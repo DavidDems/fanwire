@@ -1,0 +1,16 @@
+# Category 3 (scripted execution) per reference/Usage principals.md.
+# Trigger: PR opened. Model: cheapest tier that passes. Context: task-scoped
+# (the PR diff) only. Output: distilled result to reports/, comment on the PR.
+#
+# TODO: not yet implemented. No review agent/tooling has been chosen yet.
+name: pr-review-agent
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO - no PR review tooling defined yet"

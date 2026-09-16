@@ -1,0 +1,1 @@
+Agent tooling scaffold per `reference/Usage principals.md`'s repo layout. Empty until the actual agent/tooling stack for this repo is chosen — `settings.json`, `skills/`, and `hooks/` are placeholders, not populated yet, to avoid speculative config that may not match whatever tool ends up running here (YAGNI, `reference/Design principles.md`).

@@ -1,0 +1,19 @@
+# Category 4 (scheduled maintenance) per reference/Usage principals.md.
+# Trigger: cron, weekly. Model: cheapest tier that passes. Context: wiki/ +
+# reports/ metadata only. Action: context-size/performance audit, prune stale
+# wiki entries and stale/inaccurate code comments, flag items needing human
+# input. Output: report in reports/maintenance/. Never edits code. Opens a
+# PR or report for review — never auto-merges.
+#
+# TODO: not yet implemented.
+name: context-audit
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO - no audit tooling defined yet"
