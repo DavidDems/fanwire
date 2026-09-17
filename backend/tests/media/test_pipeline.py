@@ -272,3 +272,75 @@ def test_publish_uploads_variants_transitions_to_processed_and_clears_quarantine
         assert public_obj["Body"].read() == pipeline._served_bytes
         thumbnail_obj = s3_client.get_object(Bucket=PUBLIC_BUCKET, Key=media.s3_key_thumbnail)
         assert thumbnail_obj["Body"].read() == pipeline._thumbnail_bytes
+
+
+def test_run_happy_path_processes_media_end_to_end(s3_client, session_factory):
+    with session_factory() as session:
+        media = _make_uploader_and_media(
+            session,
+            cognito_sub="sub-run-1",
+            username="run_user_1",
+            s3_key_quarantine="q/run1.jpg",
+            status=MediaStatus.UPLOADED,
+        )
+        _put_quarantine_object(s3_client, "q/run1.jpg", _jpeg_bytes())
+        pipeline = _make_pipeline(s3_client, media, session=session)
+
+        pipeline.run()
+
+        assert media.status == MediaStatus.PROCESSED
+        assert media.mime_type == "image/jpeg"
+        assert media.size_bytes is not None
+        assert media.s3_key_quarantine is None
+        assert media.s3_key_public is not None
+        assert media.s3_key_thumbnail is not None
+        # public objects were actually written
+        s3_client.head_object(Bucket=PUBLIC_BUCKET, Key=media.s3_key_public)
+        s3_client.head_object(Bucket=PUBLIC_BUCKET, Key=media.s3_key_thumbnail)
+        # quarantine object was actually deleted
+        with pytest.raises(ClientError):
+            s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="q/run1.jpg")
+
+
+def test_run_rejects_on_malware_scan_failure(s3_client, session_factory):
+    with session_factory() as session:
+        media = _make_uploader_and_media(
+            session,
+            cognito_sub="sub-run-2",
+            username="run_user_2",
+            s3_key_quarantine="q/run2.jpg",
+            status=MediaStatus.UPLOADED,
+        )
+        _put_quarantine_object(s3_client, "q/run2.jpg", _jpeg_bytes())
+        pipeline = _make_pipeline(
+            s3_client, media, session=session, malware_scanner=FakeMalwareScanner(False)
+        )
+
+        pipeline.run()
+
+        assert media.status == MediaStatus.REJECTED
+        assert media.s3_key_quarantine is None
+        assert media.s3_key_public is None
+        assert media.s3_key_thumbnail is None
+        with pytest.raises(ClientError):
+            s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="q/run2.jpg")
+
+
+def test_run_rejects_on_invalid_file_content(s3_client, session_factory):
+    with session_factory() as session:
+        media = _make_uploader_and_media(
+            session,
+            cognito_sub="sub-run-3",
+            username="run_user_3",
+            s3_key_quarantine="q/run3.bin",
+            status=MediaStatus.UPLOADED,
+        )
+        _put_quarantine_object(s3_client, "q/run3.bin", _garbage_bytes())
+        pipeline = _make_pipeline(s3_client, media, session=session)
+
+        pipeline.run()
+
+        assert media.status == MediaStatus.REJECTED
+        assert media.s3_key_quarantine is None
+        with pytest.raises(ClientError):
+            s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="q/run3.bin")
