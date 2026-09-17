@@ -12,8 +12,9 @@ per the task's instructions not to touch app.main this phase.
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from app.users.auth import FakeTokenVerifier, VerifiedIdentity
-from app.users.dependencies import get_current_identity, get_token_verifier
+from app.settings import Settings
+from app.users.auth import FakeTokenVerifier, RefreshingTokenVerifier, VerifiedIdentity
+from app.users.dependencies import _default_token_verifier, get_current_identity, get_token_verifier
 
 
 def _make_app():
@@ -70,3 +71,41 @@ def test_get_current_identity_rejects_a_malformed_authorization_header():
     response = client.get("/whoami", headers={"Authorization": "good-token-no-scheme"})
 
     assert response.status_code == 401
+
+
+def _settings(**overrides) -> Settings:
+    values = {
+        "database_url": "postgresql+psycopg://u:p@host:5432/db",
+        "cognito_region": "us-east-1",
+        "cognito_user_pool_id": "us-east-1_pool123",
+        "cognito_app_client_id": "client-abc",
+        **overrides,
+    }
+    return Settings(**values)
+
+
+def test_get_token_verifier_builds_a_refreshing_token_verifier_from_settings():
+    _default_token_verifier.cache_clear()
+
+    verifier = get_token_verifier(_settings())
+
+    assert isinstance(verifier, RefreshingTokenVerifier)
+
+
+def test_get_token_verifier_caches_by_settings_values():
+    _default_token_verifier.cache_clear()
+    settings = _settings()
+
+    first = get_token_verifier(settings)
+    second = get_token_verifier(settings)
+
+    assert first is second
+
+
+def test_get_token_verifier_differs_for_different_settings():
+    _default_token_verifier.cache_clear()
+
+    first = get_token_verifier(_settings(cognito_user_pool_id="us-east-1_pool-a"))
+    second = get_token_verifier(_settings(cognito_user_pool_id="us-east-1_pool-b"))
+
+    assert first is not second
