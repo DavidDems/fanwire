@@ -250,7 +250,36 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
         self._thumbnail_bytes = self._encode(thumbnail, fmt)
 
     def publish(self) -> None:
-        raise NotImplementedError
+        assert self._served_bytes is not None and self._thumbnail_bytes is not None
+        ext = self._EXTENSION_BY_MIME_TYPE[self._media.mime_type]
+        public_key = f"media/{self._media.id}/public.{ext}"
+        thumbnail_key = f"media/{self._media.id}/thumbnail.{ext}"
+
+        self._s3_client.put_object(
+            Bucket=self._public_bucket,
+            Key=public_key,
+            Body=self._served_bytes,
+            ContentType=self._media.mime_type,
+        )
+        self._s3_client.put_object(
+            Bucket=self._public_bucket,
+            Key=thumbnail_key,
+            Body=self._thumbnail_bytes,
+            ContentType=self._media.mime_type,
+        )
+
+        self._media.s3_key_public = public_key
+        self._media.s3_key_thumbnail = thumbnail_key
+        transition(self._media, MediaStatus.PROCESSED)
+
+        # The quarantine copy's job is done once the public copies exist —
+        # same "don't retain past the point it's needed" instinct as the
+        # reject-path cleanup. See wiki/CodeContext/Modules/0x04-media.md
+        # AWS service mapping: "only after the malware scan passes and
+        # processing succeeds does the Lambda copy the output to the public
+        # bucket."
+        self._cleanup_quarantine_object()
+        self._session.commit()
 
     @staticmethod
     def _resized(image: Image.Image, max_edge: int) -> Image.Image:
