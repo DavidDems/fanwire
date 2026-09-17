@@ -7,6 +7,7 @@ from alembic import context
 
 from app.db import Base
 from app.settings import Settings
+import app.events.models  # noqa: F401 — registers Team/Game on Base.metadata for autogenerate
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
