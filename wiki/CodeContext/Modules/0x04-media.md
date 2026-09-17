@@ -21,6 +21,8 @@
 
 `Media` is RDS-tracked (system of record, per [[0x00-architecture]]) even though the bytes themselves live in S3 — the row is the only place that links a `User`, an optional `Post`, and the object's current pipeline state.
 
+`post_id` is currently a plain column with no enforced FK constraint — `posts/`'s `Post` table doesn't exist yet in this branch. Same deferred-FK precedent as `User.profile_picture_media_id` → `Media.id` (see [[0x01-users]]): the real `ForeignKey("posts.id")` constraint gets added once `posts/`'s `Post` table lands in Phase 2.
+
 ## Design principles applied
 
 Per [[wiki/CodeContext/Standards/design-principles|Design principles]]:
@@ -65,7 +67,9 @@ Per [[wiki/CodeContext/Standards/security|Security]] "User-generated content" an
 ## Open decisions
 
 Not yet decided — flag rather than assume when implementing:
-- Exact served-image and thumbnail dimensions (Pillow resize targets).
 - Retention/cleanup policy for quarantine objects that fail scan or validation — deleted immediately, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]], but the exact deletion trigger (Lambda-driven vs. a bucket lifecycle rule as a backstop) isn't specified.
 - Retention for `Media` rows left permanently `Uploaded`/unattached (e.g. a user who uploads in the compose flow but never publishes the post) — no orphan-cleanup job is defined yet.
-- Whether a `Rejected` `Media` row is retained (for user-facing error messaging / abuse pattern analysis) or deleted along with its (already-deleted) S3 object.
+
+## Resolved decisions
+- **Served-image/thumbnail dimensions — settled as 1600px / 200px longest-edge caps.** Implemented in `app.media.pipeline.ImageUploadPipeline.SERVED_MAX_EDGE` (1600) and `THUMBNAIL_MAX_EDGE` (200): both variants preserve aspect ratio and never upscale past the original (an image already smaller than a cap is kept at its original size for that variant).
+- **Whether a `Rejected` `Media` row is retained — settled as yes.** The DB row stays (`status=REJECTED`) for user-facing error messaging / abuse pattern analysis; only the S3 quarantine object is deleted, with `s3_key_quarantine` cleared to `None` once that deletion happens. Implemented in `app.media.pipeline.AbstractMediaUploadPipeline.run()`'s `except MediaRejected` handling — see `app.media.state.transition` for the `Scanning -> Rejected` move and `_cleanup_quarantine_object` for the S3 delete.
