@@ -89,7 +89,16 @@ def test_verify_rejects_expired_token(rsa_keys):
 def test_verify_rejects_tampered_signature(rsa_keys):
     verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
     token = _make_token(rsa_keys)
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # Flip a character in the middle of the signature segment, not the
+    # trailing edge of the base64url string — the last character(s) of a
+    # base64 group can carry fewer meaningful bits, so some substitutions
+    # there round-trip to the same decoded bytes and don't actually tamper
+    # the signature (flaky test otherwise).
+    header_b64, payload_b64, signature_b64 = token.split(".")
+    mid = len(signature_b64) // 2
+    tampered_char = "A" if signature_b64[mid] != "A" else "B"
+    tampered_signature = signature_b64[:mid] + tampered_char + signature_b64[mid + 1 :]
+    tampered = f"{header_b64}.{payload_b64}.{tampered_signature}"
 
     with pytest.raises(InvalidTokenError):
         verifier.verify(token=tampered)
