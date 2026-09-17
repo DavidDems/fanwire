@@ -21,6 +21,8 @@ from typing import Any
 from jose import jwt
 from jose.exceptions import JOSEError
 
+from app.users.jwks import JWKSProvider
+
 
 @dataclass(frozen=True)
 class VerifiedIdentity:
@@ -87,6 +89,25 @@ class CognitoTokenVerifier(TokenVerifier):
             if key.get("kid") == kid:
                 return key
         raise InvalidTokenError(f"no matching JWK for kid={kid!r}")
+
+
+class RefreshingTokenVerifier(TokenVerifier):
+    """Wraps a JWKSProvider so the JWKS is re-fetched (respecting its TTL/
+    cache) on every verify() call rather than pinned to a JWKS snapshot at
+    construction time — handles Cognito's occasional key rotation without a
+    process restart. Delegates the actual verification to a fresh
+    CognitoTokenVerifier built from whatever JWKS get_jwks() currently
+    returns (cheap: that's normally just a cache hit)."""
+
+    def __init__(self, jwks_provider: JWKSProvider, *, audience: str, issuer: str) -> None:
+        self._jwks_provider = jwks_provider
+        self._audience = audience
+        self._issuer = issuer
+
+    def verify(self, token: str) -> VerifiedIdentity:
+        jwks = self._jwks_provider.get_jwks()
+        verifier = CognitoTokenVerifier(jwks, audience=self._audience, issuer=self._issuer)
+        return verifier.verify(token)
 
 
 class FakeTokenVerifier(TokenVerifier):
