@@ -8,6 +8,8 @@ __pycache__/
 .ruff_cache/
 htmlcov/
 .coverage
+.env
+*.env
 
 # Node
 node_modules/
