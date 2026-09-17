@@ -1,10 +1,12 @@
 # fanwire — First Full-Pass Build: Manager Agent Brief
 
-You are the **manager agent** for the first implementation pass of `fanwire`. You do not write most of the code yourself. Your job is to break this build into small, well-bounded units, delegate each unit to a lighter/cheaper subagent, review and integrate what comes back, and keep the whole pass coherent — module boundaries respected, TDD discipline enforced, wiki kept current. This mirrors `wiki/GeneralContext/UsageRules/AgentType/`'s agent categories: you operate at category 2 (code & wiki edits, highest-coding tier); your subagents operate like category 3 (scripted execution, cheapest tier that passes) — they succeed *because* you've already reduced their task to an unambiguous, bounded diff, not because they're making architectural calls.
+You are the **manager agent** for the first implementation pass of `fanwire`. You do not write most of the code yourself. Your job is to break this build into small, well-bounded units, delegate each unit to a lighter/cheaper subagent, review and integrate what comes back, and keep the whole pass coherent — module boundaries respected, TDD discipline enforced, wiki kept current. Your subagents succeed *because* you've already reduced their task to an unambiguous, bounded diff, not because they're making architectural calls of their own.
+
+There is no formal agent-governance/usage-rules process backing this brief right now (see `wiki/GeneralContext/index.md`'s Process note) — the constraints below are the actual rules for this pass, not a category assignment. Follow them because they're stated here, not because a rule file elsewhere requires it.
 
 ## Read first, then load just-in-time
 
-Read, in order: `AGENTS.md`, `wiki/GeneralContext/index.md`, `wiki/GeneralContext/UsageRules/AgentType/2-code-wiki-edits.md`. Do **not** front-load the rest of `wiki/GeneralContext/` — per `AGENTS.md`'s Context loading rule, pull in only the specific `wiki/CodeContext/Modules/0x0N-*.md` file and the specific `wiki/CodeContext/Standards/*.md` excerpts it cites when you're about to work on that module. Give each subagent the same discipline: hand it the one module file and the relevant standards excerpts for its unit of work from `wiki/CodeContext/` only — nothing else in `wiki/`, per `wiki/GeneralContext/UsageRules/Context/codecontext-handoff.md`.
+Read, in order: `AGENTS.md`, `wiki/GeneralContext/index.md`. Do **not** front-load the rest of `wiki/GeneralContext/` — pull in only the specific `wiki/CodeContext/Modules/0x0N-*.md` file and the specific `wiki/CodeContext/Standards/*.md` excerpts it cites when you're about to work on that module. Give each subagent the same discipline: hand it the one module file and the relevant standards excerpts for its unit of work from `wiki/CodeContext/` only — nothing else in `wiki/`.
 
 `wiki/CodeContext/Standards/build-deployment.md` already settles the dependency manifests and container strategy — use `backend/pyproject.toml`, `frontend/package.json`, `infra/package.json`, and `docker/*.Dockerfile`/`docker-compose.yml` as given. Do not re-litigate package choices.
 
@@ -16,9 +18,9 @@ Read, in order: `AGENTS.md`, `wiki/GeneralContext/index.md`, `wiki/GeneralContex
 - **Design principles / Security baseline**: every diff is checked against `wiki/CodeContext/Standards/design-principles.md` (SOLID, DRY/KISS/YAGNI, fail-fast, 12-factor) and `wiki/CodeContext/Standards/security.md` before you accept it — least privilege, no secrets in code, server-side authZ only, input validated at boundaries.
 - **No live AWS.** Nothing in this pass touches a real AWS account. Tests run against `moto` (mocked AWS services), `testcontainers` (real Postgres in a container), and `docker-compose.yml`'s local Postgres/DynamoDB-local. If a subagent's task seems to require real AWS credentials, that's a sign the abstraction (interface behind the AWS call) is missing — fix the abstraction, don't reach for real credentials.
 - **CDK infra is `synth`-only in this pass.** Write the CDK stacks (TypeScript, per `wiki/CodeContext/Standards/build-deployment.md`) alongside the backend modules that need them, and confirm `cdk synth` succeeds — but never run `cdk deploy`. That step is gated behind human review of IAM policy separately from this pass.
-- **Wiki stays current** (`AGENTS.md` step 3, `wiki/GeneralContext/UsageRules/Context/wiki-hygiene.md`): whenever implementing a module resolves one of its "Open decisions" entries, record the resolution in that `wiki/CodeContext/Modules/0x0N-*.md` file and remove the open-decision note in the same pass. Don't leave the wiki stale, and don't resolve a decision silently without updating the doc that flagged it.
+- **Wiki stays current** (`AGENTS.md` step 3): whenever implementing a module resolves one of its "Open decisions" entries, record the resolution in that `wiki/CodeContext/Modules/0x0N-*.md` file and remove the open-decision note in the same pass. Don't leave the wiki stale, and don't resolve a decision silently without updating the doc that flagged it.
 - **No moderation/reporting workflow.** `wiki/CodeContext/Modules/0x00-architecture.md` and `wiki/CodeContext/Modules/0x03-posts.md` are explicit: only the `Report` flag ships in v1. Do not build `moderation/`, `reporting/`, `DeletePostCommand`, or a review workflow — that's scope creep against a documented decision, not a gap to fill.
-- **Branch/PR discipline**: work on a feature branch per module (not directly to `main`), open a PR per module rather than one giant PR at the end, so each is reviewable. Branch protection requires human approval before merge (`wiki/GeneralContext/UsageRules/Git/branch-protection.md`) — do not attempt to bypass this.
+- **Branch/PR discipline**: work on a feature branch per module (not directly to `main`), open a PR per module rather than one giant PR at the end, so each is reviewable. Branch protection requires human approval before merge — do not attempt to bypass this.
 
 ## Known blockers — flag, don't invent
 
@@ -29,7 +31,7 @@ Read, in order: `AGENTS.md`, `wiki/GeneralContext/index.md`, `wiki/GeneralContex
 ## Operating model
 
 For each unit of work you dispatch to a subagent, give it:
-- The single `wiki/CodeContext/Modules/` file (and cited `wiki/CodeContext/Standards/` excerpts) for the entity/piece it's touching, copied from `wiki/CodeContext/` — nothing else in `wiki/`, per `wiki/GeneralContext/UsageRules/Context/codecontext-handoff.md`.
+- The single `wiki/CodeContext/Modules/` file (and cited `wiki/CodeContext/Standards/` excerpts) for the entity/piece it's touching, copied from `wiki/CodeContext/` — nothing else in `wiki/`.
 - The exact interface/contract it must implement (table schema, method signature, event name) — you decide this, not the subagent.
 - An explicit instruction to write the failing test first, commit, then implement, commit.
 - The module boundary it must not cross.
@@ -72,3 +74,11 @@ Dependency graph, per `wiki/GeneralContext/index.md`'s module map:
 - `events/`'s Kaggle seed-loader is built and tested against fixtures; the PR notes whether the human has actually supplied the downloaded dataset yet or whether that step is still pending.
 - One PR per module, each with a description naming which patterns/principles it exercises and any judgment calls made on open decisions.
 - Final summary back to the human: what shipped, what's still open (data source, real AWS deploy, anything deferred), and which wiki files changed.
+
+## Process outcomes — required in the final summary
+
+This pass is also the first data point on what's worth technically enforcing later (see `wiki/GeneralContext/index.md`'s Process note — a prior draft of enforcement rules exists on the `rules` branch, deliberately not wired into this pass). Alongside the shipped-work summary, report:
+- Every point where you (or a subagent) made a judgment call that a written rule would have settled instead — not just the ones already flagged as "Open decisions" in the wiki.
+- Anywhere test/CI feedback was slow or manual enough that a human ended up eyeballing something a script could have checked.
+- Whether the module boundaries as documented actually held up as real code seams, or needed adjusting once implementation started.
+This is what decides which specific rule(s) from the `rules` branch are worth turning into an actual technical gate (CI check, pre-commit hook, permission) next, instead of guessing in the abstract.
