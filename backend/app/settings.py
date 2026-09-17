@@ -9,3 +9,12 @@ class Settings(BaseSettings):
 
     database_url: str
     aws_default_region: str = "us-east-1"
+
+    # Cognito wiring for app.users.dependencies.get_token_verifier's
+    # default RefreshingTokenVerifier. Empty-string defaults so Settings()
+    # still constructs fine when unset — the real values only matter once
+    # get_token_verifier is actually invoked in production; route tests
+    # override get_token_verifier entirely and never hit these.
+    cognito_region: str = "us-east-1"
+    cognito_user_pool_id: str = ""
+    cognito_app_client_id: str = ""
