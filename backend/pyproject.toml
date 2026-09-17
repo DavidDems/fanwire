@@ -61,6 +61,13 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+# pydantic/pydantic-settings' own mypy plugin understands BaseModel/
+# BaseSettings field population (including required-but-undefaulted fields
+# populated from the environment, e.g. Settings()), so mypy stops flagging
+# a bare Settings() as a missing-argument call — same "fix the false
+# positive repo-wide via config, not a scattered ignore" precedent as
+# ruff's fastapi.Depends() extend-immutable-calls entry above.
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

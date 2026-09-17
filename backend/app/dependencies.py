@@ -32,12 +32,9 @@ def get_settings() -> Settings:
     reads once from the environment, then serves the same cached instance
     for the life of the process — settings don't change without a redeploy.
     """
-    # pydantic-settings populates required-but-undefaulted fields (e.g.
-    # database_url) from the environment at construction time; mypy has no
-    # way to see that, hence the ignore. This is the one call site in app/
-    # allowed to construct Settings directly — every other caller goes
-    # through get_settings() instead of re-triggering this same gap.
-    return Settings()  # type: ignore[call-arg]
+    # This is the one call site in app/ allowed to construct Settings
+    # directly — every other caller goes through get_settings() instead.
+    return Settings()
 
 
 @lru_cache(maxsize=1)
