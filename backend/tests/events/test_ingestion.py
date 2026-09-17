@@ -52,15 +52,26 @@ def _sample_game(**overrides) -> NormalizedGame:
     return NormalizedGame(**defaults)
 
 
-def _make_idempotency_table():
-    client = boto3.client("dynamodb", region_name="us-east-1")
-    client.create_table(
-        TableName=IDEMPOTENCY_TABLE_NAME,
-        KeySchema=[{"AttributeName": "event_id", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "event_id", "AttributeType": "S"}],
-        BillingMode="PAY_PER_REQUEST",
-    )
-    return client
+@pytest.fixture()
+def dynamodb_client(monkeypatch):
+    # docker-compose.yml sets AWS_ENDPOINT_URL_DYNAMODB to point boto3 at the
+    # real local `dynamodb-local` service (for tests that want it). Left set,
+    # it diverts these calls away from moto's mock and onto that real,
+    # state-persisting service instead — breaking isolation between test
+    # runs (a table created by one test collides with the next). Unset it so
+    # mock_aws reliably intercepts here regardless of which environment
+    # (bare venv vs. docker-compose/CI) runs this suite.
+    monkeypatch.delenv("AWS_ENDPOINT_URL_DYNAMODB", raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
+    with mock_aws():
+        client = boto3.client("dynamodb", region_name="us-east-1")
+        client.create_table(
+            TableName=IDEMPOTENCY_TABLE_NAME,
+            KeySchema=[{"AttributeName": "event_id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "event_id", "AttributeType": "S"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        yield client
 
 
 @pytest.fixture(scope="module")
@@ -100,9 +111,7 @@ def _seed_teams(session):
     session.commit()
 
 
-@mock_aws
-def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory):
-    dynamodb_client = _make_idempotency_table()
+def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory, dynamodb_client):
     with session_factory() as session:
         _seed_teams(session)
 
@@ -121,9 +130,7 @@ def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory):
         assert "Item" in item
 
 
-@mock_aws
-def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_factory):
-    dynamodb_client = _make_idempotency_table()
+def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_factory, dynamodb_client):
     with session_factory() as session:
         _seed_teams(session)
         dynamodb_client.put_item(
@@ -137,9 +144,7 @@ def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_fact
         assert persisted is None
 
 
-@mock_aws
-def test_dedupe_fails_fast_on_unrecognized_home_team(session_factory):
-    dynamodb_client = _make_idempotency_table()
+def test_dedupe_fails_fast_on_unrecognized_home_team(session_factory, dynamodb_client):
     with session_factory() as session:
         pipeline = FinalScoreIngestion(
             _FakeSource([_sample_game(home_team_id=999)]), session, dynamodb_client
@@ -149,9 +154,7 @@ def test_dedupe_fails_fast_on_unrecognized_home_team(session_factory):
             pipeline.run()
 
 
-@mock_aws
-def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(session_factory):
-    dynamodb_client = _make_idempotency_table()
+def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(session_factory, dynamodb_client):
     with session_factory() as session:
         _seed_teams(session)
         bad_game = _sample_game(
