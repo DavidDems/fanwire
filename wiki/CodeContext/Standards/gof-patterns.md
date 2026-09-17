@@ -1,6 +1,6 @@
 # Gang of Four Example — Sports Discussion Feed
 
-Reference project, not to be built literally — the actual project is the sports discussion app itself (see [[Projects]]). This shows how all 23 GoF patterns connect in that codebase's domain: a Twitter-style feed where posts can mention real games/teams pulled from a live sports data provider. Mirrors [[Design principles]].
+Reference project, not to be built literally — the actual project is the sports discussion app itself (see [[wiki/GeneralContext/Architecture/business-rules|Projects]]). This shows how all 23 GoF patterns connect in that codebase's domain: a Twitter-style feed where posts can mention real games/teams pulled from a live sports data provider. Mirrors [[wiki/CodeContext/Standards/design-principles|Design principles]].
 
 ## Module layout
 
@@ -51,4 +51,4 @@ fanwire/
 
 ## Connection rule
 
-No module reaches past its own interface boundary into another module's concrete classes. `feed/`, `posts/`, `media/`, `events/`, `users/`, `notifications/`, `moderation/`, `search/`, `reporting/` communicate only through: the `PublishPostFacade`, the `PostEventBus`, and typed interfaces (`SportsDataSource`, `Notification`, `FeedRankingStrategy`). This is Dependency Inversion (see [[Design principles]]) enforced at module granularity, not just class granularity — `events/` can swap sports data providers, and `notifications/` can add a channel, without either touching `posts/` or `feed/`.
+No module reaches past its own interface boundary into another module's concrete classes. `feed/`, `posts/`, `media/`, `events/`, `users/`, `notifications/`, `moderation/`, `search/`, `reporting/` communicate only through: the `PublishPostFacade`, the `PostEventBus`, and typed interfaces (`SportsDataSource`, `Notification`, `FeedRankingStrategy`). This is Dependency Inversion (see [[wiki/CodeContext/Standards/design-principles|Design principles]]) enforced at module granularity, not just class granularity — `events/` can swap sports data providers, and `notifications/` can add a channel, without either touching `posts/` or `feed/`.

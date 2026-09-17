@@ -1,20 +1,20 @@
 # The Sideline v2
 
 ## Current project: sports discussion app
-Scaled-up successor to your prior Twitter-for-sports-clone project. Users post about games, mention real teams/matches, feed pulls live data from a real sports API. Chosen over an outdoor-events (hiking/running/triathlon) version because sports data has one consistent, well-documented multi-league API (API-SPORTS) with a real free tier — outdoor endurance events don't have an equivalent unified source (results/results-adjacent APIs are split across triathlon-only, registration-only, and hiking-has-no-results-concept-at-all providers). See [[AWS Stack]] for the provider choice.
+Scaled-up successor to your prior Twitter-for-sports-clone project. Users post about games, mention real teams/matches, feed pulls live data from a real sports API. Chosen over an outdoor-events (hiking/running/triathlon) version because sports data has one consistent, well-documented multi-league API (API-SPORTS) with a real free tier — outdoor endurance events don't have an equivalent unified source (results/results-adjacent APIs are split across triathlon-only, registration-only, and hiking-has-no-results-concept-at-all providers). See [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] for the provider choice.
 
-Prior stack carried forward: Python + FastAPI + Pydantic + SQLAlchemy, React + TypeScript. Database moves from MySQL to Postgres (see [[AWS Stack]] for why).
+Prior stack carried forward: Python + FastAPI + Pydantic + SQLAlchemy, React + TypeScript. Database moves from MySQL to Postgres (see [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] for why).
 
 ## Read in this order
-1. [[Design principles]] — universal rules (SOLID, DRY, KISS, 12-factor, security baseline). Apply on every stack.
-2. [[Gang of Four Example]] — how all 23 GoF patterns connect in this app's actual domain (feed/posts/events/moderation), and where module boundaries sit.
-3. [[AWS Stack]] — backend/frontend language choices, the AWS services, and the sports-data ingestion pipeline.
-4. [[Security]] — self-managed AWS security requirements, including the user-generated-content-specific ones (moderation, rate limiting, media scanning).
-5. [[Usage principals]] — how AI agents are used to build and maintain this project.
+1. [[wiki/CodeContext/Standards/design-principles|Design principles]] — universal rules (SOLID, DRY, KISS, 12-factor, security baseline). Apply on every stack.
+2. [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] — how all 23 GoF patterns connect in this app's actual domain (feed/posts/events/moderation), and where module boundaries sit.
+3. [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] — backend/frontend language choices, the AWS services, and the sports-data ingestion pipeline.
+4. [[wiki/CodeContext/Standards/security|Security]] — self-managed AWS security requirements, including the user-generated-content-specific ones (moderation, rate limiting, media scanning).
+5. [[wiki/GeneralContext/UsageRules/index|Usage principals]] — how AI agents are used to build and maintain this project.
 
 ## Decisions
-- **Media uploads are in scope for v1.** Image hosting is AWS-native, not a third-party service: presigned upload to a private S3 quarantine bucket, GuardDuty Malware Protection for S3 scan, Pillow-based type validation/EXIF stripping/resizing, then promotion to a public media bucket served via CloudFront. Stricter limits than the rest of the app (smaller size cap, allow-listed image types only). Full pipeline in [[AWS Stack]], the security requirements in [[Security]], the module/pattern shape in [[Gang of Four Example]].
-- **Single sports data provider (API-SPORTS) until it proves insufficient.** No fallback/cross-check provider built preemptively — the `SportsProviderFactory` Abstract Factory in [[Gang of Four Example]] makes adding one later a swap, not a rewrite, so there's no cost to waiting.
+- **Media uploads are in scope for v1.** Image hosting is AWS-native, not a third-party service: presigned upload to a private S3 quarantine bucket, GuardDuty Malware Protection for S3 scan, Pillow-based type validation/EXIF stripping/resizing, then promotion to a public media bucket served via CloudFront. Stricter limits than the rest of the app (smaller size cap, allow-listed image types only). Full pipeline in [[wiki/CodeContext/Standards/aws-stack|AWS Stack]], the security requirements in [[wiki/CodeContext/Standards/security|Security]], the module/pattern shape in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]].
+- **Single sports data provider (API-SPORTS) until it proves insufficient.** No fallback/cross-check provider built preemptively — the `SportsProviderFactory` Abstract Factory in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] makes adding one later a swap, not a rewrite, so there's no cost to waiting.
 
 
 ## Business rules

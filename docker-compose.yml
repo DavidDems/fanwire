@@ -1,8 +1,8 @@
 # Local dev + test orchestration only — nothing here is the production
 # deployment (that's Lambda container images + S3/CloudFront via CDK, see
-# reference/AWS Stack.md and docker/*.Dockerfile). This gives:
+# wiki/CodeContext/Standards/aws-stack.md and docker/*.Dockerfile). This gives:
 #   - a real Postgres to run integration tests against (matching RDS, not
-#     an in-memory substitute), per reference/Design principles.md testing
+#     an in-memory substitute), per wiki/CodeContext/Standards/design-principles.md testing
 #     pyramid guidance
 #   - a local DynamoDB for the idempotency-key / live-score-cache tables
 #   - one-shot test runners for backend and frontend, same images CI builds

@@ -51,4 +51,4 @@ are the only detection mechanism, so check on some regular cadence.
 
 - Automated alerting (SNS/EventBridge) — planned, not built.
 - Named resource-level lockout steps — blocked on Phase 6 CDK stacks existing.
-- Security Hub — optional at this budget per `Security.md`, not part of this runbook.
+- Security Hub — optional at this budget per `wiki/CodeContext/Standards/security.md`, not part of this runbook.

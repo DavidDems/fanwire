@@ -1,6 +1,6 @@
 # 0x04 — Media
 
-**Agent-facing.** Current-state only — see [[index]] for how this wiki is organized. Read [[0x00-architecture]] first for the module map and the pipeline's place in the overall topology; this file details the `Media` entity and pipeline, it does not repeat the topology diagram.
+**Agent-facing.** Current-state only — see [[wiki/GeneralContext/index|index]] for how this wiki is organized. Read [[0x00-architecture]] first for the module map and the pipeline's place in the overall topology; this file details the `Media` entity and pipeline, it does not repeat the topology diagram.
 
 `media/` is the highest-risk module in the app: it is the only place the backend accepts untrusted binary data from a client. Every rule below exists to bound that risk.
 
@@ -23,7 +23,7 @@
 
 ## Design principles applied
 
-Per [[reference/Design principles|Design principles]]:
+Per [[wiki/CodeContext/Standards/design-principles|Design principles]]:
 - **Fail fast** — a MIME mismatch, oversized file, or malformed image fails the pipeline step immediately (`Rejected`); nothing partially-valid is passed downstream.
 - **Idempotency** — the presigned upload and the S3-event-triggered processing Lambda must both tolerate a retried upload (e.g. client retries after a timeout) without producing duplicate `Media` rows or double-processing the same object.
 - **Explicit over implicit** — `status` is a first-class state field driving behavior (see State pattern below), not inferred from the presence/absence of S3 keys or timestamps.
@@ -32,13 +32,13 @@ Per [[reference/Design principles|Design principles]]:
 
 ## GoF pattern tie-in
 
-Per [[reference/Gang of Four Example|Gang of Four Example]]:
+Per [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]:
 - **State** — `Media.status` (`Uploaded → Scanning → Processed/Rejected`) is a State object per status, not an `if`/`enum`-branch scattered across the codebase. `PublishPostFacade` (see [[0x03-posts]]) can only attach `Processed` media to a `Post` because the type/interface exposed to `posts/` makes a non-`Processed` `Media` un-attachable by construction, not by a runtime check.
 - **Template Method** — the upload pipeline is the same skeleton shape as `AbstractEventIngestionPipeline` (see [[0x00-architecture]] "Ingestion & processing pipelines"): `validateType → scanForMalware → stripMetadata → generateVariants → publish`. Each step can halt/reject; no step is optional or reorderable per upload.
 
 ## AWS service mapping
 
-Full stack rationale in [[reference/AWS Stack|AWS Stack]] ("Media uploads"); mapping here is specific to `Media`:
+Full stack rationale in [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] ("Media uploads"); mapping here is specific to `Media`:
 
 | Step | Service | RDS-tracked? |
 |---|---|---|
@@ -48,11 +48,11 @@ Full stack rationale in [[reference/AWS Stack|AWS Stack]] ("Media uploads"); map
 | Type verification, EXIF strip, variant generation | Processing **Lambda (Pillow)**, triggered by the S3 event after scan passes | Drives `status → Processed` or `Rejected`, RDS-tracked |
 | Serving | S3 **public media bucket** + **CloudFront** | `s3_key_public` / `s3_key_thumbnail` RDS-tracked; CloudFront serves the public bucket only, never the quarantine bucket |
 
-The quarantine bucket is intentionally **not** the one CloudFront serves — only the public bucket is reachable from the edge, per [[reference/Security|Security]] "CloudFront is the only public entry point."
+The quarantine bucket is intentionally **not** the one CloudFront serves — only the public bucket is reachable from the edge, per [[wiki/CodeContext/Standards/security|Security]] "CloudFront is the only public entry point."
 
 ## Security requirements
 
-Per [[reference/Security|Security]] "User-generated content" and [[reference/AWS Stack|AWS Stack]] "Media uploads" — treat all of these as hard gates, not defaults to tune later:
+Per [[wiki/CodeContext/Standards/security|Security]] "User-generated content" and [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] "Media uploads" — treat all of these as hard gates, not defaults to tune later:
 - **MIME allow-list**: `image/jpeg`, `image/png`, `image/webp` only. Everything else rejected, explicitly including SVG (can carry executable/script content).
 - **Size cap**: ~5MB per image, enforced by the presigned URL's scoped policy — stricter than any other upload path in the app.
 - **Quarantine isolation**: every upload lands in a private bucket never reachable via CloudFront and never public, regardless of scan outcome timing.
@@ -66,6 +66,6 @@ Per [[reference/Security|Security]] "User-generated content" and [[reference/AWS
 
 Not yet decided — flag rather than assume when implementing:
 - Exact served-image and thumbnail dimensions (Pillow resize targets).
-- Retention/cleanup policy for quarantine objects that fail scan or validation — deleted immediately, per [[reference/AWS Stack|AWS Stack]], but the exact deletion trigger (Lambda-driven vs. a bucket lifecycle rule as a backstop) isn't specified.
+- Retention/cleanup policy for quarantine objects that fail scan or validation — deleted immediately, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]], but the exact deletion trigger (Lambda-driven vs. a bucket lifecycle rule as a backstop) isn't specified.
 - Retention for `Media` rows left permanently `Uploaded`/unattached (e.g. a user who uploads in the compose flow but never publishes the post) — no orphan-cleanup job is defined yet.
 - Whether a `Rejected` `Media` row is retained (for user-facing error messaging / abuse pattern analysis) or deleted along with its (already-deleted) S3 object.

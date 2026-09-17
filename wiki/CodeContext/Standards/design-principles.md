@@ -1,6 +1,6 @@
 # Design Principles
 
-Apply these regardless of language or stack. See [[AWS Stack]] for infrastructure, [[Security]] for security requirements, [[Gang of Four Example]] for structural pattern usage.
+Apply these regardless of language or stack. See [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] for infrastructure, [[wiki/CodeContext/Standards/security|Security]] for security requirements, [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] for structural pattern usage.
 
 ## Structural rules
 - **Single Responsibility** — one reason to change per module/class. If you describe it with "and", split it.
@@ -27,7 +27,7 @@ Apply these regardless of language or stack. See [[AWS Stack]] for infrastructur
 ## Delivery rules
 - **12-factor app** — config in environment/parameter store, not in code; no baked-in environment assumptions; logs to stdout/stderr, not files.
 - **Stateless services** — application processes hold no session state; state lives in the database, cache, or object store.
-- **Testing pyramid** — many fast unit tests, fewer integration tests, minimal end-to-end tests. No implementation without a failing test first (see [[Usage principals]]).
+- **Testing pyramid** — many fast unit tests, fewer integration tests, minimal end-to-end tests. No implementation without a failing test first (see [[wiki/GeneralContext/UsageRules/Coding/tdd|TDD rule]]).
 - **Observability is a requirement, not a nice-to-have** — every service emits structured logs, metrics, and traces sufficient to debug production without redeploying.
 
 ## Security baseline (every project, every stack)
@@ -36,4 +36,4 @@ Apply these regardless of language or stack. See [[AWS Stack]] for infrastructur
 - Encrypt in transit (TLS everywhere) and at rest (managed keys minimum, customer-managed keys for sensitive data).
 - All authentication and authorization checks happen server-side. Client-side checks are UX only, never a security boundary.
 - Dependencies are scanned for known CVEs in CI; unpatched criticals block merge.
-- See [[Security]] for the AWS-specific implementation of this baseline.
+- See [[wiki/CodeContext/Standards/security|Security]] for the AWS-specific implementation of this baseline.
