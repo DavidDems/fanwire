@@ -18,8 +18,10 @@ from app.users.auth import (
     CognitoTokenVerifier,
     FakeTokenVerifier,
     InvalidTokenError,
+    RefreshingTokenVerifier,
     VerifiedIdentity,
 )
+from app.users.jwks import JWKSProvider
 
 AUDIENCE = "test-app-client-id"
 ISSUER = "https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_test"
@@ -107,6 +109,33 @@ def test_verify_rejects_tampered_signature(rsa_keys):
 def test_verify_rejects_wrong_issuer(rsa_keys):
     verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
     token = _make_token(rsa_keys, iss="https://cognito-idp.ca-central-1.amazonaws.com/wrong-pool")
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(token)
+
+
+def test_refreshing_verifier_accepts_a_valid_token(rsa_keys):
+    provider = JWKSProvider(
+        region="ca-central-1",
+        user_pool_id="ca-central-1_test",
+        fetcher=lambda url: rsa_keys["jwks"],
+    )
+    verifier = RefreshingTokenVerifier(provider, audience=AUDIENCE, issuer=ISSUER)
+    token = _make_token(rsa_keys)
+
+    identity = verifier.verify(token)
+
+    assert identity == VerifiedIdentity(sub="cognito-sub-123", email="alice@example.com")
+
+
+def test_refreshing_verifier_rejects_an_invalid_token(rsa_keys):
+    provider = JWKSProvider(
+        region="ca-central-1",
+        user_pool_id="ca-central-1_test",
+        fetcher=lambda url: rsa_keys["jwks"],
+    )
+    verifier = RefreshingTokenVerifier(provider, audience=AUDIENCE, issuer=ISSUER)
+    token = _make_token(rsa_keys, aud="some-other-client-id")
 
     with pytest.raises(InvalidTokenError):
         verifier.verify(token)
