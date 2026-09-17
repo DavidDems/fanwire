@@ -13,8 +13,10 @@ from __future__ import annotations
 from functools import cache
 
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.dependencies import get_settings
+from app.dependencies import get_session, get_settings
 from app.settings import Settings
 from app.users.auth import (
     InvalidTokenError,
@@ -23,6 +25,7 @@ from app.users.auth import (
     VerifiedIdentity,
 )
 from app.users.jwks import JWKSProvider
+from app.users.models import User
 
 
 def get_token_verifier(settings: Settings = Depends(get_settings)) -> TokenVerifier:
@@ -81,3 +84,22 @@ def get_current_identity(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         ) from exc
+
+
+def get_current_user(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_session),
+) -> User:
+    """Resolves the verified token's `sub` to this app's local User row.
+    404s (not 401 — the token itself is valid, there's just no profile yet)
+    if no active User exists for this cognito_sub — e.g. a Cognito-confirmed
+    signup that never completed POST /users. Callers needing the internal
+    User.id (follow/unfollow, soft-delete-self) depend on this instead of
+    get_current_identity directly.
+    """
+    user = session.scalar(
+        select(User).where(User.cognito_sub == identity.sub, User.deleted_at.is_(None))
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
+    return user
