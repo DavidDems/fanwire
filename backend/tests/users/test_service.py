@@ -94,9 +94,8 @@ def test_soft_delete_user_sets_deleted_at(session_factory):
 
 
 def test_soft_delete_user_raises_for_unknown_user(session_factory):
-    with session_factory() as session:
-        with pytest.raises(UserNotFoundError):
-            soft_delete_user(session, 999_999)
+    with session_factory() as session, pytest.raises(UserNotFoundError):
+        soft_delete_user(session, 999_999)
 
 
 def test_soft_delete_user_raises_when_already_deleted(session_factory):
