@@ -221,10 +221,33 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
             raise MediaRejected("failed malware scan")
 
     def strip_metadata(self) -> None:
-        raise NotImplementedError
+        assert self._raw_bytes is not None  # validate_type always runs first
+        image = Image.open(io.BytesIO(self._raw_bytes))
+        image.load()
+
+        # Standard approach: rebuild a brand-new Image from pixel data only
+        # (Image.new starts with an empty .info dict) rather than deleting a
+        # few known EXIF tags off the original — .convert() alone is not
+        # enough, since Pillow carries the source .info (and therefore EXIF)
+        # forward across a plain convert(). Preserve alpha where the source
+        # actually has it (RGBA PNG/WEBP), otherwise flatten to RGB (plain
+        # JPEG has no alpha channel to begin with).
+        mode = "RGBA" if image.mode in ("RGBA", "LA") or "transparency" in image.info else "RGB"
+        normalized = image.convert(mode)
+        clean_image = Image.new(mode, image.size)
+        clean_image.putdata(list(normalized.getdata()))
+
+        self._stripped_image = clean_image
 
     def generate_variants(self) -> None:
-        raise NotImplementedError
+        assert self._stripped_image is not None  # strip_metadata always runs first
+        fmt = self._FORMAT_BY_MIME_TYPE[self._media.mime_type]
+
+        served = self._resized(self._stripped_image, self.SERVED_MAX_EDGE)
+        thumbnail = self._resized(self._stripped_image, self.THUMBNAIL_MAX_EDGE)
+
+        self._served_bytes = self._encode(served, fmt)
+        self._thumbnail_bytes = self._encode(thumbnail, fmt)
 
     def publish(self) -> None:
         raise NotImplementedError
