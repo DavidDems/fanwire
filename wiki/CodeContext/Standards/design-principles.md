@@ -27,7 +27,7 @@ Apply these regardless of language or stack. See [[wiki/CodeContext/Standards/aw
 ## Delivery rules
 - **12-factor app** — config in environment/parameter store, not in code; no baked-in environment assumptions; logs to stdout/stderr, not files.
 - **Stateless services** — application processes hold no session state; state lives in the database, cache, or object store.
-- **Testing pyramid** — many fast unit tests, fewer integration tests, minimal end-to-end tests. No implementation without a failing test first (see [[wiki/GeneralContext/UsageRules/Coding/tdd|TDD rule]]).
+- **Testing pyramid** — many fast unit tests, fewer integration tests, minimal end-to-end tests. No implementation without a failing test first.
 - **Observability is a requirement, not a nice-to-have** — every service emits structured logs, metrics, and traces sufficient to debug production without redeploying.
 
 ## Security baseline (every project, every stack)

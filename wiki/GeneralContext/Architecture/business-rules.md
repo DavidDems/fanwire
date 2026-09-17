@@ -10,7 +10,6 @@ Prior stack carried forward: Python + FastAPI + Pydantic + SQLAlchemy, React + T
 2. [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] — how all 23 GoF patterns connect in this app's actual domain (feed/posts/events/moderation), and where module boundaries sit.
 3. [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] — backend/frontend language choices, the AWS services, and the sports-data ingestion pipeline.
 4. [[wiki/CodeContext/Standards/security|Security]] — self-managed AWS security requirements, including the user-generated-content-specific ones (moderation, rate limiting, media scanning).
-5. [[wiki/GeneralContext/UsageRules/index|Usage principals]] — how AI agents are used to build and maintain this project.
 
 ## Decisions
 - **Media uploads are in scope for v1.** Image hosting is AWS-native, not a third-party service: presigned upload to a private S3 quarantine bucket, GuardDuty Malware Protection for S3 scan, Pillow-based type validation/EXIF stripping/resizing, then promotion to a public media bucket served via CloudFront. Stricter limits than the rest of the app (smaller size cap, allow-listed image types only). Full pipeline in [[wiki/CodeContext/Standards/aws-stack|AWS Stack]], the security requirements in [[wiki/CodeContext/Standards/security|Security]], the module/pattern shape in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]].

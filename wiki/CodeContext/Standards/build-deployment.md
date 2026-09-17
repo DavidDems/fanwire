@@ -41,7 +41,7 @@ Dev/test only (`[project.optional-dependencies].dev` — never in the Lambda ima
 | `ruff` | lint + format in one tool (replaces flake8/isort/black) |
 | `mypy` (strict) | type checking — cheap to run given Pydantic v2/SQLAlchemy 2.0 are both fully typed already |
 | `pip-audit` | CVE scan in CI, blocks merge on a hit, per [[wiki/CodeContext/Standards/security|Security]] |
-| `pre-commit` | runs lint/format before a commit reaches an agent's context, per `wiki/GeneralContext/UsageRules/Git/pre-commit-hook.md` |
+| `pre-commit` | runs lint/format before a commit reaches an agent's context |
 
 Exact versions are pinned as minimums in `pyproject.toml`; lock with `pip-compile`/`uv lock` once the app exists and let Dependabot + `pip-audit` keep the lock current — don't hand-maintain exact pins here.
 
@@ -89,7 +89,7 @@ Dev/test:
 
 ## CI/CD wiring
 GitHub Actions (OIDC-federated role, no long-lived keys, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]):
-- On PR: build `docker/backend.Dockerfile` target `test` and `docker/frontend.Dockerfile` target `test`, run both — this is `wiki/GeneralContext/UsageRules/AgentType/3-scripted-execution.md` category 3 (scripted execution), results distilled to `wiki/GeneralContext/Reports/test-runs/`, not fed raw into any interactive agent's context.
+- On PR: build `docker/backend.Dockerfile` target `test` and `docker/frontend.Dockerfile` target `test`, run both, results distilled to `wiki/GeneralContext/Reports/test-runs/`, not fed raw into any interactive agent's context.
 - On merge to `main`: build target `lambda`, push to ECR; build target `export`, sync `dist/` to the frontend S3 bucket; run `cdk deploy` via `docker/cdk-deploy.Dockerfile`.
 - `pip-audit` and `npm audit`/Dependabot run in CI per [[wiki/CodeContext/Standards/security|Security]] and block merge on an unpatched critical.
 
