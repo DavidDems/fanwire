@@ -7,7 +7,7 @@ docstring) — not verified against a live API-SPORTS response.
 """
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +100,7 @@ def test_fetch_games_returns_normalized_games_with_player_stats(adapter):
 
 
 def test_fetch_games_passes_since_as_a_date_query_param(adapter, fake_client):
-    adapter.fetch_games(since=datetime(2025, 11, 1))
+    adapter.fetch_games(since=datetime(2025, 11, 1, tzinfo=UTC))
 
     _, params = fake_client.calls[0]
     assert params is not None

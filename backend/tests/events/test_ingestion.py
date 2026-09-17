@@ -7,7 +7,7 @@ against a real Postgres (via testcontainers), per wiki/CodeContext/Modules/
 0x00-architecture.md "Data seeding order".
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import boto3
 import pytest
@@ -37,17 +37,17 @@ class _FakeSource(SportsDataSource):
 
 
 def _sample_game(**overrides) -> NormalizedGame:
-    defaults: dict = dict(
-        api_sports_game_id=5001,
-        home_team_id=12,
-        away_team_id=17,
-        date=datetime(2025, 11, 1, 19, 30),
-        season="2025-26",
-        home_score=112,
-        away_score=108,
-        venue="TD Garden",
-        player_stats=[{"player_name": "Jayson Tatum", "team_id": 12, "points": 28}],
-    )
+    defaults: dict = {
+        "api_sports_game_id": 5001,
+        "home_team_id": 12,
+        "away_team_id": 17,
+        "date": datetime(2025, 11, 1, 19, 30, tzinfo=UTC),
+        "season": "2025-26",
+        "home_score": 112,
+        "away_score": 108,
+        "venue": "TD Garden",
+        "player_stats": [{"player_name": "Jayson Tatum", "team_id": 12, "points": 28}],
+    }
     defaults.update(overrides)
     return NormalizedGame(**defaults)
 

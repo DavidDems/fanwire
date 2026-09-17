@@ -4,7 +4,7 @@ AGENTS.md TDD workflow. Written before app/events/models.py exists.
 See wiki/CodeContext/Modules/0x02-events.md for the Team/Game schema.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -31,13 +31,13 @@ def session_factory(postgres_url):
 
 
 def _make_team(**overrides):
-    defaults = dict(
-        api_sports_team_id=12,
-        name="Boston Celtics",
-        abbreviation="BOS",
-        conference="Eastern",
-        division="Atlantic",
-    )
+    defaults = {
+        "api_sports_team_id": 12,
+        "name": "Boston Celtics",
+        "abbreviation": "BOS",
+        "conference": "Eastern",
+        "division": "Atlantic",
+    }
     defaults.update(overrides)
     return Team(**defaults)
 
@@ -59,7 +59,7 @@ def test_team_and_game_round_trip(session_factory):
             api_sports_game_id=5001,
             home_team_id=home.id,
             away_team_id=away.id,
-            date=datetime(2025, 11, 1, 19, 30),
+            date=datetime(2025, 11, 1, 19, 30, tzinfo=UTC),
             season="2025-26",
             home_score=112,
             away_score=108,
@@ -94,7 +94,7 @@ def test_game_home_team_id_requires_existing_team(session_factory):
                 api_sports_game_id=1,
                 home_team_id=999_999,
                 away_team_id=999_998,
-                date=datetime(2025, 11, 1),
+                date=datetime(2025, 11, 1, tzinfo=UTC),
                 season="2025-26",
                 home_score=1,
                 away_score=0,
@@ -114,7 +114,7 @@ def test_game_player_stats_defaults_to_empty_list(session_factory):
             api_sports_game_id=2,
             home_team_id=team.id,
             away_team_id=team.id,
-            date=datetime(2025, 11, 1),
+            date=datetime(2025, 11, 1, tzinfo=UTC),
             season="2025-26",
             home_score=0,
             away_score=0,

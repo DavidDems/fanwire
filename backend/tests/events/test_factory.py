@@ -5,8 +5,8 @@ workflow. Written before app/events/factory.py exists.
 from typing import Any
 
 from app.events.adapters import ApiSportsAdapter
-from app.events.interfaces import SportsDataSource
 from app.events.factory import SportsProviderFactory
+from app.events.interfaces import SportsDataSource
 
 
 class _FakeHttpClient:
