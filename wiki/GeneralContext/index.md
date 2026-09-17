@@ -45,8 +45,13 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — interim, GuardDuty-finding response, priority-of-suspicion order; revisit once Phase 6 CDK stacks land.
 
 ### Task prompts
-`wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. Currently:
-- `first-pass-manager-agent.md` — the first implementation pass build brief.
+`wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across four sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:
+- `first-pass-manager-agent.md` — Phase 0 (scaffold) + Phase 1 (`events/`, `users/`, `media/`).
+- `phase-2-manager-agent.md` — Phase 2 (`posts/`), plus closing the Phase 1 routes gap it documents.
+- `phase-3-manager-agent.md` — Phase 3 (`notifications/`, `feed/`, `search/`).
+- `phase-4-manager-agent.md` — Phase 4 (frontend + CDK infra) — the final pass; `cdk deploy` stays out of scope even here, gated on human IAM review.
+
+Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above).
 
 ### Reports
 `wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. No automation writes here yet (see Process note above).
