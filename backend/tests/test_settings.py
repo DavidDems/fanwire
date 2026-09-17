@@ -54,3 +54,31 @@ def test_settings_reads_cognito_app_client_id_from_env(monkeypatch):
     monkeypatch.setenv("COGNITO_APP_CLIENT_ID", "test-client-id")
     settings = Settings()
     assert settings.cognito_app_client_id == "test-client-id"
+
+
+def test_settings_defaults_media_quarantine_bucket(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("MEDIA_QUARANTINE_BUCKET", raising=False)
+    settings = Settings()
+    assert settings.media_quarantine_bucket == "fanwire-media-quarantine"
+
+
+def test_settings_reads_media_quarantine_bucket_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("MEDIA_QUARANTINE_BUCKET", "custom-quarantine-bucket")
+    settings = Settings()
+    assert settings.media_quarantine_bucket == "custom-quarantine-bucket"
+
+
+def test_settings_defaults_media_public_bucket(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("MEDIA_PUBLIC_BUCKET", raising=False)
+    settings = Settings()
+    assert settings.media_public_bucket == "fanwire-media-public"
+
+
+def test_settings_reads_media_public_bucket_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("MEDIA_PUBLIC_BUCKET", "custom-public-bucket")
+    settings = Settings()
+    assert settings.media_public_bucket == "custom-public-bucket"
