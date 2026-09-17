@@ -13,6 +13,7 @@ htmlcov/
 node_modules/
 dist/
 frontend/coverage/
+*.tsbuildinfo
 
 # CDK
 infra/cdk.out/
