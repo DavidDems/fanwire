@@ -58,6 +58,15 @@ def _garbage_bytes() -> bytes:
     return b"this is not an image, just some garbage byte content"
 
 
+def _jpeg_bytes_with_exif(size: tuple[int, int] = (10, 10), color=(255, 0, 0)) -> bytes:
+    image = Image.new("RGB", size, color)
+    exif = image.getexif()
+    exif[271] = "TestCameraMake"  # tag 271 = Make
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", exif=exif.tobytes())
+    return buffer.getvalue()
+
+
 def _put_quarantine_object(s3_client, key: str, data: bytes) -> None:
     s3_client.put_object(Bucket=QUARANTINE_BUCKET, Key=key, Body=data)
 
@@ -141,3 +150,59 @@ def test_validate_type_rejects_real_image_format_not_in_allow_list(s3_client):
 
     with pytest.raises(MediaRejected):
         _make_pipeline(s3_client, media).validate_type()
+
+
+def test_strip_metadata_removes_exif_from_generated_variants(s3_client):
+    _put_quarantine_object(s3_client, "q/exif.jpg", _jpeg_bytes_with_exif())
+    media = Media(uploader_id=1, s3_key_quarantine="q/exif.jpg", status=MediaStatus.SCANNING)
+    pipeline = _make_pipeline(s3_client, media)
+
+    pipeline.validate_type()
+    pipeline.strip_metadata()
+    pipeline.generate_variants()
+
+    served = Image.open(io.BytesIO(pipeline._served_bytes))
+    thumbnail = Image.open(io.BytesIO(pipeline._thumbnail_bytes))
+    assert not served.getexif()
+    assert not thumbnail.getexif()
+    assert "exif" not in served.info
+    assert "exif" not in thumbnail.info
+
+
+def test_generate_variants_caps_served_and_thumbnail_dimensions(s3_client):
+    original_size = (2000, 800)
+    _put_quarantine_object(s3_client, "q/big.jpg", _jpeg_bytes(size=original_size))
+    media = Media(uploader_id=1, s3_key_quarantine="q/big.jpg", status=MediaStatus.SCANNING)
+    pipeline = _make_pipeline(s3_client, media)
+
+    pipeline.validate_type()
+    pipeline.strip_metadata()
+    pipeline.generate_variants()
+
+    served = Image.open(io.BytesIO(pipeline._served_bytes))
+    thumbnail = Image.open(io.BytesIO(pipeline._thumbnail_bytes))
+
+    assert max(served.size) == ImageUploadPipeline.SERVED_MAX_EDGE
+    assert served.size[0] / served.size[1] == pytest.approx(
+        original_size[0] / original_size[1], rel=0.02
+    )
+    assert max(thumbnail.size) == ImageUploadPipeline.THUMBNAIL_MAX_EDGE
+    assert thumbnail.size[0] / thumbnail.size[1] == pytest.approx(
+        original_size[0] / original_size[1], rel=0.05
+    )
+
+
+def test_generate_variants_never_upscales_a_small_image(s3_client):
+    _put_quarantine_object(s3_client, "q/small.jpg", _jpeg_bytes(size=(10, 10)))
+    media = Media(uploader_id=1, s3_key_quarantine="q/small.jpg", status=MediaStatus.SCANNING)
+    pipeline = _make_pipeline(s3_client, media)
+
+    pipeline.validate_type()
+    pipeline.strip_metadata()
+    pipeline.generate_variants()
+
+    served = Image.open(io.BytesIO(pipeline._served_bytes))
+    thumbnail = Image.open(io.BytesIO(pipeline._thumbnail_bytes))
+
+    assert served.size == (10, 10)
+    assert thumbnail.size == (10, 10)
