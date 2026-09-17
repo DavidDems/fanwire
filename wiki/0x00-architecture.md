@@ -48,7 +48,45 @@ Both of the following are the same Template Method shape (`AbstractEventIngestio
 
 ## Security posture (account/project-level)
 Per-entity security requirements live in each module's own file. Project-wide items that don't belong to any one module, per [[reference/Security|Security]]:
-- AWS Organizations, two accounts (`workload`, `log-archive`); logs/backups live where a compromised workload account can't delete them.
 - CloudFront + AWS WAF (Managed Rule Groups + rate-based rule) is the only public entry point; Shield Standard is automatic, Shield Advanced is explicitly not justified at this scale.
-- GuardDuty and CloudTrail (multi-region, Object Lock) enabled in every account from day one.
 - Every Lambda/service gets its own least-privilege IAM role — no shared "app role."
+
+### AWS account state (current, verified)
+
+**Organizations** — primary region `ca-central-1` across all three accounts; CloudFront's ACM cert is the one exception, always issued in `us-east-1` regardless.
+- Management account: `daviddemers92@gmail.com` (alias `DavidDems`). Root MFA on (authenticator app), no root access keys, root not used day-to-day.
+- `fanwire-workload` — account ID `294321867941`, email `daviddemers92+fanwire-workload@gmail.com`. Where the app runs; CDK deploys here.
+- `fanwire-log-archive` — account ID `801132668027`, email `daviddemers92+fanwire-logarchive@gmail.com`. Logs/backups only, holds nothing `workload` can reach or delete.
+
+**Human access (IAM Identity Center)** — SSO start URL `https://d-9d6748d7e4.awsapps.com/start`. No IAM users or long-lived access keys exist for human use in any account.
+- Permission set `AdministratorAccess` → `fanwire-workload`.
+- Permission set `PowerUserAccess` → `fanwire-log-archive` (excludes IAM/Organizations management, so a human SSO session there can't create a backdoor IAM role).
+
+**CI access (OIDC)** — in `fanwire-workload`:
+- OIDC identity provider `token.actions.githubusercontent.com` registered.
+- Role `GitHubActionsDeployRole`, trust policy restricted to `repo:DavidDems/fanwire:ref:refs/heads/main` (audience `sts.amazonaws.com`) — only a workflow run from `main` in this exact repo can assume it.
+- No permissions policy attached yet. CI cannot deploy or touch anything through this role until its permissions are scoped deliberately, once the CDK stacks exist and a human has reviewed the generated IAM policy (immediately before the first `cdk deploy` — see [[prompts/first-pass-manager-agent|first-pass-manager-agent]] Phase 6).
+
+**CloudTrail**
+- Trail `fanwire-workload-trail` in `fanwire-workload`: multi-region, log file validation on, management events (read + write) only.
+- Delivers to S3 bucket `fanwire-cloudtrail-801132668027-ca-central-1-an` in `fanwire-log-archive`: Object Lock on (Governance mode, 90-day default retention), all public access blocked.
+
+**GuardDuty**
+- Delegated administrator: `fanwire-log-archive` (`801132668027`); Organizations trusted access enabled; auto-enable for new Organizations accounts on.
+- `fanwire-workload` and the management account added as member accounts. Org-account-list propagation into the delegated-admin view was still settling as of this setup pass — re-confirm `fanwire-workload` shows GuardDuty status **Enabled** before treating this control as live.
+
+**AWS Config** — enabled in `fanwire-workload` only (not `log-archive` or management).
+- Recording strategy: all resource types, no overrides — global IAM resource types included, recorded in `ca-central-1`.
+- Recording mode: continuous.
+- Delivery bucket: `fanwire-config-294321867941` in `fanwire-workload`.
+- IAM role: AWS Config service-linked role (default).
+- No Config Rules defined yet — recorder only, no compliance evaluation running.
+
+**AWS Budgets** — one cost budget on the management account (rolls up the full consolidated org bill once member accounts have spend): $20/month, alerts at 80% and 100% of actual, emailed to `daviddemers92@gmail.com`. No automated actions configured.
+
+**Outstanding**
+- `GitHubActionsDeployRole` has no permissions — blocks any real `cdk deploy`, by design, until Phase 6 stacks exist and get reviewed.
+- GuardDuty member-account propagation not yet reverified.
+- No AWS Config Rules defined.
+- No incident runbook written (per [[reference/Security|Security]] "Detection & response").
+- Security Hub not enabled (optional at this budget, per [[reference/Security|Security]]).

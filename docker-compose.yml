@@ -1,0 +1,52 @@
+# Local dev + test orchestration only — nothing here is the production
+# deployment (that's Lambda container images + S3/CloudFront via CDK, see
+# reference/AWS Stack.md and docker/*.Dockerfile). This gives:
+#   - a real Postgres to run integration tests against (matching RDS, not
+#     an in-memory substitute), per reference/Design principles.md testing
+#     pyramid guidance
+#   - a local DynamoDB for the idempotency-key / live-score-cache tables
+#   - one-shot test runners for backend and frontend, same images CI builds
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fanwire
+      POSTGRES_PASSWORD: fanwire
+      POSTGRES_DB: fanwire
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fanwire"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory"]
+    ports:
+      - "8000:8000"
+
+  backend-test:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dynamodb-local:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
+      AWS_ENDPOINT_URL_DYNAMODB: http://dynamodb-local:8000
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+
+  frontend-test:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: test

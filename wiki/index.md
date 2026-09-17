@@ -2,7 +2,7 @@
 
 **Agent-facing.** This wiki is the working context for building `fanwire` (the sports discussion app — see [[reference/Projects|Projects]] for the full business rules). It states current implementation decisions only; it is not a history of how those decisions were reached — see git history for that once code exists.
 
-Read this wiki alongside [[reference/Design principles|Design principles]] (universal rules), [[reference/AWS Stack|AWS Stack]] (infrastructure), [[reference/Security|Security]] (security requirements), and [[reference/Gang of Four Example|Gang of Four Example]] (pattern usage) — each module file below cites the specific lines in those docs that justify its choices rather than restating them.
+Read this wiki alongside [[reference/Design principles|Design principles]] (universal rules), [[reference/AWS Stack|AWS Stack]] (infrastructure), [[reference/Security|Security]] (security requirements), [[reference/Gang of Four Example|Gang of Four Example]] (pattern usage), and [[reference/Build & Deployment|Build & Deployment]] (package inventory and container strategy) — each module file below cites the specific lines in those docs that justify its choices rather than restating them.
 
 This wiki also serves as a template: the structure and per-entity documentation format here is meant to be reused for future projects, not just `fanwire`.
 
