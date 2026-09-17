@@ -9,12 +9,25 @@ dependency works against a throwaway route defined in this test module,
 per the task's instructions not to touch app.main this phase.
 """
 
+from datetime import date
+
+import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+from testcontainers.postgres import PostgresContainer
 
+from app.db import Base, make_engine, make_session_factory
+from app.dependencies import get_session
 from app.settings import Settings
 from app.users.auth import FakeTokenVerifier, RefreshingTokenVerifier, VerifiedIdentity
-from app.users.dependencies import _default_token_verifier, get_current_identity, get_token_verifier
+from app.users.dependencies import (
+    _default_token_verifier,
+    get_current_identity,
+    get_current_user,
+    get_token_verifier,
+)
+from app.users.models import User
+from app.users.service import create_user, soft_delete_user
 
 
 def _make_app():
@@ -109,3 +122,93 @@ def test_get_token_verifier_differs_for_different_settings():
     second = get_token_verifier(_settings(cognito_user_pool_id="us-east-1_pool-b"))
 
     assert first is not second
+
+
+# --- get_current_user -------------------------------------------------
+#
+# Resolves the verified token's `sub` to this app's local User row. Needs a
+# real Postgres-backed session (via testcontainers, same fixture pattern as
+# backend/tests/users/test_service.py) since it queries the users table.
+
+
+@pytest.fixture(scope="module")
+def postgres_url():
+    with PostgresContainer("postgres:16-alpine") as pg:
+        yield pg.get_connection_url().replace("psycopg2", "psycopg")
+
+
+@pytest.fixture()
+def session_factory(postgres_url):
+    engine = make_engine(postgres_url)
+    Base.metadata.create_all(engine)
+    yield make_session_factory(engine)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+def _make_current_user_app(*, identity: VerifiedIdentity, session_factory):
+    app = FastAPI()
+
+    @app.get("/me")
+    def me(user: User = Depends(get_current_user)):
+        return {"id": user.id, "username": user.username}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(identity)
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_current_user_resolves_to_the_matching_active_user(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-resolve-me",
+            username="resolveme",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    identity = VerifiedIdentity(sub="sub-resolve-me")
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "username": "resolveme"}
+
+
+def test_get_current_user_404s_when_no_user_row_matches_the_sub(session_factory):
+    identity = VerifiedIdentity(sub="sub-with-no-profile")
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
+
+
+def test_get_current_user_404s_when_the_matching_row_is_soft_deleted(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-soft-deleted",
+            username="softdeleted",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+
+    identity = VerifiedIdentity(sub="sub-soft-deleted")
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
