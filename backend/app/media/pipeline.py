@@ -180,7 +180,38 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
         self._thumbnail_bytes: bytes | None = None
 
     def validate_type(self) -> None:
-        raise NotImplementedError
+        obj = self._s3_client.get_object(
+            Bucket=self._quarantine_bucket, Key=self._media.s3_key_quarantine
+        )
+        data = obj["Body"].read()
+
+        if len(data) > self.MAX_SIZE_BYTES:
+            raise MediaRejected(
+                f"object exceeds {self.MAX_SIZE_BYTES} byte size cap ({len(data)} bytes)"
+            )
+
+        # Never trust the client-declared Content-Type or file extension —
+        # actually open/parse it with Pillow, per wiki/CodeContext/Standards/
+        # security.md "User-generated content". This is also how SVG (and
+        # any other non-raster or malformed content) gets rejected: Pillow
+        # either can't parse it at all, or — if some plugin somehow does —
+        # the resulting format still isn't in ALLOWED_MIME_TYPES below.
+        try:
+            image = Image.open(io.BytesIO(data))
+            image.load()
+        except Exception as exc:
+            raise MediaRejected("not a parseable image") from exc
+
+        mime_type = Image.MIME.get(image.format)
+        if mime_type not in self.ALLOWED_MIME_TYPES:
+            raise MediaRejected(f"mime type {mime_type!r} not in allow-list")
+
+        # Set from what was actually observed, never a client-declared value
+        # — there isn't one available here anyway, this pipeline only ever
+        # sees what's in S3.
+        self._media.mime_type = mime_type
+        self._media.size_bytes = len(data)
+        self._raw_bytes = data
 
     def scan_for_malware(self) -> None:
         clean = self._malware_scanner.scan(
