@@ -38,7 +38,7 @@
     "@testing-library/user-event": "^14.5.0",
     "msw": "^2.4.0",
     "eslint": "^9.10.0",
-    "@typescript-eslint/eslint-parser": "^8.5.0",
+    "@typescript-eslint/parser": "^8.5.0",
     "@typescript-eslint/eslint-plugin": "^8.5.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "prettier": "^3.3.0",
