@@ -1,5 +1,43 @@
 # fanwire — Phase 4 Manager Agent Brief: Frontend + CDK Infra
 
+## Status: PAUSED 2026-09-17, handoff for human input and for a resumed manager session
+
+**Human: answer the "Decisions needed" items inline below (just type under each one), then tell the next session to read this section first.**
+
+### Why the plan changed
+This brief assumed Phases 0–3 were done. They weren't: `notifications/` (#12) and `CachedEventProxy` (#11) shipped, but **`feed/` and `search/` were never built**, and #11/#12 were sibling branches off `phase-2-posts-routes`, not stacked. So the manager is closing Phase 3 first as preliminary units, following the Phase 2a/`CachedEventProxy` precedent, before any frontend work.
+
+### Branches and where the work lives
+| Branch (on origin) | What | State |
+|---|---|---|
+| `phase-3-users-me` | Merge of #11 into #12 (commit `360ee40`), then the `users/` gap unit: `GET/PATCH /users/me`, `GET /users/me/following`, `get_optional_current_user`, read helpers for feed/search, **PII fix** (public `GET /users/{id}` was returning `date_of_birth`) | Subagent was running when paused; check `git log origin/phase-3-users-me` |
+| `phase-4-infra` | Full CDK app in `infra/`, based on `phase-3-notifications`, parallel track | Subagent was running when paused; check `git log origin/phase-4-infra` |
+
+Subagent worktrees are under `.claude/worktrees/` (`git worktree list` shows which branch each holds). An interrupted subagent's committed work is safe on its branch. Per Phase 2's provenance note, resume from the worktree rather than restarting.
+
+### Remaining plan (in order)
+1. Review/verify `phase-3-users-me` (docker backend-test, ruff, pip-audit, connection rule), then open its PR (base `phase-3-notifications`; note in the description that it includes the #11 merge).
+2. **`feed/`** unit (not dispatched yet, per human instruction). Contract: `GET /feed?before_id=&limit=` (≤50, keyset pagination by post id). Guest (no token) gets the most-recent-posts-globally strategy; authenticated gets reverse-chron from follows + preferred-team `EventMention`s. `FeedRankingStrategy` (Strategy), one concrete strategy plus the guest one. Response items are a `PostView` (post fields + author `{id, username, profile_picture_media_id}` + `like_count` + `liked_by_viewer` + processed media keys + mentioned game ids + optional live scores via `CachedEventProxy`). Everything is read through narrow public read functions in the owning modules, never their tables. Live-score failures degrade to "no score" and never fail the feed. `Game` has no status column, so "live" means a game dated within the last ~4h. Skip posts by soft-deleted authors.
+3. **`search/`** unit. `GET /search/accounts?q=` and `GET /search/posts?q=` (two independently paginated sections; the UI shows accounts first), `GET /search/games?season=&team_id=&position=` (plain filters, no free text). `tsvector` as `GENERATED ALWAYS ... STORED` + GIN, **declared in the owning models** (users/, posts/) with search functions exposed there. `search/` stays table-less orchestration. Post results reuse feed's `PostView` assembler.
+4. Frontend units 1–7 per this brief, sequential, each on top of `search/`. Commit `backend/openapi.json` and add a CI check that it's current.
+5. Review the infra PR, write the final whole-build summary and process-outcomes report.
+
+### Decisions needed from the human
+1. **No-NAT vs. external calls (real topology contradiction).** Lambdas must sit in the VPC to reach RDS, and NAT Gateway is rejected. As documented, the ingestion Lambda therefore can't reach API-SPORTS and the API Lambda can't fetch Cognito's JWKS. The infra subagent was told to investigate (IPv6 egress-only IGW, Cognito interface endpoint, splitting the fetch outside the VPC) and flag its pick. Your call on the final answer; a cheap NAT *instance* (~$3/mo, not a NAT Gateway) is also an option.
+   > _your answer:_
+2. **VPC interface-endpoint cost.** ~$7/mo each per AZ against the $20/mo org budget. Is single-AZ endpoints acceptable?
+   > _your answer:_
+3. **Local auth for browser testing.** No real Cognito pool exists (no deploy), so the frontend login flow can't be clicked through against AWS. Plan: run `cognito-local` (a Cognito emulator) in docker-compose, with the backend's JWKS URL/issuer made configurable. Fallback if that doesn't work: a dev-only fake auth adapter guarded fail-fast to local env. OK?
+   > _your answer:_
+4. **DOB removed from public profiles.** Only `GET /users/me` returns it. Confirm that's the intended privacy rule.
+   > _your answer:_
+
+### Coordination points already found (for the process-outcomes report)
+- CloudFront `/api/*` → API Gateway must strip the `/api` prefix (FastAPI routes have none). This was pinned to the infra agent as a cross-track contract, so frontend and infra were **not** fully independent.
+- `dynamodb-local` holds host port 8000 (uvicorn's default), so the local backend dev server needs another port (e.g. 8001).
+- The CDK IAM rule "no `*` in Action" forbids CDK `grant*()` helpers, which emit wildcard actions. The infra agent is enforcing it with a jest test walking every synthesized policy, which is a candidate real technical gate.
+- Backend Lambda entrypoints for ingestion, media-processing and the notification consumer don't exist yet. Infra references them by name only.
+
 You are the **manager agent** for the fourth and final implementation pass of `fanwire`'s first full build. Same operating model as `wiki/GeneralContext/Prompts/first-pass-manager-agent.md`, `wiki/GeneralContext/Prompts/phase-2-manager-agent.md`, and `wiki/GeneralContext/Prompts/phase-3-manager-agent.md` — skim all three once, particularly each one's "Process outcomes" section, before you start; don't re-derive what they already settled. You delegate each unit to a subagent, review/integrate, keep TDD (where it applies — see below, frontend and infra have different verification shapes than a pure-Python backend module) and the connection rule enforced, keep the wiki current. You do not write most of the code yourself.
 
 ## State when you start
