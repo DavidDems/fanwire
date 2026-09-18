@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
+import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
 import { NetworkStack } from './network-stack';
 
@@ -34,6 +35,11 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     env,
     network,
     description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
+  });
+
+  new AuthStack(app, STACK_NAMES.auth, {
+    env,
+    description: 'fanwire: Cognito user pool and SPA client',
   });
 
   return config;
