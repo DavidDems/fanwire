@@ -13,7 +13,9 @@ objects for the basketball endpoints) — it has NOT been verified against a
 real API-SPORTS response. Whoever wires the real ingestion Lambda in a later
 phase MUST reconcile this adapter's field parsing (and its auth scheme, see
 `__init__` below) against the actual API-SPORTS basketball endpoint
-docs/response before going live.
+docs/response before going live. This includes fetch_live_score's guessed
+endpoint shape (`/games?id=...`) and its `status.short` field — same
+caveat, same reconciliation task.
 -------------------------------------------------------------------------------
 """
 
@@ -22,7 +24,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Protocol
 
-from app.events.interfaces import NormalizedGame, NormalizedTeam, SportsDataSource
+from app.events.interfaces import (
+    NormalizedGame,
+    NormalizedLiveScore,
+    NormalizedTeam,
+    SportsDataSource,
+)
 
 
 class HttpClient(Protocol):
@@ -68,6 +75,22 @@ class ApiSportsAdapter(SportsDataSource):
         payload = response.json()
         return [self._to_normalized_game(item) for item in payload["response"]]
 
+    def fetch_live_score(self, api_sports_game_id: int) -> NormalizedLiveScore | None:
+        # Illustrative/unverified endpoint shape, same caveat as the rest of
+        # this file (see module docstring): guessed as the same `/games`
+        # endpoint fetch_games uses, filtered by an `id` query param, per
+        # API-SPORTS' typical REST conventions of scoping a collection
+        # endpoint down to one resource via a query param rather than a
+        # distinct path. Not verified against real API-SPORTS docs.
+        params = self._auth_params()
+        params["id"] = api_sports_game_id
+        response = self._http_client.get(f"{self._base_url}/games", params=params)
+        payload = response.json()
+        items = payload["response"]
+        if not items:
+            return None
+        return self._to_normalized_live_score(items[0])
+
     def _auth_params(self) -> dict[str, Any]:
         # The injected HttpClient interface is deliberately narrow
         # (get(url, params=None), no headers kwarg) so any HTTP library
@@ -111,4 +134,17 @@ class ApiSportsAdapter(SportsDataSource):
             away_score=item["scores"]["away"]["total"],
             venue=item.get("arena", {}).get("name"),
             player_stats=player_stats,
+        )
+
+    @staticmethod
+    def _to_normalized_live_score(item: dict[str, Any]) -> NormalizedLiveScore:
+        # `status.short` is a guessed vendor field name (illustrative, same
+        # unverified-vendor-shape caveat as the rest of this file) — reconcile
+        # against real API-SPORTS docs before going live, same as
+        # _to_normalized_game/_normalize_season above.
+        return NormalizedLiveScore(
+            api_sports_game_id=item["id"],
+            home_score=item["scores"]["home"]["total"],
+            away_score=item["scores"]["away"]["total"],
+            status=item["status"]["short"],
         )
