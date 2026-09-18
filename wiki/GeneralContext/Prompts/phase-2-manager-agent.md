@@ -1,5 +1,22 @@
 # fanwire — Phase 2 Manager Agent Brief: posts/ (+ closing the Phase 1 routes gap)
 
+## Status: complete, pending human review — do not redo
+
+Phase 2 shipped as five PRs, stacked on Phase 1's tip (`phase-1-media`), each on its own branch:
+- **#6** `phase-2a-routes-gap` — closes the Phase 1 routes gap this brief identified: real FastAPI routes + real `CognitoTokenVerifier` wiring for `events/`, `users/`, `media/` (previously pure Python, no HTTP surface).
+- **#7** `phase-2-posts-models` — `Post`/`PostLike`/`EventMention`/`Report` models + migration; resolved the "quote-repost flag" and thread-depth-limit open decisions in the wiki.
+- **#8** `phase-2-posts-fk-closure` — closes both FKs Phase 1 deliberately deferred: `Media.post_id → posts.id`, `User.profile_picture_media_id → media.id`.
+- **#9** `phase-2-posts-facade` — `PublishPostFacade`, `MentionParser` (`#GameId` Interpreter), the moderation Chain of Responsibility, `PostEventBus` (Observer) — also wired `users/`'s `follow()` to finally publish `UserFollowed`, closing a Phase 1 no-op now that `PostEventBus` exists.
+- **#10** `phase-2-posts-routes` — `posts/`'s HTTP routes (create/read/replies/like/unlike/report), wired into `app.main`.
+
+All five are CI-green (`docker compose run --rm --build backend-test`, 230 tests passing on #10's tip). Every "Definition of done" item this brief lists below is satisfied. **A fresh agent picking up this repo should start from `wiki/GeneralContext/Prompts/phase-3-manager-agent.md`, not this file** — there is nothing left to do here. This status note exists so nobody re-implements `posts/` from scratch after reading the (still-accurate, kept for reference) brief below.
+
+One thing genuinely **not done** and worth a line in Phase 3 (or later) rather than silently forgotten: `wiki/CodeContext/Standards/security.md`'s "posting is rate-limited per user via API Gateway usage plan + a DynamoDB cache check" — the API Gateway half is Phase 6 infra by nature, but the app-level DynamoDB cache-check half was never called out as its own unit here and nothing in `posts/` implements it. Flagging so it doesn't get lost between phases.
+
+**Provenance note**: the subagent executing this brief (dispatched as "Manager Agent 2") hit a session rate limit mid-run once and was resumed from its worktree with full context preserved (see PRs #6-#9, produced across that interruption with no rework needed). It hit a second stall on PR #10's unit (context/session pressure again) after fully implementing and committing the work but before verifying/pushing/opening the PR — the coordinating session picked up that already-clean, fully-committed worktree, ran the verification suite, fixed one trivial lint nit, and opened #10 on its behalf. Worth knowing for future phases: a subagent this size (a whole manager-agent mandate) can run long enough to hit session limits more than once, and resuming from its worktree rather than restarting preserved all prior work both times — prefer that over a fresh restart if it happens again.
+
+---
+
 You are the **manager agent** for the second implementation pass of `fanwire`. Same operating model as `wiki/GeneralContext/Prompts/first-pass-manager-agent.md` (which you should skim once for the operating model/patterns/constraints — don't re-derive them): you break your mandate into small, well-bounded units, delegate each to a lighter/cheaper subagent, review and integrate what comes back, keep TDD discipline and the connection rule enforced, and keep the wiki current. You do not write most of the code yourself.
 
 ## State when you start
