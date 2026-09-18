@@ -70,6 +70,32 @@ class FakeMalwareScanner(MalwareScanner):
         return self._verdict
 
 
+class GuardDutyScanResultScanner(MalwareScanner):
+    """Real production adapter (app.media.lambda_handler): fed GuardDuty's
+    already-computed verdict from the SQS-delivered "GuardDuty Malware
+    Protection Object Scan Result" EventBridge event -- never calls
+    GuardDuty or scans anything itself (see MalwareScanner's own docstring:
+    the real scan is async/event-driven, not a synchronous call this
+    pipeline can block on). `scan()` ignores its bucket/key arguments: by
+    construction, one instance is built per SQS record for exactly the one
+    object that event's verdict is about, so there's nothing to look up.
+
+    Fail-closed per wiki/CodeContext/Standards/security.md: only the exact
+    "NO_THREATS_FOUND" `scanResultStatus` counts as clean. Every other value
+    -- including "THREATS_FOUND" and any status this pipeline doesn't
+    recognize (a future GuardDuty status this code predates, a malformed
+    event, etc.) -- is treated as not clean, never Processed.
+    """
+
+    NO_THREATS_FOUND = "NO_THREATS_FOUND"
+
+    def __init__(self, scan_result_status: str) -> None:
+        self._clean = scan_result_status == self.NO_THREATS_FOUND
+
+    def scan(self, *, bucket: str, key: str) -> bool:
+        return self._clean
+
+
 class AbstractMediaUploadPipeline(abc.ABC):
     """Fixes the upload pipeline skeleton; subclasses implement each step.
     See wiki/CodeContext/Standards/gof-patterns.md's Template Method entry.
