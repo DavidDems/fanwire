@@ -154,7 +154,8 @@ def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory, d
 
 
 def test_dedupe_writes_an_expiration_ttl_24_hours_out(session_factory, dynamodb_client):
-    with session_factory() as session, freeze_time("2026-01-01T00:00:00+00:00") as frozen:
+    frozen_now = datetime(2026, 1, 1, tzinfo=UTC)
+    with session_factory() as session, freeze_time(frozen_now):
         _seed_teams(session)
         pipeline = _pipeline(_FakeSource([_sample_game()]), session, dynamodb_client)
 
@@ -163,7 +164,7 @@ def test_dedupe_writes_an_expiration_ttl_24_hours_out(session_factory, dynamodb_
         item = dynamodb_client.get_item(
             TableName=IDEMPOTENCY_TABLE_NAME, Key={"id": {"S": "5001"}}
         )["Item"]
-        expected = int(frozen.time_to_freeze.timestamp()) + FinalScoreIngestion.IDEMPOTENCY_TTL_SECONDS
+        expected = int(frozen_now.timestamp()) + FinalScoreIngestion.IDEMPOTENCY_TTL_SECONDS
         assert int(item["expiration"]["N"]) == expected
 
 
