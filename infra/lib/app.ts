@@ -3,6 +3,7 @@ import { FanwireConfig, loadConfig } from './config';
 import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
 import { NetworkStack } from './network-stack';
+import { StorageStack } from './storage-stack';
 
 /** Stack names, shared with the tests so they can look each one up in the cloud assembly. */
 export const STACK_NAMES = {
@@ -31,10 +32,17 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     description: 'fanwire: dual-stack VPC, egress-only IGW, gateway endpoints, security groups (no NAT)',
   });
 
-  new DataStack(app, STACK_NAMES.data, {
+  const data = new DataStack(app, STACK_NAMES.data, {
     env,
     network,
     description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
+  });
+
+  new StorageStack(app, STACK_NAMES.storage, {
+    env,
+    config,
+    key: data.key,
+    description: 'fanwire: quarantine / public-media / frontend buckets, GuardDuty Malware Protection plan',
   });
 
   new AuthStack(app, STACK_NAMES.auth, {
