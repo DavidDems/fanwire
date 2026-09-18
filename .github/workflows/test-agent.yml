@@ -1,19 +1,61 @@
-# Category 3 (scripted execution) per reference/Usage principals.md.
-# Trigger: push to /tests. Model: cheapest tier that passes. Context: task-scoped
-# (branch/PR diff) only. Output: distilled result to reports/test-runs/, fixed
-# low-token format — never feed raw logs back into an interactive agent's context.
-#
-# TODO: not yet implemented. No test runner exists until the backend/frontend
-# codebase is scaffolded (see AGENTS.md "Build / test / run").
 name: test-agent
 
+# Runs both test containers on every PR, per
+# wiki/CodeContext/Standards/build-deployment.md CI/CD wiring. Deploy steps
+# (ECR push, cdk deploy) are separate and only run on merge to main - not
+# defined yet, see wiki/CodeContext/Modules/0x00-architecture.md AWS account
+# state ("GitHubActionsDeployRole has no permissions yet").
+
 on:
+  pull_request:
   push:
-    paths:
-      - "tests/**"
+    branches: [main]
 
 jobs:
-  run-tests:
+  backend-test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "TODO - no test runner defined yet"
+      - uses: actions/checkout@v4
+      - name: Run backend test suite
+        run: docker compose run --rm backend-test
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run frontend test suite
+        run: docker compose run --rm frontend-test
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend package
+        working-directory: backend
+        run: pip install -e ".[dev]"
+      - name: Audit for known CVEs (blocks on any unignored finding)
+        working-directory: backend
+        # PYSEC-2026-1325 (ecdsa, pulled in transitively by python-jose): a
+        # pure-Python timing side-channel with no fix version available
+        # upstream. Accepted risk - see wiki/CodeContext/Modules/0x01-users.md
+        # Cognito JWT verification only uses RS256 (RSA), never the ECDSA
+        # signing path this advisory concerns. Re-check this ignore next time
+        # dependencies are bumped.
+        run: pip-audit --ignore-vuln PYSEC-2026-1325
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Audit for known CVEs (blocks on critical)
+        working-directory: frontend
+        run: npm audit --audit-level=critical
