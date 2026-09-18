@@ -84,4 +84,4 @@ None owns `Follow` directly. It is plain join-table state, not a pattern partici
 - No PII on this table — `follower_user_id`/`followed_user_id` are internal FKs, not exposed identifiers beyond what `User.username` already exposes on profile pages.
 
 ### Open decisions
-None remaining for `Follow`. Notification wiring is settled: `users/` publishes a `UserFollowed` event onto `PostEventBus` (the app's one domain event bus, not `posts/`-exclusive despite the name) — see [[0x00-architecture]] Conventions and [[0x05-notifications]].
+None remaining for `Follow`. Notification wiring is settled and now implemented (Phase 2, `posts/` facade unit — `PostEventBus` didn't exist before then): `app.users.service.follow()` publishes `UserFollowed` onto `app.eventbus.PostEventBus` (the app's one domain event bus, not `posts/`-exclusive despite the name — see [[0x00-architecture]] and [[0x03-posts]]) after a successful follow, never on `SelfFollowError`/`AlreadyFollowingError`. `follow()` now takes `event_bus: PostEventBus` as a required parameter; `app.users.routes.follow_user` supplies it via the new `app.dependencies.get_event_bus`.

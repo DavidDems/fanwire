@@ -7,6 +7,10 @@
 
 Post creation, mention resolution, the media-`Processed` gate, and cross-module fan-out are the `PublishPostFacade`/`PostEventBus`, both defined in [[0x00-architecture]] — not repeated here. That file also already states the "no moderation chain for v1" rule; this file only adds what's specific to the `Report` table.
 
+**Implemented (Phase 2)**: `app.posts.facade.PublishPostFacade` (Facade — the single entry point, sequencing the pre-publish moderation chain → confirm attached `Media` are `Processed` → persist → attach media → resolve mentions → commit → fan-out), `app.posts.mentions` (Interpreter, `#GameId<digits>` only — see `EventMention`'s Open decisions below for the `@user`/`$TEAM` scoping call), `app.posts.moderation` (Chain of Responsibility: `ProfanityFilter → SpamScoreCheck → RateLimitCheck → DuplicateContentCheck`, each injected against a narrow interface with no real production adapter yet — same "future work" precedent as `media/`'s `MalwareScanner`/`GuardDutyMalwareScanner`), `app.eventbus.PostEventBus` (Observer — publishes `PostCreated`/`PostMentionedEvent`/`PostReported`; deliberately **not** placed inside `app.posts` despite the name, since `users/` publishes `UserFollowed` onto the same bus — see [[0x00-architecture]] "Cross-cutting FastAPI DI" for the same top-level-not-module-owned reasoning applied here), `app.posts.service` (`report_post`/`like_post`/`unlike_post`, plain functions matching `app.users.service`'s style).
+
+**Judgment call — `PostEventBus`'s default production wiring is currently a no-op.** `app.dependencies.get_event_bus()` constructs `PostEventBus(InMemoryEventPublisher())` as the *default*, not just a test double — no real `EventPublisher` (EventBridge `PutEvents`) adapter exists yet, so every event published through the real dependency today goes nowhere outside the process. This is consistent with Phase 2's known blockers (no `notifications/`/`feed/`/`search/` subscriber exists until Phase 3 — there is genuinely nothing to deliver to yet), but differs from the `MalwareScanner`/`RateLimiter`/`SpamScorer` precedent where only *tests* use a fake, never the real dependency wiring. Revisit once Phase 3 gives `PostEventBus` an actual subscriber — that's the natural trigger to build a real `EventBridgePublisher` adapter, not before.
+
 ## Post
 Covers original posts, replies, and reposts as **one** table, distinguished by flags — not three tables or a subclass per kind.
 
@@ -58,7 +62,7 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 - **Single source of truth** — like counts are computed from `PostLike` rows, never cached on `Post` itself, until/unless a real read-performance problem justifies a denormalized counter (see Open decisions).
 - **KISS/YAGNI** — plain join table, no extra fields speculatively added.
 
-**Pattern tie-in** — none of Composite/Interpreter/Facade apply; a like is a pure fact table, not a domain object needing a structural or behavioral pattern.
+**Pattern tie-in** — none of Composite/Interpreter/Facade apply; a like is a pure fact table, not a domain object needing a structural or behavioral pattern. **Implemented**: `app.posts.service.like_post`/`unlike_post`, same fail-fast-on-duplicate shape as `app.users.service.follow`/`unfollow`. No `PostEventBus` publish — liking isn't in [[0x00-architecture]]'s list of published events, not invented here.
 
 **AWS mapping** — RDS Postgres, table `post_likes`, unique index on `(user_id, post_id)`.
 
@@ -93,8 +97,9 @@ Join table linking a `Post` to a `Game` row. `Game` is owned by `events/` — se
 - No separate rate limit — mention resolution happens inside `PublishPostFacade` during post creation, so it's covered by the post-creation rate limit, not a second one.
 
 **Open decisions**
-- What happens when `MentionParser` extracts a token that doesn't resolve to any known `Game`/team (game not yet ingested, typo, etc.) — silently dropped, stored as an unresolved placeholder, or rejects the whole post? Not specified in [[wiki/GeneralContext/Architecture/business-rules|Projects]].
-- Whether there's a per-post cap on mention count (spam/abuse vector via mention flooding) — not specified.
+- ~~What happens when `MentionParser` extracts a token that doesn't resolve to any known `Game`~~ — **resolved**: silently dropped from `EventMention` creation, post `text` kept as-authored regardless (`app.posts.mentions.resolve_mentions`).
+- ~~Whether there's a per-post cap on mention count~~ — **resolved**: none. Not specified anywhere; YAGNI cuts against inventing one.
+- **Scope note, also a judgment call**: `MentionParser` (`app.posts.mentions`) implements only `#GameId<digits>` tokens. The GoF reference doc's illustrative example also names `@user` and `$TEAM` tokens; neither is implemented — `@user` because no business rule calls for in-text @mentions and no schema table exists to store one (unlike `EventMention`), `$TEAM` because a bare team abbreviation doesn't identify one specific `Game` row and `EventMention.game_id` is `NOT NULL` (inventing a resolution rule like "most recent game" would be undocumented guesswork, not implementation). The literal business rule — "a sports game result" (singular, specific) — is satisfied by `#GameId` alone.
 
 ## Report
 The **only** reporting-related table for v1, per [[wiki/GeneralContext/Architecture/business-rules|Projects]]'s closing line ("no moderation or reporting for now, only a reported flag on posts with a table for all reported cases"). No justification text field, no status/workflow field — see [[0x00-architecture]] for the broader "moderation chain not built for v1" statement.
@@ -112,7 +117,7 @@ The **only** reporting-related table for v1, per [[wiki/GeneralContext/Architect
 - **KISS/YAGNI** — no status enum, no justification field, no assignee/reviewer field: none of that is called for by the current business rule, and adding it would be speculative.
 
 **Pattern tie-in**
-- None of Composite/Interpreter/Facade apply. Note explicitly: [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]'s `ReportPostCommand` (with `execute()`/`undo()` for a moderation audit trail) is **not implemented** — there's no moderation flow for it to undo into. `posts/` still publishes `PostReported` on the `PostEventBus` per [[0x00-architecture]]'s connection rule, but for v1 no `moderation/`/`reporting/` subscriber exists to consume it.
+- None of Composite/Interpreter/Facade apply. Note explicitly: [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]'s `ReportPostCommand` (with `execute()`/`undo()` for a moderation audit trail) is **not implemented** — there's no moderation flow for it to undo into. `posts/` still publishes `PostReported` on the `PostEventBus` per [[0x00-architecture]]'s connection rule, but for v1 no `moderation/`/`reporting/` subscriber exists to consume it. **Implemented**: `app.posts.service.report_post` (plain function, matching `ReportPostCommand`'s absence — no Command object). Idempotent per the unique constraint above (a repeat `(post_id, reporter_id)` is a no-op, returns `None`, doesn't republish). **Judgment call**: publishes `PostReported` on every new, non-duplicate `Report` row — not only the post's very first report — since each new report is itself meaningful (e.g. a future consumer counting report volume), even though `Post.reported` itself only flips once and is never unset.
 
 **AWS mapping** — RDS Postgres, table `reports`.
 
