@@ -32,7 +32,6 @@ from app.posts.moderation import (
 )
 from app.users.models import User
 
-
 # --- ProfanityFilter ---
 
 
