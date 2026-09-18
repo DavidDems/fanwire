@@ -23,6 +23,7 @@ from functools import lru_cache
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import make_engine, make_session_factory
+from app.eventbus import InMemoryEventPublisher, PostEventBus
 from app.settings import Settings
 
 
@@ -44,6 +45,29 @@ def _get_session_factory() -> sessionmaker[Session]:
     # would be pointless otherwise).
     engine = make_engine(get_settings().database_url)
     return make_session_factory(engine)
+
+
+@lru_cache(maxsize=1)
+def get_event_bus() -> PostEventBus:
+    """Process-wide PostEventBus. Real production wiring needs a real
+    EventPublisher (EventBridge) adapter, which doesn't exist yet (no live
+    AWS this phase) — this constructs one against InMemoryEventPublisher
+    for now, same as every other "no real adapter built yet" precedent in
+    this codebase (MalwareScanner, RateLimiter, SpamScorer). Route tests
+    override this via app.dependency_overrides[get_event_bus], same
+    pattern as get_session/get_token_verifier.
+
+    NOTE (flagged for manager review): unlike those other precedents,
+    this one is wired as the *default production* dependency, not just a
+    test double — every PostCreated/PostMentionedEvent/PostReported/
+    UserFollowed published through this dependency currently goes nowhere
+    outside the process (no real EventBridge PutEvents call). That's
+    consistent with Phase 2's known blockers (no notifications/feed/search
+    subscriber exists until Phase 3), but it means the domain-event fan-out
+    is a no-op end-to-end right now, which is worth a wiki note rather than
+    staying implicit in this function.
+    """
+    return PostEventBus(InMemoryEventPublisher())
 
 
 def get_session() -> Iterator[Session]:

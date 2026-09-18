@@ -12,7 +12,10 @@ from datetime import UTC, date, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.eventbus import PostEventBus
 from app.users.models import Follow, User
+
+USER_FOLLOWED = "UserFollowed"
 
 
 class UserNotFoundError(ValueError):
@@ -76,15 +79,18 @@ def soft_delete_user(session: Session, user_id: int) -> None:
     session.commit()
 
 
-def follow(session: Session, *, follower_user_id: int, followed_user_id: int) -> Follow:
+def follow(
+    session: Session, *, event_bus: PostEventBus, follower_user_id: int, followed_user_id: int
+) -> Follow:
     """Create a Follow row. Raises SelfFollowError before touching the DB
     if the ids are equal, and AlreadyFollowingError (checked first, for a
     clearer error than a raw IntegrityError — "already following" is an
     expected/common case) if the pair already exists.
 
-    Does NOT publish any event: posts/'s PostEventBus doesn't exist until
-    Phase 2, so that wiring is out of scope here — same precedent as
-    app.events.ingestion's match_to_mentions/publish no-ops.
+    Publishes UserFollowed on event_bus after the commit — app.eventbus.
+    PostEventBus is the app's one domain event bus, not posts/-exclusive
+    despite the name (wiki/CodeContext/Modules/0x00-architecture.md
+    "Cross-cutting conventions").
     """
     if follower_user_id == followed_user_id:
         raise SelfFollowError("A user cannot follow themselves")
@@ -103,6 +109,11 @@ def follow(session: Session, *, follower_user_id: int, followed_user_id: int) ->
     row = Follow(follower_user_id=follower_user_id, followed_user_id=followed_user_id)
     session.add(row)
     session.commit()
+
+    event_bus.publish(
+        USER_FOLLOWED,
+        {"follower_user_id": follower_user_id, "followed_user_id": followed_user_id},
+    )
     return row
 
 

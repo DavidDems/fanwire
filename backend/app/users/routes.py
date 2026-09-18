@@ -31,7 +31,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_session
+from app.dependencies import get_event_bus, get_session
+from app.eventbus import PostEventBus
 from app.users.auth import VerifiedIdentity
 from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
@@ -94,9 +95,15 @@ def follow_user(
     user_id: int,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    event_bus: PostEventBus = Depends(get_event_bus),
 ) -> None:
     try:
-        follow(session, follower_user_id=current_user.id, followed_user_id=user_id)
+        follow(
+            session,
+            event_bus=event_bus,
+            follower_user_id=current_user.id,
+            followed_user_id=user_id,
+        )
     except SelfFollowError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except AlreadyFollowingError as exc:
