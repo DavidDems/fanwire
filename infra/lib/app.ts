@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
+import { DataStack } from './data-stack';
 import { NetworkStack } from './network-stack';
 
 /** Stack names, shared with the tests so they can look each one up in the cloud assembly. */
@@ -24,9 +25,15 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
   const env = { account: config.account, region: config.region };
   cdk.Tags.of(app).add('project', 'fanwire');
 
-  new NetworkStack(app, STACK_NAMES.network, {
+  const network = new NetworkStack(app, STACK_NAMES.network, {
     env,
     description: 'fanwire: dual-stack VPC, egress-only IGW, gateway endpoints, security groups (no NAT)',
+  });
+
+  new DataStack(app, STACK_NAMES.data, {
+    env,
+    network,
+    description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
   });
 
   return config;
