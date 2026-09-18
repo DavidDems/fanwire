@@ -16,20 +16,24 @@ describe('Edge stack (us-east-1)', () => {
   });
 
   test('AWS managed Core, Known Bad Inputs and SQLi rule groups + a per-IP rate-based rule', () => {
-    tpl().hasResourceProperties('AWS::WAFv2::WebACL', {
-      Rules: Match.arrayWith(
-        ['AWSManagedRulesCommonRuleSet', 'AWSManagedRulesKnownBadInputsRuleSet', 'AWSManagedRulesSQLiRuleSet'].map((name) =>
+    // separate assertions: arrayWith is order-sensitive, rule order is a priority choice
+    for (const name of ['AWSManagedRulesCommonRuleSet', 'AWSManagedRulesKnownBadInputsRuleSet', 'AWSManagedRulesSQLiRuleSet']) {
+      tpl().hasResourceProperties('AWS::WAFv2::WebACL', {
+        Rules: Match.arrayWith([
           Match.objectLike({
             Statement: { ManagedRuleGroupStatement: { VendorName: 'AWS', Name: name } },
             OverrideAction: { None: {} },
           }),
-        ).concat([
-          Match.objectLike({
-            Action: { Block: {} },
-            Statement: { RateBasedStatement: Match.objectLike({ AggregateKeyType: 'IP', Limit: Match.anyValue() }) },
-          }),
         ]),
-      ),
+      });
+    }
+    tpl().hasResourceProperties('AWS::WAFv2::WebACL', {
+      Rules: Match.arrayWith([
+        Match.objectLike({
+          Action: { Block: {} },
+          Statement: { RateBasedStatement: Match.objectLike({ AggregateKeyType: 'IP', Limit: Match.anyValue() }) },
+        }),
+      ]),
     });
   });
 });
