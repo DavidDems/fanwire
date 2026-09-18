@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
 import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
+import { MessagingStack } from './messaging-stack';
 import { NetworkStack } from './network-stack';
 import { StorageStack } from './storage-stack';
 
@@ -38,11 +39,18 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
   });
 
-  new StorageStack(app, STACK_NAMES.storage, {
+  const storage = new StorageStack(app, STACK_NAMES.storage, {
     env,
     config,
     key: data.key,
     description: 'fanwire: quarantine / public-media / frontend buckets, GuardDuty Malware Protection plan',
+  });
+
+  new MessagingStack(app, STACK_NAMES.messaging, {
+    env,
+    key: data.key,
+    quarantineBucket: storage.quarantineBucket,
+    description: 'fanwire: PostEventBus, SQS queues + DLQs, EventBridge rules',
   });
 
   new AuthStack(app, STACK_NAMES.auth, {
