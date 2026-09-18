@@ -195,6 +195,28 @@ def mentioned_game_ids_by_post(session: Session, post_ids: Collection[int]) -> d
     return result
 
 
+def search_posts(session: Session, query: str, *, limit: int, offset: int) -> list[Post]:
+    """Full-text search over Post.search_vector (post text), per
+    wiki/CodeContext/Modules/0x07-search.md. Queried with
+    websearch_to_tsquery('english', :q) -- func.websearch_to_tsquery(...)
+    below passes `query` as a bind parameter, never interpolated into SQL
+    text, and websearch_to_tsquery itself tolerates arbitrary user input
+    (quotes, operators, etc.) without raising. Replies are included (no
+    is_reply filter); posts whose author is soft-deleted are excluded.
+    Ordered by rank desc, then newest first."""
+    tsquery = func.websearch_to_tsquery("english", query)
+    stmt = (
+        select(Post)
+        .join(User, User.id == Post.author_id)
+        .where(User.deleted_at.is_(None))
+        .where(Post.search_vector.op("@@")(tsquery))
+        .order_by(func.ts_rank(Post.search_vector, tsquery).desc(), Post.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(session.scalars(stmt).all())
+
+
 def replies_to(session: Session, post_id: int) -> list[Post]:
     """Direct replies only, oldest first (natural thread reading order),
     excluding soft-deleted authors -- same author-visibility rule as
