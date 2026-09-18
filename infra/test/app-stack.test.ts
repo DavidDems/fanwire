@@ -62,7 +62,8 @@ describe('App stack: one shared Lambda image', () => {
       .filter((a) => Object.keys(a.contents.dockerImages ?? {}).length > 0);
     const [image] = Object.values(manifest!.contents.dockerImages ?? {});
     const dir = path.join(synth().assembly.directory, image!.source.directory!);
-    expect(fs.readdirSync(dir).sort()).toEqual(['backend', 'docker']);
+    // CDK always stages .dockerignore alongside the context (Docker reads it at build time)
+    expect(fs.readdirSync(dir).sort()).toEqual(['.dockerignore', 'backend', 'docker']);
     expect(fs.readdirSync(path.join(dir, 'docker'))).toEqual(['backend.Dockerfile']);
     for (const entry of fs.readdirSync(path.join(dir, 'backend'))) {
       expect(['alembic', 'alembic.ini', 'app', 'pyproject.toml', 'tests']).toContain(entry);
