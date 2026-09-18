@@ -25,7 +25,17 @@ built interfaces" applying here at the schema-registration level too, not
 just at the application-code level.
 """
 
-import app.events.models
-import app.media.models
-import app.posts.models
-import app.users.models  # noqa: F401 — registers User/Follow on Base.metadata
+from app.events import models as _events_models  # noqa: F401 — registers Team/Game
+from app.media import models as _media_models  # noqa: F401 — registers Media
+from app.posts import models as _posts_models  # noqa: F401 — Post/PostLike/EventMention/Report
+from app.users import models as _users_models  # noqa: F401 — registers User/Follow
+
+# Each import above is aliased to a distinct name (rather than this repo's
+# usual `import app.x.models` form) so ruff's F401 check treats every one
+# independently. With the shared `import app.x.models` form, all four
+# statements bind the same top-level `app` name, and pyflakes/ruff consider
+# an earlier import "used" by a later one that also touches `app` - which
+# made three of the four `# noqa: F401` comments spuriously "unused"
+# (RUF100) depending purely on import order, not on whether the import
+# itself does anything. Distinct aliases make every noqa genuinely
+# necessary and order-independent.
