@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from app.events.adapters import ApiSportsAdapter
-from app.events.interfaces import NormalizedTeam
+from app.events.interfaces import NormalizedLiveScore, NormalizedTeam
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "api_sports_sample.json"
 SAMPLE = json.loads(FIXTURE_PATH.read_text())
@@ -94,8 +94,22 @@ def test_fetch_games_returns_normalized_games_with_player_stats(adapter):
     assert game.away_score == 108
     assert game.venue == "TD Garden"
     assert game.player_stats == [
-        {"player_name": "Jayson Tatum", "team_id": 12, "points": 28, "rebounds": 7, "assists": 5},
-        {"player_name": "LeBron James", "team_id": 17, "points": 25, "rebounds": 8, "assists": 9},
+        {
+            "player_name": "Jayson Tatum",
+            "team_id": 12,
+            "points": 28,
+            "rebounds": 7,
+            "assists": 5,
+            "position": "SF",
+        },
+        {
+            "player_name": "LeBron James",
+            "team_id": 17,
+            "points": 25,
+            "rebounds": 8,
+            "assists": 9,
+            "position": "SF",
+        },
     ]
 
 
@@ -105,6 +119,50 @@ def test_fetch_games_passes_since_as_a_date_query_param(adapter, fake_client):
     _, params = fake_client.calls[0]
     assert params is not None
     assert params["date"] == "2025-11-01"
+
+
+class _FakeLiveScoreHttpClient:
+    """Stub for the live-score endpoint only — separate from _FakeHttpClient
+    since fetch_live_score hits the same `/games` URL suffix as fetch_games
+    but is disambiguated by the `id` query param, not the URL."""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._payload = payload
+        self.calls: list[tuple[str, dict[str, Any] | None]] = []
+
+    def get(self, url: str, params: dict[str, Any] | None = None) -> _FakeResponse:
+        self.calls.append((url, params))
+        return _FakeResponse(self._payload)
+
+
+def test_fetch_live_score_returns_normalized_live_score():
+    payload = {
+        "response": [
+            {
+                "id": 5001,
+                "scores": {"home": {"total": 56}, "away": {"total": 52}},
+                "status": {"short": "in_progress"},
+            }
+        ]
+    }
+    client = _FakeLiveScoreHttpClient(payload)
+    adapter = ApiSportsAdapter(client, base_url="https://example.invalid/v1", api_key="test-key")
+
+    score = adapter.fetch_live_score(5001)
+
+    assert score == NormalizedLiveScore(
+        api_sports_game_id=5001, home_score=56, away_score=52, status="in_progress"
+    )
+    url, params = client.calls[0]
+    assert url.endswith("/games")
+    assert params["id"] == 5001
+
+
+def test_fetch_live_score_returns_none_when_vendor_has_no_data_for_the_game():
+    client = _FakeLiveScoreHttpClient({"response": []})
+    adapter = ApiSportsAdapter(client, base_url="https://example.invalid/v1", api_key="test-key")
+
+    assert adapter.fetch_live_score(9999) is None
 
 
 def test_api_key_is_injected_not_hardcoded(fake_client):
