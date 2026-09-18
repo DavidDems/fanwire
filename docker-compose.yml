@@ -44,6 +44,13 @@ services:
       AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
+    # docker-outside-of-docker: a handful of tests (e.g. test_db_session.py)
+    # use testcontainers to spin up their own ephemeral Postgres rather than
+    # the `postgres` service above, for tests that need a throwaway instance
+    # with no shared state. Mounting the host socket lets testcontainers
+    # start sibling containers on the host daemon from inside this one.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   frontend-test:
     build:

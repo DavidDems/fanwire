@@ -24,7 +24,25 @@ Load just-in-time, not the whole wiki. A manager-tier agent reads `wiki/GeneralC
 - Follow `wiki/CodeContext/Standards/gof-patterns.md` for which pattern implements which piece of behavior — don't introduce a different pattern for something already assigned one there.
 
 ## Build / test / run
-Not yet defined — no code exists. Add real commands here the moment the first scaffold (FastAPI app, CDK stack, or React app) is created; do not leave this section stale once code exists.
+Backend (`backend/`), frontend (`frontend/`), infra (`infra/`) each have their own scaffold now (Phase 0). Prefer the `docker-compose` commands below — they run in the same containers CI uses. Direct commands are for fast local iteration.
+
+**Backend**
+- Test (containerized, matches CI): `docker compose run --rm backend-test`
+- Test (direct, from `backend/`): `.venv/Scripts/python -m pytest tests/` (create the venv once: `python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"`)
+- Alembic migration: `DATABASE_URL=... .venv/Scripts/python -m alembic upgrade head` (or `revision --autogenerate -m "..."`)
+- Lint/type-check: `.venv/Scripts/python -m ruff check .`, `.venv/Scripts/python -m mypy app`
+
+**Frontend** (from `frontend/`)
+- Test (containerized, matches CI): `docker compose run --rm frontend-test`
+- Test (direct): `npm test` / `npm run test:watch`
+- Dev server: `npm run dev`
+- Build: `npm run build`
+- Typecheck: `npm run typecheck`
+- Lint: `npm run lint`
+
+**Infra** (from `infra/`) — not yet scaffolded (Phase 6): `npm run synth` will run `cdk synth` once the CDK stacks exist. `cdk deploy` is out of scope until a human reviews the generated IAM policy.
+
+**CI**: `.github/workflows/test-agent.yml` builds and runs both `backend-test` and `frontend-test` targets on every PR.
 
 ## Workflow
 1. Write a failing test against the requested change first, against the intended interface even if the entity doesn't exist yet. Commit it alone.
