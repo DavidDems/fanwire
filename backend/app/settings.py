@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # ARN of the Secrets Manager secret holding the real API-SPORTS key
     # (infra/lib/app-stack.ts's `data.apiSportsSecret`, ingestion Lambda
     # only). Read once per cold start and cached -- see
-    # app.events.dependencies._resolve_api_sports_key. api_sports_key (an
+    # app.events.dependencies.resolve_api_sports_key. api_sports_key (an
     # env var, e.g. for local dev/tests) always wins over this when both are
     # set, so a developer can override the vendor key without touching
     # Secrets Manager.

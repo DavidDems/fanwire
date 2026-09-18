@@ -6,15 +6,18 @@ reaches CachedEventProxy -- never constructing one directly, same
 Dependency Inversion shape as app.users.dependencies.get_token_verifier /
 app.media.dependencies.get_s3_client.
 
-No real DynamoDB-backed LiveScoreCache adapter exists yet (see
-app.events.proxy's own module docstring) -- that's future work, not
-something this dependency papers over. This wires InMemoryLiveScoreCache as
-the production default for now, the same "no real adapter built yet, wire
-the in-process one as the default" precedent as
-app.dependencies.get_event_bus (InMemoryEventPublisher) and
+Wires the real DynamoDbLiveScoreCache (app.events.proxy) once
+Settings.live_score_cache_table_name is set, otherwise InMemoryLiveScoreCache
+for local dev/tests -- same "no real adapter until the table name is known"
+precedent as app.dependencies.get_event_bus (InMemoryEventPublisher) and
 app.posts.dependencies.get_moderation_chain (FakeSpamScorer/FakeRateLimiter).
 
-_UrllibHttpClient is a minimal stdlib-only implementation of
+UrllibHttpClient/resolve_api_sports_key are also imported by
+app.events.lambda_handler (the ingestion Lambda) -- shared here rather than
+duplicated, since both call sites need the same stdlib-only HTTP client and
+the same Settings.api_sports_key/api_sports_secret_arn resolution order.
+
+UrllibHttpClient is a minimal stdlib-only implementation of
 app.events.adapters.HttpClient -- httpx is a [project.optional-dependencies]
 dev-only dependency in pyproject.toml (used for FastAPI's TestClient), not
 part of the Lambda runtime image, so using it here would add a real
@@ -41,7 +44,7 @@ from app.events.proxy import CachedEventProxy, DynamoDbLiveScoreCache, InMemoryL
 from app.settings import Settings
 
 
-class _UrllibJsonResponse:
+class UrllibJsonResponse:
     def __init__(self, payload: Any) -> None:
         self._payload = payload
 
@@ -49,17 +52,17 @@ class _UrllibJsonResponse:
         return self._payload
 
 
-class _UrllibHttpClient:
+class UrllibHttpClient:
     """Satisfies app.events.adapters.HttpClient using only the standard
     library -- see module docstring for why httpx isn't used here."""
 
-    def get(self, url: str, params: dict[str, Any] | None = None) -> _UrllibJsonResponse:
+    def get(self, url: str, params: dict[str, Any] | None = None) -> UrllibJsonResponse:
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
         # Fixed https vendor URL built from Settings, never user input.
         with urllib.request.urlopen(url, timeout=10) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        return _UrllibJsonResponse(payload)
+        return UrllibJsonResponse(payload)
 
 
 @lru_cache(maxsize=1)
@@ -84,7 +87,7 @@ def _cached_secret_value(secret_arn: str, region: str) -> str:
     return _secrets_manager_client(region).get_secret_value(SecretId=secret_arn)["SecretString"]
 
 
-def _resolve_api_sports_key(settings: Settings) -> str:
+def resolve_api_sports_key(settings: Settings) -> str:
     """Settings.api_sports_key (an env var -- local dev/tests, or an
     operator override) always wins when set. Otherwise, when
     Settings.api_sports_secret_arn is set (infra/lib/app-stack.ts's
@@ -114,7 +117,7 @@ def _process_level_proxy(
     # instance), same pattern as app.users.dependencies._default_token_verifier
     # -- one CachedEventProxy (and its cache) per process, per distinct
     # API-SPORTS config, never rebuilt per request/call.
-    adapter = ApiSportsAdapter(_UrllibHttpClient(), base_url=base_url, api_key=api_key)
+    adapter = ApiSportsAdapter(UrllibHttpClient(), base_url=base_url, api_key=api_key)
     cache: InMemoryLiveScoreCache | DynamoDbLiveScoreCache
     if live_score_cache_table_name:
         cache = DynamoDbLiveScoreCache(
@@ -134,7 +137,7 @@ def get_live_score_proxy(settings: Settings = Depends(get_settings)) -> CachedEv
     Settings.live_score_cache_table_name is set, otherwise
     InMemoryLiveScoreCache (local dev/tests), same "no real adapter until
     the table name is known" precedent as app.dependencies.get_event_bus."""
-    api_key = _resolve_api_sports_key(settings)
+    api_key = resolve_api_sports_key(settings)
     if not api_key:
         return None
     return _process_level_proxy(
