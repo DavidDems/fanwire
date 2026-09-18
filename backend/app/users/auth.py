@@ -78,6 +78,18 @@ class CognitoTokenVerifier(TokenVerifier):
         except JOSEError as exc:
             raise InvalidTokenError(str(exc)) from exc
 
+        # jose's own audience check (jose.jwt._validate_aud, installed
+        # python-jose 3.5.0) returns immediately, with no error, when
+        # "aud" is absent from the claims — so `audience=` above never
+        # rejects an audience-less token. Cognito *access* tokens carry
+        # `client_id`, not `aud`, so without this explicit check an access
+        # token for this pool would otherwise pass verification. The SPA
+        # only ever sends ID tokens (wiki/GeneralContext/Architecture/
+        # dev-auth-setup.md "Contract notes"), which always carry both
+        # `token_use: "id"` and `aud`.
+        if claims.get("token_use") != "id" or "aud" not in claims:
+            raise InvalidTokenError("token is not a Cognito ID token")
+
         return VerifiedIdentity(sub=claims["sub"], email=claims.get("email"))
 
     def _matching_key(self, token: str) -> dict[str, Any]:

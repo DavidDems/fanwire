@@ -23,6 +23,11 @@ coverage/
 # CDK / infra
 cdk.out/
 .cdk.staging/
+# `npm run build` in infra/ is type-check only (tsconfig noEmit); ignore stray tsc output anyway
+infra/bin/**/*.js
+infra/lib/**/*.js
+infra/test/**/*.js
+infra/**/*.d.ts
 
 # Env / secrets
 .env

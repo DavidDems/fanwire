@@ -59,3 +59,26 @@ jobs:
       - name: Audit for known CVEs (blocks on critical)
         working-directory: frontend
         run: npm audit --audit-level=critical
+
+  # CDK type-check, lint, tests and synth, including test/iam-policy.test.ts
+  # (the IAM wildcard gate) -- a merge gate, not a deploy. No AWS credentials
+  # are configured for this job and it never runs cdk deploy/diff/bootstrap.
+  # Synth stages the Lambda image's build context but doesn't build the
+  # image, so no Docker is needed here.
+  infra-synth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+      - run: npm run synth
