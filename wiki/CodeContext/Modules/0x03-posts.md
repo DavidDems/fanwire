@@ -39,10 +39,12 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 - **Rate limiting**: posting is rate-limited per user via API Gateway usage plan + a DynamoDB cache check, per wiki/CodeContext/Standards/security.md's user-generated-content section.
 
 **Open decisions**
-- Whether a "quote repost" (repost + own commentary) needs its own flag, or is just `is_repost=true` with non-empty `text` — [[wiki/GeneralContext/Architecture/business-rules|Projects]] only says "repost," doesn't distinguish.
+- ~~Whether a "quote repost" needs its own flag~~ — **resolved**: no separate flag. `is_repost=true` with non-empty `text` *is* a quote-repost; `is_repost=true` with null/empty `text` is a plain repost. Simplest defensible reading of "repost" per [[wiki/GeneralContext/Architecture/business-rules|Projects]], which doesn't distinguish. Implemented in `app.posts.models.Post` and enforced (both directions) via `ck_posts_repost_requires_original`.
 - ~~How `Post`↔`Media` attachment is modeled~~ — resolved in [[0x04-media]]: `Media.post_id` is a nullable FK set once an uploaded image is attached to a post (no join table, no array column). `posts/` doesn't own this column; `PublishPostFacade` just requires every `Media.id` it's given to already be `Processed` before allowing publish.
 - Whether posts are ever deletable/soft-deletable — no such business rule exists for posts (unlike `users/`'s soft-delete), and `moderation/`'s `DeletePostCommand` isn't built for v1.
-- Any thread-depth or repost-of-repost limits — not specified.
+- ~~Any thread-depth or repost-of-repost limits~~ — **resolved**: none. Not specified by any business rule; YAGNI cuts against inventing one preemptively.
+
+**Implemented** (`app.posts.models`): `Post`, `PostLike`, `EventMention`, `Report` — bigint identity PKs throughout, `ck_posts_reply_requires_parent`/`ck_posts_repost_requires_original` CHECK constraints (DB-level fail-fast, not just an application-layer assumption), `parent_post_id`/`original_post_id` both indexed for thread-traversal, `PostLike`'s composite PK on `(user_id, post_id)` doubling as its uniqueness constraint (same pattern as `users/`'s `Follow`), `uq_reports_post_reporter` unique constraint. `EventMention.game_id` is a real `ForeignKey("games.id")` — unlike Phase 1's deferred-FK cases, `events/` already existed when this was built, so no plain-column workaround was needed. Migration `d1c029a3faee` (head, `down_revision = '532f6a3d06fd'`). No service logic, `PublishPostFacade`, `MentionParser`, moderation chain, or routes yet — models/migration only, a separate unit each.
 
 ## PostLike
 **Schema**
