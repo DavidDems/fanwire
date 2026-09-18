@@ -19,6 +19,11 @@ frontend/coverage/
 
 # CDK
 infra/cdk.out/
+# `npm run build` is type-check only (tsconfig noEmit); ignore stray tsc output anyway
+infra/bin/**/*.js
+infra/lib/**/*.js
+infra/test/**/*.js
+infra/**/*.d.ts
 
 # Editors / OS
 .vscode/
