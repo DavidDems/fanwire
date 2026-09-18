@@ -162,14 +162,14 @@ def test_create_upload_policy_enforces_size_cap_and_content_type(app, client, se
         return any(predicate(c) for c in conditions)
 
     assert _has_condition(
-        lambda c: isinstance(c, list)
-        and c[0] == "content-length-range"
-        and c[1] == 1
-        and c[2] == 5 * 1024 * 1024
+        lambda c: (
+            isinstance(c, list)
+            and c[0] == "content-length-range"
+            and c[1] == 1
+            and c[2] == 5 * 1024 * 1024
+        )
     )
-    assert _has_condition(
-        lambda c: isinstance(c, dict) and c.get("Content-Type") == "image/png"
-    )
+    assert _has_condition(lambda c: isinstance(c, dict) and c.get("Content-Type") == "image/png")
     assert _has_condition(lambda c: isinstance(c, dict) and c.get("key") == body["s3_key"])
 
 

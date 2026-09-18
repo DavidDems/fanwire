@@ -21,6 +21,21 @@ actually processed (open/parse the bytes, never trust Content-Type or
 file extension) -- see app.media.pipeline's own docstring for the same
 framing.
 
+Upload size cap, enforced at S3 (not just the client): a presigned PUT
+URL has no way to scope an object-size limit -- S3 only bounds a PUT by
+whatever policy you attach to the *credentials*, and a presigned URL's
+whole point is to hand out narrowly-scoped, short-lived access without
+minting new credentials per upload. A presigned **POST**
+(generate_presigned_post) can attach a policy document with a
+`content-length-range` condition plus an exact `Content-Type` condition,
+so S3 itself -- not just this route's fail-fast check above, and not just
+the client -- rejects an oversized or mistyped upload. See
+wiki/CodeContext/Standards/aws-stack.md "Media uploads" and
+wiki/CodeContext/Modules/0x04-media.md. Before this policy verdict, the
+only thing bounding quarantine storage was the bucket's 1-day lifecycle
+expiry (infra/lib/storage-stack.ts) -- a real gap, since that only bounds
+how long an oversized object lives, not whether it can land at all.
+
 GET /media/{media_id} is uploader-only (judgment call): media isn't public
 until it's attached to a Post and reaches Processed, and that surfacing
 mechanism belongs to posts/'s own routes (not built yet), not to media/
@@ -84,17 +99,28 @@ def create_upload(
     media.s3_key_quarantine = key
     session.commit()
 
-    upload_url = s3_client.generate_presigned_url(
-        "put_object",
-        Params={
-            "Bucket": settings.media_quarantine_bucket,
-            "Key": key,
-            "ContentType": body.mime_type,
-        },
+    # MAX_SIZE_BYTES lives once on ImageUploadPipeline (DRY) -- reused here
+    # for the S3-side cap, not redefined.
+    max_bytes = ImageUploadPipeline.MAX_SIZE_BYTES
+    presigned_post = s3_client.generate_presigned_post(
+        Bucket=settings.media_quarantine_bucket,
+        Key=key,
+        Fields={"Content-Type": body.mime_type},
+        Conditions=[
+            ["content-length-range", 1, max_bytes],
+            {"Content-Type": body.mime_type},
+            {"key": key},
+        ],
         ExpiresIn=300,
     )
 
-    return CreateUploadResponse(media_id=media.id, upload_url=upload_url, s3_key=key)
+    return CreateUploadResponse(
+        media_id=media.id,
+        upload_url=presigned_post["url"],
+        fields=presigned_post["fields"],
+        s3_key=key,
+        max_bytes=max_bytes,
+    )
 
 
 @router.get("/{media_id}", response_model=MediaOut)
