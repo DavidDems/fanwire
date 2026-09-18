@@ -6,8 +6,33 @@ wiki/CodeContext/Modules/0x00-architecture.md "Cross-cutting conventions".
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", users/
 may only reach into events/ through its Team table (a read-only FK target
-for preferred_team_id) — it never queries/writes Team rows itself, and it
-must not import from media/ or posts/, neither of which exists yet.
+for preferred_team_id) — it never queries/writes Team rows itself — and
+into media/ via a real `ForeignKey("media.id")` on profile_picture_media_id
+— it must not import from app.posts or either module's internal classes.
+
+profile_picture_media_id deliberately does NOT import app.media.models.Media
+(unlike the Team/User "real FK target" imports elsewhere in this codebase):
+app.media.models already imports app.posts.models (for its own post_id FK),
+and app.posts.models imports this module (app.users.models) for author_id
+etc. An eager `from app.media.models import Media` here would close a real
+3-module import cycle (users -> media -> posts -> users), which fails at
+import time (verified: `ImportError: cannot import name 'User' from
+partially initialized module 'app.users.models'`). The FK works correctly
+without the class import — SQLAlchemy resolves the `"media.id"` string
+against Base.metadata lazily, and every entry point that touches the ORM
+(alembic/env.py, test conftest/fixtures) already imports app.media.models
+directly before any mapper configuration or DDL runs.
+
+Separately, users and media also form a circular *table* dependency now
+(media.uploader_id -> users.id, users.profile_picture_media_id -> media.id)
+— nothing to do with the Python import graph. `Base.metadata.create_all()`
+needs a single linear table-creation order and can't find one across a
+two-table FK cycle, raising `CircularDependencyError` (verified). The
+profile_picture_media_id FK below is marked `use_alter=True`, which tells
+SQLAlchemy to defer that one constraint to a post-create `ALTER TABLE`
+instead of requiring it at `CREATE TABLE media` time — breaking the cycle.
+The Alembic migration for this FK is a separate `ALTER TABLE ... ADD
+CONSTRAINT` for the same reason.
 """
 
 from __future__ import annotations
@@ -30,6 +55,9 @@ from sqlalchemy.sql import func
 from app.db import Base
 from app.events.models import Team  # noqa: F401 — read-only FK target, see module docstring
 
+# app.media.models.Media is NOT imported here — see module docstring for why
+# (it would close a real users -> media -> posts -> users import cycle).
+
 
 class User(Base):
     """Local profile projection keyed by `cognito_sub`. Cognito is the sole
@@ -50,12 +78,17 @@ class User(Base):
     preferred_team_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("teams.id"), nullable=True
     )
-    # Deliberately a plain column, NOT a ForeignKey, for now: media/ (which
-    # owns Media) doesn't exist yet in this branch. This is a two-step
-    # migration — the real `ForeignKey("media.id")` constraint gets added
-    # once media/'s Media table lands — not an oversight. See
+    # Real FK now that media/'s Media table exists. Media's class is
+    # deliberately not imported into this module, and the constraint is
+    # use_alter=True — see module docstring for both. See
     # wiki/CodeContext/Modules/0x01-users.md.
-    profile_picture_media_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    profile_picture_media_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "media.id", use_alter=True, name="fk_users_profile_picture_media_id_media"
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

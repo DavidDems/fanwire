@@ -6,8 +6,9 @@ wiki/CodeContext/Modules/0x00-architecture.md "Cross-cutting conventions".
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", media/
 may only reach into users/ through its User table (a real FK target for
-uploader_id) — it must not import from app.events or app.posts (posts/
-doesn't exist yet).
+uploader_id) and into posts/ through its Post table (a real FK target for
+post_id) — it must not import from app.events, or either module's internal
+classes.
 
 `Media.status` must only ever be mutated via app.media.state.transition —
 see that module's docstring for why (State pattern, GoF tie-in in
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.db import Base
+from app.posts.models import Post  # noqa: F401 — real FK target for post_id
 from app.users.models import User  # noqa: F401 — real FK target for uploader_id
 
 
@@ -49,14 +51,13 @@ class Media(Base):
     uploader_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=False
     )
-    # Deliberately a plain column, NOT a ForeignKey, for now: posts/ (which
-    # will own Post) doesn't exist yet in this branch. Same deferred-FK
-    # precedent as User.profile_picture_media_id -> media.id. The real
-    # `ForeignKey("posts.id")` constraint gets added once posts/'s Post
-    # table lands in Phase 2. Null while uploaded-but-unattached (compose
-    # flow uploads before the post exists, or a profile-picture use); set
-    # once attached to a post. See wiki/CodeContext/Modules/0x04-media.md.
-    post_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Real FK now that posts/'s Post table exists. Null while
+    # uploaded-but-unattached (compose flow uploads before the post exists,
+    # or a profile-picture use); set once attached to a post. See
+    # wiki/CodeContext/Modules/0x04-media.md.
+    post_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("posts.id"), nullable=True
+    )
     # Key in the private quarantine bucket. Present from Uploaded through
     # Scanning; cleared once the object is deleted post-processing (either
     # on successful publish or on fail-closed rejection cleanup) — see
