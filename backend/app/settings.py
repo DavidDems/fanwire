@@ -33,3 +33,12 @@ class Settings(BaseSettings):
     # app.posts.dependencies.get_moderation_chain into a
     # frozenset[str] -- empty string (the default) means no word is banned.
     moderation_banned_words: str = ""
+
+    # API-SPORTS wiring for app.events.dependencies.get_live_score_proxy.
+    # Empty-string defaults, same reasoning as the Cognito fields above:
+    # Settings() still constructs fine when unset, and an empty
+    # api_sports_key is get_live_score_proxy's own signal to return None
+    # (no real vendor key configured yet) rather than build a proxy that
+    # would fail on first use.
+    api_sports_base_url: str = ""
+    api_sports_key: str = ""

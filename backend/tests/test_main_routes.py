@@ -59,6 +59,15 @@ def test_openapi_schema_includes_posts_routes():
     assert "/posts/{post_id}/report" in paths
 
 
+def test_openapi_schema_includes_feed_routes():
+    client = TestClient(app)
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+
+    assert "/feed" in paths
+    assert "/feed/thread/{post_id}" in paths
+
+
 def test_health_check_still_works_alongside_the_new_routers():
     client = TestClient(app)
     response = client.get("/health")

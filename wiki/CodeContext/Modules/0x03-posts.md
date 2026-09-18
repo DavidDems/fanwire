@@ -50,6 +50,8 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 
 **Implemented** (`app.posts.models`): `Post`, `PostLike`, `EventMention`, `Report` — bigint identity PKs throughout, `ck_posts_reply_requires_parent`/`ck_posts_repost_requires_original` CHECK constraints (DB-level fail-fast, not just an application-layer assumption), `parent_post_id`/`original_post_id` both indexed for thread-traversal, `PostLike`'s composite PK on `(user_id, post_id)` doubling as its uniqueness constraint (same pattern as `users/`'s `Follow`), `uq_reports_post_reporter` unique constraint. `EventMention.game_id` is a real `ForeignKey("games.id")` — unlike Phase 1's deferred-FK cases, `events/` already existed when this was built, so no plain-column workaround was needed. Migration `d1c029a3faee` (head, `down_revision = '532f6a3d06fd'`). No service logic, `PublishPostFacade`, `MentionParser`, moderation chain, or routes yet — models/migration only, a separate unit each.
 
+**`feed/`'s read interface — implemented (Phase 3, feed/ unit).** `app.posts.service.query_feed_posts`, `like_counts`, `liked_post_ids`, `mentioned_game_ids_by_post`, and `replies_to` (direct replies, oldest first, excluding soft-deleted authors — deliberately not reused by `GET /posts/{id}/replies` above, since that would change that route's existing behaviour) are `posts/`'s public read functions for `feed/` (and later `search/`) to call instead of querying `Post`/`PostLike`/`EventMention` directly — see [[0x06-feed]] for the full contract.
+
 ## PostLike
 **Schema**
 - `user_id` — FK → `users.User`.
