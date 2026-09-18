@@ -3,9 +3,9 @@ module.exports = {
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
   transform: {
-    // Type-checking is `npm run build`'s job (tsc covers test/ too); skipping
-    // it here keeps each test file's compile fast.
-    '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true }],
+    // tsconfig's isolatedModules makes ts-jest transpile without type-checking;
+    // type-checking is `npm run build`'s job (tsc covers test/ too).
+    '^.+\\.tsx?$': 'ts-jest',
   },
   // Synthesizing the full app (including staging the Lambda image context)
   // takes a few seconds per test file.
