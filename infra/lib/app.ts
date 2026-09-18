@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
 import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
+import { EdgeStack } from './edge-stack';
 import { MessagingStack } from './messaging-stack';
 import { NetworkStack } from './network-stack';
 import { StorageStack } from './storage-stack';
@@ -27,6 +28,13 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
   const config = loadConfig(app.node);
   const env = { account: config.account, region: config.region };
   cdk.Tags.of(app).add('project', 'fanwire');
+
+  new EdgeStack(app, STACK_NAMES.edge, {
+    env: { account: config.account, region: config.edgeRegion },
+    config,
+    crossRegionReferences: true,
+    description: 'fanwire: CloudFront-scoped WAF WebACL and ACM certificate (must be us-east-1)',
+  });
 
   const network = new NetworkStack(app, STACK_NAMES.network, {
     env,
