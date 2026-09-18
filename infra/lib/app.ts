@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
 import { AppStack } from './app-stack';
 import { AuthStack } from './auth-stack';
+import { CdnStack } from './cdn-stack';
 import { DataStack } from './data-stack';
 import { EdgeStack } from './edge-stack';
 import { MessagingStack } from './messaging-stack';
@@ -30,7 +31,7 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
   const env = { account: config.account, region: config.region };
   cdk.Tags.of(app).add('project', 'fanwire');
 
-  new EdgeStack(app, STACK_NAMES.edge, {
+  const edge = new EdgeStack(app, STACK_NAMES.edge, {
     env: { account: config.account, region: config.edgeRegion },
     config,
     crossRegionReferences: true,
@@ -67,7 +68,7 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     description: 'fanwire: PostEventBus, SQS queues + DLQs, EventBridge rules',
   });
 
-  new AppStack(app, STACK_NAMES.app, {
+  const appStack = new AppStack(app, STACK_NAMES.app, {
     env,
     config,
     network,
@@ -76,6 +77,18 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     storage,
     messaging,
     description: 'fanwire: shared backend Lambda image, four functions, HTTP API, schedules and queue triggers',
+  });
+
+  new CdnStack(app, STACK_NAMES.cdn, {
+    env,
+    crossRegionReferences: true, // reads the us-east-1 WebACL + certificate
+    config,
+    edge,
+    httpApi: appStack.httpApi,
+    frontendBucket: storage.frontendBucket,
+    publicMediaBucket: storage.publicMediaBucket,
+    originVerifySecret: data.originVerifySecret,
+    description: 'fanwire: CloudFront distribution (the only public entry), OAC bucket policies, DNS aliases',
   });
 
   return config;
