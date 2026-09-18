@@ -21,7 +21,7 @@
 
 `Media` is RDS-tracked (system of record, per [[0x00-architecture]]) even though the bytes themselves live in S3 — the row is the only place that links a `User`, an optional `Post`, and the object's current pipeline state.
 
-`post_id` is currently a plain column with no enforced FK constraint — `posts/`'s `Post` table doesn't exist yet in this branch. Same deferred-FK precedent as `User.profile_picture_media_id` → `Media.id` (see [[0x01-users]]): the real `ForeignKey("posts.id")` constraint gets added once `posts/`'s `Post` table lands in Phase 2.
+~~`post_id` is currently a plain column with no enforced FK constraint~~ — **closed** (`posts/` FK-closure unit, Phase 2): `post_id` is now a real, explicitly-named `ForeignKey("posts.id", name="fk_media_post_id_posts")` — named explicitly (not left to Postgres's auto-generated name) so the migration's `downgrade()` can `drop_constraint()` it deterministically. See [[0x01-users]] for the companion FK closure (`profile_picture_media_id` → `Media.id`) and the two structural findings (a Python import-cycle avoidance and a circular table-dependency fix via `use_alter=True`) that closing both at once surfaced.
 
 ## Design principles applied
 
