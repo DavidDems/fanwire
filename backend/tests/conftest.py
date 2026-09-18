@@ -25,7 +25,7 @@ built interfaces" applying here at the schema-registration level too, not
 just at the application-code level.
 """
 
-import app.events.models  # noqa: F401 — registers Team/Game on Base.metadata
-import app.media.models  # noqa: F401 — registers Media on Base.metadata
-import app.posts.models  # noqa: F401 — registers Post/PostLike/EventMention/Report
+import app.events.models
+import app.media.models
+import app.posts.models
 import app.users.models  # noqa: F401 — registers User/Follow on Base.metadata
