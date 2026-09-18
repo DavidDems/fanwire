@@ -82,3 +82,17 @@ def test_settings_reads_media_public_bucket_from_env(monkeypatch):
     monkeypatch.setenv("MEDIA_PUBLIC_BUCKET", "custom-public-bucket")
     settings = Settings()
     assert settings.media_public_bucket == "custom-public-bucket"
+
+
+def test_settings_defaults_moderation_banned_words_empty(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("MODERATION_BANNED_WORDS", raising=False)
+    settings = Settings()
+    assert settings.moderation_banned_words == ""
+
+
+def test_settings_reads_moderation_banned_words_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("MODERATION_BANNED_WORDS", "badword, worseword,thirdword")
+    settings = Settings()
+    assert settings.moderation_banned_words == "badword, worseword,thirdword"
