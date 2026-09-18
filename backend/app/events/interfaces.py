@@ -52,6 +52,21 @@ class NormalizedGame:
     player_stats: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class NormalizedLiveScore:
+    """A single game's current score/status, as returned by
+    SportsDataSource.fetch_live_score. What CachedEventProxy
+    (app.events.proxy, wiki/CodeContext/Standards/gof-patterns.md "Proxy")
+    caches. `status` values (e.g. "in_progress"/"final") are illustrative —
+    same unverified-vendor-shape caveat as everything else in
+    app.events.adapters."""
+
+    api_sports_game_id: int
+    home_score: int
+    away_score: int
+    status: str
+
+
 class SportsDataSource(abc.ABC):
     """The one typed interface events/ ingestion depends on — see
     wiki/CodeContext/Modules/0x00-architecture.md "Connection rule" and
@@ -68,3 +83,9 @@ class SportsDataSource(abc.ABC):
     def fetch_games(self, *, since: datetime | None = None) -> list[NormalizedGame]:
         """Return games (with embedded box scores), normalized. `since`
         narrows to games on/after that date when supported by the vendor."""
+
+    @abc.abstractmethod
+    def fetch_live_score(self, api_sports_game_id: int) -> NormalizedLiveScore | None:
+        """Return the current score/status for a single game, normalized, or
+        None if the vendor has no live data for it (e.g. it hasn't started
+        yet, or the id is unknown to the vendor)."""
