@@ -50,9 +50,24 @@ packages = ["app"]
 line-length = 100
 target-version = "py312"
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI pattern is `param: T = Depends(...)` — the call in the
+# default is deliberate and immutable per-request, not the mutable-default
+# footgun B008 exists to catch. See wiki/CodeContext/Standards/design-principles.md
+# "Explicit over implicit" — this is FastAPI's own documented idiom, not a
+# workaround.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
+# pydantic/pydantic-settings' own mypy plugin understands BaseModel/
+# BaseSettings field population (including required-but-undefaulted fields
+# populated from the environment, e.g. Settings()), so mypy stops flagging
+# a bare Settings() as a missing-argument call — same "fix the false
+# positive repo-wide via config, not a scattered ignore" precedent as
+# ruff's fastapi.Depends() extend-immutable-calls entry above.
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -64,6 +64,7 @@ An imported NBA game result, including that game's player box score.
     "points": 28,
     "rebounds": 7,
     "assists": 5,
+    "position": "SF",
     "...": "whatever fields API-SPORTS' box score endpoint returns for that sport"
   }
 ]
@@ -87,6 +88,15 @@ RDS Postgres table (system of record), per [[wiki/CodeContext/Standards/aws-stac
 ### Security
 Not PII, not user-generated content — the general [[wiki/CodeContext/Standards/security|Security]]/[[wiki/CodeContext/Standards/aws-stack|AWS Stack]] requirement that applies is that the API-SPORTS key used for ingestion is a shared secret in Secrets Manager, scoped to the ingestion Lambda's role only, never reachable from client-facing code. No per-row access control is needed: `Game` and its embedded `player_stats` are public read data served by the events API.
 
-### Open decisions
-- **JSONB vs. a separate embedded-array/document shape for `player_stats`**: this doc recommends a single JSONB column on `Game` (shown above) because it's the natural Postgres fit for "structured but schema-variable per sport/vendor" data ([[wiki/CodeContext/Standards/aws-stack|AWS Stack]] already justifies Postgres generally; JSONB is the standard escape hatch for provider-shaped payloads without a migration per field API-SPORTS adds). This is a recommendation, not a settled decision — confirm before implementation, and revisit if query patterns on individual player fields (e.g. filtering by points threshold across games) turn out to need indexed columns rather than JSONB containment queries.
-- **Season format** (`season` as text like `"2025-26"` vs. integer) is left unspecified beyond "whatever the stats-section season-scoping queries need" — confirm against API-SPORTS' actual season field format when the adapter is implemented.
+### API routes (Phase 2a)
+"Create an API to serve the data of these game from the database to the website" (`wiki/GeneralContext/Architecture/business-rules.md` "Events") was unimplemented through Phase 1 — Phase 2a (`wiki/GeneralContext/Prompts/phase-2-manager-agent.md`) closed it. Routes live in `app.events.routes` (`APIRouter(prefix="/events")`), public, no auth (sports data is public read, matching the guest-feed requirement):
+- `GET /events/teams`, `GET /events/teams/{team_id}`
+- `GET /events/games` (optional `team_id`/`season` filters, ordered by `date` descending), `GET /events/games/{game_id}` — this is the read side `posts/`'s `EventMention.game_id` links to (a post's game-result attachment resolves here; not built yet — `posts/` is Phase 2 proper).
+
+No pagination on either list endpoint (YAGNI — `Team` is a small, static ~30-row table). Flagged, not resolved: `Game` grows every day of every season indefinitely, unlike `Team` — of the two, `/events/games` is the one most likely to need pagination first once real ingestion volume accumulates. Not added preemptively.
+
+### Resolved decisions
+- **`player_stats` shape — settled as JSONB.** Implemented in `app.events.models.Game.player_stats` (a Postgres `JSONB` column, not null, defaulting to `[]`) — the recommendation above is now the built schema. Revisit only if query patterns on individual player fields (e.g. filtering by points threshold across games) turn out to need indexed columns rather than JSONB containment queries; no such need exists yet (YAGNI).
+- **Season format — settled as text, `"YYYY-YY"`** (e.g. `"2025-26"`). Implemented in `app.events.models.Game.season` (`Text`, not null) and in `ApiSportsAdapter._normalize_season` (`app/events/adapters.py`), which converts the adapter's illustrative vendor shape (`"2025-2026"`) into this stored format. Caveat: the adapter's vendor-shape parsing is illustrative/unverified against a live API-SPORTS response (see `app/events/adapters.py`'s module docstring) — the *stored* format (`"YYYY-YY"`) is settled, but the exact vendor field this is derived from still needs reconciling against real API-SPORTS docs before the real ingestion Lambda goes live.
+- **`player_stats` position field name — settled as `"position"`.** Implemented in `ApiSportsAdapter._to_normalized_game` (`app/events/adapters.py`) as `stat["player"].get("position")`, same illustrative/unverified-vendor-shape caveat as the rest of this adapter. Resolves [[0x07-search]]'s previously open "exact `player_stats` position field name" question, which the sports-data filter's position query depends on.
+- **Live-score capability — `SportsDataSource.fetch_live_score` + `CachedEventProxy` implemented.** `app.events.interfaces.NormalizedLiveScore` and `SportsDataSource.fetch_live_score(api_sports_game_id) -> NormalizedLiveScore | None` exist, implemented in `ApiSportsAdapter` (same illustrative/unverified vendor-shape caveat, guessed `/games?id=...` endpoint and `status.short` field). `app.events.proxy.CachedEventProxy` (Proxy, see [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]) sits in front of it, backed by `app.events.proxy.InMemoryLiveScoreCache` — no real DynamoDB-backed cache adapter yet (no live AWS this phase, same precedent as `app.eventbus.EventPublisher`). `feed/`/`search/` (later Phase 3 units) are expected to call `CachedEventProxy.get_live_score()` directly; wiring it into a route/DI is out of scope here.

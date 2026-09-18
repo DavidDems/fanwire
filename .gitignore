@@ -9,6 +9,8 @@ venv/
 .mypy_cache/
 htmlcov/
 .coverage
+.env
+*.env
 
 # Node / frontend
 node_modules/
@@ -25,6 +27,7 @@ cdk.out/
 # Env / secrets
 .env
 .env.*.local
+.env.local
 
 # OS
 .DS_Store

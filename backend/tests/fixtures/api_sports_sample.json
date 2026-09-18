@@ -1,0 +1,71 @@
+{
+  "_comment": "Illustrative sample shape only — invented, based on API-SPORTS' typical REST JSON conventions (a top-level 'response' array, nested 'teams'/'scores'/'players' objects). NOT verified against a live API-SPORTS response. See app/events/adapters.py module docstring.",
+  "teams_response": {
+    "response": [
+      {
+        "id": 12,
+        "name": "Boston Celtics",
+        "code": "BOS",
+        "leagues": {
+          "standard": {
+            "conference": "Eastern",
+            "division": "Atlantic"
+          }
+        },
+        "logo": "https://example.invalid/logos/celtics.png"
+      },
+      {
+        "id": 17,
+        "name": "Los Angeles Lakers",
+        "code": "LAL",
+        "leagues": {
+          "standard": {
+            "conference": "Western",
+            "division": "Pacific"
+          }
+        },
+        "logo": "https://example.invalid/logos/lakers.png"
+      }
+    ]
+  },
+  "games_response": {
+    "response": [
+      {
+        "id": 5001,
+        "date": "2025-11-01T19:30:00+00:00",
+        "league": {
+          "season": "2025-2026"
+        },
+        "teams": {
+          "home": { "id": 12 },
+          "away": { "id": 17 }
+        },
+        "scores": {
+          "home": { "total": 112 },
+          "away": { "total": 108 }
+        },
+        "arena": {
+          "name": "TD Garden"
+        },
+        "players": {
+          "statistics": [
+            {
+              "player": { "name": "Jayson Tatum", "position": "SF" },
+              "team": { "id": 12 },
+              "points": 28,
+              "totReb": 7,
+              "assists": 5
+            },
+            {
+              "player": { "name": "LeBron James", "position": "SF" },
+              "team": { "id": 17 },
+              "points": 25,
+              "totReb": 8,
+              "assists": 9
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
