@@ -18,7 +18,7 @@ from moto import mock_aws
 
 from app.events import dependencies as events_dependencies
 from app.events.dependencies import get_live_score_proxy
-from app.events.proxy import CachedEventProxy, DynamoDbLiveScoreCache, InMemoryLiveScoreCache
+from app.events.proxy import CachedEventProxy, InMemoryLiveScoreCache
 from app.settings import Settings
 
 
@@ -89,7 +89,9 @@ def test_proxy_uses_in_memory_cache_when_no_table_name_configured():
 @mock_aws
 def test_resolves_api_sports_key_from_secrets_manager_when_env_key_unset():
     secrets_client = boto3.client("secretsmanager", region_name="us-east-1")
-    secret = secrets_client.create_secret(Name="api-sports-key", SecretString="from-secrets-manager")
+    secret = secrets_client.create_secret(
+        Name="api-sports-key", SecretString="from-secrets-manager"
+    )
     settings = _settings(api_sports_key="", api_sports_secret_arn=secret["ARN"])
 
     proxy = get_live_score_proxy(settings)
@@ -100,7 +102,9 @@ def test_resolves_api_sports_key_from_secrets_manager_when_env_key_unset():
 @mock_aws
 def test_env_api_sports_key_wins_over_secrets_manager_when_both_set():
     secrets_client = boto3.client("secretsmanager", region_name="us-east-1")
-    secret = secrets_client.create_secret(Name="api-sports-key", SecretString="from-secrets-manager")
+    secret = secrets_client.create_secret(
+        Name="api-sports-key", SecretString="from-secrets-manager"
+    )
     settings = _settings(api_sports_key="from-env", api_sports_secret_arn=secret["ARN"])
 
     # Doesn't raise even though the secret is never read for this settings
@@ -113,7 +117,9 @@ def test_env_api_sports_key_wins_over_secrets_manager_when_both_set():
 @mock_aws
 def test_secrets_manager_value_is_cached_after_first_read():
     secrets_client = boto3.client("secretsmanager", region_name="us-east-1")
-    secret = secrets_client.create_secret(Name="api-sports-key", SecretString="from-secrets-manager")
+    secret = secrets_client.create_secret(
+        Name="api-sports-key", SecretString="from-secrets-manager"
+    )
     settings = _settings(api_sports_key="", api_sports_secret_arn=secret["ARN"])
 
     get_live_score_proxy(settings)

@@ -70,9 +70,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                     session, event_name=detail_type, detail=detail, email_sender=email_sender
                 )
             except Exception:
-                logger.exception(
-                    "notification handling failed", extra={"message_id": message_id}
-                )
+                logger.exception("notification handling failed", extra={"message_id": message_id})
                 batch_item_failures.append({"itemIdentifier": message_id})
     finally:
         session.close()

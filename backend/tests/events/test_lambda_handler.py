@@ -28,8 +28,8 @@ import app.dependencies as app_dependencies
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_settings
 from app.events.factory import SportsProviderFactory
-from app.events.interfaces import NormalizedGame, SportsDataSource
 from app.events.ingestion import UnrecognizedTeamError
+from app.events.interfaces import NormalizedGame, SportsDataSource
 from app.events.models import Game, Team
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -202,6 +202,4 @@ def test_retry_queue_record_failure_is_reported_as_a_batch_item_failure(
 
     result = handler(event, None)
 
-    assert result == {
-        "batchItemFailures": [{"itemIdentifier": event["Records"][0]["messageId"]}]
-    }
+    assert result == {"batchItemFailures": [{"itemIdentifier": event["Records"][0]["messageId"]}]}

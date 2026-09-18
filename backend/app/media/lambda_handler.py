@@ -78,7 +78,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
 
 def _process_record(
-    record: dict[str, Any], *, session: Any, s3_client: Any, quarantine_bucket: str, public_bucket: str
+    record: dict[str, Any],
+    *,
+    session: Any,
+    s3_client: Any,
+    quarantine_bucket: str,
+    public_bucket: str,
 ) -> None:
     eventbridge_event = json.loads(record["body"])
     detail = eventbridge_event["detail"]

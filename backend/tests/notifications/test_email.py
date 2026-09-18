@@ -91,7 +91,7 @@ def test_recording_email_sender_never_touches_a_plaintext_email_field():
 # production for this pool configuration, not a workaround.
 
 
-def _notification(session) -> "Notification":  # noqa: F821 -- imported locally below
+def _notification(session) -> Notification:  # noqa: F821 -- imported locally below
     from app.notifications.models import Notification, NotificationType
 
     recipient = User(

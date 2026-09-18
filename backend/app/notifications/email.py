@@ -106,9 +106,7 @@ class SesEmailSender(EmailSender):
         user = self._cognito_client.admin_get_user(
             UserPoolId=self._user_pool_id, Username=recipient_cognito_sub
         )
-        email = next(
-            (a["Value"] for a in user["UserAttributes"] if a["Name"] == "email"), None
-        )
+        email = next((a["Value"] for a in user["UserAttributes"] if a["Name"] == "email"), None)
         if email is None:
             logger.info("email notification skipped: recipient has no email attribute in Cognito")
             return

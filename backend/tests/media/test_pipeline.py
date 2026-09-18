@@ -61,7 +61,9 @@ def session_factory(postgres_url):
     engine.dispose()
 
 
-def _make_uploader_and_media(session, *, cognito_sub: str, username: str, **media_overrides) -> Media:
+def _make_uploader_and_media(
+    session, *, cognito_sub: str, username: str, **media_overrides
+) -> Media:
     uploader = User(cognito_sub=cognito_sub, username=username, date_of_birth=date(1990, 1, 1))
     session.add(uploader)
     session.commit()
@@ -107,7 +109,9 @@ def _put_quarantine_object(s3_client, key: str, data: bytes) -> None:
     s3_client.put_object(Bucket=QUARANTINE_BUCKET, Key=key, Body=data)
 
 
-def _make_pipeline(s3_client, media: Media, *, session=None, malware_scanner=None) -> ImageUploadPipeline:
+def _make_pipeline(
+    s3_client, media: Media, *, session=None, malware_scanner=None
+) -> ImageUploadPipeline:
     return ImageUploadPipeline(
         media,
         session,

@@ -99,7 +99,9 @@ def test_user_followed_record_creates_a_notification_with_email_disabled(session
 
 
 @mock_aws
-def test_user_followed_record_sends_email_when_from_address_configured(session_factory, monkeypatch):
+def test_user_followed_record_sends_email_when_from_address_configured(
+    session_factory, monkeypatch
+):
     monkeypatch.setenv("NOTIFICATION_FROM_ADDRESS", "notifications@fanwire.example")
     get_settings.cache_clear()
 

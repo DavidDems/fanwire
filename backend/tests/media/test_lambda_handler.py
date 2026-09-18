@@ -89,7 +89,11 @@ def s3_and_media(session_factory):
         client.create_bucket(Bucket=PUBLIC_BUCKET)
 
         with session_factory() as session:
-            uploader = User(cognito_sub="sub-media-handler", username="media_handler_user", date_of_birth=date(1990, 1, 1))
+            uploader = User(
+                cognito_sub="sub-media-handler",
+                username="media_handler_user",
+                date_of_birth=date(1990, 1, 1),
+            )
             session.add(uploader)
             session.commit()
 
@@ -148,7 +152,9 @@ def test_threats_found_scan_result_rejects_and_deletes_the_object(session_factor
         s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="uploads/43/original.jpg")
 
 
-def test_unknown_scan_status_fails_closed_to_rejected_never_processed(session_factory, s3_and_media):
+def test_unknown_scan_status_fails_closed_to_rejected_never_processed(
+    session_factory, s3_and_media
+):
     # The contract's required fail-closed test: an unrecognized
     # scanResultStatus (here "UNSUPPORTED") must never leave Media Processed.
     from app.media.lambda_handler import handler

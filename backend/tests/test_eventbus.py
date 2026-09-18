@@ -19,8 +19,8 @@ from moto import mock_aws
 
 from app.eventbus import (
     DomainEvent,
-    EventBridgePublishError,
     EventBridgePublisher,
+    EventBridgePublishError,
     InMemoryEventPublisher,
     PostEventBus,
 )

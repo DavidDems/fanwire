@@ -151,13 +151,17 @@ def dynamodb_client():
 
 
 def test_dynamodb_cache_get_is_a_miss_when_nothing_cached(dynamodb_client, clock):
-    cache = DynamoDbLiveScoreCache(dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock)
+    cache = DynamoDbLiveScoreCache(
+        dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock
+    )
 
     assert cache.get(5001) is None
 
 
 def test_dynamodb_cache_put_then_get_round_trips_the_score(dynamodb_client, clock):
-    cache = DynamoDbLiveScoreCache(dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock)
+    cache = DynamoDbLiveScoreCache(
+        dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock
+    )
 
     cache.put(_score(), ttl_seconds=30)
 
@@ -165,7 +169,9 @@ def test_dynamodb_cache_put_then_get_round_trips_the_score(dynamodb_client, cloc
 
 
 def test_dynamodb_cache_uses_the_game_hash_pk_convention(dynamodb_client, clock):
-    cache = DynamoDbLiveScoreCache(dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock)
+    cache = DynamoDbLiveScoreCache(
+        dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock
+    )
 
     cache.put(_score(), ttl_seconds=30)
 
@@ -179,7 +185,9 @@ def test_dynamodb_cache_get_treats_expired_but_unreaped_item_as_a_miss(dynamodb_
     # DynamoDB's TTL sweep can lag up to 48h behind the expiry timestamp
     # (AWS docs) — moto never reaps at all, so this is exactly the
     # "expired but not yet reaped" case the contract calls out.
-    cache = DynamoDbLiveScoreCache(dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock)
+    cache = DynamoDbLiveScoreCache(
+        dynamodb_client, table_name=LIVE_SCORE_CACHE_TABLE_NAME, clock=clock
+    )
     cache.put(_score(), ttl_seconds=10)
 
     clock.advance(11)

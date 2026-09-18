@@ -146,9 +146,7 @@ def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory, d
         assert persisted.home_team_id == home_team.id
         assert persisted.player_stats[0]["team_id"] == home_team.id
 
-        item = dynamodb_client.get_item(
-            TableName=IDEMPOTENCY_TABLE_NAME, Key={"id": {"S": "5001"}}
-        )
+        item = dynamodb_client.get_item(TableName=IDEMPOTENCY_TABLE_NAME, Key={"id": {"S": "5001"}})
         assert "Item" in item
         assert "expiration" in item["Item"]
 
@@ -168,7 +166,9 @@ def test_dedupe_writes_an_expiration_ttl_24_hours_out(session_factory, dynamodb_
         assert int(item["expiration"]["N"]) == expected
 
 
-def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_factory, dynamodb_client):
+def test_run_skips_a_game_already_recorded_in_the_idempotency_table(
+    session_factory, dynamodb_client
+):
     with session_factory() as session:
         _seed_teams(session)
         dynamodb_client.put_item(
@@ -193,7 +193,9 @@ def test_dedupe_fails_fast_on_unrecognized_home_team(session_factory, dynamodb_c
             pipeline.run()
 
 
-def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(session_factory, dynamodb_client):
+def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(
+    session_factory, dynamodb_client
+):
     with session_factory() as session:
         _seed_teams(session)
         bad_game = _sample_game(
