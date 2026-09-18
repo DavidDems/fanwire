@@ -27,6 +27,7 @@ just at the application-code level.
 
 from app.events import models as _events_models  # noqa: F401 — registers Team/Game
 from app.media import models as _media_models  # noqa: F401 — registers Media
+from app.notifications import models as _notifications_models  # noqa: F401 — registers Notification
 from app.posts import models as _posts_models  # noqa: F401 — Post/PostLike/EventMention/Report
 from app.users import models as _users_models  # noqa: F401 — registers User/Follow
 
