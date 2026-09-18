@@ -71,29 +71,34 @@ class FakeMalwareScanner(MalwareScanner):
 
 
 class GuardDutyScanResultScanner(MalwareScanner):
-    """Real production adapter (app.media.lambda_handler): fed GuardDuty's
-    already-computed verdict from the SQS-delivered "GuardDuty Malware
-    Protection Object Scan Result" EventBridge event -- never calls
-    GuardDuty or scans anything itself (see MalwareScanner's own docstring:
-    the real scan is async/event-driven, not a synchronous call this
-    pipeline can block on). `scan()` ignores its bucket/key arguments: by
-    construction, one instance is built per SQS record for exactly the one
-    object that event's verdict is about, so there's nothing to look up.
+    """Real production adapter (app.media.lambda_handler), confirmed-clean
+    case only. GuardDuty Malware Protection for S3 scans *ahead of and
+    separate from* the processing Lambda, per wiki/CodeContext/Modules/
+    0x04-media.md's AWS service mapping -- the scan-result verdict is a
+    precondition for running the pipeline at all, not a step inside it.
 
-    Fail-closed per wiki/CodeContext/Standards/security.md: only the exact
-    "NO_THREATS_FOUND" `scanResultStatus` counts as clean. Every other value
-    -- including "THREATS_FOUND" and any status this pipeline doesn't
-    recognize (a future GuardDuty status this code predates, a malformed
-    event, etc.) -- is treated as not clean, never Processed.
+    Fail-closed branching (a "THREATS_FOUND" or any unrecognized
+    `scanResultStatus`) lives entirely in app.media.lambda_handler, which
+    decides whether to invoke ImageUploadPipeline in the first place rather
+    than feeding this class a false verdict: the quarantine bucket policy
+    denies GetObject to every principal except GuardDuty's role until an
+    object is tagged NO_THREATS_FOUND, so validate_type()'s GetObject
+    (the pipeline's first step) would otherwise raise an unhandled
+    ClientError for a non-clean object instead of ever reaching Rejected.
+    See that module's own docstring for the full reasoning.
+
+    This class exists only because ImageUploadPipeline's Template Method
+    still requires a MalwareScanner collaborator even on the
+    already-confirmed-clean path (GuardDuty's own async scan already ran)
+    -- it always reports clean; the handler only ever constructs it once it
+    has independently verified the event's `scanResultStatus` was exactly
+    "NO_THREATS_FOUND".
     """
 
     NO_THREATS_FOUND = "NO_THREATS_FOUND"
 
-    def __init__(self, scan_result_status: str) -> None:
-        self._clean = scan_result_status == self.NO_THREATS_FOUND
-
     def scan(self, *, bucket: str, key: str) -> bool:
-        return self._clean
+        return True
 
 
 class AbstractMediaUploadPipeline(abc.ABC):
