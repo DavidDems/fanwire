@@ -34,7 +34,7 @@ from app.events.models import Game, Team
 from app.events.proxy import CachedEventProxy, InMemoryLiveScoreCache
 from app.feed.routes import router
 from app.posts.models import Post
-from app.users.auth import FakeTokenVerifier, VerifiedIdentity
+from app.users.auth import FakeTokenVerifier
 from app.users.dependencies import get_optional_current_user, get_token_verifier
 from app.users.models import Follow, User
 
@@ -154,9 +154,7 @@ def test_get_feed_authenticated_returns_personalized_feed(app, client, session_f
     assert ids == {own_post.id, followed_post.id}
 
 
-def test_get_feed_default_limit_is_20_and_sets_next_before_id_on_full_page(
-    client, session_factory
-):
+def test_get_feed_default_limit_is_20_and_sets_next_before_id_on_full_page(client, session_factory):
     with session_factory() as session:
         author = _make_user(session, username="page_author")
         posts = [_make_post(session, author, text=f"post {i}") for i in range(25)]
