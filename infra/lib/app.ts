@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { FanwireConfig, loadConfig } from './config';
+import { AppStack } from './app-stack';
 import { AuthStack } from './auth-stack';
 import { DataStack } from './data-stack';
 import { EdgeStack } from './edge-stack';
@@ -38,13 +39,18 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
 
   const network = new NetworkStack(app, STACK_NAMES.network, {
     env,
-    description: 'fanwire: dual-stack VPC, egress-only IGW, gateway endpoints, security groups (no NAT)',
+    description: 'fanwire: VPC, single NAT instance (no NAT Gateway), gateway endpoints, security groups',
   });
 
   const data = new DataStack(app, STACK_NAMES.data, {
     env,
     network,
     description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
+  });
+
+  const auth = new AuthStack(app, STACK_NAMES.auth, {
+    env,
+    description: 'fanwire: Cognito user pool and SPA client',
   });
 
   const storage = new StorageStack(app, STACK_NAMES.storage, {
@@ -54,16 +60,22 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     description: 'fanwire: quarantine / public-media / frontend buckets, GuardDuty Malware Protection plan',
   });
 
-  new MessagingStack(app, STACK_NAMES.messaging, {
+  const messaging = new MessagingStack(app, STACK_NAMES.messaging, {
     env,
     key: data.key,
     quarantineBucket: storage.quarantineBucket,
     description: 'fanwire: PostEventBus, SQS queues + DLQs, EventBridge rules',
   });
 
-  new AuthStack(app, STACK_NAMES.auth, {
+  new AppStack(app, STACK_NAMES.app, {
     env,
-    description: 'fanwire: Cognito user pool and SPA client',
+    config,
+    network,
+    data,
+    auth,
+    storage,
+    messaging,
+    description: 'fanwire: shared backend Lambda image, four functions, HTTP API, schedules and queue triggers',
   });
 
   return config;
