@@ -28,7 +28,7 @@ This is Dependency Inversion (see [[wiki/CodeContext/Standards/design-principles
 
 ## AWS topology
 Full detail and rationale in [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]; summary of what runs where:
-- **Compute**: Lambda (via Mangum-wrapped FastAPI) behind **API Gateway HTTP API**. Ingestion and media-processing jobs are separate Lambdas triggered by EventBridge Scheduler / S3 events, not the request path.
+- **Compute**: Lambda (via Mangum-wrapped FastAPI) behind **API Gateway HTTP API**. Ingestion and media-processing jobs are separate Lambdas triggered by EventBridge Scheduler / GuardDuty scan-result events (via SQS), not the request path. A fourth function, the notifications consumer, reads `PostEventBus` events via SQS. All four run the same image (see "Infra (CDK) — implementation notes" below).
 - **Data**: **RDS Postgres** is the system of record for every table in this wiki (`User`, `Follow`, `Team`, `Game`, `Post`, `PostLike`, `EventMention`, `Report`, `Media`, `Notification`, `NotificationPreference`). **DynamoDB** is used narrowly and only for: (1) a short-TTL live-score cache behind `CachedEventProxy`, (2) ingestion idempotency keys. Neither DynamoDB table is a source of truth for anything documented per-module below.
 - **Media**: S3 quarantine bucket → GuardDuty Malware Protection scan → Pillow processing Lambda → S3 public bucket → CloudFront. Detail in [[0x04-media]].
 - **Auth**: **Cognito** owns credentials, MFA, token issuance, and the password-reset/email-confirmation flows. No custom tables for any of that — see [[0x01-users]].
@@ -54,6 +54,60 @@ Phase 0/1 built `events/`, `users/`, and `media/` as pure Python modules — no 
 Both of the following are the same Template Method shape (`AbstractEventIngestionPipeline` in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]):
 - **Sports data ingestion**: `fetchRawEvents → normalize → dedupe (DynamoDB idempotency table) → matchToMentions → publish`. `events/` never calls the API-SPORTS SDK directly outside the `ApiSportsAdapter`.
 - **Media upload**: `validateType → scanForMalware → stripMetadata → generateVariants → publish`. Detail in [[0x04-media]].
+
+## Infra (CDK) — implementation notes
+CDK app in `infra/` (TypeScript). **Synthesized and tested, never deployed.** Env from `cdk.json` context: account `294321867941`, region `ca-central-1`, `edgeRegion` `us-east-1`, `domainName` (default `fanwire.daviddems.ca`, `-c domainName=` for none), optional `hostedZoneId`/`hostedZoneName`. Three domain modes, each covered by tests: no domain (distribution on `*.cloudfront.net`, no cert); domain without zone (ACM cert with DNS validation, the CNAME added by hand, and the edge stack's deploy **waits** until it is; no alias records); domain + zone (cert validated in the zone, A/AAAA aliases). No `fromLookup` anywhere, and AZs are pinned to `a`/`b`, so synth needs no credentials.
+
+**Stack split** (dependency order):
+| Stack | Region | Contents | Why separate |
+|---|---|---|---|
+| `Fanwire-Edge` | us-east-1 | WAF WebACL (CLOUDFRONT: rate limit 1000/5 min/IP, Core, Known Bad Inputs, SQLi), ACM cert | AWS only accepts CloudFront certs/WebACLs from us-east-1 |
+| `Fanwire-Network` | ca-central-1 | VPC (public/app/data subnets × 2 AZs), one NAT instance, S3 + DynamoDB gateway endpoints, Lambda/DB security groups | Changes almost never; everything VPC-bound depends on it |
+| `Fanwire-Data` | ca-central-1 | the one CMK (rotation on), RDS Postgres `db.t4g.micro`, DynamoDB idempotency + live-score cache tables, secrets (DB creds, API-SPORTS key placeholder, CloudFront origin-verify value) | Stateful; an app deploy should never touch or risk replacing it |
+| `Fanwire-Auth` | ca-central-1 | Cognito user pool + SPA client | No dependencies; prod pool (dev uses a hand-made pool, [[wiki/GeneralContext/Architecture/dev-auth-setup\|dev-auth-setup]]) |
+| `Fanwire-Storage` | ca-central-1 | quarantine / public-media / frontend buckets, GuardDuty Malware Protection plan + role | Stateful; consumed by messaging, app and CDN |
+| `Fanwire-Messaging` | ca-central-1 | `PostEventBus`, notification / ingestion-retry / media-scan-result queues each with a DLQ, the two EventBridge rules | Async plumbing independent of function code |
+| `Fanwire-App` | ca-central-1 | the single image asset, api / ingestion / media / notifications functions, origin-verify authorizer, HTTP API, Scheduler, event source mappings | The part that changes on every backend release |
+| `Fanwire-Cdn` | ca-central-1 | CloudFront distribution, OAC, the two CloudFront Functions, frontend + public-media bucket policies, Route 53 aliases | Needs the HTTP API id, so it comes after App |
+
+The frontend and public-media bucket policies live in `Fanwire-Cdn`, not `Fanwire-Storage`: they must name the distribution ARN, and the distribution depends on App, which depends on Storage, so a Storage-owned policy would create a cycle. For the same reason the CMK's policy lets CloudFront decrypt for `distribution/*` in this account and EventBridge for `rule/*` in this account/region, rather than the exact ARNs.
+
+**Egress (human decision 2026-09-18, [[wiki/CodeContext/Standards/aws-stack|AWS Stack]])**: one `t4g.nano` NAT *instance* (CDK `NatProvider.instanceV2`, Amazon Linux 2023 arm64) in the first public subnet. Both AZs' app subnets route `0.0.0.0/0` to it, and the data subnets have no route out. It has no key pair and requires IMDSv2. Its SG admits only TCP 443 from the Lambda SG and egresses only 443. Its role holds only the Session Manager agent statement. S3 and DynamoDB use the free gateway endpoints. **No interface endpoints**: every other AWS API the Lambdas call (EventBridge `PutEvents`, Secrets Manager, SES, Cognito `AdminGetUser`) goes out through the NAT instance. SQS polling and KMS decrypts happen on the AWS side, so the functions never call those APIs themselves.
+| Endpoint | ~$/mo (1 AZ) | Would serve | Decision |
+|---|---|---|---|
+| S3 gateway | 0 | presign/put/get media | kept |
+| DynamoDB gateway | 0 | idempotency, cache | kept |
+| Secrets Manager | ~7.5 | ingestion cold start | not kept, reached through the NAT instance |
+| EventBridge (`events`) | ~7.5 | api/ingestion `PutEvents` | not kept, reached through the NAT instance |
+| SES (`email`) | ~7.5 | notifications | not kept, reached through the NAT instance |
+| Cognito (`cognito-idp`) | ~7.5 | `AdminGetUser` (the JWKS fetch needs the internet regardless) | not kept, reached through the NAT instance |
+
+The trade-off: the NAT instance is a single point of failure for all of these. If it's down, cached JWKS keep auth working for up to an hour, and ingestion/notifications retry via SQS.
+
+**API origin protection**: HTTP APIs support neither resource policies nor WAF, and the execute-api endpoint can't be disabled because CloudFront needs it. So every route has a REQUEST Lambda authorizer (`OriginVerifyAuthorizer`, inline Python, outside the VPC) with identity source `$request.header.x-origin-verify`. A request without the header gets 401 from API Gateway before any function runs. The authorizer compares the header in constant time with the `OriginVerify` secret, which it reads at cold start, and caches each result for 5 minutes. CloudFront adds the header on `/api/*` from a `{{resolve:secretsmanager:…}}` dynamic reference, so the value appears in neither git nor the synthesized template. Rotating the secret needs a redeploy of `Fanwire-Cdn`, and old authorizer containers keep the previous value until they recycle.
+
+**Frontend ↔ API contract**: the SPA calls `VITE_API_BASE_URL=/api` (same origin). FastAPI routes have no prefix (`/users`, `/posts`, `/feed`, `/health`, …). CloudFront's `/api/*` behaviour runs a viewer-request CloudFront Function that strips the leading `/api` (`/api/users/me` → `/users/me`). An origin path can only prepend, and a base-path mapping needs a custom domain on the API. That behaviour uses CachingDisabled plus the `AllViewerExceptHostHeader` origin request policy, which forwards `Authorization`, cookies and query strings, and all methods are allowed. The default behaviour (frontend bucket) uses a second function that rewrites extension-less paths to `/index.html`. There are deliberately no distribution-wide error pages, which would turn the API's own 403/404 JSON into HTML. `/media/*` serves the public-media bucket, whose keys are `media/{id}/…`, matching `app.media.pipeline`. Frontend build values come from the stack outputs: `VITE_API_BASE_URL` = `ApiBaseUrl` (`/api`), `VITE_COGNITO_USER_POOL_ID` = `UserPoolId`, `VITE_COGNITO_CLIENT_ID` = `UserPoolClientId`, `VITE_COGNITO_REGION` = `CognitoRegion`. The SPA must send the Cognito **ID token**: the backend verifier checks `aud` = client id.
+
+**Media trigger**: the GuardDuty *scan-result* event, not raw `ObjectCreated`. The default-bus rule matches `aws.guardduty` / `GuardDuty Malware Protection Object Scan Result` / quarantine bucket and feeds the media queue (+ DLQ), which triggers the media function. Processing therefore never races the scan. The plan also tags objects, and the quarantine bucket policy denies `GetObject` to every principal except GuardDuty's role until an object is tagged `NO_THREATS_FOUND`. No CDK bucket-notification custom resource is involved: GuardDuty manages its own EventBridge wiring.
+
+**IAM gate** (`infra/test/iam-policy.test.ts`, runs in CI): walks every policy document in every stack in all three domain modes, including CDK-generated ones. It fails on any `*` in an Action or Resource, any NotAction/NotResource, any Allow to Principal `*`, any AWS managed policy, and any IAM user or group. Every exception is listed below, and the test fails if an entry stops matching anything (`IAM_GATE_REPORT=1` lists each match):
+- `kms-key-policy-self`: `Resource: "*"` inside the CMK's key policy, which means "this key".
+- `s3-object-arns`: `<specific bucket ARN>/*` or `/<prefix>/*` for object-level S3 actions.
+- `tls-only-deny`: `s3:*` / `sqs:*` in Deny statements conditioned on `aws:SecureTransport=false`.
+- `lambda-vpc-eni`: the six ENI actions from AWS's `AWSLambdaVPCAccessExecutionRole`, written inline with `Resource "*"` (Describe* has no resource-level support, and Lambda validates the rest against `*`).
+- `nat-instance-session-manager`: `ssm:UpdateInstanceInformation` + the four `ssmmessages:` channel actions, `Resource "*"` (AWS's documented Session Manager minimum).
+- `guardduty-managed-eventbridge-rule`: `rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*`, GuardDuty's own managed rule name prefix.
+- `cdk-cross-region-export-parameters`: `parameter/cdk/exports/*` (writer) and `parameter/cdk/exports/Fanwire-Cdn/*` (reader), from `crossRegionReferences`.
+- `cdk-custom-resource-basic-execution`: `AWSLambdaBasicExecutionRole` on those two CDK cross-region custom-resource provider roles. They are the only managed policy and the only custom-resource Lambdas in the app.
+
+Grants are never used. `grant*()` emits wildcard actions such as `kms:GenerateDataKey*`, so every role has hand-written statements. Constructs that would append grants to the CMK's policy (Secret, Queue, Bucket, Table) receive an imported `Key.fromKeyArn` handle instead.
+
+**Known gaps**:
+- `DATABASE_URL` is assembled from secret dynamic references, so the password sits in each function's environment. It is encrypted with the CMK, but anyone allowed `lambda:GetFunctionConfiguration` plus `kms:Decrypt` can read it, and secret rotation would break it.
+- CloudFront access logging and WAF logging are off, to save cost.
+- The HTTP API has stage throttling only. HTTP APIs have no usage plans, so per-user rate limiting is app-level.
+- Nothing here creates an SES identity. Notifications get `ses:SendEmail` on `identity/<domainName>` only when a domain is configured, and Cognito uses its default email sender.
+- With no custom domain, CloudFront's default certificate can't enforce `TLSv1.2_2021` for viewers.
 
 ## Security posture (account/project-level)
 Per-entity security requirements live in each module's own file. Project-wide items that don't belong to any one module, per [[wiki/CodeContext/Standards/security|Security]]:
