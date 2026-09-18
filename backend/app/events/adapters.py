@@ -14,8 +14,9 @@ real API-SPORTS response. Whoever wires the real ingestion Lambda in a later
 phase MUST reconcile this adapter's field parsing (and its auth scheme, see
 `__init__` below) against the actual API-SPORTS basketball endpoint
 docs/response before going live. This includes fetch_live_score's guessed
-endpoint shape (`/games?id=...`) and its `status.short` field — same
-caveat, same reconciliation task.
+endpoint shape (`/games?id=...`) and its `status.short` field, and
+_to_normalized_game's `player_stats[*].position` field (guessed as
+`player.position`) — same caveat, same reconciliation task.
 -------------------------------------------------------------------------------
 """
 
@@ -121,6 +122,11 @@ class ApiSportsAdapter(SportsDataSource):
                 "points": stat["points"],
                 "rebounds": stat["totReb"],
                 "assists": stat["assists"],
+                # Guessed vendor field name (illustrative, unverified — see
+                # module docstring), resolving wiki/CodeContext/Modules/
+                # 0x07-search.md's previously open "position field name"
+                # question as "position".
+                "position": stat["player"].get("position"),
             }
             for stat in item["players"]["statistics"]
         ]

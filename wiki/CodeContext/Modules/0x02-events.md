@@ -64,6 +64,7 @@ An imported NBA game result, including that game's player box score.
     "points": 28,
     "rebounds": 7,
     "assists": 5,
+    "position": "SF",
     "...": "whatever fields API-SPORTS' box score endpoint returns for that sport"
   }
 ]
@@ -97,3 +98,5 @@ No pagination on either list endpoint (YAGNI — `Team` is a small, static ~30-r
 ### Resolved decisions
 - **`player_stats` shape — settled as JSONB.** Implemented in `app.events.models.Game.player_stats` (a Postgres `JSONB` column, not null, defaulting to `[]`) — the recommendation above is now the built schema. Revisit only if query patterns on individual player fields (e.g. filtering by points threshold across games) turn out to need indexed columns rather than JSONB containment queries; no such need exists yet (YAGNI).
 - **Season format — settled as text, `"YYYY-YY"`** (e.g. `"2025-26"`). Implemented in `app.events.models.Game.season` (`Text`, not null) and in `ApiSportsAdapter._normalize_season` (`app/events/adapters.py`), which converts the adapter's illustrative vendor shape (`"2025-2026"`) into this stored format. Caveat: the adapter's vendor-shape parsing is illustrative/unverified against a live API-SPORTS response (see `app/events/adapters.py`'s module docstring) — the *stored* format (`"YYYY-YY"`) is settled, but the exact vendor field this is derived from still needs reconciling against real API-SPORTS docs before the real ingestion Lambda goes live.
+- **`player_stats` position field name — settled as `"position"`.** Implemented in `ApiSportsAdapter._to_normalized_game` (`app/events/adapters.py`) as `stat["player"].get("position")`, same illustrative/unverified-vendor-shape caveat as the rest of this adapter. Resolves [[0x07-search]]'s previously open "exact `player_stats` position field name" question, which the sports-data filter's position query depends on.
+- **Live-score capability — `SportsDataSource.fetch_live_score` + `CachedEventProxy` implemented.** `app.events.interfaces.NormalizedLiveScore` and `SportsDataSource.fetch_live_score(api_sports_game_id) -> NormalizedLiveScore | None` exist, implemented in `ApiSportsAdapter` (same illustrative/unverified vendor-shape caveat, guessed `/games?id=...` endpoint and `status.short` field). `app.events.proxy.CachedEventProxy` (Proxy, see [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]) sits in front of it, backed by `app.events.proxy.InMemoryLiveScoreCache` — no real DynamoDB-backed cache adapter yet (no live AWS this phase, same precedent as `app.eventbus.EventPublisher`). `feed/`/`search/` (later Phase 3 units) are expected to call `CachedEventProxy.get_live_score()` directly; wiring it into a route/DI is out of scope here.
