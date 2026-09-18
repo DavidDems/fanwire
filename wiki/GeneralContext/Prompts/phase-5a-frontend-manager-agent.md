@@ -44,7 +44,7 @@ Operating model and lessons: skim the "Status" section of `wiki/GeneralContext/P
    - `ComposeMediator` (Mediator): text box, `#GameId`/`$TEAM` mention autocomplete (teams from `/events/teams`, games from `/events/games`) and the media widget communicate only through it.
    - `DraftSnapshot` (Memento): snapshot before attaching live-event data; undo restores it.
    - `PostTemplate.clone()` (Prototype): a small set of quick-post templates such as "final score reaction" and "pre-game hype".
-   - Media: `POST /media/uploads` returns a presigned **PUT** URL, and the browser PUTs the bytes straight to S3, never through the API. Allow jpeg/png/webp only and ≤5 MB client-side (the server re-validates). Only `Processed` media can be attached, so poll `GET /media/{id}` until processed.
+   - Media: `POST /media/uploads` returns a presigned **POST** (`upload_url` + `fields` + `max_bytes`; S3's policy enforces size and type). The browser sends a multipart POST of `fields` + `file` straight to S3, never through the API. Pre-check jpeg/png/webp and `max_bytes` client-side for UX; S3 and the backend enforce both regardless. Only `Processed` media can be attached, so poll `GET /media/{id}` until processed.
    - **Check the human-input checklist**: whether media upload can be verified in a browser depends on the human's answer about dev S3. If it isn't answered, build and test with msw, and report the manual browser verification of upload as not done.
 
 ## TDD and verification (every unit)
