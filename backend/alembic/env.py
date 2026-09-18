@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 import app.events.models  # registers Team/Game on Base.metadata for autogenerate
 import app.media.models  # registers Media on Base.metadata for autogenerate
+import app.posts.models  # registers Post/PostLike/EventMention/Report on Base.metadata for autogenerate
 import app.users.models  # noqa: F401 — registers User/Follow on Base.metadata for autogenerate
 from alembic import context
 from app.db import Base
