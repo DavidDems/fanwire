@@ -103,3 +103,47 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
     return user
+
+
+def get_optional_current_user(
+    request: Request,
+    token_verifier: TokenVerifier = Depends(get_token_verifier),
+    session: Session = Depends(get_session),
+) -> User | None:
+    """For the guest-vs-authenticated feed/ (a later unit): no Authorization
+    header at all is a legitimate guest request, so this returns None
+    rather than raising. A *present but invalid* token is never silently
+    downgraded to guest, though -- that would let a client with an expired/
+    forged token quietly fall back to public content instead of finding out
+    its session is dead, so this still 401s in that case, same as
+    get_current_identity. A valid token with no matching User row (an
+    otherwise-valid Cognito account that never completed POST /users) also
+    returns None -- there's no profile to attach, but it's not this
+    dependency's job to force a 404 the way get_current_user does for
+    write-path routes that require one.
+
+    Deliberately duplicates get_current_identity's header-parsing (rather
+    than calling it directly) because get_current_identity always raises on
+    a missing header -- there's no way to call it and get None back for
+    that one case without changing its behavior for every existing caller.
+    """
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        return None
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed Authorization header"
+        )
+
+    try:
+        identity = token_verifier.verify(token)
+    except InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from exc
+
+    return session.scalar(
+        select(User).where(User.cognito_sub == identity.sub, User.deleted_at.is_(None))
+    )
