@@ -56,7 +56,9 @@ class Media(Base):
     # or a profile-picture use); set once attached to a post. See
     # wiki/CodeContext/Modules/0x04-media.md.
     post_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("posts.id"), nullable=True
+        BigInteger,
+        ForeignKey("posts.id", name="fk_media_post_id_posts"),
+        nullable=True,
     )
     # Key in the private quarantine bucket. Present from Uploaded through
     # Scanning; cleared once the object is deleted post-processing (either
