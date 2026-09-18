@@ -19,11 +19,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import lru_cache
+from typing import Any
 
+import boto3  # type: ignore[import-untyped]  # no boto3 stubs/py.typed marker installed
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import make_engine, make_session_factory
-from app.eventbus import InMemoryEventPublisher, PostEventBus
+from app.eventbus import EventBridgePublisher, EventPublisher, InMemoryEventPublisher, PostEventBus
 from app.settings import Settings
 
 
@@ -48,26 +50,34 @@ def _get_session_factory() -> sessionmaker[Session]:
 
 
 @lru_cache(maxsize=1)
-def get_event_bus() -> PostEventBus:
-    """Process-wide PostEventBus. Real production wiring needs a real
-    EventPublisher (EventBridge) adapter, which doesn't exist yet (no live
-    AWS this phase) — this constructs one against InMemoryEventPublisher
-    for now, same as every other "no real adapter built yet" precedent in
-    this codebase (MalwareScanner, RateLimiter, SpamScorer). Route tests
-    override this via app.dependency_overrides[get_event_bus], same
-    pattern as get_session/get_token_verifier.
+def _events_client() -> Any:
+    # Process-wide boto3 EventBridge client, built once from get_settings()'s
+    # region — same "build once, cache, inject" shape as
+    # app.media.dependencies.get_s3_client.
+    return boto3.client("events", region_name=get_settings().aws_default_region)
 
-    NOTE (flagged for manager review): unlike those other precedents,
-    this one is wired as the *default production* dependency, not just a
-    test double — every PostCreated/PostMentionedEvent/PostReported/
-    UserFollowed published through this dependency currently goes nowhere
-    outside the process (no real EventBridge PutEvents call). That's
-    consistent with Phase 2's known blockers (no notifications/feed/search
-    subscriber exists until Phase 3), but it means the domain-event fan-out
-    is a no-op end-to-end right now, which is worth a wiki note rather than
-    staying implicit in this function.
+
+@lru_cache(maxsize=1)
+def get_event_bus() -> PostEventBus:
+    """Process-wide PostEventBus. Real production wiring per
+    wiki/CodeContext/Modules/0x00-architecture.md "PostEventBus
+    implementation": once Settings.post_event_bus_name (POST_EVENT_BUS_NAME,
+    infra/lib/app-stack.ts) is set, this wires the real EventBridgePublisher
+    adapter (app.eventbus.EventBridgePublisher, boto3 `events.put_events`);
+    otherwise it falls back to InMemoryEventPublisher, same as before, for
+    local dev/tests where no real bus exists. Route tests override this via
+    app.dependency_overrides[get_event_bus], same pattern as
+    get_session/get_token_verifier.
     """
-    return PostEventBus(InMemoryEventPublisher())
+    settings = get_settings()
+    publisher: EventPublisher
+    if settings.post_event_bus_name:
+        publisher = EventBridgePublisher(
+            _events_client(), event_bus_name=settings.post_event_bus_name
+        )
+    else:
+        publisher = InMemoryEventPublisher()
+    return PostEventBus(publisher)
 
 
 def get_session() -> Iterator[Session]:

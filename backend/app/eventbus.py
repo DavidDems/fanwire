@@ -67,6 +67,57 @@ class InMemoryEventPublisher(EventPublisher):
         self.published.append(DomainEvent(name=detail_type, detail=json.loads(detail)))
 
 
+class EventBridgePublishError(RuntimeError):
+    """Raised by EventBridgePublisher.put_event when EventBridge reports
+    FailedEntryCount > 0 -- PutEvents returns HTTP 200 even when an entry
+    fails, so this is the fail-fast check per
+    wiki/CodeContext/Standards/design-principles.md "Fail fast": a
+    partially-failed publish must not look like a success to the caller."""
+
+
+class EventBridgePublisher(EventPublisher):
+    """Real production adapter: boto3 `events.put_events` against a fixed
+    EventBridge bus. Takes an already-constructed boto3 client (Dependency
+    Inversion — same "inject the client, don't construct it here" shape as
+    app.events.adapters.ApiSportsAdapter taking an HttpClient), so this
+    class never imports boto3 or resolves credentials/region itself; that's
+    app.dependencies.get_event_bus's job.
+
+    `event_bus_name` is PostEventBus's real EventBridge bus name
+    (infra/lib/messaging-stack.ts's `postEventBus.eventBusName`, wired in via
+    Settings.post_event_bus_name / POST_EVENT_BUS_NAME) -- distinct from the
+    default account bus GuardDuty publishes scan results to.
+
+    Source/DetailType come from the caller (PostEventBus.publish() passes
+    PostEventBus.SOURCE == "fanwire" as `source`) -- this class never picks
+    its own Source. messaging-stack.ts's NotificationRule filters only on
+    `detailType` (["PostCreated", "UserFollowed"]), never on `source`, so
+    that "fanwire" source string is already compatible with the rule as-is;
+    no infra change was needed to accommodate this adapter.
+    """
+
+    def __init__(self, client: Any, *, event_bus_name: str) -> None:
+        self._client = client
+        self._event_bus_name = event_bus_name
+
+    def put_event(self, *, source: str, detail_type: str, detail: str) -> None:
+        response = self._client.put_events(
+            Entries=[
+                {
+                    "Source": source,
+                    "DetailType": detail_type,
+                    "Detail": detail,
+                    "EventBusName": self._event_bus_name,
+                }
+            ]
+        )
+        if response.get("FailedEntryCount", 0) > 0:
+            raise EventBridgePublishError(
+                f"EventBridge PutEvents reported FailedEntryCount="
+                f"{response['FailedEntryCount']}: {response.get('Entries')}"
+            )
+
+
 class PostEventBus:
     """The app's one domain event bus. Wraps the given detail dict with a
     `published_at` ISO-8601 UTC timestamp, JSON-encodes it, and forwards to
