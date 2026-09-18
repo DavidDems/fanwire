@@ -356,20 +356,19 @@ def test_run_rejects_on_invalid_file_content(s3_client, session_factory):
 
 
 # --- GuardDutyScanResultScanner (real MalwareScanner adapter) -------------
-# Fed GuardDuty's already-computed verdict from the SQS-delivered scan-result
-# event (app.media.lambda_handler) -- never calls GuardDuty or scans
-# anything itself. Fail-closed per wiki/CodeContext/Standards/security.md:
-# only the exact "NO_THREATS_FOUND" scanResultStatus counts as clean.
+# app.media.lambda_handler only ever constructs this once it has already
+# confirmed the GuardDuty scan-result event's scanResultStatus was exactly
+# "NO_THREATS_FOUND" -- the fail-closed branching for THREATS_FOUND/any
+# unrecognized status now lives entirely in the handler, which skips
+# ImageUploadPipeline.run() (and therefore this class) altogether for those
+# cases rather than feeding it a false verdict (see
+# tests/media/test_lambda_handler.py and that module's docstring for why:
+# validate_type()'s GetObject would hit the quarantine bucket policy's Deny
+# for an object GuardDuty didn't tag NO_THREATS_FOUND). This class exists
+# only because ImageUploadPipeline's Template Method still requires a
+# MalwareScanner collaborator even on the confirmed-clean path (GuardDuty's
+# own async scan already happened) -- it always returns True.
 
 
-def test_guardduty_scanner_is_clean_only_for_no_threats_found():
-    assert GuardDutyScanResultScanner("NO_THREATS_FOUND").scan(bucket="b", key="k") is True
-
-
-def test_guardduty_scanner_is_not_clean_for_threats_found():
-    assert GuardDutyScanResultScanner("THREATS_FOUND").scan(bucket="b", key="k") is False
-
-
-@pytest.mark.parametrize("status", ["UNSUPPORTED", "ACCESS_DENIED", "FAILED", "", "something-new"])
-def test_guardduty_scanner_fails_closed_on_any_unrecognized_status(status):
-    assert GuardDutyScanResultScanner(status).scan(bucket="b", key="k") is False
+def test_guardduty_scanner_always_reports_clean():
+    assert GuardDutyScanResultScanner().scan(bucket="b", key="k") is True
