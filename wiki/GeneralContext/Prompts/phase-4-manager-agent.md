@@ -1,8 +1,16 @@
 # fanwire — Phase 4 Manager Agent Brief: Frontend + CDK Infra
 
-## Status: PAUSED 2026-09-17, handoff for human input and for a resumed manager session
+## Status: IN PROGRESS (resumed 2026-09-18). A resumed manager session reads this section first.
 
-**Human: answer the "Decisions needed" items inline below (just type under each one), then tell the next session to read this section first.**
+**Landing fix (2026-09-18):** PRs #2–#12 were each merged into their *parent* branch top-down, so none of Phases 1–3a reached `main`. Only `phase-2-posts-routes` held the full backend. Branch `land-phases-1-3` = `phase-2-posts-routes` + a merge of `main`, opened as a single PR into `main`. Every later branch stacks on it. **Merge stacked PRs bottom-up (the one based on `main` first), or turn on GitHub's "Automatically delete head branches"** so dependent PRs retarget to `main` on their own.
+
+### Decisions (answered by the human 2026-09-18; recorded in the wiki where noted)
+1. **Egress**: use a cheap **NAT instance** (not a NAT Gateway, which stays rejected). Recorded in `wiki/CodeContext/Standards/aws-stack.md`.
+2. **Interface VPC endpoints in a single AZ**: acceptable. Recorded in `wiki/CodeContext/Standards/aws-stack.md`.
+3. **Local/dev auth must be real**, not an emulator or an in-house fake. A human-created **dev Cognito user pool** (free tier) that local dev and browser testing point at. Setup instructions: `wiki/GeneralContext/Architecture/dev-auth-setup.md`. The backend's real `CognitoTokenVerifier` verifies against it unchanged.
+4. **DOB is private**: never on public profiles, only on `GET /users/me`. Recorded in `wiki/CodeContext/Modules/0x01-users.md` (users-me unit).
+
+The original questions and answers are kept below for provenance.
 
 ### Why the plan changed
 This brief assumed Phases 0–3 were done. They weren't: `notifications/` (#12) and `CachedEventProxy` (#11) shipped, but **`feed/` and `search/` were never built**, and #11/#12 were sibling branches off `phase-2-posts-routes`, not stacked. So the manager is closing Phase 3 first as preliminary units, following the Phase 2a/`CachedEventProxy` precedent, before any frontend work.
@@ -24,13 +32,13 @@ Subagent worktrees are under `.claude/worktrees/` (`git worktree list` shows whi
 
 ### Decisions needed from the human
 1. **No-NAT vs. external calls (real topology contradiction).** Lambdas must sit in the VPC to reach RDS, and NAT Gateway is rejected. As documented, the ingestion Lambda therefore can't reach API-SPORTS and the API Lambda can't fetch Cognito's JWKS. The infra subagent was told to investigate (IPv6 egress-only IGW, Cognito interface endpoint, splitting the fetch outside the VPC) and flag its pick. Your call on the final answer; a cheap NAT *instance* (~$3/mo, not a NAT Gateway) is also an option.
-   > _your answer:_
+   > _your answer: We can go ahead and use a cheap NAT instance on AWS.
 2. **VPC interface-endpoint cost.** ~$7/mo each per AZ against the $20/mo org budget. Is single-AZ endpoints acceptable?
-   > _your answer:_
+   > _your answer: Yes it is acceptable
 3. **Local auth for browser testing.** No real Cognito pool exists (no deploy), so the frontend login flow can't be clicked through against AWS. Plan: run `cognito-local` (a Cognito emulator) in docker-compose, with the backend's JWKS URL/issuer made configurable. Fallback if that doesn't work: a dev-only fake auth adapter guarded fail-fast to local env. OK?
-   > _your answer:_
+   > _your answer: I would like to setup some type of real auth system, I can be given instructions to register for free third party auth services or even a paid AWS one if its available. But a fake in-house developed auth system seems like too much of a shortcut.
 4. **DOB removed from public profiles.** Only `GET /users/me` returns it. Confirm that's the intended privacy rule.
-   > _your answer:_
+   > _your answer: Yes date of birth shouldn't be shown on public profiles, only held by our DB after registration.
 
 ### Coordination points already found (for the process-outcomes report)
 - CloudFront `/api/*` → API Gateway must strip the `/api` prefix (FastAPI routes have none). This was pinned to the infra agent as a cross-track contract, so frontend and infra were **not** fully independent.

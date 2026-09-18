@@ -27,6 +27,7 @@ cdk.out/
 # Env / secrets
 .env
 .env.*.local
+.env.local
 
 # OS
 .DS_Store

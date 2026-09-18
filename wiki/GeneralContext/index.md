@@ -43,6 +43,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 ### Architecture & operations (GeneralContext-only — not handed to code-change subagents)
 - **Business rules**: `wiki/GeneralContext/Architecture/business-rules.md`
 - **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — interim, GuardDuty-finding response, priority-of-suspicion order; revisit once Phase 6 CDK stacks land.
+- **Dev auth setup**: `wiki/GeneralContext/Architecture/dev-auth-setup.md`: the human-created real Cognito dev user pool that local dev and browser testing use (decided 2026-09-18, no emulator or fake).
 
 ### Task prompts
 `wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across four sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:
