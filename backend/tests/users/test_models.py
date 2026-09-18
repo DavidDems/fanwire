@@ -13,6 +13,7 @@ from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.models import Team
+from app.media.models import Media
 from app.users.models import Follow, User
 
 
@@ -104,6 +105,37 @@ def test_user_preferred_team_id_resolves_to_a_real_team(session_factory):
 
         fetched = session.scalar(select(User).where(User.cognito_sub == "sub-d"))
         assert fetched.preferred_team_id == team.id
+
+
+def test_user_profile_picture_media_id_requires_existing_media(session_factory):
+    with session_factory() as session:
+        session.add(
+            _make_user(
+                cognito_sub="sub-j", username="bad_media_user", profile_picture_media_id=999_999
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_user_profile_picture_media_id_resolves_to_a_real_media(session_factory):
+    with session_factory() as session:
+        uploader = _make_user(cognito_sub="sub-k", username="media_owner_user")
+        session.add(uploader)
+        session.commit()
+
+        media = Media(uploader_id=uploader.id)
+        session.add(media)
+        session.commit()
+
+        user = _make_user(
+            cognito_sub="sub-l", username="pfp_user", profile_picture_media_id=media.id
+        )
+        session.add(user)
+        session.commit()
+
+        fetched = session.scalar(select(User).where(User.cognito_sub == "sub-l"))
+        assert fetched.profile_picture_media_id == media.id
 
 
 def test_follow_round_trip(session_factory):

@@ -13,6 +13,7 @@ from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.media.models import Media, MediaStatus
+from app.posts.models import Post
 from app.users.models import User
 
 
@@ -74,21 +75,34 @@ def test_media_uploader_id_requires_existing_user(session_factory):
             session.commit()
 
 
-def test_media_post_id_has_no_enforced_fk_constraint(session_factory):
-    """post_id is deliberately a plain column (no ForeignKey) until posts/'s
-    Post table lands in Phase 2 — an arbitrary, non-existent post_id must
-    NOT raise an IntegrityError."""
+def test_media_post_id_requires_existing_post(session_factory):
     with session_factory() as session:
         uploader = _make_user(cognito_sub="sub-media-2", username="media_uploader_2")
         session.add(uploader)
         session.commit()
 
-        media = Media(uploader_id=uploader.id, post_id=999_999)
+        session.add(Media(uploader_id=uploader.id, post_id=999_999))
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_media_post_id_resolves_to_a_real_post(session_factory):
+    with session_factory() as session:
+        uploader = _make_user(cognito_sub="sub-media-2b", username="media_uploader_2b")
+        session.add(uploader)
+        session.commit()
+
+        post = Post(author_id=uploader.id, text="hello world")
+        session.add(post)
+        session.commit()
+
+        media = Media(uploader_id=uploader.id, post_id=post.id)
         session.add(media)
         session.commit()
 
         fetched = session.scalar(select(Media).where(Media.id == media.id))
-        assert fetched.post_id == 999_999
+        assert fetched is not None
+        assert fetched.post_id == post.id
 
 
 def test_media_status_enum_round_trips(session_factory):
