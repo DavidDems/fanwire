@@ -21,7 +21,8 @@ from fastapi.testclient import TestClient
 from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
-from app.dependencies import get_session
+from app.dependencies import get_event_bus, get_session
+from app.eventbus import InMemoryEventPublisher, PostEventBus
 from app.users.auth import VerifiedIdentity
 from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
@@ -57,6 +58,7 @@ def app(session_factory):
             session.close()
 
     app.dependency_overrides[get_session] = _get_session_override
+    app.dependency_overrides[get_event_bus] = lambda: PostEventBus(InMemoryEventPublisher())
     return app
 
 
@@ -77,6 +79,16 @@ def _as_identity(app, identity: VerifiedIdentity) -> None:
 
 def _as_user(app, user: User) -> None:
     app.dependency_overrides[get_current_user] = lambda: user
+
+
+def _test_event_bus() -> PostEventBus:
+    return PostEventBus(InMemoryEventPublisher())
+
+
+def _with_captured_event_bus(app) -> InMemoryEventPublisher:
+    publisher = InMemoryEventPublisher()
+    app.dependency_overrides[get_event_bus] = lambda: PostEventBus(publisher)
+    return publisher
 
 
 # --- POST /users --------------------------------------------------------
@@ -190,10 +202,13 @@ def test_follow_succeeds(app, client, session_factory):
         followed = _create(session, "sub-followed", "followed_user")
 
     _as_user(app, follower)
+    publisher = _with_captured_event_bus(app)
 
     response = client.post(f"/users/{followed.id}/follow")
 
     assert response.status_code == 204
+    event_names = [e.name for e in publisher.published]
+    assert event_names == ["UserFollowed"]
 
 
 def test_self_follow_returns_400(app, client, session_factory):
@@ -211,7 +226,12 @@ def test_duplicate_follow_returns_409(app, client, session_factory):
     with session_factory() as session:
         follower = _create(session, "sub-dup-follower", "dup_follower_user")
         followed = _create(session, "sub-dup-followed", "dup_followed_user")
-        follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed.id,
+        )
 
     _as_user(app, follower)
 
@@ -224,7 +244,12 @@ def test_unfollow_succeeds(app, client, session_factory):
     with session_factory() as session:
         follower = _create(session, "sub-unfollower", "unfollower_user")
         followed = _create(session, "sub-unfollowed", "unfollowed_user")
-        follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed.id,
+        )
 
     _as_user(app, follower)
 

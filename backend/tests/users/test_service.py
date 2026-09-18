@@ -13,8 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
+from app.eventbus import InMemoryEventPublisher, PostEventBus
 from app.users.models import Follow, User
 from app.users.service import (
+    USER_FOLLOWED,
     AlreadyFollowingError,
     NotFollowingError,
     SelfFollowError,
@@ -107,12 +109,20 @@ def test_soft_delete_user_raises_when_already_deleted(session_factory):
             soft_delete_user(session, user.id)
 
 
+def _event_bus():
+    publisher = InMemoryEventPublisher()
+    return PostEventBus(publisher), publisher
+
+
 def test_follow_creates_a_follow_row(session_factory):
     with session_factory() as session:
         follower = _create(session, "sub-e", "follower_user")
         followed = _create(session, "sub-f", "followed_user")
+        bus, _ = _event_bus()
 
-        result = follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+        result = follow(
+            session, event_bus=bus, follower_user_id=follower.id, followed_user_id=followed.id
+        )
 
         assert result.follower_user_id == follower.id
         assert result.followed_user_id == followed.id
@@ -125,29 +135,54 @@ def test_follow_creates_a_follow_row(session_factory):
         assert fetched is not None
 
 
+def test_follow_publishes_user_followed_on_success(session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-e2", "follower_user_2")
+        followed = _create(session, "sub-f2", "followed_user_2")
+        bus, publisher = _event_bus()
+
+        follow(session, event_bus=bus, follower_user_id=follower.id, followed_user_id=followed.id)
+
+        event_names = [e.name for e in publisher.published]
+        assert event_names == [USER_FOLLOWED]
+        published_event = publisher.published[0]
+        assert published_event.detail["follower_user_id"] == follower.id
+        assert published_event.detail["followed_user_id"] == followed.id
+
+
 def test_follow_raises_self_follow_error_without_touching_db(session_factory):
     with session_factory() as session:
         user = _create(session, "sub-g", "self_follower")
+        bus, publisher = _event_bus()
 
         with pytest.raises(SelfFollowError):
-            follow(session, follower_user_id=user.id, followed_user_id=user.id)
+            follow(session, event_bus=bus, follower_user_id=user.id, followed_user_id=user.id)
+
+        assert publisher.published == []
 
 
 def test_follow_raises_already_following_error(session_factory):
     with session_factory() as session:
         follower = _create(session, "sub-h", "follower_two")
         followed = _create(session, "sub-i", "followed_two")
-        follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+        bus, publisher = _event_bus()
+        follow(session, event_bus=bus, follower_user_id=follower.id, followed_user_id=followed.id)
+        publisher.published.clear()
 
         with pytest.raises(AlreadyFollowingError):
-            follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+            follow(
+                session, event_bus=bus, follower_user_id=follower.id, followed_user_id=followed.id
+            )
+
+        assert publisher.published == []
 
 
 def test_unfollow_deletes_the_row(session_factory):
     with session_factory() as session:
         follower = _create(session, "sub-j", "follower_three")
         followed = _create(session, "sub-k", "followed_three")
-        follow(session, follower_user_id=follower.id, followed_user_id=followed.id)
+        bus, _ = _event_bus()
+        follow(session, event_bus=bus, follower_user_id=follower.id, followed_user_id=followed.id)
 
         unfollow(session, follower_user_id=follower.id, followed_user_id=followed.id)
 
