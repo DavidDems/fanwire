@@ -24,6 +24,7 @@ from app.users.dependencies import (
     _default_token_verifier,
     get_current_identity,
     get_current_user,
+    get_optional_current_user,
     get_token_verifier,
 )
 from app.users.models import User
@@ -212,3 +213,100 @@ def test_get_current_user_404s_when_the_matching_row_is_soft_deleted(session_fac
     response = client.get("/me", headers={"Authorization": "Bearer good-token"})
 
     assert response.status_code == 404
+
+
+# --- get_optional_current_user -----------------------------------------
+#
+# For the guest-vs-authenticated feed/ (a later unit): no header -> None
+# (guest), an invalid/malformed token -> 401 (never a silent downgrade to
+# guest), a valid token with no matching profile -> None.
+
+
+def _make_optional_current_user_app(*, session_factory):
+    app = FastAPI()
+
+    @app.get("/maybe-me")
+    def maybe_me(user: User | None = Depends(get_optional_current_user)):
+        if user is None:
+            return {"authenticated": False}
+        return {"authenticated": True, "id": user.id}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_optional_current_user_returns_none_without_authorization_header(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant")
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me")
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+def test_get_optional_current_user_401s_on_an_invalid_token(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(None)
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer bad-token"})
+
+    assert response.status_code == 401
+
+
+def test_get_optional_current_user_401s_on_a_malformed_header(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant")
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "good-token-no-scheme"})
+
+    assert response.status_code == 401
+
+
+def test_get_optional_current_user_returns_none_when_token_valid_but_no_profile(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-no-profile")
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+def test_get_optional_current_user_resolves_the_active_user(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-optional-with-profile",
+            username="optionalprofile",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-with-profile")
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": True, "id": user_id}

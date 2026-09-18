@@ -23,6 +23,8 @@ from testcontainers.postgres import PostgresContainer
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_event_bus, get_session
 from app.eventbus import InMemoryEventPublisher, PostEventBus
+from app.events.models import Team
+from app.media.models import Media, MediaStatus
 from app.users.auth import VerifiedIdentity
 from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
@@ -175,6 +177,249 @@ def test_get_profile_returns_404_for_soft_deleted_user(client, session_factory):
     response = client.get(f"/users/{user_id}")
 
     assert response.status_code == 404
+
+
+def test_get_profile_does_not_leak_date_of_birth(client, session_factory):
+    """Regression test: date_of_birth is PII (wiki/CodeContext/Standards/
+    security.md) and this public, unauthenticated route must never return
+    it -- see PublicUserOut in app.users.schemas."""
+    with session_factory() as session:
+        user = _create(session, "sub-pii", "pii_user")
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    assert response.status_code == 200
+    assert "date_of_birth" not in response.json()
+
+
+def test_get_profile_includes_follower_and_following_counts(client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-counts", "counts_user")
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    body = response.json()
+    assert body["follower_count"] == 0
+    assert body["following_count"] == 0
+
+
+# --- GET /users/me ---------------------------------------------------------
+
+
+def test_get_me_returns_full_profile_including_date_of_birth(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-me", "me_user", description="about me")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == user.id
+    assert body["username"] == "me_user"
+    assert body["date_of_birth"] == "1990-01-01"
+
+
+def test_get_me_returns_404_when_token_valid_but_no_profile(app, client):
+    _as_identity(app, VerifiedIdentity(sub="sub-no-profile-me"))
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 404
+
+
+def test_me_route_is_not_shadowed_by_user_id_route(app, client, session_factory):
+    """Regression test for route ordering -- GET /users/me must resolve to
+    the /me handler, not fall into GET /users/{user_id} and fail int
+    conversion on "me" (see routes.py module docstring)."""
+    with session_factory() as session:
+        user = _create(session, "sub-ordering", "ordering_user")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "ordering_user"
+
+
+# --- PATCH /users/me --------------------------------------------------------
+
+
+def test_patch_me_updates_only_provided_fields(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch", "patch_user", description="before")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": "after"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["description"] == "after"
+    assert body["username"] == "patch_user"
+
+
+def test_patch_me_explicit_null_clears_description(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-null", "patch_null_user", description="has text")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": None})
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+
+def test_patch_me_absent_field_leaves_it_untouched(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-absent", "patch_absent_user", description="keep me")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={})
+
+    assert response.status_code == 200
+    assert response.json()["description"] == "keep me"
+
+
+def test_patch_me_ignores_username_and_date_of_birth(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-immutable", "immutable_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"username": "hacked", "date_of_birth": "2000-01-01"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["username"] == "immutable_user"
+    assert body["date_of_birth"] == "1990-01-01"
+
+
+def test_patch_me_description_over_500_chars_returns_422(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-long", "patch_long_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": "x" * 501})
+
+    assert response.status_code == 422
+
+
+def test_patch_me_bad_preferred_team_id_returns_422(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-team-bad", "patch_team_bad_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"preferred_team_id": 999999})
+
+    assert response.status_code == 422
+
+
+def test_patch_me_sets_valid_preferred_team_id(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-team-ok", "patch_team_ok_user")
+        team = Team(
+            api_sports_team_id=301,
+            name="Test Team",
+            abbreviation="TST",
+            conference="Eastern",
+            division="Atlantic",
+        )
+        session.add(team)
+        session.commit()
+        team_id = team.id
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"preferred_team_id": team_id})
+
+    assert response.status_code == 200
+    assert response.json()["preferred_team_id"] == team_id
+
+
+def test_patch_me_rejects_unprocessed_or_not_owned_media(app, client, session_factory):
+    with session_factory() as session:
+        owner = _create(session, "sub-patch-pic-owner", "patch_pic_owner")
+        other_user = _create(session, "sub-patch-pic-other", "patch_pic_other")
+        unprocessed = Media(uploader_id=owner.id, status=MediaStatus.UPLOADED)
+        someone_elses = Media(uploader_id=other_user.id, status=MediaStatus.PROCESSED)
+        session.add_all([unprocessed, someone_elses])
+        session.commit()
+        unprocessed_id = unprocessed.id
+        someone_elses_id = someone_elses.id
+
+    _as_user(app, owner)
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": unprocessed_id})
+    assert response.status_code == 422
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": someone_elses_id})
+    assert response.status_code == 422
+
+
+def test_patch_me_sets_valid_own_processed_profile_picture(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-pic-ok", "patch_pic_ok_user")
+        media = Media(uploader_id=user.id, status=MediaStatus.PROCESSED)
+        session.add(media)
+        session.commit()
+        media_id = media.id
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": media_id})
+
+    assert response.status_code == 200
+    assert response.json()["profile_picture_media_id"] == media_id
+
+
+# --- GET /users/me/following -------------------------------------------
+
+
+def test_get_my_following_returns_followed_ids(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-following-a", "following_a")
+        followed_one = _create(session, "sub-following-b", "following_b")
+        followed_two = _create(session, "sub-following-c", "following_c")
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed_one.id,
+        )
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed_two.id,
+        )
+
+    _as_user(app, follower)
+
+    response = client.get("/users/me/following")
+
+    assert response.status_code == 200
+    assert sorted(response.json()) == sorted([followed_one.id, followed_two.id])
+
+
+def test_get_my_following_returns_empty_list_when_following_no_one(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-following-lonely", "following_lonely")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me/following")
+
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 # --- DELETE /users/me -----------------------------------------------------
