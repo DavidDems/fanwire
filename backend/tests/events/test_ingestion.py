@@ -35,6 +35,12 @@ class _FakeSource(SportsDataSource):
     def fetch_games(self, *, since=None):
         return self._games
 
+    def fetch_live_score(self, api_sports_game_id):
+        # Unused by these ingestion tests — present only to satisfy
+        # SportsDataSource's abstract contract (fetch_live_score, added for
+        # CachedEventProxy, app.events.proxy).
+        return None
+
 
 def _sample_game(**overrides) -> NormalizedGame:
     defaults: dict = {
