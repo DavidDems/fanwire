@@ -94,8 +94,22 @@ def test_fetch_games_returns_normalized_games_with_player_stats(adapter):
     assert game.away_score == 108
     assert game.venue == "TD Garden"
     assert game.player_stats == [
-        {"player_name": "Jayson Tatum", "team_id": 12, "points": 28, "rebounds": 7, "assists": 5},
-        {"player_name": "LeBron James", "team_id": 17, "points": 25, "rebounds": 8, "assists": 9},
+        {
+            "player_name": "Jayson Tatum",
+            "team_id": 12,
+            "points": 28,
+            "rebounds": 7,
+            "assists": 5,
+            "position": "SF",
+        },
+        {
+            "player_name": "LeBron James",
+            "team_id": 17,
+            "points": 25,
+            "rebounds": 8,
+            "assists": 9,
+            "position": "SF",
+        },
     ]
 
 

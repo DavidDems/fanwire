@@ -50,14 +50,14 @@
         "players": {
           "statistics": [
             {
-              "player": { "name": "Jayson Tatum" },
+              "player": { "name": "Jayson Tatum", "position": "SF" },
               "team": { "id": 12 },
               "points": 28,
               "totReb": 7,
               "assists": 5
             },
             {
-              "player": { "name": "LeBron James" },
+              "player": { "name": "LeBron James", "position": "SF" },
               "team": { "id": 17 },
               "points": 25,
               "totReb": 8,
