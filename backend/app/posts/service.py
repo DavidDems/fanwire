@@ -6,17 +6,28 @@ See wiki/CodeContext/Modules/0x03-posts.md "Report"/"PostLike" sections for
 the report_post/like_post/unlike_post behavior these implement.
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", this
-module imports app.posts.models and app.eventbus only -- nothing else
-cross-module.
+module imports app.posts.models and app.eventbus, plus app.users.models.User
+-- the same narrow, already-sanctioned cross-module read posts/models.py's
+own docstring establishes (Post.author_id is a real FK target into
+users.User) -- and nothing else cross-module.
+
+query_feed_posts/like_counts/liked_post_ids/mentioned_game_ids_by_post/
+replies_to are this module's public read interface for feed/ (a later
+unit, per wiki/CodeContext/Modules/0x06-feed.md): feed/ owns no tables of
+its own, so every Post-related read it needs is exposed here instead of
+feed/ querying app.posts.models directly.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from collections.abc import Collection
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.eventbus import PostEventBus
-from app.posts.models import Post, PostLike, Report
+from app.posts.models import EventMention, Post, PostLike, Report
+from app.users.models import User
 
 POST_REPORTED = "PostReported"
 
@@ -96,3 +107,105 @@ def unlike_post(session: Session, *, user_id: int, post_id: int) -> None:
 
     session.delete(row)
     session.commit()
+
+
+def query_feed_posts(
+    session: Session,
+    *,
+    author_ids: Collection[int] | None,
+    mentioned_game_ids: Collection[int] | None,
+    before_id: int | None,
+    limit: int,
+) -> list[Post]:
+    """Top-level posts only (`is_reply=False`; reposts included -- a repost
+    row also has `is_reply=False`), newest first by id, `id < before_id`
+    when given. `author_ids`/`mentioned_game_ids` are OR'd, never producing
+    duplicates (the mention condition is expressed as a `Post.id.in_(...)`
+    subquery, not a join, specifically to avoid row multiplication from a
+    post with several EventMention rows). Both None means no filter at all
+    (the guest feed: all posts). Posts whose author is soft-deleted are
+    excluded."""
+    stmt = (
+        select(Post)
+        .join(User, User.id == Post.author_id)
+        .where(Post.is_reply.is_(False), User.deleted_at.is_(None))
+    )
+
+    conditions = []
+    if author_ids is not None:
+        conditions.append(Post.author_id.in_(author_ids))
+    if mentioned_game_ids is not None:
+        conditions.append(
+            Post.id.in_(
+                select(EventMention.post_id).where(EventMention.game_id.in_(mentioned_game_ids))
+            )
+        )
+    if conditions:
+        stmt = stmt.where(or_(*conditions))
+
+    if before_id is not None:
+        stmt = stmt.where(Post.id < before_id)
+
+    stmt = stmt.order_by(Post.id.desc()).limit(limit)
+    return list(session.scalars(stmt).all())
+
+
+def like_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
+    """Batch like-count lookup, keyed by post id. A post with zero likes is
+    absent from the result entirely (callers use `.get(post_id, 0)`), same
+    "absent means zero/none" shape as mentioned_game_ids_by_post."""
+    if not post_ids:
+        return {}
+
+    rows = session.execute(
+        select(PostLike.post_id, func.count())
+        .where(PostLike.post_id.in_(post_ids))
+        .group_by(PostLike.post_id)
+    ).all()
+    return {post_id: count for post_id, count in rows}
+
+
+def liked_post_ids(session: Session, user_id: int, post_ids: Collection[int]) -> set[int]:
+    """Which of `post_ids` has `user_id` liked -- for feed/'s
+    `liked_by_viewer` field, one query per page rather than one per post."""
+    if not post_ids:
+        return set()
+
+    return set(
+        session.scalars(
+            select(PostLike.post_id).where(
+                PostLike.user_id == user_id, PostLike.post_id.in_(post_ids)
+            )
+        ).all()
+    )
+
+
+def mentioned_game_ids_by_post(session: Session, post_ids: Collection[int]) -> dict[int, list[int]]:
+    """Batch EventMention lookup, keyed by post id. A post with no mentions
+    is absent from the result entirely."""
+    if not post_ids:
+        return {}
+
+    rows = session.execute(
+        select(EventMention.post_id, EventMention.game_id).where(EventMention.post_id.in_(post_ids))
+    ).all()
+    result: dict[int, list[int]] = {}
+    for post_id, game_id in rows:
+        result.setdefault(post_id, []).append(game_id)
+    return result
+
+
+def replies_to(session: Session, post_id: int) -> list[Post]:
+    """Direct replies only, oldest first (natural thread reading order),
+    excluding soft-deleted authors -- same author-visibility rule as
+    query_feed_posts. Not wired into GET /posts/{id}/replies: that route's
+    existing behaviour doesn't exclude soft-deleted authors, so reusing this
+    here would be a behaviour change, not a pure refactor (see this unit's
+    task brief)."""
+    stmt = (
+        select(Post)
+        .join(User, User.id == Post.author_id)
+        .where(Post.parent_post_id == post_id, User.deleted_at.is_(None))
+        .order_by(Post.created_at.asc())
+    )
+    return list(session.scalars(stmt).all())
