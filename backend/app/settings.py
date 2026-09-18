@@ -27,3 +27,9 @@ class Settings(BaseSettings):
     # these resolving to a bucket that actually exists.
     media_quarantine_bucket: str = "fanwire-media-quarantine"
     media_public_bucket: str = "fanwire-media-public"
+
+    # Comma-separated banned-word list for app.posts.moderation.ProfanityFilter
+    # (12-factor: env vars are strings, not lists). Parsed by
+    # app.posts.dependencies.get_moderation_chain into a
+    # frozenset[str] -- empty string (the default) means no word is banned.
+    moderation_banned_words: str = ""
