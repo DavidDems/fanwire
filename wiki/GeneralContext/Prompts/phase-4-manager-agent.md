@@ -7,7 +7,7 @@
 ### Decisions (answered by the human 2026-09-18; recorded in the wiki where noted)
 1. **Egress**: use a cheap **NAT instance** (not a NAT Gateway, which stays rejected). Recorded in `wiki/CodeContext/Standards/aws-stack.md`.
 2. **Interface VPC endpoints in a single AZ**: acceptable. Recorded in `wiki/CodeContext/Standards/aws-stack.md`.
-3. **Local/dev auth must be real**, not an emulator or an in-house fake. A human-created **dev Cognito user pool** (free tier) that local dev and browser testing point at. Setup instructions: `wiki/GeneralContext/Architecture/dev-auth-setup.md`. The backend's real `CognitoTokenVerifier` verifies against it unchanged.
+3. **Local/dev auth must be real**, not an emulator or an in-house fake. A human-created **dev Cognito user pool** (free tier) that local dev and browser testing point at. Setup instructions: `wiki/GeneralContext/Architecture/dev-auth-setup.md`. The backend's real `CognitoTokenVerifier` verifies against it unchanged. **Status: DONE (2026-09-18, human-completed).** The dev pool and SPA client exist in `fanwire-workload` (`ca-central-1`), and the human created `backend/.env` and `frontend/.env.local` with the three variables each, as specified in `dev-auth-setup.md`. Nothing further is required from the human for this item.
 4. **DOB is private**: never on public profiles, only on `GET /users/me`. Recorded in `wiki/CodeContext/Modules/0x01-users.md` (users-me unit).
 
 The original questions and answers are kept below for provenance.
