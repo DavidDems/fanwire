@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -39,7 +40,7 @@ export function synthFanwire(overrides: Record<string, unknown> = {}): Synthesiz
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const outdir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'fanwire-cdk-test-'));
+  const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'fanwire-cdk-test-'));
   const app = new cdk.App({ outdir, context: { ...cdkJsonContext(), ...overrides } });
   buildFanwire(app);
   const assembly = app.synth();
