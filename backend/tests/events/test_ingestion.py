@@ -11,18 +11,25 @@ from datetime import UTC, datetime
 
 import boto3
 import pytest
+from freezegun import freeze_time
 from moto import mock_aws
 from sqlalchemy import select
 from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
-from app.events.ingestion import (
-    IDEMPOTENCY_TABLE_NAME,
-    FinalScoreIngestion,
-    UnrecognizedTeamError,
-)
+from app.events.ingestion import FinalScoreIngestion, UnrecognizedTeamError
 from app.events.interfaces import NormalizedGame, SportsDataSource
 from app.events.models import Game, Team
+
+# Test-local table name -- the real name comes from Settings.idempotency_table_name
+# (IDEMPOTENCY_TABLE_NAME, infra/lib/app-stack.ts) and is injected into
+# FinalScoreIngestion explicitly, same as ApiSportsAdapter's base_url/api_key,
+# rather than hardcoded in app.events.ingestion. Schema (partition key `id`,
+# TTL attribute `expiration`) matches aws-lambda-powertools' Idempotency
+# DynamoDBPersistenceLayer defaults (key_attr="id", expiry_attr="expiration")
+# even though this pipeline uses a hand-rolled conditional put rather than
+# that utility -- see app.events.ingestion's module docstring for why.
+IDEMPOTENCY_TABLE_NAME = "fanwire-ingestion-idempotency-test"
 
 
 class _FakeSource(SportsDataSource):
@@ -73,9 +80,13 @@ def dynamodb_client(monkeypatch):
         client = boto3.client("dynamodb", region_name="us-east-1")
         client.create_table(
             TableName=IDEMPOTENCY_TABLE_NAME,
-            KeySchema=[{"AttributeName": "event_id", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "event_id", "AttributeType": "S"}],
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[{"AttributeName": "id", "AttributeType": "S"}],
             BillingMode="PAY_PER_REQUEST",
+        )
+        client.update_time_to_live(
+            TableName=IDEMPOTENCY_TABLE_NAME,
+            TimeToLiveSpecification={"Enabled": True, "AttributeName": "expiration"},
         )
         yield client
 
@@ -117,11 +128,16 @@ def _seed_teams(session):
     session.commit()
 
 
+def _pipeline(source, session, dynamodb_client, **overrides) -> FinalScoreIngestion:
+    overrides.setdefault("idempotency_table_name", IDEMPOTENCY_TABLE_NAME)
+    return FinalScoreIngestion(source, session, dynamodb_client, **overrides)
+
+
 def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory, dynamodb_client):
     with session_factory() as session:
         _seed_teams(session)
 
-        pipeline = FinalScoreIngestion(_FakeSource([_sample_game()]), session, dynamodb_client)
+        pipeline = _pipeline(_FakeSource([_sample_game()]), session, dynamodb_client)
         pipeline.run()
 
         persisted = session.scalar(select(Game).where(Game.api_sports_game_id == 5001))
@@ -131,19 +147,35 @@ def test_run_persists_new_game_and_resolves_internal_team_ids(session_factory, d
         assert persisted.player_stats[0]["team_id"] == home_team.id
 
         item = dynamodb_client.get_item(
-            TableName=IDEMPOTENCY_TABLE_NAME, Key={"event_id": {"S": "5001"}}
+            TableName=IDEMPOTENCY_TABLE_NAME, Key={"id": {"S": "5001"}}
         )
         assert "Item" in item
+        assert "expiration" in item["Item"]
+
+
+def test_dedupe_writes_an_expiration_ttl_24_hours_out(session_factory, dynamodb_client):
+    with session_factory() as session, freeze_time("2026-01-01T00:00:00+00:00") as frozen:
+        _seed_teams(session)
+        pipeline = _pipeline(_FakeSource([_sample_game()]), session, dynamodb_client)
+
+        pipeline.run()
+
+        item = dynamodb_client.get_item(
+            TableName=IDEMPOTENCY_TABLE_NAME, Key={"id": {"S": "5001"}}
+        )["Item"]
+        expected = int(frozen.time_to_freeze.timestamp()) + FinalScoreIngestion.IDEMPOTENCY_TTL_SECONDS
+        assert int(item["expiration"]["N"]) == expected
 
 
 def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_factory, dynamodb_client):
     with session_factory() as session:
         _seed_teams(session)
         dynamodb_client.put_item(
-            TableName=IDEMPOTENCY_TABLE_NAME, Item={"event_id": {"S": "5001"}}
+            TableName=IDEMPOTENCY_TABLE_NAME,
+            Item={"id": {"S": "5001"}, "expiration": {"N": "9999999999"}},
         )
 
-        pipeline = FinalScoreIngestion(_FakeSource([_sample_game()]), session, dynamodb_client)
+        pipeline = _pipeline(_FakeSource([_sample_game()]), session, dynamodb_client)
         pipeline.run()
 
         persisted = session.scalar(select(Game).where(Game.api_sports_game_id == 5001))
@@ -152,7 +184,7 @@ def test_run_skips_a_game_already_recorded_in_the_idempotency_table(session_fact
 
 def test_dedupe_fails_fast_on_unrecognized_home_team(session_factory, dynamodb_client):
     with session_factory() as session:
-        pipeline = FinalScoreIngestion(
+        pipeline = _pipeline(
             _FakeSource([_sample_game(home_team_id=999)]), session, dynamodb_client
         )
 
@@ -166,7 +198,7 @@ def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(session_fact
         bad_game = _sample_game(
             player_stats=[{"player_name": "Nobody", "team_id": 999, "points": 1}]
         )
-        pipeline = FinalScoreIngestion(_FakeSource([bad_game]), session, dynamodb_client)
+        pipeline = _pipeline(_FakeSource([bad_game]), session, dynamodb_client)
 
         with pytest.raises(UnrecognizedTeamError):
             pipeline.run()
@@ -174,7 +206,7 @@ def test_dedupe_fails_fast_on_unrecognized_team_inside_player_stats(session_fact
 
 def test_match_to_mentions_and_publish_are_explicit_noops(session_factory):
     with session_factory() as session:
-        pipeline = FinalScoreIngestion(_FakeSource([]), session, dynamodb_client=None)
+        pipeline = _pipeline(_FakeSource([]), session, dynamodb_client=None)
 
         assert pipeline.match_to_mentions(["placeholder"]) is None
         assert pipeline.publish(["placeholder"]) is None
