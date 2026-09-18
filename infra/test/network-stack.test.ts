@@ -83,6 +83,13 @@ describe('Network stack', () => {
       expect(ingress[0]?.Properties?.SourceSecurityGroupId).toBeDefined();
     });
 
+    test('NAT SG egress: HTTPS only (forwarded Lambda traffic, SSM agent, package repos)', () => {
+      tpl().hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: Match.stringLikeRegexp('NAT'),
+        SecurityGroupEgress: [{ CidrIp: '0.0.0.0/0', Description: Match.anyValue(), FromPort: 443, ToPort: 443, IpProtocol: 'tcp' }],
+      });
+    });
+
     test('its own role: EC2 trust, no managed policies, only the Session Manager agent statements', () => {
       const roles = Object.values(resourcesOfType(raw(), 'AWS::IAM::Role'));
       expect(roles).toHaveLength(1);
