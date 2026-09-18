@@ -96,3 +96,31 @@ def test_settings_reads_moderation_banned_words_from_env(monkeypatch):
     monkeypatch.setenv("MODERATION_BANNED_WORDS", "badword, worseword,thirdword")
     settings = Settings()
     assert settings.moderation_banned_words == "badword, worseword,thirdword"
+
+
+def test_settings_defaults_api_sports_base_url_empty(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("API_SPORTS_BASE_URL", raising=False)
+    settings = Settings()
+    assert settings.api_sports_base_url == ""
+
+
+def test_settings_reads_api_sports_base_url_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("API_SPORTS_BASE_URL", "https://api-sports.example.com")
+    settings = Settings()
+    assert settings.api_sports_base_url == "https://api-sports.example.com"
+
+
+def test_settings_defaults_api_sports_key_empty(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("API_SPORTS_KEY", raising=False)
+    settings = Settings()
+    assert settings.api_sports_key == ""
+
+
+def test_settings_reads_api_sports_key_from_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("API_SPORTS_KEY", "test-key")
+    settings = Settings()
+    assert settings.api_sports_key == "test-key"
