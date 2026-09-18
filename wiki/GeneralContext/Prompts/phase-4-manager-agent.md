@@ -23,8 +23,11 @@ This brief assumed Phases 0–3 were done. They weren't: `notifications/` (#12) 
 | #15 | `infra/`: 8 CDK stacks, synth-only, IAM wildcard gate in CI (`infra-synth` job). NAT instance per decision #1 |
 | #16 | `feed/`: `FeedRankingStrategy`, `GET /feed`, `GET /feed/thread/{id}`, `PostView` assembler |
 | #17 | Security fix (backend rejected Cognito access tokens only by accident; now requires `token_use=id` + `aud`), `backend-dev` compose service on :8001, `seed_dev.py`, overridable ports, `AGENTS.md` commands |
-| `phase-3-search` | `search/`: tsvector accounts/posts search, year/team/position game filter. Finishing when this was written; see `gh pr list` |
-| backend handlers unit | Lambda handlers + real AWS adapters the infra references (see below). Dispatched after `search/` |
+| #18 | `search/`: tsvector account search (prefix) and post search, `GET /search/games` year/team/position filter (no free text), `GET /search/games/filters` |
+| #19 | Media upload size + MIME enforced **at S3** via presigned POST (quarantine CORS PUT→POST). Stacked on #18 |
+| `phase-4-lambda-handlers` | Lambda handlers (ingestion, media, notifications) + real adapters: EventBridge publisher, DynamoDB live-score cache, API-SPORTS key from Secrets Manager, idempotency table aligned to the infra schema, SES sender, GuardDuty-verdict handling (non-clean verdict → Rejected without reading the object). Stacked on #18 |
+
+**Merge order:** #18 first, then #19 and the handlers PR (either order). Deferred: a production migration runner (Alembic isn't in the `lambda` image), and reading DB credentials from Secrets Manager rather than `DATABASE_URL`. Unverifiable until a real deploy: GuardDuty's actual tagging/bucket-policy interaction and the scan-result event shape.
 
 **The frontend moved to Phase 5.** It isn't part of this brief anymore. See `phase-5a-frontend-manager-agent.md` (foundation, auth, profile, compose) and `phase-5b-frontend-manager-agent.md` (feed, notifications, search, and the whole-build summary + rolled-up process outcomes). They were split in two because every earlier single-manager phase hit session limits.
 
@@ -34,7 +37,7 @@ This brief assumed Phases 0–3 were done. They weren't: `notifications/` (#12) 
 
 ### Frontend: human input needed before Phase 5a starts
 Answer inline, as before.
-1. **Merge the remaining backend PRs** (`search/`, the handlers unit) into `main`. Phase 5a checks ancestry before starting.
+1. **Merge the remaining backend PRs** (#18, then #19 and the handlers PR) into `main`. Phase 5a checks ancestry before starting.
 2. **Dev media uploads.** Locally there's no S3 and no GuardDuty/processing Lambda, so an uploaded image never reaches `Processed` and can't be attached, and compose-with-media can't be clicked through in a browser. Options:
    (a) create real dev S3 buckets (quarantine + public) with CLI steps like the Cognito ones, plus a dev-only script that runs the processing pipeline on demand;
    (b) run a local S3 emulator in compose;
