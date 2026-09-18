@@ -20,7 +20,6 @@ from app.db import Base, make_engine, make_session_factory
 from app.events.models import Game, Team
 from app.posts.mentions import MentionToken, parse_mentions, resolve_mentions
 
-
 # --- parse_mentions: pure function, no DB needed ---
 
 
@@ -95,15 +94,15 @@ def _seed_game(session, **overrides) -> Game:
     session.add_all([home, away])
     session.commit()
 
-    defaults = dict(
-        api_sports_game_id=555,
-        home_team_id=home.id,
-        away_team_id=away.id,
-        date=datetime(2026, 1, 1, tzinfo=UTC),
-        season="2025-26",
-        home_score=100,
-        away_score=98,
-    )
+    defaults = {
+        "api_sports_game_id": 555,
+        "home_team_id": home.id,
+        "away_team_id": away.id,
+        "date": datetime(2026, 1, 1, tzinfo=UTC),
+        "season": "2025-26",
+        "home_score": 100,
+        "away_score": 98,
+    }
     defaults.update(overrides)
     game = Game(**defaults)
     session.add(game)
