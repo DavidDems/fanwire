@@ -25,7 +25,12 @@ from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.media.models import Media, MediaStatus
-from app.media.pipeline import FakeMalwareScanner, ImageUploadPipeline, MediaRejected
+from app.media.pipeline import (
+    FakeMalwareScanner,
+    GuardDutyScanResultScanner,
+    ImageUploadPipeline,
+    MediaRejected,
+)
 from app.users.models import User
 
 QUARANTINE_BUCKET = "fanwire-test-quarantine"
@@ -344,3 +349,23 @@ def test_run_rejects_on_invalid_file_content(s3_client, session_factory):
         assert media.s3_key_quarantine is None
         with pytest.raises(ClientError):
             s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="q/run3.bin")
+
+
+# --- GuardDutyScanResultScanner (real MalwareScanner adapter) -------------
+# Fed GuardDuty's already-computed verdict from the SQS-delivered scan-result
+# event (app.media.lambda_handler) -- never calls GuardDuty or scans
+# anything itself. Fail-closed per wiki/CodeContext/Standards/security.md:
+# only the exact "NO_THREATS_FOUND" scanResultStatus counts as clean.
+
+
+def test_guardduty_scanner_is_clean_only_for_no_threats_found():
+    assert GuardDutyScanResultScanner("NO_THREATS_FOUND").scan(bucket="b", key="k") is True
+
+
+def test_guardduty_scanner_is_not_clean_for_threats_found():
+    assert GuardDutyScanResultScanner("THREATS_FOUND").scan(bucket="b", key="k") is False
+
+
+@pytest.mark.parametrize("status", ["UNSUPPORTED", "ACCESS_DENIED", "FAILED", "", "something-new"])
+def test_guardduty_scanner_fails_closed_on_any_unrecognized_status(status):
+    assert GuardDutyScanResultScanner(status).scan(bucket="b", key="k") is False
