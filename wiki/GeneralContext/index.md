@@ -14,7 +14,7 @@ There is no formal agent-governance/usage-rules process on `main` right now. It 
 ## Project state, architecture, and the full stack
 
 ### Current state
-No application code exists yet. What exists is this wiki (design/decisions) and the repo scaffolding (`backend/pyproject.toml`, `frontend/package.json`, `infra/package.json`, `docker/*.Dockerfile`, `docker-compose.yml`). The first build pass is briefed in `wiki/GeneralContext/Prompts/first-pass-manager-agent.md` (Phases 0–6: scaffold → `events/`/`users/`/`media/` → `posts/` → `notifications/`/`feed/` → `search/` → frontend → CDK infra, `cdk synth`-only). No live AWS deploy — see `wiki/GeneralContext/Architecture/incident-runbook.md`'s "Outstanding" note and `wiki/CodeContext/Modules/0x00-architecture.md`'s "AWS account state" for exactly what is and isn't live today.
+The backend (`events/`, `users/`, `media/`, `posts/`, `notifications/`, `feed/`, `search/`) and the CDK `infra/` app (synth-only) are built; the frontend is a scaffold until Phase 5. The build was briefed in `wiki/GeneralContext/Prompts/` (see below). No live AWS deploy — see `wiki/GeneralContext/Architecture/incident-runbook.md`'s "Outstanding" note and `wiki/CodeContext/Modules/0x00-architecture.md`'s "AWS account state" for exactly what is and isn't live today.
 
 ### Business rules
 `wiki/GeneralContext/Architecture/business-rules.md` — the full source requirements (accounts, posts, events, feed, notifications, search, images) and the two standing project-level decisions (media uploads in scope for v1, single sports data provider until proven insufficient).
@@ -46,11 +46,13 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **Dev auth setup**: `wiki/GeneralContext/Architecture/dev-auth-setup.md`: the human-created real Cognito dev user pool that local dev and browser testing use (decided 2026-09-18, no emulator or fake).
 
 ### Task prompts
-`wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across four sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:
+`wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:
 - `first-pass-manager-agent.md` — Phase 0 (scaffold) + Phase 1 (`events/`, `users/`, `media/`).
 - `phase-2-manager-agent.md` — Phase 2 (`posts/`), plus closing the Phase 1 routes gap it documents.
 - `phase-3-manager-agent.md` — Phase 3 (`notifications/`, `feed/`, `search/`).
-- `phase-4-manager-agent.md` — Phase 4 (frontend + CDK infra) — the final pass; `cdk deploy` stays out of scope even here, gated on human IAM review.
+- `phase-4-manager-agent.md` — Phase 4: closed the unbuilt Phase 3 `feed/`/`search/` gap, the `users/me` gap and CDK infra (synth-only). Its Status section holds the human-decision log and the frontend human-input checklist.
+- `phase-5a-frontend-manager-agent.md` — Phase 5a: frontend foundation + typed client, auth (real dev Cognito), profile/follow, compose.
+- `phase-5b-frontend-manager-agent.md` — Phase 5b: feed, notifications, search UIs, then the whole-build summary and rolled-up process outcomes. `cdk deploy` stays out of scope throughout, gated on human IAM review.
 
 Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above).
 
