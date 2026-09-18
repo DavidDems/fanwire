@@ -134,7 +134,17 @@ def test_in_memory_cache_get_evicts_expired_entries(clock):
 
 
 @pytest.fixture()
-def dynamodb_client():
+def dynamodb_client(monkeypatch):
+    # docker-compose.yml sets AWS_ENDPOINT_URL_DYNAMODB to point boto3 at the
+    # real local `dynamodb-local` service. Left set, it diverts these calls
+    # away from moto's mock and onto that real, state-persisting service
+    # instead -- breaking isolation between test runs (a table created by
+    # one test collides with the next). Unset it so mock_aws() reliably
+    # intercepts here regardless of which environment (bare venv vs.
+    # docker-compose/CI) runs this suite -- same fix as
+    # tests/events/test_ingestion.py's own dynamodb_client fixture.
+    monkeypatch.delenv("AWS_ENDPOINT_URL_DYNAMODB", raising=False)
+    monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
     with mock_aws():
         client = boto3.client("dynamodb", region_name="us-east-1")
         client.create_table(
