@@ -21,7 +21,7 @@ to point at the compose Postgres):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -74,7 +74,7 @@ _GAMES = [
         "api_sports_game_id": 1001,
         "home_api_sports_team_id": 1,
         "away_api_sports_team_id": 2,
-        "date": datetime(2025, 11, 1, 19, 30, tzinfo=timezone.utc),
+        "date": datetime(2025, 11, 1, 19, 30, tzinfo=UTC),
         "season": "2025-26",
         "home_score": 108,
         "away_score": 102,
@@ -84,7 +84,7 @@ _GAMES = [
         "api_sports_game_id": 1002,
         "home_api_sports_team_id": 3,
         "away_api_sports_team_id": 4,
-        "date": datetime(2025, 11, 3, 22, 0, tzinfo=timezone.utc),
+        "date": datetime(2025, 11, 3, 22, 0, tzinfo=UTC),
         "season": "2025-26",
         "home_score": 115,
         "away_score": 120,
@@ -94,7 +94,7 @@ _GAMES = [
         "api_sports_game_id": 1003,
         "home_api_sports_team_id": 2,
         "away_api_sports_team_id": 3,
-        "date": datetime(2025, 11, 6, 20, 0, tzinfo=timezone.utc),
+        "date": datetime(2025, 11, 6, 20, 0, tzinfo=UTC),
         "season": "2025-26",
         "home_score": 99,
         "away_score": 104,
