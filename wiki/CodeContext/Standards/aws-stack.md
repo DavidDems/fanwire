@@ -65,6 +65,8 @@ Optimized for near-zero idle cost with room to scale if traffic grows. Every com
 
 ## Explicitly rejected at this scale
 - **NAT Gateway** — hourly cost regardless of traffic. Lambda needs VPC access here (to reach RDS) — use a VPC endpoint for AWS service calls (S3, DynamoDB, Secrets Manager) instead of routing through NAT.
+  - **Egress to the public internet (decided 2026-09-18 by the vault owner):** some in-VPC Lambdas must reach non-AWS endpoints: the ingestion Lambda calls API-SPORTS, and the API Lambda fetches Cognito's JWKS. Neither works with endpoints alone. A single small **NAT instance** (e.g. `t4g.nano`, ~$3/mo) provides that egress. It is *not* a NAT Gateway, which stays rejected. It gets no SSH/key pair (admin via SSM Session Manager only, per [[wiki/CodeContext/Standards/security|Security]]), a security group admitting only the Lambda SG(s), and its own least-privilege role.
+  - **Interface VPC endpoints** (~$7/mo each per AZ) may be placed in a **single AZ** to control cost (vault-owner decision 2026-09-18). Gateway endpoints (S3, DynamoDB) are free and always used.
 - **Application Load Balancer** — hourly cost regardless of traffic. API Gateway replaces it for HTTP workloads.
 - **ElastiCache** — hourly cost regardless of traffic. The DynamoDB cache table above covers the caching need at this scale; revisit ElastiCache only if cache read volume genuinely outgrows it.
 - **Third-party hosting/PaaS (Vercel, Heroku, Render, etc.)** — explicitly out of scope per your requirement to run security yourself on AWS primitives.

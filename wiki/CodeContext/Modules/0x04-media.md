@@ -36,7 +36,7 @@ Per [[wiki/CodeContext/Standards/design-principles|Design principles]]:
 
 Per [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]]:
 - **State** — `Media.status` (`Uploaded → Scanning → Processed/Rejected`) is a State object per status, not an `if`/`enum`-branch scattered across the codebase. `PublishPostFacade` (see [[0x03-posts]]) can only attach `Processed` media to a `Post` because the type/interface exposed to `posts/` makes a non-`Processed` `Media` un-attachable by construction, not by a runtime check.
-- **Template Method** — the upload pipeline is the same skeleton shape as `AbstractEventIngestionPipeline` (see [[0x00-architecture]] "Ingestion & processing pipelines"): `validateType → scanForMalware → stripMetadata → generateVariants → publish`. Each step can halt/reject; no step is optional or reorderable per upload.
+- **Template Method** — the upload pipeline is the same skeleton shape as `AbstractEventIngestionPipeline` (see [[0x00-architecture]] "Ingestion & processing pipelines"): `validateType → scanForMalware → stripMetadata → generateVariants → publish`. Each step can halt/reject; no step is optional or reorderable per upload. However due to using "AWS service mapping", GuardDuty scans directly on upload, ahead of and separate from the processing Lambda that would run the other four steps, this will be the implementation for this project.
 
 ## AWS service mapping
 

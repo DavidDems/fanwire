@@ -1,31 +1,37 @@
 # Python
-.venv/
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
+.venv/
+venv/
 .pytest_cache/
-.mypy_cache/
 .ruff_cache/
+.mypy_cache/
 htmlcov/
 .coverage
 .env
 *.env
 
-# Node
+# Node / frontend
 node_modules/
 dist/
-frontend/coverage/
+build/
 *.tsbuildinfo
+.vite/
+coverage/
 
-# CDK
-infra/cdk.out/
+# CDK / infra
+cdk.out/
+.cdk.staging/
 
-# Editors / OS
-.vscode/
-.idea/
+# Env / secrets
+.env
+.env.*.local
+.env.local
+
+# OS
 .DS_Store
 Thumbs.db
 
-# Large third-party dataset — human-downloaded, never committed (see
-# wiki/CodeContext/Modules/0x02-events.md seed-loader notes)
-backend/seed-data/
+# Claude Code worktrees (each is its own linked git worktree already)
+.claude/worktrees/
