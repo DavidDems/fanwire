@@ -3,7 +3,7 @@
 **Agent-facing.** Entry point for any agent working in this repo.
 
 ## State
-No application code exists yet. This repo currently holds `wiki/` (all AI-facing context — implementation decisions, standards, rules, prompts, reports) and this scaffolding. The first work here is initializing the FastAPI backend, React frontend, and AWS CDK infrastructure per `wiki/CodeContext/Standards/aws-stack.md` — there is nothing to build/test/run before that.
+`backend/` (FastAPI: `users`, `posts`, `events`, `media`, `notifications`) and `frontend/` (React + Vite) are real, tested application code, well past Phase 0. `infra/` has `package.json` only — no CDK stacks yet, so `npm run synth`/`npm test` there have nothing to build/run against until that lands. See `## Build / test / run` below for the actual commands.
 
 ## Wiki structure — read this before touching `wiki/`
 `wiki/` has two folders, split by audience (not by technical access control — see Process note below):
@@ -24,23 +24,26 @@ Load just-in-time, not the whole wiki. A manager-tier agent reads `wiki/GeneralC
 - Follow `wiki/CodeContext/Standards/gof-patterns.md` for which pattern implements which piece of behavior — don't introduce a different pattern for something already assigned one there.
 
 ## Build / test / run
-Backend (`backend/`), frontend (`frontend/`), infra (`infra/`) each have their own scaffold now (Phase 0). Prefer the `docker-compose` commands below — they run in the same containers CI uses. Direct commands are for fast local iteration.
+Prefer the `docker-compose` commands below — they run in the same containers CI uses. Direct commands are for fast local iteration.
 
 **Backend**
 - Test (containerized, matches CI): `docker compose run --rm backend-test`
 - Test (direct, from `backend/`): `.venv/Scripts/python -m pytest tests/` (create the venv once: `python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"`)
+- Real local dev server, browser-clickable (Phase 4, real Postgres + real dev Cognito pool — see `wiki/GeneralContext/Architecture/dev-auth-setup.md`): `docker compose up -d --build backend-dev`, serves on `http://localhost:8001` (`--reload` against a bind-mounted `backend/app`). Needs `COGNITO_REGION`/`COGNITO_USER_POOL_ID`/`COGNITO_APP_CLIENT_ID` set in the host shell or `backend/.env` first.
+- Seed the dev database with fixture teams/games (idempotent, run inside `backend-dev`): `docker compose exec backend-dev python scripts/seed_dev.py` — dev fixture data only, not the real Kaggle seed-loader (see the script's docstring).
 - Alembic migration: `DATABASE_URL=... .venv/Scripts/python -m alembic upgrade head` (or `revision --autogenerate -m "..."`)
 - Lint/type-check: `.venv/Scripts/python -m ruff check .`, `.venv/Scripts/python -m mypy app`
 
 **Frontend** (from `frontend/`)
 - Test (containerized, matches CI): `docker compose run --rm frontend-test`
 - Test (direct): `npm test` / `npm run test:watch`
-- Dev server: `npm run dev`
+- Dev server: `npm run dev` (talks to `backend-dev` above through the Vite proxy)
 - Build: `npm run build`
 - Typecheck: `npm run typecheck`
-- Lint: `npm run lint`
+- Lint: `npm run lint` / format: `npm run format`
+- Regenerate API types from the backend's OpenAPI schema: `npm run gen:api-types`
 
-**Infra** (from `infra/`) — not yet scaffolded (Phase 6): `npm run synth` will run `cdk synth` once the CDK stacks exist. `cdk deploy` is out of scope until a human reviews the generated IAM policy.
+**Infra** (from `infra/`) — `package.json` only so far, no CDK stacks yet: `npm test` (jest) and `npm run synth` (`cdk synth`) once they exist. `npm run deploy`/`cdk deploy` is out of scope until a human reviews the generated IAM policy — never run it.
 
 **CI**: `.github/workflows/test-agent.yml` builds and runs both `backend-test` and `frontend-test` targets on every PR.
 

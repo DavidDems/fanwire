@@ -24,6 +24,27 @@ COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
 ENTRYPOINT ["python", "-m", "pytest"]
 
+# --- dev stage: `backend-dev` in docker-compose.yml — a real, clickable
+# local backend for browser testing (wiki/GeneralContext/Architecture/
+# dev-auth-setup.md: real Cognito pool, real Postgres, no fake auth).
+# `.[dev]` pulls in uvicorn (added there rather than to the runtime
+# `dependencies` list — it's a local/dev-only server, never used by the
+# Lambda entry point in the `lambda` stage below). `app` itself reloads
+# from docker-compose.yml's bind mount, not this COPY; alembic/scripts are
+# not bind-mounted since editing a migration or the seed script mid-session
+# isn't a supported workflow here.
+FROM base AS dev
+RUN pip install --no-cache-dir .[dev]
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./
+COPY backend/scripts ./scripts
+# The Lambda base image sets its own ENTRYPOINT (the Lambda Runtime
+# Interface Client, which expects a handler path, not a shell command) —
+# clear it so the CMD below runs directly instead of being appended as an
+# argument to that entrypoint.
+ENTRYPOINT []
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"]
+
 # --- lambda stage: this is what actually gets pushed to ECR and deployed.
 # Kept last so a plain `docker build` (no --target) produces the deployable
 # image by default.

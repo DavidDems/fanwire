@@ -6,6 +6,9 @@
 #     pyramid guidance
 #   - a local DynamoDB for the idempotency-key / live-score-cache tables
 #   - one-shot test runners for backend and frontend, same images CI builds
+#   - `backend-dev`: a real, clickable local backend (Phase 4) so the
+#     frontend can be exercised in an actual browser, not just against
+#     mocks (frontend tests still use msw — see frontend/'s test setup)
 
 services:
   postgres:
@@ -15,7 +18,9 @@ services:
       POSTGRES_PASSWORD: fanwire
       POSTGRES_DB: fanwire
     ports:
-      - "5432:5432"
+      # Overridable so multiple git worktrees/agents can run compose
+      # concurrently without colliding on the host port. Defaults unchanged.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fanwire"]
       interval: 5s
@@ -26,7 +31,7 @@ services:
     image: amazon/dynamodb-local:latest
     command: ["-jar", "DynamoDBLocal.jar", "-inMemory"]
     ports:
-      - "8000:8000"
+      - "${DYNAMODB_HOST_PORT:-8000}:8000"
 
   backend-test:
     build:
@@ -57,3 +62,45 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
       target: test
+
+  # Real local dev backend (Phase 4, wiki/GeneralContext/Architecture/
+  # dev-auth-setup.md): real Postgres (the `postgres` service above), real
+  # Cognito user pool — no fake auth, no TokenVerifier override. Runs
+  # `alembic upgrade head` then uvicorn with --reload against a bind-mounted
+  # `backend/app`, so edits show up without a rebuild.
+  #
+  # No CORS middleware here on purpose: the frontend dev setup calls this
+  # backend through a Vite proxy (`/api` -> `http://localhost:8001`, prefix
+  # stripped — vite.config.*'s `server.proxy`, a separate frontend unit),
+  # so the browser only ever talks to the Vite origin and sees every
+  # request as same-origin. Adding permissive CORS here would just be an
+  # unused, easy-to-forget-about attack surface for a same-origin setup.
+  backend-dev:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
+      # Cognito ids are not secrets (wiki/GeneralContext/Architecture/
+      # dev-auth-setup.md: "pool id and public client id ship in the
+      # browser bundle anyway") but are per-developer (each points at
+      # their own dev pool). Bare names here forward the value from
+      # whatever shell runs `docker compose up`, if set, and otherwise
+      # fall through to backend/.env below — never hardcoded.
+      - COGNITO_REGION
+      - COGNITO_USER_POOL_ID
+      - COGNITO_APP_CLIENT_ID
+    # `required: false` lets this start with backend/.env absent entirely —
+    # get_token_verifier just won't resolve a real pool until the Cognito
+    # vars are set one way or the other (host env or this file).
+    env_file:
+      - path: backend/.env
+        required: false
+    volumes:
+      - ./backend/app:/var/task/app
+    ports:
+      - "${BACKEND_DEV_PORT:-8001}:8001"
