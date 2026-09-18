@@ -63,9 +63,7 @@ def test_search_users_prefix_matches_username(session_factory):
 
 def test_search_users_matches_description(session_factory):
     with session_factory() as session:
-        user = _make_user(
-            cognito_sub="sub-bio", username="baller23", description="Lakers superfan"
-        )
+        user = _make_user(cognito_sub="sub-bio", username="baller23", description="Lakers superfan")
         other = _make_user(cognito_sub="sub-bio2", username="other_user")
         session.add_all([user, other])
         session.commit()
@@ -110,9 +108,7 @@ def test_search_users_orders_by_rank_then_id(session_factory):
 
 def test_search_users_respects_limit_and_offset(session_factory):
     with session_factory() as session:
-        users = [
-            _make_user(cognito_sub=f"sub-page{i}", username=f"pageuser{i}") for i in range(5)
-        ]
+        users = [_make_user(cognito_sub=f"sub-page{i}", username=f"pageuser{i}") for i in range(5)]
         session.add_all(users)
         session.commit()
 

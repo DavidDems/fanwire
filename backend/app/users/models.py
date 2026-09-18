@@ -42,13 +42,16 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Computed,
     Date,
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     PrimaryKeyConstraint,
     Text,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -84,9 +87,7 @@ class User(Base):
     # wiki/CodeContext/Modules/0x01-users.md.
     profile_picture_media_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey(
-            "media.id", use_alter=True, name="fk_users_profile_picture_media_id_media"
-        ),
+        ForeignKey("media.id", use_alter=True, name="fk_users_profile_picture_media_id_media"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -102,6 +103,23 @@ class User(Base):
     # a row was deactivated is explicit rather than inferred — see
     # wiki/CodeContext/Modules/0x01-users.md Design principles tie-ins.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Full-text search index for search/'s account search
+    # (wiki/CodeContext/Modules/0x07-search.md) -- search/ owns no tables,
+    # so this column (and its GIN index below) lives here, the schema's
+    # single source of truth, per 0x00-architecture.md's Connection rule.
+    # A generated, persisted (STORED) column: Postgres keeps it current on
+    # every INSERT/UPDATE automatically, no trigger to maintain. description
+    # IS included (resolves 0x07-search.md's prior open decision).
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('simple', username || ' ' || coalesce(description, ''))",
+            persisted=True,
+        ),
+        nullable=True,
+    )
+
+    __table_args__ = (Index("ix_users_search_vector", "search_vector", postgresql_using="gin"),)
 
 
 class Follow(Base):
@@ -125,7 +143,5 @@ class Follow(Base):
         # Composite PK doubles as the "follow a given user at most once"
         # uniqueness constraint — no separate UniqueConstraint needed.
         PrimaryKeyConstraint("follower_user_id", "followed_user_id"),
-        CheckConstraint(
-            "follower_user_id <> followed_user_id", name="ck_follows_no_self_follow"
-        ),
+        CheckConstraint("follower_user_id <> followed_user_id", name="ck_follows_no_self_follow"),
     )

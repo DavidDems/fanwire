@@ -7,6 +7,7 @@ these implement.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -298,3 +299,46 @@ def following_count(session: Session, user_id: int) -> int:
         )
         or 0
     )
+
+
+# Only [A-Za-z0-9_] survives per token -- everything else (quotes,
+# semicolons, tsquery operator syntax like ":*"/"&|!()", "%", etc.) is
+# stripped before the string ever reaches Postgres, per
+# wiki/CodeContext/Modules/0x07-search.md's injection-safety requirement.
+_SEARCH_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
+
+
+def _build_prefix_tsquery(query: str) -> str | None:
+    """Splits `query` into tokens, keeping only [A-Za-z0-9_] characters per
+    token and dropping empties, then joins as "tok1:* & tok2:*" for prefix
+    matching ("dav" finds "david"). Returns None when no token survives --
+    the caller must return [] without ever querying in that case."""
+    tokens = _SEARCH_TOKEN_RE.findall(query)
+    if not tokens:
+        return None
+    return " & ".join(f"{token}:*" for token in tokens)
+
+
+def search_users(session: Session, query: str, *, limit: int, offset: int) -> list[User]:
+    """Full-text search over User.search_vector (username + description),
+    prefix-matched, excluding soft-deleted users. The tsquery string built
+    by _build_prefix_tsquery is always bound as a parameter to
+    to_tsquery('simple', :q) -- func.to_tsquery(...) below passes it as a
+    bind parameter, never interpolated into SQL text -- per
+    wiki/CodeContext/Modules/0x07-search.md and
+    wiki/CodeContext/Standards/security.md. Ordered by ts_rank desc, then
+    id, matching wiki/CodeContext/Modules/0x07-search.md."""
+    tsquery_str = _build_prefix_tsquery(query)
+    if tsquery_str is None:
+        return []
+
+    tsquery = func.to_tsquery("simple", tsquery_str)
+    stmt = (
+        select(User)
+        .where(User.deleted_at.is_(None))
+        .where(User.search_vector.op("@@")(tsquery))
+        .order_by(func.ts_rank(User.search_vector, tsquery).desc(), User.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(session.scalars(stmt).all())
