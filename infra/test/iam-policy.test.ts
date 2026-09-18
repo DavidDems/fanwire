@@ -91,17 +91,6 @@ const ALLOW_LIST: AllowListEntry[] = [
       hasCondition(f.statement, 'aws:SecureTransport'),
   },
   {
-    id: 'own-log-group-streams',
-    reason:
-      'logs:CreateLogStream/PutLogEvents act on log streams, whose names Lambda generates per execution environment. ' +
-      '`arn:...:log-group:<this function\'s own log group>:*` is the narrowest ARN AWS accepts for them.',
-    matches: (f) =>
-      f.kind === 'resource' &&
-      onlyActions(f.statement, ['logs:CreateLogStream', 'logs:PutLogEvents']) &&
-      (f.value.match(/\*/g) ?? []).length === 1 &&
-      /"Fn::GetAtt":\["[A-Za-z0-9]*LogGroup[A-Za-z0-9]*","Arn"\]/.test(f.value),
-  },
-  {
     id: 'lambda-vpc-eni',
     reason:
       'A VPC-attached Lambda\'s execution role must hold the ENI actions AWS lists for AWSLambdaVPCAccessExecutionRole ' +
@@ -119,6 +108,25 @@ const ALLOW_LIST: AllowListEntry[] = [
         'ec2:DeleteNetworkInterface',
         'ec2:AssignPrivateIpAddresses',
         'ec2:UnassignPrivateIpAddresses',
+      ]),
+  },
+  {
+    id: 'nat-instance-session-manager',
+    reason:
+      'The NAT instance (human decision 2026-09-18) is administered via SSM Session Manager only (no SSH). ' +
+      "Its role holds exactly AWS's documented minimum for the Session Manager agent " +
+      '(https://docs.aws.amazon.com/systems-manager/latest/userguide/getting-started-create-iam-instance-profile.html): ' +
+      'ssmmessages:* channel actions have no resource-level permissions, and ssm:UpdateInstanceInformation is called ' +
+      'before the agent knows its managed-instance ARN. Replaces the AmazonSSMManagedInstanceCore managed policy.',
+    matches: (f) =>
+      f.kind === 'resource' &&
+      f.value === '"*"' &&
+      onlyActions(f.statement, [
+        'ssm:UpdateInstanceInformation',
+        'ssmmessages:CreateControlChannel',
+        'ssmmessages:CreateDataChannel',
+        'ssmmessages:OpenControlChannel',
+        'ssmmessages:OpenDataChannel',
       ]),
   },
   {
@@ -142,7 +150,8 @@ const ALLOW_LIST: AllowListEntry[] = [
     matches: (f) =>
       f.kind === 'resource' &&
       (f.value.match(/\*/g) ?? []).length === 1 &&
-      /:parameter\/cdk\/exports\/[A-Za-z0-9-]+\/\*"/.test(f.value.replace(/"\]\]\}$/, '"')),
+      // writer: `/cdk/exports/*` in the consumer region; reader: `/cdk/exports/<consumer stack>/*`
+      /:parameter\/cdk\/exports\/([A-Za-z0-9-]+\/)?\*"/.test(f.value.replace(/"\]\]\}$/, '"')),
   },
   {
     id: 'cdk-custom-resource-basic-execution',
@@ -245,6 +254,8 @@ describe.each(Object.entries(DOMAIN_MODES))('IAM wildcard gate (%s)', (_mode, ov
       const entry = ALLOW_LIST.find((e) => e.matches(f));
       if (entry) {
         usedAllowListEntries.add(entry.id);
+        // `IAM_GATE_REPORT=1 npx jest test/iam-policy.test.ts` lists every excepted finding for review.
+        if (process.env.IAM_GATE_REPORT) console.log(`[${_mode}] ${entry.id}: ${f.stack}/${f.logicalId} ${f.kind} ${f.value}`);
       } else {
         violations.push(`${f.stack}/${f.logicalId} (${f.resourceType}) ${f.kind}: ${f.value}` +
           (f.statement ? `\n    statement: ${json(f.statement)}` : ''));
