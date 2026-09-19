@@ -22,6 +22,7 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 - `is_repost` — boolean, default false. `original_post_id` — FK → `posts.Post`, nullable, required when `is_repost`.
 - `reported` — boolean, default false. Set true only as a side effect of the first `Report` row for this post (see below) — never set directly by a client request.
 - `created_at` — timestamptz.
+- `search_vector` — `TSVECTOR`, generated/persisted, GIN-indexed: `to_tsvector('english', coalesce(text, ''))` (Phase 3, `search/` unit) — backs `search/`'s post search, see [[0x07-search]].
 - No `moderationStatus` / State-pattern field. [[0x00-architecture]] already establishes there's no moderation workflow for v1; `reported` is a plain flag, not a status machine.
 - No `updated_at` / edit support — no "edit a post" business rule exists in [[wiki/GeneralContext/Architecture/business-rules|Projects]], so a published `Post` is treated as immutable (see Design principles below).
 
@@ -51,6 +52,8 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 **Implemented** (`app.posts.models`): `Post`, `PostLike`, `EventMention`, `Report` — bigint identity PKs throughout, `ck_posts_reply_requires_parent`/`ck_posts_repost_requires_original` CHECK constraints (DB-level fail-fast, not just an application-layer assumption), `parent_post_id`/`original_post_id` both indexed for thread-traversal, `PostLike`'s composite PK on `(user_id, post_id)` doubling as its uniqueness constraint (same pattern as `users/`'s `Follow`), `uq_reports_post_reporter` unique constraint. `EventMention.game_id` is a real `ForeignKey("games.id")` — unlike Phase 1's deferred-FK cases, `events/` already existed when this was built, so no plain-column workaround was needed. Migration `d1c029a3faee` (head, `down_revision = '532f6a3d06fd'`). No service logic, `PublishPostFacade`, `MentionParser`, moderation chain, or routes yet — models/migration only, a separate unit each.
 
 **`feed/`'s read interface — implemented (Phase 3, feed/ unit).** `app.posts.service.query_feed_posts`, `like_counts`, `liked_post_ids`, `mentioned_game_ids_by_post`, and `replies_to` (direct replies, oldest first, excluding soft-deleted authors — deliberately not reused by `GET /posts/{id}/replies` above, since that would change that route's existing behaviour) are `posts/`'s public read functions for `feed/` (and later `search/`) to call instead of querying `Post`/`PostLike`/`EventMention` directly — see [[0x06-feed]] for the full contract.
+
+**`search/`'s read interface — implemented (Phase 3, search/ unit).** `app.posts.service.search_posts(session, query, *, limit, offset) -> list[Post]` — full-text search over `Post.search_vector` via `websearch_to_tsquery('english', :q)`, replies included, posts whose author is soft-deleted excluded, ordered by rank desc then newest — backs `GET /search/posts`. See [[0x07-search]].
 
 ## PostLike
 **Schema**

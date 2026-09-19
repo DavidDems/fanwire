@@ -27,6 +27,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Identity,
@@ -36,6 +37,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -76,6 +78,17 @@ class Post(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Full-text search index for search/'s post search
+    # (wiki/CodeContext/Modules/0x07-search.md) -- search/ owns no tables,
+    # so this column (and its GIN index below) lives here, the schema's
+    # single source of truth, per 0x00-architecture.md's Connection rule.
+    # Generated/persisted (STORED): Postgres keeps it current on every
+    # INSERT/UPDATE, no trigger to maintain.
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', coalesce(text, ''))", persisted=True),
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -90,6 +103,7 @@ class Post(Base):
         # wiki/CodeContext/Modules/0x03-posts.md "AWS mapping".
         Index("ix_posts_parent_post_id", "parent_post_id"),
         Index("ix_posts_original_post_id", "original_post_id"),
+        Index("ix_posts_search_vector", "search_vector", postgresql_using="gin"),
     )
 
 

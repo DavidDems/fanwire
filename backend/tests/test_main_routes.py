@@ -68,6 +68,17 @@ def test_openapi_schema_includes_feed_routes():
     assert "/feed/thread/{post_id}" in paths
 
 
+def test_openapi_schema_includes_search_routes():
+    client = TestClient(app)
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+
+    assert "/search/accounts" in paths
+    assert "/search/posts" in paths
+    assert "/search/games" in paths
+    assert "/search/games/filters" in paths
+
+
 def test_health_check_still_works_alongside_the_new_routers():
     client = TestClient(app)
     response = client.get("/health")
