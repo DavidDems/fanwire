@@ -1,5 +1,7 @@
 # Dev auth setup: a real Cognito user pool for local development
 
+**Status: COMPLETED 2026-09-18 (human).** The dev user pool and SPA client were created with the commands below in `fanwire-workload` (`ca-central-1`), and the pool id and client id were recorded. `backend/.env` and `frontend/.env.local` did not previously exist; the human created both, each containing only the three variables listed under "Wire it into local dev". Both files are untracked and local. No further human action is needed for this task.
+
 **Human-facing.** Decided 2026-09-18 (see `wiki/GeneralContext/Prompts/phase-4-manager-agent.md` Decisions #3): local development and browser testing use a **real** Cognito user pool, not an emulator and not an in-house fake. Cognito's free tier covers this (50k MAU; the default Cognito email sender allows ~50 emails/day, plenty for dev). Estimated cost: $0.
 
 This pool is **dev-only** and separate from the production pool the CDK `auth` stack defines (that one only exists once `cdk deploy` happens, after the IAM review). It's created with the AWS CLI commands below rather than console clicks, so the exact configuration lives in a reviewed file. It mirrors the CDK stack's settings: email sign-in, email verification, optional TOTP MFA, and a public SPA client with no secret using SRP.
@@ -12,6 +14,8 @@ This pool is **dev-only** and separate from the production pool the CDK `auth` s
   ```
 
 ## Create the pool and SPA client (run once)
+On Windows PowerShell, the Bash below does not run as-is. Use `$env:AWS_PROFILE = "fanwire-dev"` and `$env:AWS_REGION = "ca-central-1"` instead of `export`, `$VAR = aws ...` instead of `VAR=$(aws ...)`, and a backtick instead of `\` for line continuation. Keep the single quotes around the `--policies` and `--account-recovery-setting` values. This is how the human ran it successfully.
+
 ```sh
 export AWS_PROFILE=fanwire-dev AWS_REGION=ca-central-1
 
