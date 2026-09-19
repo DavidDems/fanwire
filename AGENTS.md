@@ -3,7 +3,7 @@
 **Agent-facing.** Entry point for any agent working in this repo.
 
 ## State
-`backend/` (FastAPI: `users`, `posts`, `events`, `media`, `notifications`) and `frontend/` (React + Vite) are real, tested application code, well past Phase 0. `infra/` has `package.json` only — no CDK stacks yet, so `npm run synth`/`npm test` there have nothing to build/run against until that lands. See `## Build / test / run` below for the actual commands.
+`backend/` (FastAPI: `users`, `posts`, `events`, `media`, `notifications`) and `frontend/` (React + Vite) are real, tested application code, well past Phase 0. `infra/` (CDK, TypeScript) has all eight stacks built, synthesized and tested — `npm run synth`/`npm test` there both run against real stack code, not stubs (see `wiki/CodeContext/Standards/build-deployment.md` and `wiki/CodeContext/Modules/0x00-architecture.md` "Infra (CDK) — implementation notes" for the stack split). See `## Build / test / run` below for the actual commands.
 
 ## Wiki structure — read this before touching `wiki/`
 `wiki/` has two folders, split by audience (not by technical access control — see Process note below):
@@ -43,7 +43,7 @@ Prefer the `docker-compose` commands below — they run in the same containers C
 - Lint: `npm run lint` / format: `npm run format`
 - Regenerate API types from the backend's OpenAPI schema: `npm run gen:api-types`
 
-**Infra** (from `infra/`) — `package.json` only so far, no CDK stacks yet: `npm test` (jest) and `npm run synth` (`cdk synth`) once they exist. `npm run deploy`/`cdk deploy` is out of scope until a human reviews the generated IAM policy — never run it.
+**Infra** (from `infra/`) — CDK app in TypeScript, all eight stacks built and tested (see `wiki/CodeContext/Modules/0x00-architecture.md` "Infra (CDK) — implementation notes" for the stack split, egress, and IAM-gate detail): `npm ci` once, then `npm test` (jest, includes the `iam-policy.test.ts` no-wildcard-IAM gate) and `npm run synth` (`cdk synth`, needs no AWS credentials — no `fromLookup` anywhere). `npm run deploy`/`cdk deploy` is out of scope until a human reviews the generated IAM policy — never run it; nothing has been deployed yet (`GitHubActionsDeployRole` has no permissions).
 
 **CI**: `.github/workflows/test-agent.yml` builds and runs both `backend-test` and `frontend-test` targets on every PR.
 

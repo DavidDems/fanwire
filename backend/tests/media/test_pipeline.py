@@ -25,7 +25,12 @@ from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.media.models import Media, MediaStatus
-from app.media.pipeline import FakeMalwareScanner, ImageUploadPipeline, MediaRejected
+from app.media.pipeline import (
+    FakeMalwareScanner,
+    GuardDutyScanResultScanner,
+    ImageUploadPipeline,
+    MediaRejected,
+)
 from app.users.models import User
 
 QUARANTINE_BUCKET = "fanwire-test-quarantine"
@@ -56,7 +61,9 @@ def session_factory(postgres_url):
     engine.dispose()
 
 
-def _make_uploader_and_media(session, *, cognito_sub: str, username: str, **media_overrides) -> Media:
+def _make_uploader_and_media(
+    session, *, cognito_sub: str, username: str, **media_overrides
+) -> Media:
     uploader = User(cognito_sub=cognito_sub, username=username, date_of_birth=date(1990, 1, 1))
     session.add(uploader)
     session.commit()
@@ -102,7 +109,9 @@ def _put_quarantine_object(s3_client, key: str, data: bytes) -> None:
     s3_client.put_object(Bucket=QUARANTINE_BUCKET, Key=key, Body=data)
 
 
-def _make_pipeline(s3_client, media: Media, *, session=None, malware_scanner=None) -> ImageUploadPipeline:
+def _make_pipeline(
+    s3_client, media: Media, *, session=None, malware_scanner=None
+) -> ImageUploadPipeline:
     return ImageUploadPipeline(
         media,
         session,
@@ -344,3 +353,22 @@ def test_run_rejects_on_invalid_file_content(s3_client, session_factory):
         assert media.s3_key_quarantine is None
         with pytest.raises(ClientError):
             s3_client.head_object(Bucket=QUARANTINE_BUCKET, Key="q/run3.bin")
+
+
+# --- GuardDutyScanResultScanner (real MalwareScanner adapter) -------------
+# app.media.lambda_handler only ever constructs this once it has already
+# confirmed the GuardDuty scan-result event's scanResultStatus was exactly
+# "NO_THREATS_FOUND" -- the fail-closed branching for THREATS_FOUND/any
+# unrecognized status now lives entirely in the handler, which skips
+# ImageUploadPipeline.run() (and therefore this class) altogether for those
+# cases rather than feeding it a false verdict (see
+# tests/media/test_lambda_handler.py and that module's docstring for why:
+# validate_type()'s GetObject would hit the quarantine bucket policy's Deny
+# for an object GuardDuty didn't tag NO_THREATS_FOUND). This class exists
+# only because ImageUploadPipeline's Template Method still requires a
+# MalwareScanner collaborator even on the confirmed-clean path (GuardDuty's
+# own async scan already happened) -- it always returns True.
+
+
+def test_guardduty_scanner_always_reports_clean():
+    assert GuardDutyScanResultScanner().scan(bucket="b", key="k") is True
