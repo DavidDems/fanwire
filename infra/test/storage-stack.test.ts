@@ -41,11 +41,11 @@ describe('Storage stack', () => {
       );
     });
 
-    test('presigned-PUT CORS on the quarantine bucket only', () => {
+    test('presigned-POST CORS on the quarantine bucket only (not PUT -- a presigned PUT cannot cap object size)', () => {
       const [, q] = bucketByTag('media-quarantine');
       expect(q.Properties?.CorsConfiguration).toEqual({
         CorsRules: [
-          expect.objectContaining({ AllowedMethods: ['PUT'], AllowedHeaders: ['Content-Type'] }),
+          expect.objectContaining({ AllowedMethods: ['POST'], AllowedHeaders: ['Content-Type'] }),
         ],
       });
       for (const purpose of ['media-public', 'frontend-static']) {
