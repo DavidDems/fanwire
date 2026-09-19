@@ -35,7 +35,10 @@ dev = [
     "uvicorn[standard]>=0.30",      # ASGI server for `backend-dev` (docker-compose.yml) local
                                      # browser testing only — production uses Mangum/Lambda
                                      # (see docker/backend.Dockerfile's `lambda` stage), never uvicorn
-    "moto[s3,dynamodb,events,secretsmanager,ses,sns]>=5.0",  # mock AWS in unit tests
+    # cognitoidp extra added for tests/notifications/test_email.py's
+    # SesEmailSender tests (Cognito AdminGetUser) -- pulls in moto's own
+    # joserfc dependency (JWT/JWK support) automatically.
+    "moto[s3,dynamodb,events,secretsmanager,ses,sns,cognitoidp]>=5.0",  # mock AWS in unit tests
     "testcontainers[postgres]>=4.8", # real Postgres in a container for integration tests
     "factory-boy>=3.3",
     "faker>=30.0",
