@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "_comment": [
+    "Runtime configuration for the agent system. Contains NO secrets: a",
+    "provider's credential is named here by the GitHub Actions secret that",
+    "holds it, never by value. Changing a model or a retry limit must not",
+    "require touching workflow logic - that is the whole point of this file.",
+    "",
+    "Configuration hierarchy, most specific wins:",
+    "  1. task.json workflow_policy   - per task",
+    "  2. this file                    - per repository",
+    "  3. agentlib defaults            - per codebase (hard caps live here and",
+    "                                    cannot be raised by 1 or 2)"
+  ],
+
+  "providers": {
+    "anthropic": {
+      "api_key_secret": "ANTHROPIC_API_KEY",
+      "invoke": "claude"
+    }
+  },
+
+  "roles": {
+    "manager": {
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "_why": "Strategy, ambiguous-failure interpretation, escalation calls. Invoked rarely and only when reasoning is actually needed."
+    },
+    "test_agent": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "_why": "Turning stated acceptance criteria into tests is bounded work against a contract the Director already wrote."
+    },
+    "code_agent": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "_why": "Bounded implementation against committed tests. Escalates rather than re-deciding architecture."
+    },
+    "distiller": {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "_why": "Adds prose interpretation on top of an already-parsed failure structure. Cheapest tier; optional (see features.distiller_model_pass)."
+    },
+    "context_maintainer": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "_why": "Small targeted wiki edits against a known diff."
+    }
+  },
+
+  "workflow": {
+    "task_branch_prefix": "agent/",
+    "base_branch": "main",
+    "ci_workflow": "test-agent.yml",
+    "default_max_impl_attempts": 3,
+    "agent_timeout_minutes": 30,
+    "ci_timeout_minutes": 45
+  },
+
+  "telemetry": {
+    "enabled": true,
+    "root": ".ai/telemetry/runs",
+    "_prices_note": "USD per million tokens. Used only to annotate records; an unpriced model records a null cost rather than a guessed one. Update when provider pricing changes.",
+    "prices": {
+      "anthropic/claude-opus-5": { "input_per_mtok": 15.0, "output_per_mtok": 75.0 },
+      "anthropic/claude-sonnet-5": { "input_per_mtok": 3.0, "output_per_mtok": 15.0 },
+      "anthropic/claude-haiku-4-5-20251001": { "input_per_mtok": 1.0, "output_per_mtok": 5.0 }
+    }
+  },
+
+  "features": {
+    "distiller_model_pass": true,
+    "context_maintainer": true,
+    "auto_open_pr": true,
+    "auto_merge": false
+  },
+
+  "_auto_merge_note": "features.auto_merge is false and the workflows never set it true. Every agent-authored branch reaches main through a human-approved PR."
+}
