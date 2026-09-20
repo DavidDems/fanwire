@@ -12,6 +12,33 @@ the system is shaped this way.
 
 ---
 
+## 0. Check that GitHub Actions can actually run — do this first
+
+**Observed 2026-09-20:** pushing the `agent-system` branch and opening PR #23
+created **no workflow runs at all**. Not a failed run — no run. The newest run
+in the whole repository is from the previous day, so this is repo-wide and not
+caused by anything in this branch.
+
+`fanwire` is a **private** repository, so Actions minutes are metered against
+the free monthly allowance. When that allowance is exhausted, or a spending
+limit of $0 is set, GitHub silently stops creating runs. That matches the
+symptom exactly, but it could not be confirmed from here — reading billing
+needs a token scope this session does not have.
+
+- [ ] GitHub → **Settings → Billing and plans → Plans and usage** → check
+      Actions minutes remaining and any spending limit
+- [ ] If exhausted: wait for the cycle to reset, raise the spending limit, or
+      make the repository public (public repos get unmetered Actions)
+
+**Why this is item 0:** the entire agent system is GitHub Actions. Without it,
+`agentctl` and the state machine still work locally, but nothing dispatches,
+no tests run, and the guard never fires. Every item below assumes Actions runs.
+
+**Confirm:** push any commit and see a `test-agent` run appear in the Actions
+tab.
+
+---
+
 ## 1. Merge the agent-system PR
 
 - [ ] Review and merge the `agent-system` branch into `main`.

@@ -12,7 +12,7 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`01-ai-workflow-setup.md`](01-ai-workflow-setup.md) | Making the agent system actually run: secrets, branch protection, the first live task | **Yes** — the agent system does nothing until this is done |
+| [`01-ai-workflow-setup.md`](01-ai-workflow-setup.md) | Making the agent system actually run: **Actions minutes**, secrets, branch protection, the first live task | **Yes** — the agent system does nothing until this is done |
 | [`02-deployment-requirements.md`](02-deployment-requirements.md) | AWS, domain, IAM review, third-party keys — collated from across the wiki | Not yet. Blocks `cdk deploy`, not development |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks |
 
