@@ -3,13 +3,21 @@
 **Agent-facing, manager/thinking tier.** Most agents never read this file — it is the lookup for the agent doing the managing/thinking, not for a code-change subagent, which gets a hand-picked slice of `wiki/CodeContext/` instead.
 
 ## What `fanwire` is trying to be
-`fanwire` is not just a sports discussion app — it's the first project run through an intentional AI-coding-factory process: every fact about the project lives in exactly one place in this wiki, and every non-trivial claim (a schema decision, a pattern choice, a security requirement) is written down as current-state fact rather than left to be re-derived or re-argued each session. `wiki/` (this folder's parent) is deliberately meant to be a template other projects can copy, not a one-off. The formal agent-governance process that name implies is currently deferred — see the Process note below.
+`fanwire` is not just a sports discussion app — it's the first project run through an intentional AI-coding-factory process: every fact about the project lives in exactly one place in this wiki, and every non-trivial claim (a schema decision, a pattern choice, a security requirement) is written down as current-state fact rather than left to be re-derived or re-argued each session. `wiki/` (this folder's parent) is deliberately meant to be a template other projects can copy, not a one-off. The factory itself now exists as running infrastructure in `.ai/` — a Git-backed, CI-driven workflow with an explicit state machine, enforced per-role permissions and telemetry; start at `.ai/README.md`, and see the Process note below for what changed.
 
 This file is the root of the project's map: the full state of its design and implementation.
 
 ## Process note
 
-There is no formal agent-governance/usage-rules process on `main` right now. It was drafted, then deliberately deferred: soft, instruction-only "MUST NOT" rules have no technical backing, so they were pulled off `main` onto a separate `rules` branch to be revisited once real enforcement (permissions, CI, hooks — not prose) makes sense, after a few iterations of actual development. Until then, treat this repo as ungoverned beyond ordinary git branch protection and code review.
+The agent-governance process that was drafted and deferred — because instruction-only "MUST NOT" rules have no technical backing — now exists as enforcement rather than prose, in `.ai/`:
+
+- **Per-role write permissions** (`.ai/policy.json`) checked against the actual diff by `agentctl guard check`, in CI, in a workflow agents cannot modify. `.ai/`, `.github/`, `wiki/GeneralContext/` and `AGENTS.md` are never writable by an agent.
+- **Test-first as a machine property**: after the test agent commits, CI must go *red* before any implementation is dispatched. A green baseline routes to manager review. See `.ai/docs/state-machine.md`.
+- **Bounded retries** with a hard cap no task or manager can raise, and an explicit `ESCALATED` state.
+- **No merge permission** anywhere in the system; every agent branch reaches `main` through a human-approved PR.
+- **Telemetry** that agents cannot write, amend or under-report (`.ai/telemetry/`).
+
+`.ai/docs/permissions.md` closes with what is deliberately *not* enforced (read access, the Director's own session, GitHub repo settings a human must switch on). The `rules` branch's prose draft is superseded by `.ai/docs/` and can be retired.
 
 ## Project state, architecture, and the full stack
 
@@ -55,7 +63,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above).
 
 ### Reports
-`wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. No automation writes here yet (see Process note above).
+`wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. Still unwritten by automation: the agent system records machine output as structured state and telemetry under `.ai/` (`agentctl status`, `agentctl telemetry report`) rather than as prose reports here, so these folders are awaiting a use that genuinely needs prose. `wiki/GeneralContext/` is not writable by any agent worker.
 
 ## Explicitly out of scope for v1
 - Standalone `Player`/`PlayerSeasonStat` tables — see `wiki/CodeContext/Modules/0x02-events.md`.

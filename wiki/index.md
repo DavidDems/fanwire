@@ -1,6 +1,10 @@
 # fanwire — Wiki
 
-**Agent-facing.** Every AI-facing file for `fanwire` lives under this folder — implementation decisions, design/security/pattern standards, agent usage rules, task prompts, and agent-generated reports. Nothing agent-relevant lives outside `wiki/` except `AGENTS.md` (repo-root entry point) and this folder's parent scaffolding.
+**Agent-facing.** This folder holds `fanwire`'s **semantic** context — implementation decisions, design/security/pattern standards, task prompts, and agent-generated reports. It is prose for a reader.
+
+The agent system's **machine** infrastructure lives in `.ai/` instead: executable code, enforced permission policy, workflow state and telemetry. The split is by kind, not by audience — `.ai/policy.json` is enforced by a script, `wiki/CodeContext/Modules/0x03-posts.md` is read by an agent. Nothing is duplicated across the two; a task spec names the `wiki/CodeContext/` files a worker needs, by path. Start at `.ai/README.md` for that side.
+
+`AGENTS.md` at the repo root routes to both.
 
 This wiki is also meant as a reusable template: the two-folder split and per-entity documentation format below are meant to be reused for future projects, not just `fanwire`.
 
@@ -16,7 +20,7 @@ Contents:
 ### `wiki/GeneralContext/`
 Context for **manager/thinking-tier agents**. Contains everything `wiki/CodeContext/` has (by reference, not duplicated — see below) plus the rest of the project: business rules, architecture/ops docs, task prompts, and reports. Start at `wiki/GeneralContext/index.md` — the project dictionary. Most agents never read it; it's the lookup for the agent doing the managing.
 
-There is no agent-governance/usage-rules process on this branch right now — see `wiki/GeneralContext/index.md`'s Process note. A `rules` branch holds the drafted-but-deferred version for later, once there's something worth technically enforcing.
+Agent governance is no longer prose: per-role write permissions are enforced against the actual diff in CI (`.ai/policy.json`, `.github/workflows/agent-guard.yml`), and `.ai/docs/permissions.md` records both what is enforced and what is not. See `wiki/GeneralContext/index.md`'s Process note.
 
 `wiki/GeneralContext/` "contains" `wiki/CodeContext/` in the sense that its index links to every `CodeContext` file as part of the full picture — content is never duplicated between the two folders (single source of truth). A manager-tier agent has full read access to both folders; a code-change subagent is restricted to exactly the `CodeContext` files it's handed.
 
