@@ -1,0 +1,192 @@
+name: agent-worker
+
+# Runs exactly one agent, for one role, for one task, then terminates.
+#
+# The worker is the only place a model is invoked, and it is deliberately dumb:
+# it does not decide anything. It assembles the prompt from durable state,
+# invokes the provider, checks the resulting diff against the permission model,
+# commits or escalates, records what was spent, and hands control back to the
+# orchestrator.
+#
+# Least privilege notes, because this is where a compromised or manipulated
+# agent would do damage:
+#   * `contents: write` is the only broad permission, and it is scoped to a
+#     task branch by the guard step below, not by trust.
+#   * The agent process itself runs with NO GitHub token in its environment
+#     (see "Invoke the agent"). Only the steps around it can talk to the API.
+#   * The provider credential is present only for that one step.
+#   * A guard violation is not retried. It escalates to a human.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "Task id, e.g. DEMO-001"
+        required: true
+      role:
+        description: "manager | test_agent | code_agent | context_maintainer"
+        required: true
+
+permissions:
+  contents: write
+  actions: write # hand control back to agent-orchestrator.yml
+
+concurrency:
+  group: agent-worker-${{ github.event.inputs.task_id }}
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TASK_ID: ${{ github.event.inputs.task_id }}
+      ROLE: ${{ github.event.inputs.role }}
+      BRANCH: agent/${{ github.event.inputs.task_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/${{ github.event.inputs.task_id }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refuse an unknown role
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, sys
+          role = os.environ["ROLE"]
+          policy = json.load(open(".ai/policy.json", encoding="utf-8"))
+          entry = policy["roles"].get(role)
+          if entry is None or not entry.get("ci_dispatched"):
+              print(f"::error::{role!r} is not a CI-dispatchable role")
+              sys.exit(1)
+          PY
+
+      - name: Assemble the prompt from durable state
+        id: prompt
+        run: |
+          set -euo pipefail
+          python .ai/bin/agentctl.py context "$TASK_ID" > context.json
+          python .ai/bin/agentctl.py prompt "$TASK_ID" --role "$ROLE" --out prompt.md
+          echo "--- prompt ($(wc -c < prompt.md) bytes) ---"
+          head -40 prompt.md
+
+      - name: Record the start time
+        id: clock
+        run: echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Invoke the agent
+        id: agent
+        continue-on-error: true
+        env:
+          # The one provider-specific seam in the whole system. Everything else
+          # is provider-agnostic; swapping providers means editing
+          # .ai/bin/invoke_agent.sh and .ai/config.json, and nothing else.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Deliberately blank. The agent must not be able to reach the GitHub
+          # API, dispatch workflows, or touch branch protection, whatever it is
+          # told to do by content it reads.
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+        run: bash .ai/bin/invoke_agent.sh "$ROLE" prompt.md agent-result.json
+
+      - name: Record what the invocation cost
+        if: always()
+        run: |
+          set -euo pipefail
+          python .ai/bin/agentctl.py telemetry-from-run \
+            --task "$TASK_ID" --role "$ROLE" \
+            --started "${{ steps.clock.outputs.started }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --agent-result agent-result.json \
+            --result "${{ steps.agent.outcome }}"
+
+      - name: Stop here if the provider call failed
+        if: steps.agent.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+            --event AGENT_FAILED --reason "provider invocation failed in run ${{ github.run_id }}"
+          echo "::warning::agent invocation failed; task routed to MANAGER_REVIEW"
+
+      - name: Check the diff against the permission model
+        if: steps.agent.outcome == 'success'
+        id: guard
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --name-only > changed.txt
+          # State and telemetry are written by the steps around the agent, not
+          # by the agent, and are not part of what it is permitted to produce.
+          grep -v '^\.ai/' changed.txt > agent-changed.txt || true
+          echo "--- agent touched ---"; cat agent-changed.txt
+          python .ai/bin/agentctl.py guard check "$TASK_ID" \
+            --role "$ROLE" --diff-file agent-changed.txt
+
+      - name: Escalate a boundary violation
+        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          git reset --hard HEAD
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+            --event GUARD_VIOLATION \
+            --reason "role $ROLE wrote outside its permitted paths in run ${{ github.run_id }}"
+          echo "::error::$ROLE wrote outside its permitted paths. Work discarded, task escalated."
+
+      - name: Commit the work
+        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "fanwire-$ROLE"
+          git config user.email "noreply@github.com"
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "the agent produced no diff"
+          else
+            case "$ROLE" in
+              test_agent) VERB="test" ;;
+              code_agent) VERB="impl" ;;
+              context_maintainer) VERB="wiki" ;;
+              *) VERB="chore" ;;
+            esac
+            git commit -m "$TASK_ID $VERB: $(python .ai/bin/agentctl.py summary-line --agent-result agent-result.json)"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Advance the workflow
+        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        run: |
+          set -euo pipefail
+          case "$ROLE" in
+            context_maintainer) EVENT=MAINTAINER_DONE ;;
+            manager)            EVENT="$(python .ai/bin/agentctl.py manager-decision --agent-result agent-result.json)" ;;
+            *)                  EVENT=AGENT_COMMITTED ;;
+          esac
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+            --event "$EVENT" --commit-sha "${{ steps.commit.outputs.sha }}" \
+            --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result agent-result.json)"
+
+      - name: Push state and work
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "fanwire-$ROLE"
+          git config user.email "noreply@github.com"
+          git add .ai/tasks/ .ai/telemetry/ || true
+          git diff --cached --quiet || git commit -m "[agent-state] $TASK_ID: $ROLE finished"
+          git push origin HEAD:"$BRANCH"
+
+      - name: Hand control back to the orchestrator
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
+        run: |
+          gh workflow run agent-orchestrator.yml \
+            --ref "${{ github.event.repository.default_branch }}" \
+            -f task_id="$TASK_ID"
