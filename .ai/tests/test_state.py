@@ -112,6 +112,14 @@ class TestRetryPolicy:
         assert s["state"] == "ESCALATED"
         assert s["escalation_reason"] == "needs architectural decision"
 
+    def test_progress_clears_a_stale_escalation_reason(self):
+        # The board shows `escalation_reason` as the headline for a task. A
+        # task that recovered and completed must not still be advertising why
+        # it once stalled.
+        s = fresh(state="IMPL_CI", attempt=2, escalation_reason="max_attempts_exhausted")
+        s = st.advance(s, "CI_PASSED")
+        assert s["escalation_reason"] is None
+
     def test_manager_may_send_the_task_back_for_re_specification(self):
         s = fresh(state="MANAGER_REVIEW")
         s = st.advance(s, "MANAGER_RESCOPE")

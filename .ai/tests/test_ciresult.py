@@ -8,7 +8,6 @@ ever asked to add prose interpretation on top (see `.ai/docs/architecture.md`,
 
 from agentlib import ciresult
 
-
 PYTEST_LOG = """
 =================================== FAILURES ===================================
 ____________________ test_refresh_token_reuse_is_rejected ______________________
@@ -92,7 +91,9 @@ class TestOriginClassification:
         assert r["origin"] == "infrastructure"
 
     def test_unparseable_failure_is_ambiguous_not_guessed(self):
-        r = ciresult.distill("something went wrong", ci_status="failure", task_id="D-001", attempt=1)
+        r = ciresult.distill(
+            "something went wrong", ci_status="failure", task_id="D-001", attempt=1
+        )
         assert r["origin"] == "ambiguous"
         assert r["failures"] == []
 

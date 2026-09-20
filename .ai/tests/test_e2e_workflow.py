@@ -9,8 +9,10 @@ and back, with no live model and no live CI. See `.ai/docs/operations.md`,
 
 import pytest
 
-from agentlib import ciresult, guard, orchestrator, spec as sp, state as st, telemetry as tm
-
+from agentlib import ciresult, guard, orchestrator
+from agentlib import spec as sp
+from agentlib import state as st
+from agentlib import telemetry as tm
 
 SPEC = {
     "task_id": "DEMO-001",
@@ -125,7 +127,9 @@ class TestGreenPath:
         assert st.is_terminal(h.state)
 
     def test_context_maintenance_is_skipped_when_the_spec_opts_out(self, h):
-        spec = dict(SPEC, workflow_policy=dict(SPEC["workflow_policy"], run_context_maintainer=False))
+        spec = dict(
+            SPEC, workflow_policy=dict(SPEC["workflow_policy"], run_context_maintainer=False)
+        )
         h.state = st.advance(dict(h.state, state="IMPL_CI", attempt=1), "CI_PASSED", spec=spec)
         assert h.state["state"] == "COMPLETE"
 
