@@ -13,7 +13,7 @@ See `.ai/docs/state-machine.md`.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,12 @@ STATES: frozenset[str] = frozenset(
 )
 
 TERMINAL: frozenset[str] = frozenset({"COMPLETE", "CANCELLED", "FAILED"})
+
+# Reaching one of these means the task is moving forward again, so whatever
+# reason it previously stalled for no longer describes it.
+_CLEARS_ESCALATION: frozenset[str] = frozenset(
+    {"READY", "READY_FOR_IMPLEMENTATION", "RETRY_READY", "CONTEXT_MAINTENANCE", "COMPLETE"}
+)
 
 CONTROLS: frozenset[str] = frozenset({"RUN", "PAUSE", "CANCEL"})
 
@@ -143,6 +149,12 @@ def advance(state: dict, event: str, **ctx: Any) -> dict[str, Any]:
 
     if nxt not in STATES:  # pragma: no cover - guards against a typo in the table
         raise StateError(f"transition produced unknown state {nxt!r}")
+
+    if nxt in _CLEARS_ESCALATION:
+        # `escalation_reason` is the headline `agentctl status` shows for a
+        # task. Once the task is making progress again it is stale, and a
+        # completed task still advertising why it once stalled is misleading.
+        out["escalation_reason"] = None
 
     out["state"] = nxt
     out["updated_at"] = _now()
@@ -268,4 +280,4 @@ def save_state(path: str | Path, state: dict) -> Path:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

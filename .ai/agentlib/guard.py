@@ -18,8 +18,8 @@ Decision order (first match wins, and a denial is never overridden later):
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
 
 # Paths no agent role may ever write, regardless of policy.json or a task spec.
 # `.ai/**` and `.github/**` are the boundary itself; `wiki/GeneralContext/**` is
@@ -84,7 +84,9 @@ def check_diff(
         # not worth special-casing into a pass.
         return GuardResult(
             ok=not paths,
-            violations=[Violation(p, "unknown_role", f"no policy entry for role {role!r}") for p in paths],
+            violations=[
+                Violation(p, "unknown_role", f"no policy entry for role {role!r}") for p in paths
+            ],
         )
 
     allow = list(roles[role].get("write", []))

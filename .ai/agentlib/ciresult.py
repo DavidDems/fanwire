@@ -30,12 +30,20 @@ _SOURCE_REF = re.compile(r"([\w./\\-]+\.(?:py|ts|tsx|js|jsx)):\d+")
 
 # Ordered: the first pattern that matches a failure's text wins.
 _CATEGORIES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("collection_error", re.compile(r"ModuleNotFoundError|ImportError|error collecting|Cannot find module", re.I)),
-    ("timeout", re.compile(r"\bTimeout\b|timed out", re.I)),
-    ("assertion_failure", re.compile(r"\bAssertionError\b|^assert |\bexpect\(", re.I | re.M)),
+    (
+        "collection_error",
+        re.compile(
+            r"ModuleNotFoundError|ImportError|error collecting|Cannot find module", re.IGNORECASE
+        ),
+    ),
+    ("timeout", re.compile(r"\bTimeout\b|timed out", re.IGNORECASE)),
+    (
+        "assertion_failure",
+        re.compile(r"\bAssertionError\b|^assert |\bexpect\(", re.IGNORECASE | re.MULTILINE),
+    ),
     # Static type-checking output only. A runtime `TypeError` is an ordinary
     # exception and must not be mistaken for a mypy/tsc finding.
-    ("type_error", re.compile(r"\bmypy\b|error TS\d+|error:.*\[[a-z-]+\]$", re.M)),
+    ("type_error", re.compile(r"\bmypy\b|error TS\d+|error:.*\[[a-z-]+\]$", re.MULTILINE)),
     ("exception", re.compile(r"\b[A-Z]\w*(?:Error|Exception)\b")),
 )
 
@@ -44,7 +52,7 @@ _INFRA = re.compile(
     r"docker: Error|Cannot connect to the Docker daemon|pull access denied|"
     r"No space left on device|The runner has received a shutdown signal|"
     r"connection refused|could not connect to server",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -124,7 +132,9 @@ def _detail_near(log: str, test_id: str) -> str:
     """The short name of a pytest test also heads its traceback block; use that
     block when the summary line carried no reason."""
     short = test_id.split("::")[-1]
-    block = re.search(rf"_{{3,}}[^\n]*{re.escape(short)}[^\n]*_{{3,}}\n(.{{0,600}})", log, re.S)
+    block = re.search(
+        rf"_{{3,}}[^\n]*{re.escape(short)}[^\n]*_{{3,}}\n(.{{0,600}})", log, re.DOTALL
+    )
     return block.group(1) if block else ""
 
 

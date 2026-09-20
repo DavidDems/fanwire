@@ -12,9 +12,10 @@ taken from the caller, so a worker cannot under-report what it spent.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -55,9 +56,7 @@ def record(
         if field not in rec:
             raise TelemetryError(f"telemetry record is missing required field: {field}")
     if rec["role"] not in KNOWN_ROLES:
-        raise TelemetryError(
-            f"unknown role {rec['role']!r}; known roles: {sorted(KNOWN_ROLES)}"
-        )
+        raise TelemetryError(f"unknown role {rec['role']!r}; known roles: {sorted(KNOWN_ROLES)}")
 
     out = {"schema": SCHEMA_VERSION, **rec}
     for field in NULLABLE:
@@ -134,8 +133,8 @@ def _accumulate(bucket: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def _duration(started: str, ended: str) -> int | None:
     try:
-        a = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
-        b = datetime.fromisoformat(str(ended).replace("Z", "+00:00"))
+        a = datetime.fromisoformat(str(started))
+        b = datetime.fromisoformat(str(ended))
     except ValueError:
         return None
     return int((b - a).total_seconds())
@@ -148,10 +147,9 @@ def _cost(rec: dict[str, Any], prices: dict[str, dict[str, float]]) -> float | N
         # Never guess a price. A null cost is a known unknown; a wrong number
         # silently corrupts every aggregate built on it.
         return None
-    return (
-        int(rec["input_tokens"]) / 1e6 * float(price.get("input_per_mtok", 0.0))
-        + int(rec["output_tokens"]) / 1e6 * float(price.get("output_per_mtok", 0.0))
-    )
+    return int(rec["input_tokens"]) / 1e6 * float(price.get("input_per_mtok", 0.0)) + int(
+        rec["output_tokens"]
+    ) / 1e6 * float(price.get("output_per_mtok", 0.0))
 
 
 def iter_records(root: str | Path) -> Iterable[dict[str, Any]]:

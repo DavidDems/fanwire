@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -69,9 +70,7 @@ def load(task_dir: str | Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise SpecError(f"{path} is not valid JSON: {exc}") from exc
     if spec.get("task_id") != d.name:
-        raise SpecError(
-            f"task_id {spec.get('task_id')!r} disagrees with its directory {d.name!r}"
-        )
+        raise SpecError(f"task_id {spec.get('task_id')!r} disagrees with its directory {d.name!r}")
     return spec
 
 
@@ -89,9 +88,7 @@ def validate(spec: dict, known_skills: Iterable[str]) -> list[str]:
             errors.append(f"missing required field: {field}")
 
     task_id = spec.get("task_id")
-    if task_id is not None and (
-        not isinstance(task_id, str) or not TASK_ID_RE.match(task_id)
-    ):
+    if task_id is not None and (not isinstance(task_id, str) or not TASK_ID_RE.match(task_id)):
         errors.append(
             f"task_id {task_id!r} must match {TASK_ID_RE.pattern} "
             "(it is used verbatim as a directory and branch segment)"
