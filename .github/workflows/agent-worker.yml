@@ -53,6 +53,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Provider-specific, like invoke_agent.sh itself. A self-hosted runner
+      # with the CLI already present can drop this step; on GitHub-hosted
+      # runners it is the only way the CLI exists at all.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the provider CLI
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Refuse an unknown role
         run: |
           set -euo pipefail
