@@ -37,7 +37,13 @@ permissions:
 concurrency:
   # One orchestrator at a time per task. Never cancel in flight: a half-applied
   # transition is worse than a queued one.
-  group: agent-${{ github.event.inputs.task_id || github.event.workflow_run.head_branch }}
+  # Both triggers must normalise to the SAME key, or a workflow_run-woken run
+  # and a dispatch-woken run collide on one task and half-apply transitions.
+  # workflow_run supplies `agent/<ID>`, so the dispatch side is formatted to match.
+  group: >-
+    agent-${{ github.event.inputs.task_id
+      && format('agent/{0}', github.event.inputs.task_id)
+      || github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -105,6 +111,10 @@ jobs:
           echo "$ACTION"
           echo "kind=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin)["kind"])')" >> "$GITHUB_OUTPUT"
           echo "role=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin).get("role",""))')" >> "$GITHUB_OUTPUT"
+          # The transition this dispatch implies. Supplied by agentlib, never
+          # re-derived here — a second copy of that mapping in YAML is exactly
+          # what went wrong on the first live run.
+          echo "event=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin).get("event",""))')" >> "$GITHUB_OUTPUT"
 
       # --- the one action -------------------------------------------------
 
@@ -151,12 +161,23 @@ jobs:
         if: steps.decide.outputs.kind == 'dispatch_agent'
         env:
           GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
+          ROLE: ${{ steps.decide.outputs.role }}
+          EVENT: ${{ steps.decide.outputs.event }}
         run: |
           set -euo pipefail
+          # Move the machine BEFORE dispatching. The worker reports back with
+          # AGENT_COMMITTED, which is only legal from a *_RUNNING state — and
+          # DISPATCH_CODE_AGENT is what increments the attempt counter, so
+          # skipping it would also uncap the retry budget. An empty EVENT means
+          # the manager, which holds MANAGER_REVIEW until it decides for itself.
+          if [ -n "$EVENT" ]; then
+            python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
+              --event "$EVENT"
+          fi
           gh workflow run agent-worker.yml \
             --ref "${{ github.event.repository.default_branch }}" \
             -f task_id="${{ steps.task.outputs.id }}" \
-            -f role="${{ steps.decide.outputs.role }}"
+            -f role="$ROLE"
 
       # --- persist and hand off -------------------------------------------
 

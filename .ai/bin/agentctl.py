@@ -89,16 +89,40 @@ def state_path(task_id: str) -> Path:
     return task_dir(task_id) / "state.json"
 
 
-def load_pair(task_id: str) -> tuple[dict, dict]:
-    d = task_dir(task_id)
+def load_spec(task_id: str) -> dict:
     try:
-        spec = spec_mod.load(d)
+        return spec_mod.load(task_dir(task_id))
     except spec_mod.SpecError as exc:
         die(str(exc))
+        raise  # unreachable; keeps the type checker honest
+
+
+def draft_state(task_id: str, spec: dict) -> dict:
+    """The state a task is in before anything has run: DRAFT, on disk nowhere.
+
+    A spec with no state file is not an error — it is a task nobody has started.
+    Treating it as one produced a chicken-and-egg that killed the first live
+    orchestrator run: `next` refused to answer without a state file, and the
+    action it would have returned (`validate`) is what creates that file.
+    """
+    policy_ = spec_mod.workflow_policy(spec)
+    s = st.new_state(
+        task_id,
+        branch=spec_mod.branch_name(task_id),
+        max_attempts=policy_["max_impl_attempts"],
+    )
+    s["require_red_baseline"] = policy_["require_red_baseline"]
+    return s
+
+
+def load_pair(task_id: str, require_state: bool = True) -> tuple[dict, dict]:
+    spec = load_spec(task_id)
     p = state_path(task_id)
-    if not p.exists():
+    if p.exists():
+        return spec, st.load_state(p)
+    if require_state:
         die(f"no state file for {task_id}; run `agentctl state init {task_id}`")
-    return spec, st.load_state(p)
+    return spec, draft_state(task_id, spec)
 
 
 def emit(obj) -> None:
@@ -174,19 +198,19 @@ def cmd_task_list(args) -> int:
 
 
 def cmd_state_init(args) -> int:
-    d = task_dir(args.task_id)
-    spec = spec_mod.load(d)
+    spec = load_spec(args.task_id)
     errors = spec_mod.validate(spec, known_skills())
     if errors:
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
         die(f"refusing to start an invalid spec ({len(errors)} problems)", FAILED)
-    policy_ = spec_mod.workflow_policy(spec)
-    s = st.new_state(
-        args.task_id,
-        branch=spec_mod.branch_name(args.task_id),
-        max_attempts=policy_["max_impl_attempts"],
-    )
-    s["require_red_baseline"] = policy_["require_red_baseline"]
-    s = st.advance(s, "VALIDATED")
+    if state_path(args.task_id).exists():
+        # Idempotent: the orchestrator may retry a run, and re-initialising
+        # would silently discard a task's history.
+        print(f"{args.task_id} already has state; leaving it alone", file=sys.stderr)
+        emit(st.load_state(state_path(args.task_id)))
+        return OK
+    s = st.advance(draft_state(args.task_id, spec), "VALIDATED")
     st.save_state(state_path(args.task_id), s)
     emit(s)
     return OK
@@ -244,7 +268,9 @@ def cmd_state_control(args) -> int:
 
 
 def cmd_next(args) -> int:
-    spec, s = load_pair(args.task_id)
+    # require_state=False: a task that has never run is DRAFT, and the answer
+    # is `validate`. This is the orchestrator's very first call on a new task.
+    spec, s = load_pair(args.task_id, require_state=False)
     emit(orchestrator.next_action(s, spec))
     return OK
 
@@ -439,18 +465,24 @@ def cmd_telemetry_report(args) -> int:
 
 def cmd_status(args) -> int:
     rows = []
-    for d in sorted(TASKS_DIR.glob("*/state.json")):
+    # Keyed on task.json, not state.json: a task with a spec and no state is a
+    # DRAFT waiting to start, and it belongs on the board. Keying on state
+    # files is why a just-created task read as "no tasks".
+    for task_file in sorted(TASKS_DIR.glob("*/task.json")):
+        d = task_file.parent
         try:
-            s = st.load_state(d)
-        except (st.StateError, json.JSONDecodeError) as exc:
-            rows.append((d.parent.name, "UNREADABLE", "-", "-", str(exc)[:50]))
+            spec = spec_mod.load(d)
+        except spec_mod.SpecError as exc:
+            rows.append((d.name, "BAD SPEC", "-", "-", str(exc)[:60]))
             continue
+        state_file = d / "state.json"
         try:
-            spec = spec_mod.load(d.parent)
-            action = orchestrator.next_action(s, spec)
-            nxt = action["kind"] + (f":{action['role']}" if action.get("role") else "")
-        except spec_mod.SpecError:
-            nxt = "-"
+            s = st.load_state(state_file) if state_file.exists() else draft_state(d.name, spec)
+        except (st.StateError, json.JSONDecodeError) as exc:
+            rows.append((d.name, "UNREADABLE", "-", "-", str(exc)[:60]))
+            continue
+        action = orchestrator.next_action(s, spec)
+        nxt = action["kind"] + (f":{action['role']}" if action.get("role") else "")
         rows.append(
             (
                 s["task_id"],
