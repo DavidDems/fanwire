@@ -19,14 +19,23 @@
       "from": "READY",
       "note": "test agent dispatched",
       "to": "TEST_AGENT_RUNNING"
+    },
+    {
+      "at": "2026-09-21T23:39:30Z",
+      "event": "AGENT_COMMITTED",
+      "from": "TEST_AGENT_RUNNING",
+      "note": "36e71c847719c4c50afa907f51e7c5ee589796bf",
+      "to": "TESTS_COMMITTED"
     }
   ],
   "last_ci": null,
   "max_attempts": 3,
   "require_red_baseline": true,
   "schema": 1,
-  "sessions": {},
-  "state": "TEST_AGENT_RUNNING",
+  "sessions": {
+    "test_agent": "af4f84c5-866b-4d63-986c-3ae8c5b9d79f"
+  },
+  "state": "TESTS_COMMITTED",
   "task_id": "DEMO-001",
-  "updated_at": "2026-09-21T23:37:59Z"
+  "updated_at": "2026-09-21T23:39:30Z"
 }
