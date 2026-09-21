@@ -102,7 +102,11 @@ class TestGreenPath:
         assert orchestrator.next_action(h.state, SPEC)["kind"] == "validate"
         h.state = st.advance(h.state, "VALIDATED")
 
-        assert h.step() == {"kind": "dispatch_agent", "role": "test_agent"}
+        assert h.step() == {
+            "kind": "dispatch_agent",
+            "role": "test_agent",
+            "event": "DISPATCH_TEST_AGENT",
+        }
         h.state = st.advance(h.state, "DISPATCH_TEST_AGENT")
         assert h.agent_commits("test_agent", ["backend/tests/users/test_tokens.py"])
 
@@ -112,14 +116,14 @@ class TestGreenPath:
         h.state = st.advance(h.state, "CI_FAILED")
         assert h.state["state"] == "READY_FOR_IMPLEMENTATION"
 
-        assert h.step() == {"kind": "dispatch_agent", "role": "code_agent"}
+        assert h.step()["role"] == "code_agent"
         h.state = st.advance(h.state, "DISPATCH_CODE_AGENT")
         assert h.agent_commits("code_agent", ["backend/app/users/tokens.py"])
 
         h.state = st.advance(h.state, "CI_STARTED")
         h.state = st.advance(h.state, "CI_PASSED")
 
-        assert h.step() == {"kind": "dispatch_agent", "role": "context_maintainer"}
+        assert h.step()["role"] == "context_maintainer"
         h.state = st.advance(h.state, "DISPATCH_MAINTAINER")
         h.state = st.advance(h.state, "MAINTAINER_DONE")
 
@@ -149,7 +153,7 @@ class TestFailureRetryPath:
         # The retry prompt carries the distilled result, never the raw log.
         assert h.state["distilled"]["failures"][0]["test"].endswith("::test_rotation")
 
-        assert h.step() == {"kind": "dispatch_agent", "role": "code_agent"}
+        assert h.step()["role"] == "code_agent"
         h.state = st.advance(h.state, "DISPATCH_CODE_AGENT")
         assert h.state["attempt"] == 2
         assert h.agent_commits("code_agent", ["backend/app/users/tokens.py"])
@@ -162,7 +166,7 @@ class TestFailureRetryPath:
         h.state = st.advance(h.state, "CI_FAILED")
         h.state = st.advance(h.state, "DISTILLED", distilled={})
         assert h.state["state"] == "MANAGER_REVIEW"
-        assert h.step() == {"kind": "dispatch_agent", "role": "manager"}
+        assert h.step()["role"] == "manager"
 
     def test_the_loop_cannot_run_forever(self, h):
         """Drive the retry cycle greedily; it must terminate."""
@@ -230,3 +234,52 @@ class TestStatelessReconstruction:
         summary = tm.aggregate(h.telemetry_dir)
         assert summary["by_task"]["DEMO-001"]["invocations"] == 2
         assert summary["totals"]["total_tokens"] == 220
+
+
+class TestDispatchContract:
+    """The orchestrator/worker contract that the first live run broke.
+
+    A worker finishes by emitting AGENT_COMMITTED, which is only legal from a
+    *_RUNNING state. So every `dispatch_agent` action must carry the transition
+    that gets the machine there, and the orchestrator must apply it before it
+    dispatches. When that mapping lived only in workflow YAML it was simply
+    missing, and nothing here could see it.
+    """
+
+    DISPATCHING_STATES = [
+        "READY",
+        "READY_FOR_IMPLEMENTATION",
+        "RETRY_READY",
+        "CONTEXT_MAINTENANCE",
+        "MANAGER_REVIEW",
+    ]
+
+    @pytest.mark.parametrize("state", DISPATCHING_STATES)
+    def test_every_dispatch_names_a_legal_transition(self, state):
+        s = dict(st.new_state("DEMO-001", branch="agent/DEMO-001", max_attempts=3), state=state)
+        action = orchestrator.next_action(s, SPEC)
+        assert action["kind"] == "dispatch_agent"
+
+        event = action.get("event")
+        if event is None:
+            # Only the manager may hold its state: it decides its own next move.
+            assert action["role"] == "manager"
+            return
+        st.advance(s, event)  # must not raise
+
+    def test_a_dispatched_worker_can_then_report_a_commit(self):
+        """Dispatch -> AGENT_COMMITTED must work for every committing role."""
+        for state in ("READY", "READY_FOR_IMPLEMENTATION"):
+            s = dict(st.new_state("DEMO-001", branch="agent/DEMO-001", max_attempts=3), state=state)
+            s = st.advance(s, orchestrator.next_action(s, SPEC)["event"])
+            assert s["state"].endswith("_RUNNING")
+            s = st.advance(s, "AGENT_COMMITTED")
+            assert s["state"] in ("TESTS_COMMITTED", "IMPL_COMMITTED")
+
+    def test_dispatching_the_code_agent_is_what_spends_the_budget(self):
+        # If the orchestrator skips this event, `attempt` never rises and the
+        # retry loop has no ceiling at all.
+        s = dict(st.new_state("DEMO-001", max_attempts=3), state="READY_FOR_IMPLEMENTATION")
+        assert s["attempt"] == 0
+        s = st.advance(s, orchestrator.next_action(s, SPEC)["event"])
+        assert s["attempt"] == 1
