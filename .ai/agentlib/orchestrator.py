@@ -15,7 +15,12 @@ from . import state as st
 
 # state -> the one thing the orchestrator does next.
 #   validate        deterministic: run `agentctl task validate`
-#   dispatch_agent  invoke the named role through .github/workflows/agent-worker.yml
+#   dispatch_agent  invoke the named role through .github/workflows/agent-worker.yml.
+#                   Carries the `event` the orchestrator must apply BEFORE
+#                   dispatching, so the role -> transition mapping lives here
+#                   and not in workflow YAML. Duplicating it in YAML is what
+#                   let a worker report AGENT_COMMITTED from READY, and left
+#                   the attempt counter never incrementing.
 #   run_ci          trigger .github/workflows/test-agent.yml on the task branch
 #   await_ci        nothing to do; a workflow_run event will wake the orchestrator
 #   await_agent     nothing to do; the worker job reports back when it finishes
@@ -24,18 +29,31 @@ from . import state as st
 #   cancel          human cancelled; tear the task down
 _ACTIONS: dict[str, dict[str, Any]] = {
     "DRAFT": {"kind": "validate"},
-    "READY": {"kind": "dispatch_agent", "role": "test_agent"},
+    "READY": {"kind": "dispatch_agent", "role": "test_agent", "event": "DISPATCH_TEST_AGENT"},
     "TEST_AGENT_RUNNING": {"kind": "await_agent", "role": "test_agent"},
     "TESTS_COMMITTED": {"kind": "run_ci", "phase": "baseline"},
     "BASELINE_CI": {"kind": "await_ci", "phase": "baseline"},
-    "READY_FOR_IMPLEMENTATION": {"kind": "dispatch_agent", "role": "code_agent"},
-    "RETRY_READY": {"kind": "dispatch_agent", "role": "code_agent"},
+    "READY_FOR_IMPLEMENTATION": {
+        "kind": "dispatch_agent",
+        "role": "code_agent",
+        "event": "DISPATCH_CODE_AGENT",
+    },
+    "RETRY_READY": {
+        "kind": "dispatch_agent",
+        "role": "code_agent",
+        "event": "DISPATCH_CODE_AGENT",
+    },
     "CODE_AGENT_RUNNING": {"kind": "await_agent", "role": "code_agent"},
     "IMPL_COMMITTED": {"kind": "run_ci", "phase": "implementation"},
     "IMPL_CI": {"kind": "await_ci", "phase": "implementation"},
     "DISTILLING": {"kind": "distill"},
+    # No event: MANAGER_REVIEW holds until the manager itself returns a decision.
     "MANAGER_REVIEW": {"kind": "dispatch_agent", "role": "manager"},
-    "CONTEXT_MAINTENANCE": {"kind": "dispatch_agent", "role": "context_maintainer"},
+    "CONTEXT_MAINTENANCE": {
+        "kind": "dispatch_agent",
+        "role": "context_maintainer",
+        "event": "DISPATCH_MAINTAINER",
+    },
 }
 
 
