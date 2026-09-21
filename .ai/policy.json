@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "_comment": [
+    "Per-role write permissions. This file is the enforced permission model:",
+    "`agentctl guard check` runs it against every agent-authored diff in CI,",
+    "so a worker that ignores its prompt still cannot land an out-of-scope",
+    "change. A task spec's allowed_paths NARROWS a role; it never widens one.",
+    "",
+    "`.ai/**`, `.github/**`, `wiki/GeneralContext/**`, `AGENTS.md` and the git",
+    "dotfiles are in agentlib.guard.ALWAYS_FORBIDDEN and cannot be granted here",
+    "at all - see .ai/docs/permissions.md.",
+    "",
+    "`deny` is an explicit belt-and-braces denial checked before `write`.",
+    "`write` is an allowlist: a path matching nothing in it is refused."
+  ],
+
+  "roles": {
+    "director": {
+      "_role": "Human-driven architecture session. Not dispatched by CI and not subject to this file; its changes land as an ordinary human-reviewed PR from a non-agent branch. Listed here so the model is complete.",
+      "ci_dispatched": false,
+      "write": [],
+      "deny": ["**"]
+    },
+
+    "manager": {
+      "_role": "Decides strategy for one task. Reads; does not commit code.",
+      "ci_dispatched": true,
+      "write": [],
+      "deny": ["**"]
+    },
+
+    "test_agent": {
+      "_role": "Writes the failing tests that define the task's contract.",
+      "ci_dispatched": true,
+      "write": [
+        "backend/tests/**",
+        "frontend/src/**/*.test.ts",
+        "frontend/src/**/*.test.tsx",
+        "frontend/src/**/__tests__/**",
+        "infra/test/**"
+      ],
+      "deny": [
+        "backend/app/**",
+        "backend/alembic/**",
+        "frontend/src/**/*.tsx",
+        "infra/lib/**",
+        "infra/bin/**",
+        "wiki/**"
+      ]
+    },
+
+    "code_agent": {
+      "_role": "Implements until the committed tests pass.",
+      "ci_dispatched": true,
+      "write": [
+        "backend/app/**",
+        "backend/alembic/**",
+        "backend/scripts/**",
+        "frontend/src/**",
+        "frontend/public/**",
+        "infra/lib/**",
+        "infra/bin/**"
+      ],
+      "deny": [
+        "backend/tests/**",
+        "infra/test/**",
+        "frontend/src/**/*.test.ts",
+        "frontend/src/**/*.test.tsx",
+        "wiki/**",
+        "backend/pyproject.toml",
+        "frontend/package.json",
+        "infra/package.json",
+        "docker/**",
+        "docker-compose.yml"
+      ]
+    },
+
+    "distiller": {
+      "_role": "Summarises a CI failure from text handed to it in its prompt. Has no repository access at all - see .ai/docs/threat-model.md.",
+      "ci_dispatched": true,
+      "repository_read": false,
+      "write": [],
+      "deny": ["**"]
+    },
+
+    "context_maintainer": {
+      "_role": "After a green run, records what changed in the one module file the task named. Commits onto the same task branch so the wiki edit lands in the same human-reviewed PR as the code.",
+      "ci_dispatched": true,
+      "write": ["wiki/CodeContext/Modules/*.md"],
+      "deny": [
+        "wiki/CodeContext/Standards/**",
+        "backend/**",
+        "frontend/**",
+        "infra/**"
+      ]
+    }
+  },
+
+  "_dependency_changes": [
+    "backend/pyproject.toml, frontend/package.json, infra/package.json, docker/** and",
+    "docker-compose.yml are denied to the code agent on purpose: adding a dependency",
+    "is a supply-chain decision and a Director call, not something a retry loop makes",
+    "on attempt 3 to get a test green."
+  ]
+}

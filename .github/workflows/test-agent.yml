@@ -5,11 +5,28 @@ name: test-agent
 # (ECR push, cdk deploy) are separate and only run on merge to main - not
 # defined yet, see wiki/CodeContext/Modules/0x00-architecture.md AWS account
 # state ("GitHubActionsDeployRole has no permissions yet").
+#
+# Despite the name, this workflow is not an agent: it is the repository's
+# quality gate, and the agent system treats it as the ONE authoritative test
+# executor (.ai/docs/architecture.md). agent-orchestrator.yml triggers it by
+# workflow_dispatch on a task branch and reads its conclusion; no agent is ever
+# believed about whether tests passed. Nothing else manages workflow state.
 
 on:
   pull_request:
+    # State and telemetry commits are machine bookkeeping with nothing to test,
+    # so they must not re-trigger the gate. `.ai/agentlib/**` and the rest of
+    # `.ai/` are deliberately NOT ignored - agent-infra-test below covers them.
+    paths-ignore:
+      - ".ai/tasks/**"
+      - ".ai/telemetry/**"
   push:
     branches: [main]
+  # Lets agent-orchestrator.yml run the gate against a task branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   backend-test:
@@ -25,6 +42,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run frontend test suite
         run: docker compose run --rm frontend-test
+
+  # The agent system's own deterministic core (.ai/agentlib). Stdlib only, so
+  # this needs pytest and nothing else. It gates the state machine, the
+  # permission guard and the telemetry writer the same way the application
+  # suites gate the application.
+  agent-infra-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pytest>=8.3"
+      - name: Run agent infrastructure test suite
+        working-directory: .ai
+        run: python -m pytest -q
+      - name: Selfcheck - state machine, guard, policy and every task spec
+        run: python .ai/bin/agentctl.py selfcheck
 
   pip-audit:
     runs-on: ubuntu-latest

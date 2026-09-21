@@ -1,0 +1,124 @@
+name: agent-guard
+
+# The enforcement backstop. Every agent-authored PR is checked here, by a
+# workflow the agents cannot modify (`.github/**` is in
+# agentlib.guard.ALWAYS_FORBIDDEN) and cannot skip.
+#
+# This runs independently of agent-orchestrator.yml on purpose. The
+# orchestrator also guards each commit as it happens, but the orchestrator is
+# the thing dispatching the agents; a boundary that is only checked by the
+# component being bounded is not a boundary. If the orchestrator were
+# misconfigured, or a branch were pushed by hand, this job still fails the PR.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    # Only agent-authored branches. A human PR is governed by review and
+    # CODEOWNERS, not by the agent permission model.
+    if: startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Derive the task id from the branch
+        id: task
+        run: echo "id=${GITHUB_HEAD_REF#agent/}" >> "$GITHUB_OUTPUT"
+
+      - name: The spec must be valid
+        run: python .ai/bin/agentctl.py task validate "${{ steps.task.outputs.id }}"
+
+      - name: No commit may touch the agent system's own boundaries
+        # Checked separately from the per-role guard below so that the failure
+        # message is unambiguous about which rule was broken.
+        run: |
+          set -euo pipefail
+          git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, ".ai")
+          from agentlib import guard
+          paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
+          breaches = [p for p in paths if guard.is_always_forbidden(p)]
+          if breaches:
+              print("This branch modifies the agent system's own boundaries:")
+              for p in breaches:
+                  print(f"  {p}")
+              print("\nThese paths are never writable by an agent. If a human authored")
+              print("this change, it does not belong on an agent/ branch.")
+              raise SystemExit(1)
+          print(f"{len(paths)} changed path(s), none forbidden")
+          PY
+
+      - name: Every changed path must be inside the task's scope
+        # The union of what the test agent and the code agent were allowed to
+        # write. A per-commit, per-role check already ran during the workflow;
+        # at PR level the roles' commits are interleaved, so the check here is
+        # "nothing outside the task contract", which is the property a human
+        # reviewer actually needs guaranteed.
+        run: |
+          set -euo pipefail
+          git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python - "${{ steps.task.outputs.id }}" <<'PY'
+          import json, sys
+          sys.path.insert(0, ".ai")
+          from agentlib import guard, spec as spec_mod
+          task_id = sys.argv[1]
+          spec = spec_mod.load(f".ai/tasks/{task_id}")
+          policy = json.load(open(".ai/policy.json", encoding="utf-8"))
+          paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
+
+          allow_tests = spec_mod.workflow_policy(spec)["allow_test_edits_during_impl"]
+          # A path is acceptable if SOME dispatched role could legitimately have
+          # written it for this task.
+          roles = [r for r, v in policy["roles"].items() if v.get("ci_dispatched")]
+          bad = []
+          for p in paths:
+              if any(
+                  guard.check_diff([p], role, spec, policy, allow_test_edits=allow_tests).ok
+                  for role in roles
+              ):
+                  continue
+              bad.append(p)
+          if bad:
+              print(f"{len(bad)} path(s) outside the contract of {task_id}:")
+              for p in bad:
+                  print(f"  {p}")
+              print(f"\nallowed_paths: {spec['allowed_paths']}")
+              print(f"forbidden_paths: {spec['forbidden_paths']}")
+              raise SystemExit(1)
+          print(f"{len(paths)} changed path(s), all inside the task contract")
+          PY
+
+      - name: The task must not have been left in a failed or paused state
+        run: |
+          set -euo pipefail
+          python - "${{ steps.task.outputs.id }}" <<'PY'
+          import sys
+          sys.path.insert(0, ".ai")
+          from agentlib import state as st
+          from pathlib import Path
+          task_id = sys.argv[1]
+          p = Path(f".ai/tasks/{task_id}/state.json")
+          if not p.exists():
+              print("no state file; treating as a hand-authored branch")
+              raise SystemExit(0)
+          s = st.load_state(p)
+          print(f"{task_id}: {s['state']} (control={s['control']}, "
+                f"attempt {s['attempt']}/{s['max_attempts']})")
+          if s["state"] in ("ESCALATED", "FAILED"):
+              print(f"\nReason: {s.get('escalation_reason')}")
+              print("This PR is open for a human to look at, not to merge as-is.")
+              raise SystemExit(1)
+          PY
