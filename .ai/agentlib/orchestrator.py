@@ -57,6 +57,12 @@ _ACTIONS: dict[str, dict[str, Any]] = {
 }
 
 
+# A task that has taken this many transitions is not progressing, whatever the
+# transition table says. This is a backstop for loops nobody anticipated, of the
+# kind that produced eleven identical hops in four minutes on the first live run.
+MAX_TRANSITIONS = 100
+
+
 def next_action(state: dict, spec: dict | None = None) -> dict[str, Any]:
     """Pure: identical input, identical decision. Never reads the filesystem,
     never needs a live agent session."""
@@ -65,6 +71,14 @@ def next_action(state: dict, spec: dict | None = None) -> dict[str, Any]:
         return {"kind": "cancel", "reason": "cancelled by human"}
     if control == "PAUSE":
         return {"kind": "halt", "reason": "paused"}
+
+    hops = len(state.get("history") or [])
+    if hops > MAX_TRANSITIONS:
+        return {
+            "kind": "halt",
+            "reason": f"{hops} transitions exceeds the {MAX_TRANSITIONS} ceiling; "
+            "refusing to dispatch. A human should look at the history.",
+        }
 
     current = state["state"]
     if current in st.TERMINAL:
