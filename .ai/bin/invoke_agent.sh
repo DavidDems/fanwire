@@ -56,7 +56,8 @@ json.dump(
 PY
 
 RAW="$(mktemp)"
-trap 'rm -f "$RAW"' EXIT
+ERR="$(mktemp)"
+trap 'rm -f "$RAW" "$ERR"' EXIT
 
 case "$PROVIDER" in
   anthropic)
@@ -64,9 +65,19 @@ case "$PROVIDER" in
       echo "::error::the 'claude' CLI is not installed on this runner" >&2
       exit 127
     }
+    echo "cli: $(claude --version 2>&1 | head -1)"
+
     # --permission-mode acceptEdits: the agent edits files without prompting.
     # It is NOT trusted as a result - every edit is checked by the guard step
     # afterwards, which is where the real boundary is.
+    #
+    # `set +e` around the call on purpose. Under `set -e` the script died the
+    # instant the CLI returned non-zero, before anything could be printed - and
+    # in --print mode the CLI reports its errors on STDOUT, which is redirected
+    # into $RAW. So the real message was captured into a temp file and thrown
+    # away, and eight identical failed runs said only "exit code 1".
+    # An automation whose failure is silent is worse than the step it replaced.
+    set +e
     claude \
       --print \
       --output-format json \
@@ -74,7 +85,25 @@ case "$PROVIDER" in
       --permission-mode acceptEdits \
       --add-dir "$REPO_ROOT" \
       < "$PROMPT_FILE" \
-      > "$RAW"
+      > "$RAW" 2> "$ERR"
+    STATUS=$?
+    set -e
+
+    if [ "$STATUS" -ne 0 ]; then
+      echo "::error::provider CLI exited $STATUS"
+      echo "--- stderr (last 40 lines) ---"
+      tail -40 "$ERR" || true
+      echo "--- stdout (last 40 lines) ---"
+      # Truncated and printed rather than dumped: this is provider output, and
+      # the whole of it may be large. It is shown for a human reading the run
+      # log; it is never fed back into a prompt.
+      tail -40 "$RAW" || true
+      echo "------------------------------"
+      exit "$STATUS"
+    fi
+    # Surface warnings even on success - a run that worked but complained is
+    # worth seeing before it becomes the next incident.
+    [ -s "$ERR" ] && { echo "--- provider stderr ---"; tail -20 "$ERR"; }
     ;;
   *)
     echo "::error::unknown provider '$PROVIDER'; add a case here and to config.json" >&2

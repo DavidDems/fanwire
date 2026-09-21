@@ -283,3 +283,29 @@ class TestDispatchContract:
         assert s["attempt"] == 0
         s = st.advance(s, orchestrator.next_action(s, SPEC)["event"])
         assert s["attempt"] == 1
+
+
+class TestCircuitBreaker:
+    """A global stop, independent of any one transition rule.
+
+    The runaway loop produced eleven identical MANAGER_REVIEW -> MANAGER_REVIEW
+    hops in under four minutes. Even with that specific transition fixed, the
+    orchestrator should refuse to keep dispatching a task whose history has
+    grown implausibly long — whatever the cause.
+    """
+
+    def test_an_implausibly_long_history_halts_dispatch(self):
+        s = st.new_state("DEMO-001", branch="agent/DEMO-001", max_attempts=3)
+        s["state"] = "READY"
+        s["history"] = [{"at": "x", "from": "A", "to": "B", "event": "E", "note": ""}] * (
+            orchestrator.MAX_TRANSITIONS + 1
+        )
+        action = orchestrator.next_action(s, SPEC)
+        assert action["kind"] == "halt"
+        assert "transitions" in action["reason"]
+
+    def test_a_normal_history_is_unaffected(self):
+        s = st.new_state("DEMO-001", branch="agent/DEMO-001", max_attempts=3)
+        s["state"] = "READY"
+        s["history"] = [{"at": "x", "from": "A", "to": "B", "event": "E", "note": ""}] * 12
+        assert orchestrator.next_action(s, SPEC)["kind"] == "dispatch_agent"

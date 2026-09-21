@@ -23,6 +23,12 @@ SCHEMA_VERSION = 1
 # budget, never past this. The retry loop is bounded by construction.
 HARD_MAX_ATTEMPTS = 8
 
+# Ceiling on back-to-back invocation failures, reset by any real progress.
+# This is a SEPARATE budget from HARD_MAX_ATTEMPTS, which only counts code-agent
+# dispatches: a provider that fails before doing any work never increments
+# `attempt`, so without this counter such failures were unbounded. They were.
+MAX_CONSECUTIVE_FAILURES = 3
+
 STATES: frozenset[str] = frozenset(
     {
         "DRAFT",  # spec written, not yet validated
@@ -98,6 +104,7 @@ def new_state(task_id: str, branch: str = "", max_attempts: int = 3) -> dict[str
         "require_red_baseline": True,
         "history": [],
         "sessions": {},  # role -> provider session id; an optimisation, never a dependency
+        "consecutive_failures": 0,
         "last_ci": None,
         "distilled": None,
         "escalation_reason": None,
@@ -150,6 +157,9 @@ def advance(state: dict, event: str, **ctx: Any) -> dict[str, Any]:
     if nxt not in STATES:  # pragma: no cover - guards against a typo in the table
         raise StateError(f"transition produced unknown state {nxt!r}")
 
+    if event not in ("AGENT_FAILED", "INFRA_FAILED"):
+        out["consecutive_failures"] = 0
+
     if nxt in _CLEARS_ESCALATION:
         # `escalation_reason` is the headline `agentctl status` shows for a
         # task. Once the task is making progress again it is stale, and a
@@ -180,8 +190,24 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         out["escalation_reason"] = ctx.get("reason", "infrastructure failure")
         return "FAILED", out["escalation_reason"]
     if event == "AGENT_FAILED":
-        out["escalation_reason"] = ctx.get("reason", "agent invocation failed")
-        return "MANAGER_REVIEW", out["escalation_reason"]
+        reason = ctx.get("reason", "agent invocation failed")
+        out["consecutive_failures"] = int(out.get("consecutive_failures") or 0) + 1
+
+        if current == "MANAGER_REVIEW":
+            # The one state where routing to the manager is meaningless: the
+            # manager is what just failed. Sending it back here is what made
+            # the workflow ping-pong forever instead of stopping.
+            out["escalation_reason"] = f"manager could not be invoked: {reason}"
+            return "ESCALATED", out["escalation_reason"]
+
+        if out["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
+            out["escalation_reason"] = (
+                f"{out['consecutive_failures']} consecutive invocation failures: {reason}"
+            )
+            return "ESCALATED", out["escalation_reason"]
+
+        out["escalation_reason"] = reason
+        return "MANAGER_REVIEW", reason
 
     # --- ordinary workflow ----------------------------------------------------
     if event == "VALIDATED" and current in ("DRAFT", "MANAGER_REVIEW"):

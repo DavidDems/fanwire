@@ -1,14 +1,19 @@
 # 01 — Making the AI workflow live
 
-**Status: steps 0–5 done. Step 6 is the only one left.**
+**Status: steps 0–5 done. Step 6 is the only one left, and it has now failed twice.**
 
-Progress so far: repo made public so Actions runs, PR merged, `ANTHROPIC_API_KEY`
-added, branch protection on with every setting, staying on the hosted-runner CLI
-install, pre-commit hook installed.
+Progress: repo public so Actions runs, both fix PRs merged, `ANTHROPIC_API_KEY`
+added, branch protection on, staying on the hosted-runner CLI install,
+pre-commit hook installed.
 
-The first live run of DEMO-001 failed on **my bugs, not your setup** — three of
-them, fixed on the `agent-system-fixes` branch. Merge that, then redo step 6.
-Step 7 has not been reached yet; it will only matter if the chain stalls.
+⚠️ **The agent workflows are currently DISABLED.** They were turned off by hand
+to stop a runaway loop (see step 6). Re-enable them only after merging the
+`agent-loop-fix` PR:
+
+```sh
+gh workflow enable agent-orchestrator.yml
+gh workflow enable agent-worker.yml
+```
 
 Background, if you want it: [`.ai/docs/operations.md`](../.ai/docs/operations.md)
 is the full runbook; [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) is why
@@ -178,10 +183,56 @@ Two more bugs sat behind it, which the run never reached:
 Also: `agentctl status` said "no tasks" while DEMO-001 existed, because it
 keyed on state files rather than specs. Fixed — it now shows `DRAFT`.
 
+### Second failure: a runaway loop (2026-09-21)
+
+After the first fixes merged, the run got further — through `validate`, into
+`TEST_AGENT_RUNNING` — and then the provider call failed. What followed was the
+serious one:
+
+```
+TEST_AGENT_RUNNING -> MANAGER_REVIEW  (AGENT_FAILED)
+MANAGER_REVIEW     -> MANAGER_REVIEW  (AGENT_FAILED)   x8
+```
+
+Orchestrator and worker ping-ponged every ~20 seconds until stopped by hand.
+`AGENT_FAILED` routed to `MANAGER_REVIEW` from *any* state — including
+`MANAGER_REVIEW` itself — so the orchestrator dispatched the manager, whose
+provider call failed identically, forever.
+
+**Nothing bounded it.** `attempt` stayed at 0 the whole time, because only
+`DISPATCH_CODE_AGENT` increments it, so `HARD_MAX_ATTEMPTS` never applied. The
+retry budget covered code-agent attempts and nothing else. This was the design's
+single most important promise — "retry loops have hard limits" — and it had a
+hole.
+
+**Cost: $0.** Every one of those runs recorded 0 tokens; the CLI exits before
+making an API call. It burned Actions minutes, nothing else.
+
+Fixed in the `agent-loop-fix` PR, three ways:
+- `AGENT_FAILED` from `MANAGER_REVIEW` now escalates.
+- A consecutive-failure budget (3), separate from the attempt budget.
+- A circuit breaker refusing to dispatch any task past 100 transitions.
+
+**Why the provider call fails is still unknown** — and that is a fourth bug.
+`invoke_agent.sh` redirected the CLI's stdout to a temp file, and in `--print`
+mode the CLI reports errors on *stdout*, so the real message was captured and
+discarded. Eight failed runs said only "exit code 1". The script now prints
+both stderr and stdout tails on failure, so the next run will finally say what
+is wrong. Likely candidates: the API key, or a permission mode that cannot work
+without a TTY.
+
 ### What you need to do
 
-- [ ] Merge the `agent-system-fixes` PR
-- [ ] Delete the stale branch and re-run:
+- [ ] Merge the `agent-loop-fix` PR
+- [ ] Re-enable the workflows (they are disabled right now):
+
+```sh
+gh workflow enable agent-orchestrator.yml
+gh workflow enable agent-worker.yml
+```
+
+- [ ] Delete the stale branch — it carries 11 junk `[agent-state]` commits from
+      the loop — and re-run:
 
 ```sh
 git push origin --delete agent/DEMO-001

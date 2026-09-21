@@ -201,3 +201,45 @@ class TestRoundTrip:
         p.write_text('{"task_id": "X-001", "state": "TOTALLY_MADE_UP"}', encoding="utf-8")
         with pytest.raises(st.StateError):
             st.load_state(p)
+
+
+class TestInvocationFailuresAreBounded:
+    """The runaway loop from run 35553951441..35554168040.
+
+    A worker whose provider call fails emits AGENT_FAILED, which routed to
+    MANAGER_REVIEW — from *any* state, including MANAGER_REVIEW itself. The
+    orchestrator then dispatched the manager, whose provider call failed the
+    same way, forever. `attempt` never moved, because only DISPATCH_CODE_AGENT
+    increments it, so HARD_MAX_ATTEMPTS never applied. Nothing bounded it.
+    """
+
+    def test_a_manager_that_cannot_be_invoked_escalates_instead_of_looping(self):
+        # This is the exact transition that looped: the ONE state where
+        # AGENT_FAILED must not route back to the manager, because the manager
+        # is the thing that just failed.
+        s = fresh(state="MANAGER_REVIEW")
+        s = st.advance(s, "AGENT_FAILED", reason="provider invocation failed")
+        assert s["state"] == "ESCALATED"
+
+    def test_a_worker_failure_still_reaches_the_manager_once(self):
+        s = fresh(state="TEST_AGENT_RUNNING")
+        s = st.advance(s, "AGENT_FAILED", reason="provider 500")
+        assert s["state"] == "MANAGER_REVIEW"
+        assert s["consecutive_failures"] == 1
+
+    def test_repeated_failures_escalate_even_without_passing_through_review(self):
+        s = fresh(state="CODE_AGENT_RUNNING", attempt=1)
+        for _ in range(st.MAX_CONSECUTIVE_FAILURES):
+            s = st.advance(dict(s, state="CODE_AGENT_RUNNING"), "AGENT_FAILED", reason="flaky")
+        assert s["state"] == "ESCALATED"
+        assert "consecutive" in (s["escalation_reason"] or "")
+
+    def test_progress_resets_the_failure_counter(self):
+        s = fresh(state="TEST_AGENT_RUNNING")
+        s = st.advance(s, "AGENT_FAILED", reason="transient")
+        assert s["consecutive_failures"] == 1
+        s = st.advance(dict(s, state="TEST_AGENT_RUNNING"), "AGENT_COMMITTED")
+        assert s["consecutive_failures"] == 0
+
+    def test_a_brand_new_state_starts_with_no_failures(self):
+        assert st.new_state("DEMO-001")["consecutive_failures"] == 0
