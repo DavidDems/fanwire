@@ -1,5 +1,5 @@
 {
-  "attempt": 0,
+  "attempt": 1,
   "branch": "agent/DEMO-001",
   "consecutive_failures": 0,
   "control": "RUN",
@@ -33,6 +33,20 @@
       "from": "TESTS_COMMITTED",
       "note": "baseline CI started (expected RED)",
       "to": "BASELINE_CI"
+    },
+    {
+      "at": "2026-09-21T23:44:48Z",
+      "event": "CI_FAILED",
+      "from": "BASELINE_CI",
+      "note": "baseline is red, as required",
+      "to": "READY_FOR_IMPLEMENTATION"
+    },
+    {
+      "at": "2026-09-21T23:44:49Z",
+      "event": "DISPATCH_CODE_AGENT",
+      "from": "READY_FOR_IMPLEMENTATION",
+      "note": "code agent dispatched (attempt 1)",
+      "to": "CODE_AGENT_RUNNING"
     }
   ],
   "last_ci": null,
@@ -42,7 +56,7 @@
   "sessions": {
     "test_agent": "af4f84c5-866b-4d63-986c-3ae8c5b9d79f"
   },
-  "state": "BASELINE_CI",
+  "state": "CODE_AGENT_RUNNING",
   "task_id": "DEMO-001",
-  "updated_at": "2026-09-21T23:39:45Z"
+  "updated_at": "2026-09-21T23:44:49Z"
 }
