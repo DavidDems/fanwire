@@ -33,6 +33,8 @@ This brief assumed Phases 0–3 were done. They weren't: `notifications/` (#12) 
 
 ### Open, needs a human decision (not blocking the frontend)
 - **Infra idle cost** (#15): ~$20/mo during the RDS free tier and ~$35/mo after, against the $20/mo budget. Main items: WAF ~$9 and RDS ~$15. Options: accept it, drop WAF managed groups to fewer rules, or accept a lower budget margin.
+	The 35$/mo is okay, continue with the current implementation plan.
+
 - `cdk deploy` stays blocked on the IAM review of the synthesized policies (see #15's exception list) and on the domain purchase.
 
 ### Frontend: human input needed before Phase 5a starts
