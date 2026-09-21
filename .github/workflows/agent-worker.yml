@@ -43,6 +43,19 @@ jobs:
       TASK_ID: ${{ github.event.inputs.task_id }}
       ROLE: ${{ github.event.inputs.role }}
       BRANCH: agent/${{ github.event.inputs.task_id }}
+      # The workflow's own scratch files (prompt, context, agent result) must
+      # NOT live inside the checkout. They are not the agent's work, but
+      # `git add -A` stages them all the same and the guard then — correctly —
+      # rejects the diff for containing paths no role may write. That is how
+      # run 35556225202 died: the test agent wrote exactly the right file, and
+      # was failed for prompt.md, context.json and agent-result.json sitting
+      # next to it.
+      #
+      # The steps use the $RUNNER_TEMP shell variable directly. Do NOT lift it
+      # to a job-level WORK built from the `runner` context: that context is not
+      # available in `jobs.<id>.env`, and GitHub rejects the entire workflow
+      # file when it appears there — run 35556516395 failed with "workflow file
+      # issue" and no job at all. A YAML parser cannot see that; only a push can.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,10 +92,10 @@ jobs:
         id: prompt
         run: |
           set -euo pipefail
-          python .ai/bin/agentctl.py context "$TASK_ID" > context.json
-          python .ai/bin/agentctl.py prompt "$TASK_ID" --role "$ROLE" --out prompt.md
-          echo "--- prompt ($(wc -c < prompt.md) bytes) ---"
-          head -40 prompt.md
+          python .ai/bin/agentctl.py context "$TASK_ID" > "$RUNNER_TEMP/context.json"
+          python .ai/bin/agentctl.py prompt "$TASK_ID" --role "$ROLE" --out "$RUNNER_TEMP/prompt.md"
+          echo "--- prompt ($(wc -c < "$RUNNER_TEMP/prompt.md") bytes) ---"
+          head -40 "$RUNNER_TEMP/prompt.md"
 
       - name: Record the start time
         id: clock
@@ -101,7 +114,7 @@ jobs:
           # told to do by content it reads.
           GITHUB_TOKEN: ""
           GH_TOKEN: ""
-        run: bash .ai/bin/invoke_agent.sh "$ROLE" prompt.md agent-result.json
+        run: bash .ai/bin/invoke_agent.sh "$ROLE" "$RUNNER_TEMP/prompt.md" "$RUNNER_TEMP/agent-result.json"
 
       - name: Record what the invocation cost
         if: always()
@@ -111,7 +124,7 @@ jobs:
             --task "$TASK_ID" --role "$ROLE" \
             --started "${{ steps.clock.outputs.started }}" \
             --workflow-run-id "${{ github.run_id }}" \
-            --agent-result agent-result.json \
+            --agent-result "$RUNNER_TEMP/agent-result.json" \
             --result "${{ steps.agent.outcome }}"
 
       - name: Stop here if the provider call failed
@@ -125,16 +138,21 @@ jobs:
       - name: Check the diff against the permission model
         if: steps.agent.outcome == 'success'
         id: guard
+        # Without this the step's failure fails the JOB, so the escalate step
+        # below never runs, the state is never advanced, and the task sits in
+        # *_RUNNING forever. A boundary violation must be recorded and routed,
+        # never silently dropped.
+        continue-on-error: true
         run: |
           set -euo pipefail
           git add -A
-          git diff --cached --name-only > changed.txt
+          git diff --cached --name-only > "$RUNNER_TEMP/changed.txt"
           # State and telemetry are written by the steps around the agent, not
           # by the agent, and are not part of what it is permitted to produce.
-          grep -v '^\.ai/' changed.txt > agent-changed.txt || true
-          echo "--- agent touched ---"; cat agent-changed.txt
+          grep -v '^\.ai/' "$RUNNER_TEMP/changed.txt" > "$RUNNER_TEMP/agent-changed.txt" || true
+          echo "--- agent touched ---"; cat "$RUNNER_TEMP/agent-changed.txt"
           python .ai/bin/agentctl.py guard check "$TASK_ID" \
-            --role "$ROLE" --diff-file agent-changed.txt
+            --role "$ROLE" --diff-file "$RUNNER_TEMP/agent-changed.txt"
 
       - name: Escalate a boundary violation
         if: steps.agent.outcome == 'success' && steps.guard.outcome == 'failure'
@@ -145,6 +163,9 @@ jobs:
             --event GUARD_VIOLATION \
             --reason "role $ROLE wrote outside its permitted paths in run ${{ github.run_id }}"
           echo "::error::$ROLE wrote outside its permitted paths. Work discarded, task escalated."
+          # The state is now ESCALATED and will be pushed by the always() step
+          # below; fail the job so the run is visibly red, not quietly green.
+          exit 1
 
       - name: Commit the work
         if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
@@ -163,7 +184,7 @@ jobs:
               context_maintainer) VERB="wiki" ;;
               *) VERB="chore" ;;
             esac
-            git commit -m "$TASK_ID $VERB: $(python .ai/bin/agentctl.py summary-line --agent-result agent-result.json)"
+            git commit -m "$TASK_ID $VERB: $(python .ai/bin/agentctl.py summary-line --agent-result "$RUNNER_TEMP/agent-result.json")"
             echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -174,12 +195,12 @@ jobs:
           set -euo pipefail
           case "$ROLE" in
             context_maintainer) EVENT=MAINTAINER_DONE ;;
-            manager)            EVENT="$(python .ai/bin/agentctl.py manager-decision --agent-result agent-result.json)" ;;
+            manager)            EVENT="$(python .ai/bin/agentctl.py manager-decision --agent-result "$RUNNER_TEMP/agent-result.json")" ;;
             *)                  EVENT=AGENT_COMMITTED ;;
           esac
           python .ai/bin/agentctl.py state advance "$TASK_ID" \
             --event "$EVENT" --commit-sha "${{ steps.commit.outputs.sha }}" \
-            --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result agent-result.json)"
+            --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result "$RUNNER_TEMP/agent-result.json")"
 
       - name: Push state and work
         if: always()
