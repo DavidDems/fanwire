@@ -23,7 +23,17 @@ class CreateUploadRequest(BaseModel):
 class CreateUploadResponse(BaseModel):
     media_id: int
     upload_url: str
+    # generate_presigned_post's form fields the browser's multipart POST
+    # must submit alongside the file (key, Content-Type, policy,
+    # signature, ...) -- see app.media.routes. Breaking change from the
+    # old presigned-PUT shape (no `fields`); no compatibility shim, the
+    # frontend doesn't consume this endpoint yet (YAGNI).
+    fields: dict[str, str]
     s3_key: str
+    # ImageUploadPipeline.MAX_SIZE_BYTES, echoed back so the client can
+    # pre-check a file before even attempting the upload. The S3 policy
+    # (see app.media.routes) is the actual enforcement point.
+    max_bytes: int
 
 
 class MediaOut(BaseModel):

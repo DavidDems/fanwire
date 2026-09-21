@@ -58,8 +58,13 @@ export class StorageStack extends cdk.Stack {
       ],
       cors: [
         {
-          // The backend presigns a PUT with a fixed Content-Type (app.media.routes).
-          allowedMethods: [s3.HttpMethods.PUT],
+          // The backend presigns a POST with a scoped policy (content-length-range +
+          // exact Content-Type + exact key) -- app.media.routes, generate_presigned_post.
+          // Not PUT: a presigned PUT cannot cap object size, so POST is the only way to
+          // enforce the ~5MB cap at S3 itself (wiki/CodeContext/Standards/aws-stack.md
+          // "Media uploads"). The browser's multipart POST needs Content-Type on the
+          // form part.
+          allowedMethods: [s3.HttpMethods.POST],
           allowedOrigins: [config.domainName ? `https://${config.domainName}` : 'https://*.cloudfront.net'],
           allowedHeaders: ['Content-Type'],
           maxAge: 3000,

@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, ForeignKey, Identity, Text
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,18 +50,27 @@ class Game(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     api_sports_game_id: Mapped[int] = mapped_column(unique=True, nullable=False)
-    home_team_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("teams.id"), nullable=False
-    )
-    away_team_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("teams.id"), nullable=False
-    )
+    home_team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"), nullable=False)
+    away_team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"), nullable=False)
     date: Mapped[datetime] = mapped_column(nullable=False)
     # e.g. "2025-26" — settled format, see wiki/CodeContext/Modules/0x02-events.md.
     season: Mapped[str] = mapped_column(Text, nullable=False)
     home_score: Mapped[int] = mapped_column(nullable=False)
     away_score: Mapped[int] = mapped_column(nullable=False)
     venue: Mapped[str | None] = mapped_column(Text, nullable=True)
-    player_stats: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list
+    player_stats: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+
+    __table_args__ = (
+        # search/'s position filter (wiki/CodeContext/Modules/0x07-search.md)
+        # queries this via JSONB containment (`player_stats @> '[{"position":
+        # "<P>"}]'`) -- jsonb_path_ops is the right opclass for containment
+        # (@>) queries specifically, smaller/faster than the default
+        # jsonb_ops at the cost of not supporting key-existence (?) queries,
+        # which nothing here needs.
+        Index(
+            "ix_games_player_stats_gin",
+            "player_stats",
+            postgresql_using="gin",
+            postgresql_ops={"player_stats": "jsonb_path_ops"},
+        ),
     )

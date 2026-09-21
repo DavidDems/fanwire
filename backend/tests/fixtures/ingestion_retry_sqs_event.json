@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "11111111-1111-1111-1111-111111111111",
+      "receiptHandle": "AQEBexamplereceipthandle==",
+      "body": "{\"version\": \"1.0\", \"timestamp\": \"2026-01-01T00:00:00.000Z\", \"requestContext\": {\"requestId\": \"8ea123f0-1111-4b22-9b1a-1234567890ab\", \"functionArn\": \"arn:aws:lambda:ca-central-1:294321867941:function:Fanwire-App-Ingestion:$LATEST\", \"condition\": \"RetriesExhausted\", \"approximateInvokeCount\": 3}, \"requestPayload\": {\"trigger\": \"schedule\", \"mode\": \"baseline\"}, \"responseContext\": {\"statusCode\": 200, \"executedVersion\": \"$LATEST\", \"functionError\": \"Unhandled\"}, \"responsePayload\": {\"errorType\": \"UnrecognizedTeamError\", \"errorMessage\": \"No Team seeded for api_sports_team_id=999\", \"trace\": []}}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1767225600000",
+        "SenderId": "AIDAEXAMPLE",
+        "ApproximateFirstReceiveTimestamp": "1767225600000"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "00000000000000000000000000000000",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:ca-central-1:294321867941:Fanwire-Messaging-IngestionRetryQueue",
+      "awsRegion": "ca-central-1"
+    }
+  ]
+}

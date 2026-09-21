@@ -24,6 +24,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from app.events.interfaces import NormalizedLiveScore, SportsDataSource
 
@@ -67,6 +68,78 @@ class InMemoryLiveScoreCache(LiveScoreCache):
     def put(self, score: NormalizedLiveScore, *, ttl_seconds: int) -> None:
         expires_at = self._clock() + timedelta(seconds=ttl_seconds)
         self._entries[score.api_sports_game_id] = (score, expires_at)
+
+
+class DynamoDbLiveScoreCache(LiveScoreCache):
+    """Real production adapter: DynamoDB-backed, table name is
+    LIVE_SCORE_CACHE_TABLE_NAME (infra/lib/data-stack.ts's
+    `liveScoreCacheTable`, wired via Settings.live_score_cache_table_name).
+
+    Schema (wiki/CodeContext/Modules/0x00-architecture.md "AWS topology"):
+    partition key `pk` = "game#<api_sports_game_id>" (string), TTL attribute
+    `expires_at` (epoch seconds, DynamoDB's own TTL sweep reaps the item
+    eventually). get() additionally treats an expired-but-not-yet-reaped
+    item as a miss at read time -- DynamoDB TTL deletion can lag up to 48h
+    behind the expiry timestamp (AWS docs), and a stale score would
+    otherwise be served as if still fresh. This adapter never deletes an
+    expired item itself: infra/lib/app-stack.ts's `LiveScoreCache` IAM
+    statement grants only GetItem/PutItem/UpdateItem (no DeleteItem),
+    matching that DynamoDB's own TTL sweep, not this code, is the intended
+    cleanup mechanism.
+
+    Takes an already-constructed boto3 DynamoDB client (Dependency
+    Inversion, same "inject the client" shape as
+    app.eventbus.EventBridgePublisher) -- app.events.dependencies owns
+    constructing/caching that client.
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        table_name: str,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._client = client
+        self._table_name = table_name
+        self._clock = clock
+
+    @staticmethod
+    def _pk(api_sports_game_id: int) -> str:
+        return f"game#{api_sports_game_id}"
+
+    def get(self, api_sports_game_id: int) -> NormalizedLiveScore | None:
+        response = self._client.get_item(
+            TableName=self._table_name, Key={"pk": {"S": self._pk(api_sports_game_id)}}
+        )
+        item = response.get("Item")
+        if item is None:
+            return None
+
+        expires_at = int(item["expires_at"]["N"])
+        if expires_at <= int(self._clock().timestamp()):
+            return None  # expired but not yet reaped by DynamoDB's TTL sweep -- treat as a miss
+
+        return NormalizedLiveScore(
+            api_sports_game_id=int(item["api_sports_game_id"]["N"]),
+            home_score=int(item["home_score"]["N"]),
+            away_score=int(item["away_score"]["N"]),
+            status=item["status"]["S"],
+        )
+
+    def put(self, score: NormalizedLiveScore, *, ttl_seconds: int) -> None:
+        expires_at = int(self._clock().timestamp()) + ttl_seconds
+        self._client.put_item(
+            TableName=self._table_name,
+            Item={
+                "pk": {"S": self._pk(score.api_sports_game_id)},
+                "api_sports_game_id": {"N": str(score.api_sports_game_id)},
+                "home_score": {"N": str(score.home_score)},
+                "away_score": {"N": str(score.away_score)},
+                "status": {"S": score.status},
+                "expires_at": {"N": str(expires_at)},
+            },
+        )
 
 
 class CachedEventProxy:

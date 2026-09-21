@@ -24,17 +24,20 @@ from sqlalchemy.orm import Session
 from testcontainers.postgres import PostgresContainer
 
 from app.db import make_engine, make_session_factory
-from app.dependencies import get_session, get_settings
+from app.dependencies import get_event_bus, get_session, get_settings
+from app.eventbus import EventBridgePublisher, InMemoryEventPublisher
 
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
-    # get_settings is process-wide lru_cache(maxsize=1) state — clear it
-    # before and after every test so tests never leak a cached Settings
-    # instance into one another.
+    # get_settings/get_event_bus are process-wide lru_cache(maxsize=1)
+    # state — clear both before and after every test so tests never leak a
+    # cached instance into one another.
     get_settings.cache_clear()
+    get_event_bus.cache_clear()
     yield
     get_settings.cache_clear()
+    get_event_bus.cache_clear()
 
 
 def test_get_settings_returns_a_cached_instance(monkeypatch):
@@ -44,6 +47,31 @@ def test_get_settings_returns_a_cached_instance(monkeypatch):
     second = get_settings()
 
     assert first is second
+
+
+def test_get_event_bus_defaults_to_in_memory_publisher_when_no_bus_name_configured(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
+
+    bus = get_event_bus()
+
+    assert isinstance(bus._publisher, InMemoryEventPublisher)
+
+
+def test_get_event_bus_wires_real_event_bridge_publisher_when_bus_name_configured(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("POST_EVENT_BUS_NAME", "PostEventBus")
+
+    bus = get_event_bus()
+
+    assert isinstance(bus._publisher, EventBridgePublisher)
+    assert bus._publisher._event_bus_name == "PostEventBus"
+
+
+def test_get_event_bus_returns_a_cached_instance(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+
+    assert get_event_bus() is get_event_bus()
 
 
 @pytest.fixture(scope="module")

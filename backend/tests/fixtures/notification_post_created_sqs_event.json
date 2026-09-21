@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-1111-1111-1111-111111111111",
+      "receiptHandle": "AQEBexamplereceipthandle==",
+      "body": "{\"version\": \"0\", \"id\": \"6a7e8feb-b491-4cf7-a9f1-bf3703467718\", \"detail-type\": \"PostCreated\", \"source\": \"fanwire\", \"account\": \"294321867941\", \"time\": \"2026-01-01T00:00:00Z\", \"region\": \"ca-central-1\", \"resources\": [], \"detail\": {\"post_id\": 501, \"author_id\": 7, \"published_at\": \"2026-01-01T00:00:00+00:00\"}}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1767225600000",
+        "SenderId": "AIDAEXAMPLE",
+        "ApproximateFirstReceiveTimestamp": "1767225600000"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "00000000000000000000000000000000",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:ca-central-1:294321867941:Fanwire-Messaging-NotificationQueue",
+      "awsRegion": "ca-central-1"
+    }
+  ]
+}

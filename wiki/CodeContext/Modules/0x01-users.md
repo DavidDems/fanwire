@@ -19,6 +19,7 @@
 | `created_at` | timestamp, not null | |
 | `updated_at` | timestamp, not null | |
 | `deleted_at` | timestamp, nullable | soft-delete marker; `null` = active row |
+| `search_vector` | `TSVECTOR`, generated/persisted, GIN-indexed | `to_tsvector('simple', username \|\| ' ' \|\| coalesce(description, ''))` — backs `search/`'s account search, see [[0x07-search]] |
 
 No `email` or `password` column: Cognito is the sole owner of credentials and the registration-confirmation / forgot-password flows ("Cognito ... handles password storage" — [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] Auth section; "Do not roll your own auth" — same section). `cognito_sub` is the only link between the two systems.
 
@@ -75,6 +76,7 @@ Routes:
 Per the Connection rule, other modules never query the `User`/`Follow` tables directly — they call these typed functions in `app.users.service` instead:
 - `followed_user_ids(session, user_id) -> list[int]` — the ids `user_id` follows. Reused by `GET /users/me/following`.
 - `get_public_profiles(session, user_ids: Collection[int]) -> dict[int, PublicProfile]` — batch lookup; `PublicProfile` is a frozen dataclass (`id, username, profile_picture_media_id`). Soft-deleted users are silently excluded from the result (never surfaced past this module).
+- `search_users(session, query, *, limit, offset) -> list[User]` (Phase 3, `search/` unit) — prefix full-text search over `User.search_vector`, excluding soft-deleted users, backing `GET /search/accounts`; see [[0x07-search]] for the tsquery-building/injection-safety detail.
 - `app.users.dependencies.get_optional_current_user` — a FastAPI dependency for `feed/`'s guest-vs-authenticated read path (next unit): no `Authorization` header → `None` (guest); a present-but-invalid/malformed token → **401**, never a silent downgrade to guest; a valid token with no matching `User` row → `None`. Duplicates `get_current_identity`'s header-parsing rather than reusing it directly, since `get_current_identity` always raises on a missing header and there's no way to get `None` back for that one case without changing its behavior for every existing caller.
 
 ### Open decisions
