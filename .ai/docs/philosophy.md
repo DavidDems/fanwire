@@ -2,8 +2,9 @@
 
 **This is the entry point for reviewing or improving the agent workflow.** If
 you are a reasoning model asked to critique, extend or redesign any part of
-this system, read this file first, then `architecture.md`, then the code it
-points at. The last two sections tell you how to do that review and what a
+this system, read this file first, then [handoff.md](handoff.md) for where
+things actually stand today, then `architecture.md`, then the code it points
+at. The last two sections tell you how to do that review and what a
 good proposal looks like.
 
 ---

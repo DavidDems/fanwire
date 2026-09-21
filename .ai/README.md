@@ -13,7 +13,8 @@ state. Nothing is duplicated between them: a task spec names the
 
 | | |
 |---|---|
-| **Reviewing or improving this system** | [docs/philosophy.md](docs/philosophy.md) — read this first |
+| **Picking this up / taking it over** | [docs/handoff.md](docs/handoff.md) — current state, what is proven, what is not |
+| **Reviewing or improving this system** | [docs/philosophy.md](docs/philosophy.md) — the reasoning and the review protocol |
 | **Running a task, or one went wrong** | [docs/operations.md](docs/operations.md) |
 | **How the whole thing fits together** | [docs/architecture.md](docs/architecture.md) |
 | **What each agent may touch** | [docs/permissions.md](docs/permissions.md) |
@@ -54,7 +55,7 @@ Nothing depends on an agent session staying alive.
 ├── tasks/<TASK-ID>/       task.json (contract) + brief.md (prose) + state.json
 ├── telemetry/runs/        one immutable JSON file per agent invocation
 ├── hooks/                 git hooks (see hooks/README.md)
-├── docs/                  philosophy (the review entry point) + the five above
+├── docs/                  handoff (start here) + philosophy + the five above
 └── tests/                 137 tests over agentlib; runs in CI
 ```
 
