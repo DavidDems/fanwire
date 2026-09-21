@@ -244,8 +244,24 @@ jobs:
             --base "${{ github.event.repository.default_branch }}" \
             --head "${{ steps.task.outputs.branch }}" \
             --title "${{ steps.task.outputs.id }}: $STATE" \
-            --body-file pr-body.md \
-            || echo "a PR for this branch already exists"
+            --body-file pr-body.md 2> pr-error.txt && exit 0
+          # Only a genuine duplicate is benign. Anything else — most likely
+          # "GitHub Actions is not permitted to create or approve pull
+          # requests", which is a repository setting — must be reported as
+          # itself. A blanket `||` that renames every failure "already exists"
+          # is worse than no handler at all.
+          if grep -qi "already exists" pr-error.txt; then
+            echo "a PR for this branch already exists"
+            exit 0
+          fi
+          echo "::error::could not open the review PR:"
+          cat pr-error.txt
+          echo "If this says Actions is not permitted to create pull requests,"
+          echo "enable Settings -> Actions -> General -> Workflow permissions ->"
+          echo "'Allow GitHub Actions to create and approve pull requests'."
+          echo "The task itself is unaffected; only the PR is missing. Open it"
+          echo "by hand: gh pr create --base ${{ github.event.repository.default_branch }} --head ${{ steps.task.outputs.branch }}"
+          exit 1
 
       - name: Summary
         if: always()

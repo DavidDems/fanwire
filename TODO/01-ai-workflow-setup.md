@@ -1,13 +1,19 @@
 # 01 — Making the AI workflow live
 
-**Status: setup is complete. One thing left — run a task end to end.**
+**Status: the pipeline works. DEMO-001 completed end to end on 2026-09-21.**
 
-Everything a human had to do has been done. The system is merged, enabled and
-funded. What remains is proving it works, which is step 6.
+```
+DRAFT → READY → TEST_AGENT_RUNNING → TESTS_COMMITTED → BASELINE_CI
+      → READY_FOR_IMPLEMENTATION → CODE_AGENT_RUNNING → IMPL_COMMITTED
+      → IMPL_CI → COMPLETE
+```
 
-**No task has completed yet.** Four live runs, ten bugs found and fixed, each
-getting further than the last. The next one is the first that could plausibly
-go green.
+One attempt, no retries, no escalation. **$0.2738** total (2 invocations,
+18,328 tokens). The red-baseline gate fired correctly: 2 failed / 474 passed,
+`assert 404 == 200`.
+
+Two steps remain, both small and both discovered by that run — see
+**Left to do**.
 
 > Incident history is deliberately not repeated here. Every bug, the run it came
 > from and the PR that fixed it is in
@@ -92,23 +98,31 @@ git config core.hooksPath .ai/hooks
 Blocks on ruff; **advisory** on the test suite, because this repo's own workflow
 requires committing a failing test alone. CI is the real gate.
 
----
+### 6. Run DEMO-001 to completion ✅
 
-## Left to do
+Done 2026-09-21. The test agent wrote three tests (one per acceptance
+criterion, including a regression guard on the existing `/health`), the
+baseline went red for the right reason, the code agent implemented
+`GET /health/version`, and implementation CI passed.
 
-### 6. Run DEMO-001 to completion ⬅ the only open item
-
-`agent/DEMO-001` is stuck in `TEST_AGENT_RUNNING` — left there by a bug since
-fixed, but the branch cannot recover. Delete and recreate it:
+**Review the PR yourself** — it was not opened automatically (step 9):
 
 ```sh
-git push origin --delete agent/DEMO-001
-git branch -D agent/DEMO-001
+gh pr create --base main --head agent/DEMO-001
+```
 
+Worth looking at before you merge: the implementation reads `pyproject.toml`
+from disk on every request rather than using `importlib.metadata`. It passes
+the tests and it is in scope, but it is a judgement call a reviewer should make
+— which is exactly what the human gate is for. Merge it, change it, or close it;
+nothing depends on the endpoint.
+
+To run it again, or to run any task:
+
+```sh
 git switch main && git pull
-git switch -c agent/DEMO-001 main
-git push -u origin agent/DEMO-001
-gh workflow run agent-orchestrator.yml -f task_id=DEMO-001
+git switch -c agent/<TASK-ID> main && git push -u origin agent/<TASK-ID>
+gh workflow run agent-orchestrator.yml -f task_id=<TASK-ID>
 ```
 
 Watch it without opening an agent session:
@@ -153,14 +167,20 @@ gh run view <id> --log-failed
 - [ ] Review the PR it opens, merge or close it, and decide whether to keep the
       `/health/version` endpoint. Nothing depends on it.
 
-### 7. Add a dispatch token — only if the chain stalls
+---
 
-Each run wakes the next with `gh workflow run`. `workflow_dispatch` chaining is
-proven; the `workflow_run` leg (CI finishing → orchestrator waking) is **not yet
-verified** and is the most likely thing to break.
+## Left to do
 
-**Symptom:** a task sits in `BASELINE_CI` or `IMPL_COMMITTED` with no new run in
-the Actions tab.
+### 7. Add a dispatch token ⬅ **required, confirmed**
+
+No longer conditional. During DEMO-001 the orchestrator **did not wake after
+either CI run** — the task stalled at `BASELINE_CI` and again at `IMPL_CI`, and
+both had to be nudged by hand. GitHub does not fire `workflow_run` for a run
+that the default `GITHUB_TOKEN` started, so the CI-finished leg of the chain
+never fires.
+
+**Symptom:** a task sits in `BASELINE_CI` or `IMPL_CI` with no new run in the
+Actions tab. Until the token is added, every task needs two manual nudges.
 
 - [ ] Fine-grained PAT: **Settings → Developer settings → Personal access tokens
       → Fine-grained tokens**. This repository only; **Actions: read and write**
@@ -170,8 +190,16 @@ the Actions tab.
 Every dispatch step already prefers it, so no code change is needed. Read the
 bypass warning in step 3 before creating it.
 
-A stalled task is never a lost task — nudge it with
-`gh workflow run agent-orchestrator.yml -f task_id=<ID>`.
+**Manual recovery, until then.** A bare nudge does *not* work in a CI-wait
+state: `next_action` returns `await_ci`, which does nothing. You have to supply
+the result yourself, after checking what CI actually concluded:
+
+```sh
+gh run list --workflow=test-agent.yml --branch agent/<ID> --limit 1
+gh workflow run agent-orchestrator.yml -f task_id=<ID> -f event=CI_FAILED   # or CI_PASSED
+```
+
+A stalled task is never a lost task; the state file stays accurate.
 
 ### 8. Learn the stop button
 
@@ -195,13 +223,32 @@ resumes exactly where it stopped.
 
 ---
 
+### 9. Let Actions open the review PR
+
+`gh pr create` failed with *"GitHub Actions is not permitted to create or
+approve pull requests"*. The task still reached `COMPLETE` — only the PR is
+missing, and you can open it by hand.
+
+- [ ] **Settings → Actions → General → Workflow permissions** → tick
+      **"Allow GitHub Actions to create and approve pull requests"**
+
+⚠️ That setting also grants *approval*, which would let a workflow satisfy the
+1-approval rule. Nothing in these workflows calls `gh pr review`, and
+`.ai/tests/test_workflows.py` now fails the build if one ever does — alongside
+the existing check that no workflow can merge. CODEOWNERS is the second layer.
+
+If you would rather not enable it, leave it off and open each PR by hand; the
+orchestrator now prints the exact command when it cannot.
+
+---
+
 ## Done when
 
-- [ ] `agentctl status` shows `DEMO-001` as `COMPLETE`, or a state you
-      understand and chose
-- [ ] `agentctl telemetry report` shows a full task's cost
-- [ ] A PR was opened by the workflow, and **you** merged it
-- [ ] You have paused and resumed a task at least once
+- [x] `agentctl status` shows `DEMO-001` as `COMPLETE`
+- [x] `agentctl telemetry report` shows a full task's cost — $0.2738
+- [ ] A PR was opened **by the workflow**, and you merged it *(blocked on step 9;
+      the first one was opened by hand)*
+- [ ] You have paused and resumed a task at least once *(step 8)*
 
 Then the pipeline is live, and
 [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) §6 becomes the standing

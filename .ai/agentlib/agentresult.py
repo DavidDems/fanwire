@@ -20,6 +20,7 @@ useful must still leave a committable run and an honest telemetry record.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,11 @@ MAX_SUMMARY_LINE = 72
 MANAGER_DECISIONS = frozenset({"MANAGER_RETRY", "MANAGER_RESCOPE", "ESCALATE"})
 
 _FIELDS = ("provider", "model", "session_id", "summary", "decision", "reason")
+
+# `<TASK-ID> <verb>: ` written by the agent into its own summary. The worker
+# prepends exactly this itself, so a summary carrying one produces a doubled
+# subject and wastes the length cap on a repeat.
+_REDUNDANT_PREFIX = re.compile(r"^[A-Z][A-Z0-9]*-\d+\s+(?:test|impl|fix|wiki|chore)\s*:\s*")
 
 
 def parse(path: str | Path) -> dict[str, Any]:
@@ -59,6 +65,7 @@ def summary_line(result: dict[str, Any]) -> str:
     rest into a body.
     """
     flat = " ".join(str(result.get("summary") or "").split())
+    flat = _REDUNDANT_PREFIX.sub("", flat).strip()
     if not flat:
         return FALLBACK_SUMMARY
     return flat[:MAX_SUMMARY_LINE]

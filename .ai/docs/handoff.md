@@ -12,14 +12,15 @@ Written at the end of the session that built the system and ran it four times.
 
 ## 1. Where things stand in one paragraph
 
-The agent system is built, merged to `main`, and covered by 172 tests. It has
-been run live four times. It has never completed a task. Each run got further
-than the last and exposed real bugs — ten of them, all in the workflow layer
-rather than the tested core, all now fixed. The furthest run reached the point
-where the test agent produced exactly the right file and was then failed by the
-guard for the *workflow's own* scratch files sitting beside it. That is fixed
-(PR #27) and unverified. **The next run is the first one that could plausibly
-go green.**
+The agent system is built, merged to `main`, covered by 182 tests, and **it
+works**. DEMO-001 ran end to end on 2026-09-21 — `DRAFT` to `COMPLETE`, one
+attempt, no retries, no escalation, $0.2738. Getting there took five live runs
+and thirteen bugs, every one in the workflow layer rather than the tested core.
+
+Two things still need a human: a dispatch PAT (the `workflow_run` leg of the
+chain does not fire under `GITHUB_TOKEN` — confirmed, not theoretical), and the
+repository setting that lets Actions open a PR. Both are in
+[`../../TODO/01-ai-workflow-setup.md`](../../TODO/01-ai-workflow-setup.md).
 
 ## 2. What exists
 
@@ -55,19 +56,29 @@ Distinguish this carefully from "is implemented".
   ping-ponging forever.
 - Telemetry records and aggregates real cost.
 
-**Not proven — every one of these is still a first run:**
-- The red-baseline gate firing against real CI.
+- **The red-baseline gate**, against real CI: 2 failed / 474 passed,
+  `assert 404 == 200`, and the task advanced to implementation on the strength
+  of the failure.
 - CI triggered by the orchestrator via `workflow_dispatch` on a task branch.
-- **`workflow_run` waking the orchestrator after that CI run.** This is the
-  single biggest unknown; see §5.
-- The code agent, at all.
-- The distiller, the context maintainer, the manager decision path.
-- `gh pr create` on halt.
-- A guard violation actually escalating and being pushed (fixed in #27,
-  never exercised).
-- An end-to-end task reaching `COMPLETE`.
+- The code agent: implemented `GET /health/version`, CI green first attempt.
+- A task reaching `COMPLETE`.
 
-## 4. The ten bugs, and what they have in common
+**Disproven:**
+- **`workflow_run` does not wake the orchestrator.** GitHub does not fire it for
+  a run the default `GITHUB_TOKEN` started, so the CI-finished leg never fires.
+  DEMO-001 stalled at `BASELINE_CI` and again at `IMPL_CI`. See §5.1 — the PAT
+  is now required, not conditional.
+- **`gh pr create` is refused** by default: "GitHub Actions is not permitted to
+  create or approve pull requests". A repository setting; the task still
+  completes, only the PR is missing.
+
+**Still not proven:**
+- The distiller, the context maintainer, the manager decision path — DEMO-001
+  passed first time, so no failure path ran.
+- A guard violation escalating and being pushed (fixed in #27, never exercised).
+- Any retry at all: `attempt` never went past 1.
+
+## 4. The thirteen bugs, and what they have in common
 
 Recorded because the pattern matters more than the list.
 
@@ -83,6 +94,9 @@ Recorded because the pattern matters more than the list.
 | 8 | Workflow scratch files written into the checkout, staged by `git add -A`, correctly rejected by the guard | #27 |
 | 9 | A guard failure failed the job, so the escalate step never ran and the task stalled in `*_RUNNING` forever | #27 |
 | 10 | `${{ runner.temp }}` in job-level `env` — GitHub rejects the whole workflow file | #27 |
+| 11 | Commit subject doubled its own `<TASK-ID> <verb>:` prefix, truncating real content | #29 |
+| 12 | `gh pr create`'s blanket `\|\|` reported every failure as "already exists", hiding a repository setting | #29 |
+| 13 | Nothing stopped a workflow from *approving* a PR once PR-creation is enabled | #29 |
 
 **Every single one was in the workflow layer, and none was visible to the unit
 tests.** The tested core was right each time. `next_action` was always handed a
@@ -105,7 +119,7 @@ budget counts it.
 
 ## 5. CI/CD considerations — read before changing anything
 
-### 5.1 `workflow_run` chaining is the biggest unverified assumption
+### 5.1 `workflow_run` chaining does not work
 
 The orchestrator wakes after CI via `on: workflow_run`. GitHub restricts
 workflows triggered by the default `GITHUB_TOKEN` from triggering further runs
