@@ -101,3 +101,32 @@ class TestNoWorkflowCanMerge:
         text = path.read_text(encoding="utf-8")
         assert "gh pr merge" not in text
         assert "--auto" not in text
+
+
+class TestNoWorkflowCanApprove:
+    """`gh pr create` needs "Allow GitHub Actions to create and approve pull
+    requests", which also grants approval. Nothing here may use it: a workflow
+    that can approve could satisfy the 1-approval rule on an agent's own PR."""
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    def test_no_workflow_approves_a_pull_request(self, path):
+        if not path.exists():
+            pytest.skip(f"{path.name} not present")
+        text = path.read_text(encoding="utf-8")
+        assert "gh pr review" not in text
+        assert "--approve" not in text
+
+
+class TestPrCreationFailuresAreNotMasked:
+    """The real error — "GitHub Actions is not permitted to create or approve
+    pull requests" — was swallowed by `|| echo "a PR for this branch already
+    exists"`, which reported the wrong cause for a setting that was switched
+    off."""
+
+    def test_the_pr_step_does_not_claim_a_duplicate_on_any_failure(self):
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        text = ORCHESTRATOR.read_text(encoding="utf-8")
+        assert '|| echo "a PR for this branch already exists"' not in text, (
+            "a blanket || masks every gh pr create failure as a duplicate"
+        )

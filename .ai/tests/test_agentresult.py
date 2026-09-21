@@ -119,3 +119,35 @@ class TestTelemetryRecord:
         )
         assert rec["result"] == "failed"
         assert tm.record(tmp_path / "t", rec).exists()
+
+
+class TestSummaryLineDoesNotDoubleThePrefix:
+    """DEMO-001's first commit read:
+
+        DEMO-001 test: DEMO-001 test: pin GET /health/version response shape
+
+    The worker prepends `<TASK-ID> <verb>: ` itself, and the agent had already
+    written one into its summary. Strip a redundant leading prefix so the
+    subject is not doubled — and so the 72-char cap is spent on content.
+    """
+
+    @pytest.mark.parametrize(
+        "summary",
+        [
+            "DEMO-001 test: pin the version endpoint",
+            "DEMO-001 impl: pin the version endpoint",
+            "AUTH-017 fix: pin the version endpoint",
+            "DEMO-001 wiki: pin the version endpoint",
+        ],
+    )
+    def test_a_leading_task_prefix_is_stripped(self, summary):
+        assert ar.summary_line({"summary": summary}) == "pin the version endpoint"
+
+    def test_an_ordinary_summary_is_untouched(self):
+        assert ar.summary_line({"summary": "add GET /health/version"}) == "add GET /health/version"
+
+    def test_a_colon_that_is_not_a_prefix_survives(self):
+        assert ar.summary_line({"summary": "fix: handle 404"}) == "fix: handle 404"
+
+    def test_stripping_cannot_empty_the_subject(self):
+        assert ar.summary_line({"summary": "DEMO-001 test:"}) == ar.FALLBACK_SUMMARY
