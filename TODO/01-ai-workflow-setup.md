@@ -1,10 +1,14 @@
 # 01 — Making the AI workflow live
 
-**Status: blocking.** The agent system is committed and its deterministic half
-is tested, but it has never executed. Nothing below can be done by an agent —
-these are credentials, repository settings and one judgement call.
+**Status: steps 0–5 done. Step 6 is the only one left.**
 
-Estimated time: ~30 minutes, plus waiting on the first run.
+Progress so far: repo made public so Actions runs, PR merged, `ANTHROPIC_API_KEY`
+added, branch protection on with every setting, staying on the hosted-runner CLI
+install, pre-commit hook installed.
+
+The first live run of DEMO-001 failed on **my bugs, not your setup** — three of
+them, fixed on the `agent-system-fixes` branch. Merge that, then redo step 6.
+Step 7 has not been reached yet; it will only matter if the chain stalls.
 
 Background, if you want it: [`.ai/docs/operations.md`](../.ai/docs/operations.md)
 is the full runbook; [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) is why
@@ -12,30 +16,20 @@ the system is shaped this way.
 
 ---
 
-## 0. Check that GitHub Actions can actually run — do this first
+## 0. ~~Check that GitHub Actions can actually run~~ — RESOLVED ✅
 
-**Observed 2026-09-20:** pushing the `agent-system` branch and opening PR #23
-created **no workflow runs at all**. Not a failed run — no run. The newest run
-in the whole repository is from the previous day, so this is repo-wide and not
-caused by anything in this branch.
+You made the repository public. Actions runs fine: `test-agent` has passed on
+`main` and on both PRs, and `agent-orchestrator` now dispatches.
 
-`fanwire` is a **private** repository, so Actions minutes are metered against
-the free monthly allowance. When that allowance is exhausted, or a spending
-limit of $0 is set, GitHub silently stops creating runs. That matches the
-symptom exactly, but it could not be confirmed from here — reading billing
-needs a token scope this session does not have.
+**The "skipped" runs you saw were correct, not a failure.** `agent-orchestrator`
+also triggers on `workflow_run` — every time `test-agent` finishes, anywhere,
+including on `main`. Its job then checks whether the branch is an `agent/*`
+branch and skips if not. That is the design: a `test-agent` run on `main` is the
+ordinary quality gate and none of the orchestrator's business. A skipped job
+costs no minutes. Expect to keep seeing them, and ignore them.
 
-- [ ] GitHub → **Settings → Billing and plans → Plans and usage** → check
-      Actions minutes remaining and any spending limit
-- [ ] If exhausted: wait for the cycle to reset, raise the spending limit, or
-      make the repository public (public repos get unmetered Actions)
-
-**Why this is item 0:** the entire agent system is GitHub Actions. Without it,
-`agentctl` and the state machine still work locally, but nothing dispatches,
-no tests run, and the guard never fires. Every item below assumes Actions runs.
-
-**Confirm:** push any commit and see a `test-agent` run appear in the Actions
-tab.
+The runs that matter are `[workflow_dispatch]` and `[workflow_run]` on an
+`agent/*` branch.
 
 ---
 
@@ -48,6 +42,8 @@ from the default branch.
 
 **Confirm:** `.github/workflows/agent-orchestrator.yml` appears in the Actions
 tab as a workflow you can run.
+
+DONE
 
 ---
 
@@ -70,6 +66,8 @@ cheaper to catch with a hard limit than with attention.
 
 **Confirm:** `ANTHROPIC_API_KEY` is listed under repository secrets. Do not
 paste it anywhere else; nothing in the repo should ever contain the value.
+
+DONE
 
 ---
 
@@ -102,6 +100,8 @@ not a boundary.
 **Confirm:** open a throwaway PR and check that the merge button is blocked
 until checks pass and someone approves.
 
+DONE, every setting was set
+
 ---
 
 ## 4. Decide how the provider CLI reaches the runner
@@ -124,6 +124,8 @@ what an agent can *commit*, not what it can execute during a run.
 
 **Recommendation:** stay on A until run time actually bothers you.
 
+Stay on A for now, might consider this once I get a linux box to use VM's.
+
 ---
 
 ## 5. Install the pre-commit hook locally (optional, 10 seconds)
@@ -136,44 +138,99 @@ Runs ruff over staged Python and the `.ai/` suite when you touch it. Purely a
 convenience for your own commits — agent commits are checked by CI, not by
 this. See [`.ai/hooks/README.md`](../.ai/hooks/README.md).
 
+DONE, ran 'PS C:\Users\david\source\repos\fanwire> git config core.hooksPath .ai/hooks' with no output (no failure)
+
 ---
 
 ## 6. Run DEMO-001 — the first live task
 
-Do this before pointing the system at anything real. `DEMO-001` adds a
-`GET /health/version` endpoint: additive, two files, disposable.
-[`.ai/tasks/DEMO-001/brief.md`](../.ai/tasks/DEMO-001/brief.md) explains why
-that shape was chosen and what to watch.
+**Your run failed. That was my bug, not your setup.** Three of them, all now
+fixed on the `agent-system-fixes` branch. What you did was correct.
 
-- [ ] Create the branch and start it:
+### What went wrong
+
+Run [35551731774](https://github.com/DavidDems/fanwire/actions/runs/35551731774)
+failed at the *Decide the next action* step:
+
+```
+agentctl: no state file for DEMO-001; run `agentctl state init DEMO-001`
+```
+
+A chicken-and-egg. `agentctl next` refused to answer without a state file — but
+the action it should have returned is `validate`, which is the step that
+*creates* that state file. So a brand-new task could never start. Every unit
+test passed because they all hand `next_action` a state dictionary directly;
+nothing exercised the CLI wrapper, which is where the bug was.
+
+Two more bugs sat behind it, which the run never reached:
+
+- **Dispatching a worker never moved the state machine.** The orchestrator
+  would have started the test agent without emitting `DISPATCH_TEST_AGENT`, so
+  the worker's `AGENT_COMMITTED` would have been an illegal transition. Worse,
+  `DISPATCH_CODE_AGENT` is what increments the attempt counter — so the retry
+  budget would never have been spent, and the retry loop would have had **no
+  ceiling at all**. That mapping lived only in workflow YAML, where no test
+  could see it; it now lives beside the transition table and is tested.
+- **The two triggers used different concurrency keys** for the same task, so a
+  CI-woken run and a dispatch-woken run could interleave and half-apply
+  transitions.
+
+Also: `agentctl status` said "no tasks" while DEMO-001 existed, because it
+keyed on state files rather than specs. Fixed — it now shows `DRAFT`.
+
+### What you need to do
+
+- [ ] Merge the `agent-system-fixes` PR
+- [ ] Delete the stale branch and re-run:
 
 ```sh
+git push origin --delete agent/DEMO-001
+git branch -D agent/DEMO-001
+
+git switch main && git pull
 git switch -c agent/DEMO-001 main
 git push -u origin agent/DEMO-001
 gh workflow run agent-orchestrator.yml -f task_id=DEMO-001
 ```
 
-- [ ] Watch it, from your own machine, without opening an agent session:
+- [ ] Watch it. State lives on the task branch, so pull before looking:
 
 ```sh
-python .ai/bin/agentctl.py status            # where it is
-python .ai/bin/agentctl.py state show DEMO-001   # why it is there
-python .ai/bin/agentctl.py telemetry report      # what it cost
+git pull                                          # refresh state.json
+python .ai/bin/agentctl.py status                 # where it is
+python .ai/bin/agentctl.py state show DEMO-001    # why it is there
+python .ai/bin/agentctl.py telemetry report       # what it cost
 ```
 
-(Run `git pull` on the task branch first — state lives on the branch.)
+Or watch from GitHub without pulling at all:
+`gh run list --workflow=agent-orchestrator.yml`.
 
 **Expected path:**
 
 ```
-READY → TEST_AGENT_RUNNING → TESTS_COMMITTED → BASELINE_CI
+DRAFT → READY → TEST_AGENT_RUNNING → TESTS_COMMITTED → BASELINE_CI
       → READY_FOR_IMPLEMENTATION → CODE_AGENT_RUNNING → IMPL_COMMITTED
       → IMPL_CI → COMPLETE
 ```
 
+The first orchestrator run now does `validate` (creating `state.json`,
+committing it to the branch) and then re-dispatches itself. So expect **two**
+orchestrator runs before the test agent starts. That is normal — one action per
+run is the design.
+
 **If `BASELINE_CI` goes green** and the task lands in `MANAGER_REVIEW`, that is
-*also* a successful demonstration — it is the red-baseline gate catching a test
-that pins nothing. See [`.ai/docs/state-machine.md`](../.ai/docs/state-machine.md).
+*also* a successful demonstration — the red-baseline gate catching a test that
+pins nothing. See [`.ai/docs/state-machine.md`](../.ai/docs/state-machine.md).
+
+**If it fails again**, the useful command is:
+
+```sh
+gh run list --workflow=agent-orchestrator.yml --limit 5
+gh run view <id> --log-failed
+```
+
+The state file is never lost — whatever happened, `state show` tells you where
+it stopped and `next` tells you what it would do.
 
 - [ ] Review the PR it opens, merge or close it, and decide whether to keep the
       endpoint. Nothing depends on it.
