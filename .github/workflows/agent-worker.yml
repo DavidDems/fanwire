@@ -50,7 +50,12 @@ jobs:
       # run 35556225202 died: the test agent wrote exactly the right file, and
       # was failed for prompt.md, context.json and agent-result.json sitting
       # next to it.
-      WORK: ${{ runner.temp }}
+      #
+      # The steps use the $RUNNER_TEMP shell variable directly. Do NOT lift it
+      # to a job-level WORK built from the `runner` context: that context is not
+      # available in `jobs.<id>.env`, and GitHub rejects the entire workflow
+      # file when it appears there — run 35556516395 failed with "workflow file
+      # issue" and no job at all. A YAML parser cannot see that; only a push can.
     steps:
       - uses: actions/checkout@v4
         with:
