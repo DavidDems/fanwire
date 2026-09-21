@@ -1,0 +1,25 @@
+{
+  "attempt": 0,
+  "branch": "agent/DEMO-001",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-09-21T23:37:41Z",
+      "event": "VALIDATED",
+      "from": "DRAFT",
+      "note": "spec validated",
+      "to": "READY"
+    }
+  ],
+  "last_ci": null,
+  "max_attempts": 3,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "READY",
+  "task_id": "DEMO-001",
+  "updated_at": "2026-09-21T23:37:41Z"
+}
