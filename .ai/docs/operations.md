@@ -36,6 +36,19 @@ Nothing below is done by this repository's files; a human has to switch it on.
    require `test-agent` and `agent-guard` to pass, and do not allow the
    `github-actions` bot to bypass it. The agent system deliberately has no way
    to merge; this is what makes that true rather than polite.
+
+   **On a solo repository, add "Repository admin" to the bypass list with mode
+   "Pull requests only".** GitHub does not let a PR author approve their own PR,
+   so without this a sole maintainer's own PRs can never satisfy the rule. That
+   mode still forbids direct pushes to `main` — it only allows merging a PR
+   without a second approver.
+
+   This does not weaken the agent gate. Agent PRs are opened with
+   `github.token`, so their author is `github-actions[bot]`, which a human can
+   approve normally. The bypass requires a human's own credentials, which no
+   agent has. Do not instead set required approvals to 0: the orchestrator holds
+   `pull-requests: write` and `contents: write`, so with no approval required a
+   workflow *could* merge. It does not, but "cannot" is the stronger property.
 3. **`.github/CODEOWNERS`** is committed and assigns `.ai/` and
    `.github/workflows/` to a human. It only has effect once "require review
    from Code Owners" is enabled.
