@@ -1,19 +1,17 @@
 # 01 — Making the AI workflow live
 
-**Status: steps 0–5 done. Step 6 is the only one left, and it has now failed twice.**
+**Status: steps 0–5 done. Step 6 outstanding — three attempts, ten bugs found and fixed.**
+
+The system is merged and its bugs are fixed, but **no task has completed yet**.
+Full picture of what is proven and what is not, plus the CI/CD caveats:
+[`.ai/docs/handoff.md`](../.ai/docs/handoff.md).
 
 Progress: repo public so Actions runs, both fix PRs merged, `ANTHROPIC_API_KEY`
 added, branch protection on, staying on the hosted-runner CLI install,
 pre-commit hook installed.
 
-⚠️ **The agent workflows are currently DISABLED.** They were turned off by hand
-to stop a runaway loop (see step 6). Re-enable them only after merging the
-`agent-loop-fix` PR:
-
-```sh
-gh workflow enable agent-orchestrator.yml
-gh workflow enable agent-worker.yml
-```
+✅ Workflows are enabled again and PRs #25, #26 and #27 are merged. The next
+run is the first that could plausibly go green.
 
 Background, if you want it: [`.ai/docs/operations.md`](../.ai/docs/operations.md)
 is the full runbook; [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) is why

@@ -17,6 +17,8 @@ The agent-governance process that was drafted and deferred — because instructi
 - **No merge permission** anywhere in the system; every agent branch reaches `main` through a human-approved PR.
 - **Telemetry** that agents cannot write, amend or under-report (`.ai/telemetry/`).
 
+Current state of that system, including what has actually been proven by running it and what has not: `.ai/docs/handoff.md`. The reasoning behind it, and the protocol for reviewing or improving it: `.ai/docs/philosophy.md`.
+
 `.ai/docs/permissions.md` closes with what is deliberately *not* enforced (read access, the Director's own session, GitHub repo settings a human must switch on). The `rules` branch's prose draft is superseded by `.ai/docs/` and can be retired.
 
 ## Project state, architecture, and the full stack
