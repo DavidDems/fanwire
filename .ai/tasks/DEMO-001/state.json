@@ -47,6 +47,13 @@
       "from": "READY_FOR_IMPLEMENTATION",
       "note": "code agent dispatched (attempt 1)",
       "to": "CODE_AGENT_RUNNING"
+    },
+    {
+      "at": "2026-09-21T23:48:14Z",
+      "event": "AGENT_COMMITTED",
+      "from": "CODE_AGENT_RUNNING",
+      "note": "cfed09c5d9c341170a74e73b6c6d1a70e1f5dcd6",
+      "to": "IMPL_COMMITTED"
     }
   ],
   "last_ci": null,
@@ -54,9 +61,10 @@
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {
+    "code_agent": "78f81c63-a4ac-48b2-82a8-a0129ea40bff",
     "test_agent": "af4f84c5-866b-4d63-986c-3ae8c5b9d79f"
   },
-  "state": "CODE_AGENT_RUNNING",
+  "state": "IMPL_COMMITTED",
   "task_id": "DEMO-001",
-  "updated_at": "2026-09-21T23:44:49Z"
+  "updated_at": "2026-09-21T23:48:14Z"
 }
