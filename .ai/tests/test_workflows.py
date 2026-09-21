@@ -29,9 +29,19 @@ class TestScratchFilesStayOutOfTheCheckout:
 
     SCRATCH = ("prompt.md", "context.json", "agent-result.json", "changed.txt")
 
-    def test_the_worker_declares_a_scratch_directory(self, worker):
-        assert "WORK:" in worker, "the worker must define WORK for its own scratch files"
-        assert "runner.temp" in worker, "scratch must live in the runner temp dir, not the repo"
+    def test_the_worker_uses_the_runner_temp_directory(self, worker):
+        assert "$RUNNER_TEMP/" in worker, "scratch must live in the runner temp dir, not the repo"
+
+    def test_the_runner_context_is_not_used_in_job_level_env(self, worker):
+        # `runner` is unavailable in `jobs.<id>.env`, and GitHub rejects the
+        # entire workflow file if it appears there — no job runs at all. A YAML
+        # parser cannot see this; run 35556516395 is what it looks like.
+        head = worker.split("steps:", 1)[0]
+        live = [ln for ln in head.splitlines() if not ln.strip().startswith("#")]
+        offenders = [ln for ln in live if "runner." in ln]
+        assert not offenders, "the runner context is not available above `steps:`: " + "; ".join(
+            offenders
+        )
 
     @pytest.mark.parametrize("name", SCRATCH)
     def test_no_scratch_file_is_referenced_at_the_repo_root(self, worker, name):
@@ -40,8 +50,8 @@ class TestScratchFilesStayOutOfTheCheckout:
             if name not in stripped or stripped.startswith("#"):
                 continue
             # Every mention must be qualified by the scratch directory.
-            assert "$WORK/" in stripped or "WORK:" in stripped, (
-                f"{name} is referenced without $WORK/ — it would land in the checkout "
+            assert "$RUNNER_TEMP/" in stripped, (
+                f"{name} is referenced without $RUNNER_TEMP/ — it would land in the checkout "
                 f"and be staged by `git add -A`:\n    {stripped}"
             )
 
