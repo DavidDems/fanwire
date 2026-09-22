@@ -77,8 +77,11 @@ Distinguish this carefully from "is implemented".
   passed first time, so no failure path ran.
 - A guard violation escalating and being pushed (fixed in #27, never exercised).
 - Any retry at all: `attempt` never went past 1.
+- **An agent PR merging.** `agent-guard` ran on one for the first time and
+  failed it (bug 14). Fixed in #29, and the fix is verified against the real
+  branch diff — but no agent PR has actually merged yet.
 
-## 4. The thirteen bugs, and what they have in common
+## 4. The fourteen bugs, and what they have in common
 
 Recorded because the pattern matters more than the list.
 
@@ -97,6 +100,7 @@ Recorded because the pattern matters more than the list.
 | 11 | Commit subject doubled its own `<TASK-ID> <verb>:` prefix, truncating real content | #29 |
 | 12 | `gh pr create`'s blanket `\|\|` reported every failure as "already exists", hiding a repository setting | #29 |
 | 13 | Nothing stopped a workflow from *approving* a PR once PR-creation is enabled | #29 |
+| 14 | `agent-guard` flagged the orchestrator's own state commits as an agent breaching `.ai/` — a required check that **no agent PR could ever pass** | #29 |
 
 **Every single one was in the workflow layer, and none was visible to the unit
 tests.** The tested core was right each time. `next_action` was always handed a

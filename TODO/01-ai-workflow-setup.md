@@ -105,11 +105,8 @@ criterion, including a regression guard on the existing `/health`), the
 baseline went red for the right reason, the code agent implemented
 `GET /health/version`, and implementation CI passed.
 
-**Review the PR yourself** — it was not opened automatically (step 9):
-
-```sh
-gh pr create --base main --head agent/DEMO-001
-```
+**[PR #30](https://github.com/DavidDems/fanwire/pull/30) is open** for it —
+opened by hand, because the workflow could not (step 9).
 
 Worth looking at before you merge: the implementation reads `pyproject.toml`
 from disk on every request rather than using `importlib.metadata`. It passes
@@ -223,7 +220,22 @@ resumes exactly where it stopped.
 
 ---
 
-### 9. Let Actions open the review PR
+### 9. Merge PR #29 before merging PR #30
+
+PR #30 (the DEMO-001 work) **cannot merge until #29 is in**. `agent-guard` is a
+required check and it failed on #30 — the first time it had ever run on a real
+agent branch — because it flagged the orchestrator's own `[agent-state]`
+commits as an agent writing to `.ai/`.
+
+Two correct design decisions had collided: state lives on the task branch so
+the PR is self-documenting, and `.ai/**` is forbidden to agents. The PR-level
+guard sees the whole branch and could not tell the two apart. #29 teaches it
+the difference, as narrowly as possible — this task's `state.json` and
+telemetry, and nothing else.
+
+- [ ] Merge #29, then re-run the checks on #30 and merge it.
+
+### 10. Let Actions open the review PR
 
 `gh pr create` failed with *"GitHub Actions is not permitted to create or
 approve pull requests"*. The task still reached `COMPLETE` — only the PR is
