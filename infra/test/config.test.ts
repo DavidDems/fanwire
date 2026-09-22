@@ -8,19 +8,26 @@ function configWith(overrides: Record<string, unknown>) {
 }
 
 describe('loadConfig', () => {
-  test('cdk.json defaults: workload account, ca-central-1, domain set, no hosted zone', () => {
+  test('cdk.json defaults: workload account, ca-central-1, the real delegated zone', () => {
+    // Pins what a bare `cdk deploy` would actually use. The zone is the real
+    // one delegated from the registrar on 2026-09-22, so this asserts the
+    // committed deployment config, not a placeholder.
     expect(configWith({})).toEqual({
       account: '294321867941',
       region: 'ca-central-1',
       edgeRegion: 'us-east-1',
       domainName: 'fanwire.daviddems.com',
-      hostedZoneId: undefined,
-      hostedZoneName: undefined,
+      hostedZoneId: 'Z04139742PYZYKIOGHWGR',
+      hostedZoneName: 'fanwire.daviddems.com',
     });
   });
 
   test('empty domainName means "no custom domain"', () => {
-    expect(configWith({ domainName: '' }).domainName).toBeUndefined();
+    // The zone keys have to be cleared alongside it: a hosted zone without a
+    // domain is rejected, and cdk.json now carries a real one.
+    expect(
+      configWith({ domainName: '', hostedZoneId: '', hostedZoneName: '' }).domainName,
+    ).toBeUndefined();
   });
 
   test('rejects a hosted zone without a domain', () => {
