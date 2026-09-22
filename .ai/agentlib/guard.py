@@ -35,10 +35,25 @@ ALWAYS_FORBIDDEN: tuple[str, ...] = (
     "AGENTS.md",
 )
 
+# The orchestrator's own bookkeeping, committed to a task branch by the
+# workflow (never by an agent) so that a PR is self-documenting. These live
+# under `.ai/`, so the PR-level guard would otherwise flag them as a boundary
+# breach — it did, on the first real agent PR, and agent-guard is a required
+# check, so nothing could have merged. Deliberately the narrowest possible
+# carve-out: two paths, scoped to one task.
+_BOOKKEEPING = (
+    ".ai/tasks/{task_id}/state.json",
+    ".ai/telemetry/runs/{task_id}/*.json",
+)
+
 # The role whose grants are merged in when a task sets
 # `allow_test_edits_during_impl` — i.e. "the code agent may also do what the
 # test agent may do, for this task only".
 TEST_ROLE = "test_agent"
+
+# A task id is interpolated into the bookkeeping patterns, so it is validated
+# rather than trusted: a crafted id must not be able to widen them.
+TASK_ID_SAFE = re.compile(r"^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$")
 
 
 @dataclass(frozen=True)
@@ -66,6 +81,26 @@ def path_matches(path: str, pattern: str) -> bool:
 
 def is_always_forbidden(path: str) -> bool:
     return any(path_matches(path, p) for p in ALWAYS_FORBIDDEN)
+
+
+def is_orchestrator_bookkeeping(path: str, task_id: str) -> bool:
+    """Is this the workflow's own state/telemetry for *this* task?
+
+    Used only by the PR-level check in `.github/workflows/agent-guard.yml`,
+    which sees a whole branch. A worker's own diff must still never contain
+    these paths — `is_always_forbidden` continues to say so, and the per-role
+    guard in the worker is unchanged.
+
+    Note what is NOT bookkeeping: another task's records, `task.json` and
+    `brief.md` (rewriting your own `allowed_paths` mid-task is precisely what
+    the permission model exists to prevent), and anything else whatsoever.
+    """
+    if not TASK_ID_SAFE.match(task_id or ""):
+        return False
+    candidate = _normalise(path)
+    if ".." in candidate.split("/"):
+        return False
+    return any(path_matches(candidate, p.format(task_id=task_id)) for p in _BOOKKEEPING)
 
 
 def check_diff(
