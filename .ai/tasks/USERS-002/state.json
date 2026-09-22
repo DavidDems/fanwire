@@ -54,6 +54,13 @@
       "from": "CODE_AGENT_RUNNING",
       "note": "f85c04951e48674c565ceef2796462e6387058f3",
       "to": "IMPL_COMMITTED"
+    },
+    {
+      "at": "2026-09-22T18:37:46Z",
+      "event": "CI_STARTED",
+      "from": "IMPL_COMMITTED",
+      "note": "implementation CI started",
+      "to": "IMPL_CI"
     }
   ],
   "last_ci": {
@@ -68,7 +75,7 @@
     "code_agent": "dbb4f353-842f-40b8-8585-d83807e78772",
     "test_agent": "8078a52d-083c-4986-b796-2dfe9543cd40"
   },
-  "state": "IMPL_COMMITTED",
+  "state": "IMPL_CI",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-22T18:37:35Z"
+  "updated_at": "2026-09-22T18:37:46Z"
 }
