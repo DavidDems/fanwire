@@ -179,13 +179,65 @@ never fires.
 **Symptom:** a task sits in `BASELINE_CI` or `IMPL_CI` with no new run in the
 Actions tab. Until the token is added, every task needs two manual nudges.
 
-- [ ] Fine-grained PAT: **Settings → Developer settings → Personal access tokens
+- [x] Fine-grained PAT: **Settings → Developer settings → Personal access tokens
       → Fine-grained tokens**. This repository only; **Actions: read and write**
-      and **Contents: read and write**; nothing else.
-- [ ] Add it as repository secret `AGENT_DISPATCH_TOKEN`.
+      and **Contents: read and write**; nothing else. *(Created as
+      `AGENT_DISPATCH_TOKEN`, scoped to this repo, with exactly: metadata read,
+      actions read/write, code read/write.)*
+- [ ] Add it as a **repository** secret named `AGENT_DISPATCH_TOKEN` —
+      **Settings → Secrets and variables → Actions → Secrets → Repository
+      secrets → New repository secret**. Not an *Environment* secret; see the
+      box below.
 
 Every dispatch step already prefers it, so no code change is needed. Read the
 bypass warning in step 3 before creating it.
+
+> **Repository secret, not an environment secret.** The first attempt put the
+> token in an environment (`fanwire environment`), which looks equivalent in the
+> UI and is not. An environment secret is only injected into a job that declares
+> `environment: <name>`, and none of the four dispatch steps do
+> (`agent-orchestrator.yml` :128, :163, :203; `agent-worker.yml` :218). The
+> expression `${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}` then resolves
+> the left side to empty and **silently falls back to `github.token`** — no
+> error, no log line, and the `workflow_run` stall stays exactly as it was.
+> Environments exist to gate deployments behind approvals, which is the opposite
+> of what an unattended orchestrator wants.
+>
+> ```sh
+> gh secret set AGENT_DISPATCH_TOKEN --repo DavidDems/fanwire   # paste at prompt
+> gh secret list --repo DavidDems/fanwire                       # must list two
+> gh api -X DELETE "repos/DavidDems/fanwire/environments/fanwire%20environment"
+> ```
+>
+> **Confirm it actually took.** Two separate checks, and the first is not
+> evidence of the second:
+>
+> ```sh
+> gh secret list --repo DavidDems/fanwire     # 1. is it a repository secret?
+> ```
+>
+> **2. Is the chain fixed?** This needs a task the **orchestrator itself**
+> dispatches CI for. Nothing else tests it:
+>
+> | What you might watch | Does it test the token? |
+> |---|---|
+> | A merged PR, on any branch | **No.** |
+> | A PR check run on an `agent/*` branch | **No** — `workflow_run` always fired for `pull_request`-triggered runs. |
+> | An `agent-orchestrator` run marked `skipped` | **No** — that is the job's `if:` rejecting a non-`agent/*` branch, and most rows are these. |
+> | A task passing `BASELINE_CI` → `READY_FOR_IMPLEMENTATION` **with no manual nudge** | **Yes.** This is the only proof. |
+> | A task already `COMPLETE` | **No** — it is terminal and will never dispatch CI again. |
+>
+> So: start a **new** task and watch it cross a CI boundary unattended.
+>
+> ```sh
+> python .ai/bin/agentctl.py status                 # did it move past BASELINE_CI on its own?
+> gh run list --workflow=agent-orchestrator.yml --limit 5
+> ```
+>
+> If it sits in `BASELINE_CI` and only a hand-supplied `-f event=CI_FAILED`
+> moves it, the token is still not reaching the workflow. See
+> [`handoff.md`](../.ai/docs/handoff.md) §5.1, which was originally written too
+> broadly and is now corrected.
 
 **Manual recovery, until then.** A bare nudge does *not* work in a CI-wait
 state: `next_action` returns `await_ci`, which does nothing. You have to supply
@@ -198,20 +250,23 @@ gh workflow run agent-orchestrator.yml -f task_id=<ID> -f event=CI_FAILED   # or
 
 A stalled task is never a lost task; the state file stays accurate.
 
-**I have several things to clarify before we consider this DONE. Firstly, I already had a fine-grained personal access token created for this project 'fanwire token', I don't remember writing down its value in any file, but its possible I wrote its value into something when I created this PAT.**
-This old PAT's permissions are;
- Read access to metadata
- Read and Write access to actions, administration, code, commit statuses, pull requests, secrets, and workflows
-With that being said, I decided to create a new PAT (scoped only for the fanwire repo), called 'AGENT_DISPATCH_TOKEN', it has less permissions than the other one;
- Read access to metadata
- Read and Write access to actions and code
-but its value was stored in a safe location on my computer and the PAT exists.
-You said to 'Add it as repository secret `AGENT_DISPATCH_TOKEN`', which I was not exactly sure what you wanted me to do.
-The project has no existing env variables, only github actions 'Repository secrets: ANTHROPIC_API_KEY', so I had to create an environment for this repo so that I could create an env secret.
-This is the new PAT in the repo as you asked:
-Environment secrets;
-AGENT_DISPATCH_TOKEN    fanwire environment
-It exists in the repo, confirm if this is what you wanted.
+### 7b. Revoke the old `fanwire token` PAT ⬅ **do this too**
+
+A second, older fine-grained PAT (`fanwire token`) exists with **read/write on
+administration, secrets, workflows, pull requests, code, commit statuses and
+actions** — and its value is unaccounted for. That is the most privileged
+credential in this project: `secrets: write` can read nothing but can *replace*
+`ANTHROPIC_API_KEY`, and `workflows: write` can rewrite the very files that
+enforce the permission model.
+
+Nothing in the repo uses it. Before the dispatch token was added the repo had
+exactly one secret (`ANTHROPIC_API_KEY`), so there is nothing to break.
+
+- [ ] **Settings → Developer settings → Personal access tokens → Fine-grained
+      tokens → `fanwire token` → Delete.**
+
+A token you cannot locate is a token you cannot rotate, and deleting it costs
+nothing because `AGENT_DISPATCH_TOKEN` now covers the only automated use.
 
 ### 8. Learn the stop button
 
@@ -248,24 +303,66 @@ guard sees the whole branch and could not tell the two apart. #29 teaches it
 the difference, as narrowly as possible — this task's `state.json` and
 telemetry, and nothing else.
 
-- [ ] Merge #29, then re-run the checks on #30 and merge it.
+- [x] Merge #29 — merged 2026-09-22 02:53Z, `main` is now `3daac76` and the
+      guard fix is live.
+- [ ] **Update branch** on #30, wait for `guard` to re-run, then merge it.
 
-### 10. Let Actions open the review PR
+**#30 needs "Update branch" rather than just a re-run.** It currently reads
+`BEHIND` (its base is `60f14bd`, `main` is `3daac76`), the strict up-to-date
+policy requires the update anyway, and `agent-guard` evaluates the PR's merge
+ref — so it only picks up #29's fix once `main` is merged in. A bare "re-run
+failed jobs" on the old ref fails again for the same reason. The `guard
+FAILURE` you can see on #30 right now is that stale run, not a new verdict.
+
+⚠️ **Expect one red X that is not your problem.** Updating the branch re-runs
+`test-agent` on `agent/DEMO-001`, which wakes the orchestrator for a task that
+is already `COMPLETE`, and until the fix for bug 15 lands that run **fails**
+(`COMPLETE is terminal; CI_PASSED rejected` — run 35670385955 is the first
+instance). It is cosmetic: `agent-orchestrator` is not a required check, the
+state file stays `COMPLETE`, and nothing is lost. Merge on the strength of
+`guard` and the six `test-agent` checks.
+
+### 10. Let Actions open the review PR ✅
 
 `gh pr create` failed with *"GitHub Actions is not permitted to create or
-approve pull requests"*. The task still reached `COMPLETE` — only the PR is
-missing, and you can open it by hand.
+approve pull requests"*. The task still reached `COMPLETE` — only the PR was
+missing.
 
-- [ ] **Settings → Actions → General → Workflow permissions** → tick
+- [x] **Settings → Actions → General → Workflow permissions** → tick
       **"Allow GitHub Actions to create and approve pull requests"**
+
+Enabled 2026-09-21. Verify any time:
+
+```sh
+gh api repos/DavidDems/fanwire/actions/permissions/workflow
+# {"default_workflow_permissions":"read","can_approve_pull_request_reviews":true}
+```
+
+`default_workflow_permissions` stays **read** on purpose — every workflow
+declares its own `permissions:` block, so the repo-wide default never needs to
+grant anything.
 
 ⚠️ That setting also grants *approval*, which would let a workflow satisfy the
 1-approval rule. Nothing in these workflows calls `gh pr review`, and
 `.ai/tests/test_workflows.py` now fails the build if one ever does — alongside
 the existing check that no workflow can merge. CODEOWNERS is the second layer.
+**Unproven:** no workflow-opened PR has appeared yet, because the setting was
+off for every run so far. The next task to reach `COMPLETE` is the test.
 
-If you would rather not enable it, leave it off and open each PR by hand; the
-orchestrator now prints the exact command when it cannot.
+### 11. Head branches are deleted on merge ✅
+
+Turned on 2026-09-21 (`delete_branch_on_merge: true`) — the mechanical fix for
+the stacked-PR trap that [`03-open-decisions.md`](03-open-decisions.md) asked
+for, and a candidate automation from
+[`philosophy.md`](../.ai/docs/philosophy.md) §6 now closed.
+
+There are still **28 remote branches**, most of them merged phase branches from
+before the setting existed. Deleting them is safe but is a git action, so it is
+listed here rather than done:
+
+```sh
+git branch -r --merged origin/main | sed 's#origin/##' | grep -v -e main -e HEAD
+```
 
 ---
 
@@ -273,8 +370,12 @@ orchestrator now prints the exact command when it cannot.
 
 - [x] `agentctl status` shows `DEMO-001` as `COMPLETE`
 - [x] `agentctl telemetry report` shows a full task's cost — $0.2738
-- [ ] A PR was opened **by the workflow**, and you merged it *(blocked on step 9;
-      the first one was opened by hand)*
+- [ ] `AGENT_DISPATCH_TOKEN` is a **repository** secret and an
+      `agent-orchestrator` run woke on `workflow_run` after CI *(step 7)*
+- [ ] The old `fanwire token` PAT is revoked *(step 7b)*
+- [ ] A PR was opened **by the workflow**, and you merged it *(step 10 is now
+      enabled, so the next completed task should do this; the first one was
+      opened by hand)*
 - [ ] You have paused and resumed a task at least once *(step 8)*
 
 Then the pipeline is live, and
