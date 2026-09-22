@@ -54,6 +54,11 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.workflow_run.head_branch, 'agent/')
     runs-on: ubuntu-latest
+    # One run does one transition and stops, so this is generous by an order of
+    # magnitude. Without it the job inherits GitHub's 6-hour default and a hung
+    # run holds this task's concurrency group for that long, dropping every
+    # transition behind it (handoff.md 5.4, 5.5).
+    timeout-minutes: 15
     steps:
       - name: Resolve the task
         id: task
@@ -92,9 +97,14 @@ jobs:
             failure|timed_out) EVENT=CI_FAILED ;;
             *) echo "CI concluded '$CONCLUSION'; nothing to apply"; exit 0 ;;
           esac
+          # --ignore-terminal: CI re-running on a finished task's branch is
+          # routine (a review PR has to be brought up to date before it can
+          # merge), and the state machine rightly refuses a CI result for a
+          # COMPLETE task. Waking to find nothing to do is not a failure -- it
+          # used to fail the whole run and paint a red X on a healthy pipeline.
           python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
             --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
-            --commit-sha "$SHA"
+            --commit-sha "$SHA" --ignore-terminal
 
       - name: Apply a human-supplied event
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.event != ''

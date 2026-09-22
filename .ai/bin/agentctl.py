@@ -239,6 +239,15 @@ def cmd_state_advance(args) -> int:
         ctx["commit_sha"] = args.commit_sha
     if args.extra_attempts:
         ctx["extra_attempts"] = args.extra_attempts
+    # An unsolicited event about a task that has already finished. CI re-running
+    # on a completed task's branch is normal -- a review PR must be brought
+    # up to date before it can merge -- and the orchestrator waking to find
+    # nothing to do is not a failure. Callers that represent a *deliberate*
+    # instruction never pass this, so a person asking for the impossible is
+    # still told so.
+    if args.ignore_terminal and st.is_terminal(s):
+        print(f"agentctl: {args.task_id} is {s['state']}; {args.event} not applied")
+        return OK
     try:
         s = st.advance(s, args.event, **ctx)
     except st.Paused as exc:
@@ -635,6 +644,12 @@ def build_parser() -> argparse.ArgumentParser:
     s_adv.add_argument("--extra-attempts", type=int)
     s_adv.add_argument("--session-id", help="record a resumable provider session id")
     s_adv.add_argument("--role", help="which role the --session-id belongs to")
+    s_adv.add_argument(
+        "--ignore-terminal",
+        action="store_true",
+        help="exit 0 instead of failing when the task has already finished "
+        "(for unsolicited events such as a late CI result)",
+    )
     s_adv.set_defaults(func=cmd_state_advance)
     s_ctl = state.add_parser("control", help="human stop/start")
     s_ctl.add_argument("task_id")
