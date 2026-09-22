@@ -61,12 +61,26 @@
       "from": "IMPL_COMMITTED",
       "note": "implementation CI started",
       "to": "IMPL_CI"
+    },
+    {
+      "at": "2026-09-22T18:41:50Z",
+      "event": "CI_PASSED",
+      "from": "IMPL_CI",
+      "note": "CI green",
+      "to": "CONTEXT_MAINTENANCE"
+    },
+    {
+      "at": "2026-09-22T18:41:50Z",
+      "event": "DISPATCH_MAINTAINER",
+      "from": "CONTEXT_MAINTENANCE",
+      "note": "context maintainer dispatched",
+      "to": "CONTEXT_MAINTENANCE"
     }
   ],
   "last_ci": {
-    "commit": "679bf25d0e5870bb5015aad051cdfc89ca49d1dd",
-    "conclusion": "failure",
-    "run_id": "35767687867"
+    "commit": "6fa98fbfba1e415ad3aa9ea633d4d2b437aa30c0",
+    "conclusion": "success",
+    "run_id": "35768428915"
   },
   "max_attempts": 3,
   "require_red_baseline": true,
@@ -75,7 +89,7 @@
     "code_agent": "dbb4f353-842f-40b8-8585-d83807e78772",
     "test_agent": "8078a52d-083c-4986-b796-2dfe9543cd40"
   },
-  "state": "IMPL_CI",
+  "state": "CONTEXT_MAINTENANCE",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-22T18:37:46Z"
+  "updated_at": "2026-09-22T18:41:50Z"
 }
