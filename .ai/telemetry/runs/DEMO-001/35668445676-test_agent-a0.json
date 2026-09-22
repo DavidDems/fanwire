@@ -1,0 +1,20 @@
+{
+  "attempt": 0,
+  "ci_run_id": null,
+  "commit_sha": null,
+  "duration_seconds": 79,
+  "ended_at": "2026-09-21T23:39:30Z",
+  "estimated_cost_usd": 0.07821,
+  "input_tokens": 30,
+  "model": "claude-sonnet-5",
+  "output_tokens": 5208,
+  "provider": "anthropic",
+  "result": "completed",
+  "role": "test_agent",
+  "schema": 1,
+  "session_id": "af4f84c5-866b-4d63-986c-3ae8c5b9d79f",
+  "started_at": "2026-09-21T23:38:11Z",
+  "task_id": "DEMO-001",
+  "total_tokens": 5238,
+  "workflow_run_id": "35668445676"
+}

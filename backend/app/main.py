@@ -1,3 +1,6 @@
+import tomllib
+from pathlib import Path
+
 from fastapi import FastAPI
 from mangum import Mangum
 
@@ -23,6 +26,22 @@ app.include_router(search_router)
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+_PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
+def _backend_version() -> str:
+    with _PYPROJECT_PATH.open("rb") as f:
+        data = tomllib.load(f)
+    version = data["project"]["version"]
+    assert isinstance(version, str)
+    return version
+
+
+@app.get("/health/version")
+def health_version() -> dict[str, str]:
+    return {"version": _backend_version()}
 
 
 handler = Mangum(app)

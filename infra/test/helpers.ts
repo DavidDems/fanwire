@@ -67,10 +67,24 @@ export function resourcesOfType(
   return out;
 }
 
-/** The three domain modes `cdk synth` must support. */
+/**
+ * The three domain modes `cdk synth` must support.
+ *
+ * Every mode sets all three keys explicitly. These are merged *over* cdk.json's
+ * context, so a key a mode leaves out keeps whatever the real deployment
+ * config happens to say — and a mode called "no domain" that silently inherits
+ * a live `hostedZoneName` is not testing the mode it names. That is not
+ * hypothetical: the day `hostedZoneName` was filled in for the real zone, both
+ * zone-less modes started failing `loadConfig`'s "hostedZoneName requires
+ * hostedZoneId" check, because they had only ever cleared the id.
+ */
 export const DOMAIN_MODES: Record<string, Record<string, unknown>> = {
-  'no domain': { domainName: '', hostedZoneId: '' },
-  'domain without hosted zone': { domainName: 'fanwire.daviddems.com', hostedZoneId: '' },
+  'no domain': { domainName: '', hostedZoneId: '', hostedZoneName: '' },
+  'domain without hosted zone': {
+    domainName: 'fanwire.daviddems.com',
+    hostedZoneId: '',
+    hostedZoneName: '',
+  },
   'domain with hosted zone': {
     domainName: 'fanwire.daviddems.com',
     hostedZoneId: 'Z0123456789ABCDEFGHIJ',

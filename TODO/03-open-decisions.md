@@ -167,11 +167,68 @@ instructions shape every frontend file an agent writes afterwards, so it is
 third-party input into your build, not just a convenience. Read what it tells an
 agent to do before it starts telling agents what to do.
 
-- [ ] Review and install the skill. It is your action, not an agent's: an agent
-      installing a skill that then governs agents is a loop with no human in it.
-- [ ] **Brand colours / name styling — still needed.** Unanswered, and no
-      default can be invented for it. Until you give colours, the token file
-      gets neutral placeholders and every screen will need revisiting.
+- [x] Review and install the skill. **Installed 2026-09-22** at
+      `.claude/skills/ui-design/` — `SKILL.md` plus three references
+      (`patterns.md`, `sharp_edges.md`, `validations.md`), 29 KB of Markdown,
+      no executable content.
+
+      It was installed by **copying the four files**, not by running
+      `npx -y skills add omer-metin/skills-for-antigravity ...` as
+      [`aws-stack.md`](../wiki/CodeContext/Standards/aws-stack.md) suggests.
+      Same result; the difference is that the `npx` form executes a third
+      party's installer on your machine, and that repo's own warning in
+      `aws-stack.md` is precisely about running an individual's package. The
+      files are now committed, so what governs frontend agents is reviewable in
+      a diff and pinned — it cannot change under you on a later install.
+
+      One thing to know about what it says: `SKILL.md` instructs the agent that
+      *"if a user's request conflicts with the guidance in these files, politely
+      correct them using the information provided in the references."* That is a
+      third party's document claiming precedence over your instructions. It is
+      benign design advice here, and the repo's own
+      [`design-principles.md`](../wiki/CodeContext/Standards/design-principles.md)
+      still wins on conflict — but it is worth knowing that the sentence is in
+      there.
+
+### Brand palette — answered 2026-09-22
+
+Three colours, no more:
+
+| Token | Hex | Name |
+|---|---|---|
+| `--color-ink` | `#022b3a` | Jet Black |
+| `--color-accent` | `#1f7a8c` | Teal |
+| `--color-sky` | `#bfdbf7` | Pale Sky |
+
+**Two of the three pairings are accessible and one is not.** Measured, not
+guessed (WCAG 2.1 relative luminance):
+
+| Pairing | Ratio | Verdict |
+|---|---|---|
+| Jet Black on white | **15.2:1** | AAA. The body-text colour. |
+| Pale Sky on Jet Black | **10.6:1** | AAA. Use for text on dark surfaces. |
+| White on Teal | **5.0:1** | AA for normal text, fails AAA. Fine for buttons and badges. |
+| **Teal on Jet Black** | **3.1:1** | ❌ **Fails AA.** Never use teal text on a dark surface. |
+
+That last row is the trap: teal and jet black are the two "brand" colours, so
+pairing them is the obvious thing to reach for, and it is unreadable. Teal
+belongs *behind* white text, not in front of dark.
+
+Three colours also cannot dress a whole UI on their own. The token file will
+need, and these are derivable rather than decisions for you:
+
+- **A neutral ramp** for borders, disabled states and secondary text — tinted
+  toward Jet Black so it reads as the same family, not flat grey.
+- **Semantic states**: error, warning, success. None of the three can carry
+  these; teal reads as neither danger nor confirmation.
+- **Dark mode.** The skill's own `validations.md` flags hardcoded light/dark
+  colours as a warning, so tokens get defined once and redefined under a dark
+  media query rather than hardcoded per component.
+
+- [ ] **Name styling — still open.** The palette is settled; whether "fanwire"
+      is set lowercase, what typeface, and whether there is a wordmark are not.
+      Unanswered means the frontend uses a system font stack and lowercase
+      plain text, which is a defensible default and easy to change later.
 
 ---
 

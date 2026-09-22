@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "task_id": "USERS-002",
+  "objective": "Enforce a minimum age of 16 at profile creation. POST /users currently accepts any date for date_of_birth, including a future one, so a one-year-old and a person born in 2030 are both valid today. Validate at the API boundary that the date of birth is strictly in the past and that the person is at least 16 whole years old on the day of the request.",
+  "acceptance_criteria": [
+    "POST /users with a date_of_birth exactly 16 years before today returns HTTP 201 and creates the profile.",
+    "POST /users with a date_of_birth 16 years before today plus one day (one day short of the 16th birthday) returns HTTP 422 and creates no profile.",
+    "POST /users with a date_of_birth in the future returns HTTP 422 and creates no profile.",
+    "POST /users with a date_of_birth of today returns HTTP 422.",
+    "The 422 response body names date_of_birth as the field at fault, so a form can attach the message to the right input.",
+    "A profile created with a date_of_birth 30 years before today still succeeds, and GET /users/{id} still omits date_of_birth while GET /users/me still returns it."
+  ],
+  "allowed_paths": [
+    "backend/app/users/schemas.py",
+    "backend/tests/users/test_age_gate.py"
+  ],
+  "forbidden_paths": [
+    "backend/app/users/models.py",
+    "backend/alembic/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
