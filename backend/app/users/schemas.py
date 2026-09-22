@@ -29,7 +29,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+MINIMUM_AGE_YEARS = 16
 
 
 class CreateUserRequest(BaseModel):
@@ -37,6 +39,20 @@ class CreateUserRequest(BaseModel):
     date_of_birth: date
     description: str | None = None
     preferred_team_id: int | None = None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _validate_date_of_birth(cls, value: date) -> date:
+        """Whole-years-old check against "today" -- a future date_of_birth or
+        one from today produces a negative/zero age here, so this single
+        comparison also covers "strictly in the past" without a separate
+        check (see wiki/CodeContext/Modules/0x01-users.md Security section
+        and the USERS-002 age-gate acceptance criteria)."""
+        today = date.today()
+        age_years = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age_years < MINIMUM_AGE_YEARS:
+            raise ValueError(f"must be at least {MINIMUM_AGE_YEARS} years old")
+        return value
 
 
 class PublicUserOut(BaseModel):
