@@ -61,6 +61,19 @@ class TestNextOnAFreshTask:
         assert result.returncode == 0, result.stderr
 
 
+class TestAdvanceAdvertisesIgnoreTerminal:
+    """`agent-orchestrator.yml` passes `--ignore-terminal` on the CI-result
+    step (run 35670385955). If the CLI does not accept it, argparse exits 2 and
+    the job fails for a second, sillier reason than the one being fixed — so
+    the flag's existence is pinned here, next to the workflow test that pins
+    its use."""
+
+    def test_the_flag_exists(self):
+        result = run("state", "advance", "--help")
+        assert result.returncode == 0, result.stderr
+        assert "--ignore-terminal" in result.stdout
+
+
 class TestStatus:
     def test_status_lists_a_task_that_has_a_spec_but_no_state(self, has_demo_task):
         # A spec-only task is invisible on the board if status keys off state

@@ -70,10 +70,10 @@ export function resourcesOfType(
 /** The three domain modes `cdk synth` must support. */
 export const DOMAIN_MODES: Record<string, Record<string, unknown>> = {
   'no domain': { domainName: '', hostedZoneId: '' },
-  'domain without hosted zone': { domainName: 'fanwire.daviddems.ca', hostedZoneId: '' },
+  'domain without hosted zone': { domainName: 'fanwire.daviddems.com', hostedZoneId: '' },
   'domain with hosted zone': {
-    domainName: 'fanwire.daviddems.ca',
+    domainName: 'fanwire.daviddems.com',
     hostedZoneId: 'Z0123456789ABCDEFGHIJ',
-    hostedZoneName: 'daviddems.ca',
+    hostedZoneName: 'daviddems.com',
   },
 };

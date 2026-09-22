@@ -24,9 +24,9 @@ Recorded here so you do not redo them.
 
 ---
 
-## 1. Confirm GuardDuty is actually enabled — 2 minutes
+## 1. Confirm GuardDuty is actually enabled — ✅ done
 
-- [ ] In the `fanwire-log-archive` account (the delegated administrator), check
+- [x] In the `fanwire-log-archive` account (the delegated administrator), check
       that `fanwire-workload` shows GuardDuty status **Enabled**.
 
 **Why:** Organizations account-list propagation into the delegated-admin view
@@ -40,6 +40,26 @@ on GuardDuty Malware Protection to clear uploads.
 "AWS account state" → GuardDuty.
 
 **Confirm:** the workload account row reads Enabled, not Pending or Invited.
+
+**Answered 2026-09-21 — accepted.** GuardDuty reads **Enabled** in
+`fanwire-workload`, confirmed from inside that account. The delegated-admin
+account list is empty from `fanwire-log-archive` because listing organization
+members needs Organizations read permissions, which `PowerUserAccess`
+deliberately excludes (that exclusion is the point of that permission set — see
+"Human access" in
+[`0x00-architecture.md`](../wiki/CodeContext/Modules/0x00-architecture.md)).
+Checking in the account that is actually being protected is the better evidence
+anyway.
+
+Two consequences to carry forward, neither of them a problem today:
+
+- Membership is **by invitation**, not Organizations auto-enrollment. A future
+  fourth account will not self-enroll; it has to be invited the same way.
+- **Malware Protection for S3 is a separate feature from GuardDuty core**, and
+  it is what the media pipeline actually depends on — an upload never leaves
+  `Quarantined` without a scan verdict. It can only be enabled against a bucket
+  that exists, so it belongs to the first deploy, not to this checklist. Added
+  to the post-deploy list in §6.
 
 ---
 
@@ -57,10 +77,9 @@ what you get, not whether it deploys:
 | **Domain, no zone** | ACM cert with DNS validation; the edge stack **waits** for you to add the CNAME by hand; no alias records | Buy the domain, add one CNAME when the deploy pauses |
 | **Domain + zone** *(the intended end state)* | Cert validated automatically, A/AAAA aliases | Buy the domain, create the Route 53 hosted zone, delegate the nameservers, pass `hostedZoneId`/`hostedZoneName` |
 
-- [ ] Decide which mode for the first deploy — **"no domain" is a fine first
-      deploy** and de-risks it
-- [ ] If going to production: register the domain, create the hosted zone in
-      `fanwire-workload`, point the registrar's nameservers at it
+- [x] Decide which mode for the first deploy
+- [x] Register the domain — **`daviddems.com`, bought at GoDaddy 2026-09-21**
+- [ ] Create the hosted zone and delegate the subdomain (steps below)
 
 **Cost:** domain registration (~$10–20/yr, registrar-dependent); Route 53
 hosted zone $0.50/mo; ACM certs are free.
@@ -75,6 +94,121 @@ you do not need to do anything about it.
 
 ---
 
+### 2a. The plan: delegate `fanwire.daviddems.com`, leave the apex at GoDaddy
+
+**Decided 2026-09-21.** The app gets `fanwire.daviddems.com`. Route 53 hosts a
+zone for **that subdomain only**; `daviddems.com` itself stays on GoDaddy's
+nameservers.
+
+Why this shape rather than moving the whole domain:
+
+- **Blast radius.** Repointing the apex nameservers moves *all* DNS for
+  `daviddems.com` to Route 53 at once — anything already on GoDaddy DNS (mail
+  MX, verification TXT, a parked page) stops resolving the moment the change
+  propagates unless it was recreated in Route 53 first. Delegating one subdomain
+  touches nothing else.
+- **Reversible in one step.** Undoing it is "delete four NS records at GoDaddy".
+- **Same result for the app.** ACM validation, the A/AAAA aliases and SES all
+  work identically against a delegated subdomain.
+- **Same cost.** $0.50/mo per hosted zone either way.
+
+The trade-off, stated honestly: the apex `daviddems.com` and any *other*
+subdomain stay manual GoDaddy records, and DNS is administered in two places.
+If this domain later becomes AWS-hosted for everything, moving the apex is a
+separate, deliberate change — not something to bundle in now.
+
+`infra/cdk.json` has already been updated to `domainName:
+"fanwire.daviddems.com"` (and the `.ca` value is gone from the infra tests, the
+backend settings test and the architecture wiki). `hostedZoneId` is still empty,
+which is mode **"domain, no zone"** — deployable, but the edge stack would pause
+waiting for a validation CNAME by hand. Filling in the zone id is the last step
+below and turns it into the intended **"domain + zone"** mode.
+
+### 2b. Create the hosted zone — in `fanwire-workload`
+
+Your SSO session is expired, so start there:
+
+```sh
+aws sso login --profile fanwire-workload
+```
+
+Then create the zone for the **subdomain**, not the apex:
+
+```sh
+aws route53 create-hosted-zone \
+  --name fanwire.daviddems.com \
+  --caller-reference "fanwire-$(date +%s)" \
+  --hosted-zone-config Comment="fanwire app - delegated from GoDaddy" \
+  --profile fanwire-workload
+```
+
+**Confirm:** the output's `HostedZone.Id` looks like
+`/hostedzone/Z0123456789ABCDEFGHIJ` — the bare `Z...` part is what `cdk.json`
+needs. `DelegationSet.NameServers` holds the four nameservers for the next step.
+To read them again later:
+
+```sh
+aws route53 get-hosted-zone --id <ZONE_ID> --profile fanwire-workload \
+  --query 'DelegationSet.NameServers' --output text
+```
+
+### 2c. Delegate it at GoDaddy — four NS records
+
+In GoDaddy: **My Products → `daviddems.com` → DNS → Manage Zones → Add New
+Record**. Add **four** records, one per nameserver AWS gave you:
+
+| Field | Value |
+|---|---|
+| Type | `NS` |
+| Name | `fanwire` ← the label only, **not** the full `fanwire.daviddems.com` |
+| Value | one nameserver, e.g. `ns-1234.awsdns-56.org` (trailing dot optional) |
+| TTL | 1 hour |
+
+Four records, same `Name`, different `Value`. That is correct and not a
+duplicate — an NS record set has multiple values by design.
+
+**Do not** change GoDaddy's nameservers for the domain itself, and do not add an
+A record or forwarding for `fanwire` — the NS records hand the whole subdomain
+to AWS, and a stray A record at the same name conflicts with the delegation.
+
+**Confirm** (from any machine, after a few minutes — allow up to the old TTL):
+
+```sh
+nslookup -type=NS fanwire.daviddems.com 8.8.8.8
+```
+
+You want the four `awsdns` nameservers back. `Non-existent domain` means the
+records have not propagated yet or the `Name` field included the full domain;
+GoDaddy's own nameservers coming back instead means the records were not saved.
+
+### 2d. Point the CDK app at the zone
+
+- [ ] Put the zone id into `infra/cdk.json`:
+
+```json
+"domainName": "fanwire.daviddems.com",
+"hostedZoneId": "Z0123456789ABCDEFGHIJ",
+"hostedZoneName": "fanwire.daviddems.com",
+```
+
+**Confirm:** `cd infra && npm run synth` still succeeds, and
+`npx jest test/cdn-stack.test.ts` passes — the "domain + zone" fixture is the
+mode that emits the A/AAAA aliases.
+
+After that, the first `cdk deploy` (still gated on §3) validates the ACM
+certificate automatically by writing the validation record into the zone. No
+manual CNAME, which is the whole reason for creating the zone.
+
+**One gap to expect, not a mistake:** nothing in the stacks creates an **SES
+identity** for the domain
+([`0x00-architecture.md`](../wiki/CodeContext/Modules/0x00-architecture.md),
+"Known gaps"). Notification email is a deliberate no-op until an identity
+exists — `SesEmailSender` skips sending when `NOTIFICATION_FROM_ADDRESS` is
+unset and logs no PII. Verifying `fanwire.daviddems.com` in SES and leaving the
+sandbox is post-deploy work, tracked in §6.
+
+---
+
 ## 3. Review the generated IAM policies — the hard gate before any deploy
 
 **This is the one that must not be skipped or delegated.**
@@ -82,12 +216,10 @@ you do not need to do anything about it.
 deploy or touch anything until you scope its permissions deliberately, having
 read the policies CDK generates.
 
-- [ ] Run `cd infra && npm run synth` and read the synthesized IAM policies
-- [ ] Read the exception list in
-      [`0x00-architecture.md`](../wiki/CodeContext/Modules/0x00-architecture.md)
-      "IAM gate" — every entry is a place the automated rule was deliberately
-      waived, and each one is a thing you are personally signing off
-- [ ] Attach a scoped permissions policy to `GitHubActionsDeployRole`
+- [x] Run `cd infra && npm run synth` and read the synthesized IAM policies
+- [ ] Read the eight waivers in plain language (§3b) and decide you accept them
+- [ ] Bootstrap CDK in both regions (§3c)
+- [ ] Attach the scoped permissions policy to `GitHubActionsDeployRole` (§3d)
 - [ ] Only then run the first `cdk deploy`
 
 **What helps you:** `infra/test/iam-policy.test.ts` runs in CI and already
@@ -102,6 +234,146 @@ that used to be prose, now a gate that fails the build. See
 
 **Do not** let an agent do this step. `cdk deploy` is out of scope for agents
 repo-wide (`AGENTS.md`, "never run it"), and this review is the reason.
+
+---
+
+### 3a. `'cdk' is not recognized` — fixed, and it was not your mistake
+
+`infra/node_modules` did not exist. `aws-cdk` is a **devDependency**, so the
+`cdk` binary lives at `infra/node_modules/.bin/cdk` and npm only puts it on
+`PATH` for scripts once the dependencies are installed. Nothing was missing from
+your machine and nothing needed a global install.
+
+```sh
+cd infra && npm ci && npm run synth
+```
+
+Now succeeds: eight stacks synthesize to `infra/cdk.out` (`Fanwire-Edge`,
+`-Network`, `-Data`, `-Auth`, `-Storage`, `-Messaging`, `-App`, `-Cdn`), and
+`IAM_GATE_REPORT=1 npx jest test/iam-policy.test.ts` passes 12/12 while printing
+every wildcard it matched.
+
+**This is worth a permanent fix, not a note.** CI installs deps so `infra-synth`
+always passed, which is exactly why a local-only break went unnoticed. Added to
+[`philosophy.md`](../.ai/docs/philosophy.md) §6 as a candidate: a `selfcheck`
+that fails when a workspace's `node_modules` is missing would have said so in
+one line.
+
+### 3b. The eight waivers, in plain language
+
+These are the only places the "no wildcards" rule is waived. **Seven of the
+eight are shapes AWS itself requires** — a stricter policy would not be more
+secure, it would not work. Read them as "here is why this one cannot be
+narrower", and the risk column as what you are actually accepting.
+
+| Waiver | What it really is | Risk you are accepting |
+|---|---|---|
+| `kms-key-policy-self` | `Resource: "*"` inside the CMK's **key policy**. In a key policy, `*` means *this key* — a key policy cannot grant on any other key. | None. It is a syntax requirement; the scope is the key the policy is attached to. |
+| `s3-object-arns` | `<bucket>/*` for object-level actions. | Object actions need an object ARN, and `/*` means "objects in this bucket". The bucket is named explicitly. This is the intended grant. |
+| `tls-only-deny` | `s3:*` / `sqs:*` in a **Deny** with `aws:SecureTransport=false`. | None — this is a *hardening* statement. Broad in a Deny is the safe direction: it denies everything over plaintext HTTP. |
+| `lambda-vpc-eni` | Six EC2 network-interface actions with `Resource "*"`. | Real but unavoidable. `ec2:DescribeNetworkInterfaces` has no resource-level support, and Lambda validates the others against `*`. Written inline instead of using AWS's managed `AWSLambdaVPCAccessExecutionRole`, so the action list is visible and frozen. Worst case: a compromised function could enumerate ENIs in the account. |
+| `nat-instance-session-manager` | `ssm:UpdateInstanceInformation` + four `ssmmessages:*` channel actions on `*`. | AWS's documented minimum for Session Manager — it is how you get a shell on the NAT instance without opening SSH. Removing it means no way in. Scoped to the NAT instance's own role. |
+| `guardduty-managed-eventbridge-rule` | `rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*`. | GuardDuty names its own managed rule with a generated suffix, so the prefix is the only stable form. One `*`, at the end, on a name only GuardDuty creates. |
+| `cdk-cross-region-export-parameters` | `parameter/cdk/exports/*` and `.../Fanwire-Cdn/*` in SSM. | CDK's mechanism for passing values between `us-east-1` and `ca-central-1` — needed only because CloudFront certs must live in `us-east-1`. Confined to the `/cdk/exports/` prefix. |
+| `cdk-custom-resource-basic-execution` | The AWS managed policy `AWSLambdaBasicExecutionRole`, on two roles. | The one managed policy in the app, and only on CDK's own cross-region-reference custom resources — not on any function of ours. It grants CloudWatch Logs write, nothing more. |
+
+Two structural facts that matter more than the list:
+
+- **`grant*()` is never used anywhere in the app.** CDK's convenience grants
+  emit wildcard actions like `kms:GenerateDataKey*`, so every role has
+  hand-written statements, and constructs that would silently append to the
+  CMK's policy get an imported `Key.fromKeyArn` handle instead. That is why the
+  list is eight entries and not eighty.
+- **The list cannot rot.** `iam-policy.test.ts` fails if an entry stops matching
+  anything, so a waiver kept alive for a resource that no longer exists breaks
+  the build.
+
+What the gate does **not** cover, and you should know before signing: the
+`GuardDuty` bucket-policy interaction and the scan-result event shape are
+unverifiable without a real deploy, and `DATABASE_URL` still carries the DB
+password in each function's environment (encrypted with the CMK, but readable by
+anyone holding `lambda:GetFunctionConfiguration` + `kms:Decrypt`). Both are
+recorded as known gaps in
+[`0x00-architecture.md`](../wiki/CodeContext/Modules/0x00-architecture.md).
+
+### 3c. Bootstrap CDK — this is what makes the CI policy small
+
+`GitHubActionsDeployRole` has no policy, and the instinct is to write one
+listing every service the stacks touch. **Don't.** That policy would be hundreds
+of actions wide, would need editing on every stack change, and you would be
+signing off something too large to actually read — the exact failure this gate
+exists to prevent.
+
+`cdk deploy` does not need service permissions. It needs to assume four roles
+that `cdk bootstrap` creates, and *those* roles do the work. So CI gets one
+statement with one action, and the privileged policies are AWS-authored and
+versioned by the bootstrap stack rather than hand-maintained here.
+
+Both regions, because the CloudFront cert lives in `us-east-1`:
+
+```sh
+aws sso login --profile fanwire-workload
+cd infra
+npx cdk bootstrap aws://294321867941/ca-central-1 aws://294321867941/us-east-1 \
+  --profile fanwire-workload
+```
+
+**Confirm:** a `CDKToolkit` stack in each region, and eight roles named
+`cdk-hnb659fds-*-294321867941-<region>`:
+
+```sh
+aws iam list-roles --profile fanwire-workload \
+  --query "Roles[?starts_with(RoleName,'cdk-hnb659fds')].RoleName" --output text
+```
+
+⚠️ **The one thing you are genuinely signing off here.** Bootstrap also creates
+`cdk-hnb659fds-cfn-exec-role-*`, the role CloudFormation itself uses, and by
+default it gets the **`AdministratorAccess`** managed policy. That is the real
+privilege in this design, and it is not what the IAM gate inspects — the gate
+walks *our* stacks. It is defensible: only CloudFormation can use it, CI can
+only reach it by way of the deploy role, and the OIDC trust policy limits that
+to a workflow run on `main` of this exact repo. But it is admin, and you should
+know that rather than discover it.
+
+If you would rather scope it, create a customer-managed policy first and pass
+`--cloudformation-execution-policies <arn>`. Be aware that a too-narrow policy
+fails mid-deploy, with a half-created stack to clean up — which is why the
+default exists. **Recommendation: take the default for the first deploy, and
+narrow it once a successful deploy has told you what is actually needed.**
+
+### 3d. Attach the CI policy
+
+The policy is written and in the repo, so you review it as a diff rather than as
+console JSON: [`../infra/iam/github-actions-deploy-role-policy.json`](../infra/iam/github-actions-deploy-role-policy.json)
+(see [`../infra/iam/README.md`](../infra/iam/README.md)). It is eight ARNs and
+one action — `sts:AssumeRole` on the bootstrap roles, nothing else. Read it; it
+fits on a screen, which is the point.
+
+```sh
+cd /c/Users/david/source/repos/fanwire
+aws iam put-role-policy \
+  --role-name GitHubActionsDeployRole \
+  --policy-name CdkBootstrapAssumeRole \
+  --policy-document file://infra/iam/github-actions-deploy-role-policy.json \
+  --profile fanwire-workload
+```
+
+**Confirm:**
+
+```sh
+aws iam get-role-policy --role-name GitHubActionsDeployRole \
+  --policy-name CdkBootstrapAssumeRole --profile fanwire-workload
+```
+
+Run §3c **before** this — the ARNs are validated on attach and a missing
+bootstrap role is rejected.
+
+**It still deploys nothing.** No workflow assumes this role; `cdk deploy` stays
+out of scope repo-wide, and
+[`handoff.md`](../.ai/docs/handoff.md) §5.7 is explicit that deployment must not
+be wired into the agent workflows. The first deploy is you, from your machine,
+with `--profile fanwire-workload`. This policy exists so that a later, separate,
+deliberately-reviewed deploy workflow has something correct to assume.
 
 ---
 
@@ -121,11 +393,14 @@ Recorded so the number is not a surprise later.
 Against a stated **$20/mo** budget: roughly **$20/mo** during the RDS free
 tier, **~$35/mo** after.
 
-- [ ] Confirm the post-free-tier figure in writing somewhere durable
+- [x] Confirm the post-free-tier figure in writing somewhere durable
 
-**You have already answered this** — "the $35/mo is okay, continue with the
-current implementation plan" — but that answer is currently **uncommitted in
-your working tree** on `phase-4-docs`. Commit it, or it is lost.
+**Answered — ~$35/mo accepted.** The answer is now durable in two places: on
+`main` in
+[`phase-4-manager-agent.md`](../wiki/GeneralContext/Prompts/phase-4-manager-agent.md)
+("Open, needs a human decision" → Infra idle cost), landed with the
+`phase-4-docs` merge, and restated below. The earlier warning that it was
+uncommitted is stale.
 
 Levers if you change your mind: fewer WAF managed rule groups (~$9 → less), or
 single-AZ interface endpoints (already accepted, see
@@ -135,14 +410,29 @@ single-AZ interface endpoints (already accepted, see
 justified at this scale.
 ([`security.md`](../wiki/CodeContext/Standards/security.md))
 
-**Source:** `phase-4-manager-agent.md` "Open, needs a human decision"
-*(unmerged `phase-4-docs` branch)*.
+**Source:** `phase-4-manager-agent.md` "Open, needs a human decision" — now
+merged to `main`.
+
+Note the number moves slightly: the hosted zone in §2 is a real $0.50/mo that
+was already in this table, and bootstrapping (§3c) adds an S3 assets bucket
+whose cost is pennies at this scale.
 
 ---
 
-## 5. Optional: an API-SPORTS key for live scores in dev
+## 5. An API-SPORTS key — ❌ declined, not doing
 
-Without it the feed simply shows no live scores. Nothing breaks.
+**Answered 2026-09-21: no.** Until much later in the project's life, the app
+relies only on historical games already in the database. No recent or live
+results, so no key is needed. The reasoning is sound and worth keeping: an API
+key is not the cost — modelling the calls and transforming the payload into this
+schema is, and that work buys nothing while the feed has no live surface.
+
+Nothing breaks. `SesEmailSender`-style graceful degradation already applies: the
+ingestion path simply has no live scores to show, and the production code reads
+the key from Secrets Manager, where its absence is the same no-op.
+
+**If that changes**, this is all it takes — kept here so the decision is
+reversible rather than forgotten:
 
 - [ ] Register a free key at <https://api-sports.io> (basketball)
 - [ ] Add to `backend/.env`:
@@ -155,8 +445,31 @@ API_SPORTS_BASE_URL=https://v1.basketball.api-sports.io
 In production this comes from Secrets Manager, not `.env` — the ingestion
 Lambda already reads it from there.
 
-**Source:** `phase-4-manager-agent.md` frontend checklist item 7
-*(unmerged `phase-4-docs` branch)*.
+**Source:** `phase-4-manager-agent.md` frontend checklist item 7.
+
+---
+
+## 6. After the first deploy — not now, but not forgettable either
+
+These cannot be done before the resources exist, which is why they are not
+checkboxes above. They are listed because each one is a thing that silently
+does nothing until you do it.
+
+- [ ] **GuardDuty Malware Protection for S3** on the quarantine bucket. Separate
+      from GuardDuty core (§1). Media uploads never leave `Quarantined` without
+      a scan verdict, so the compose-with-media path is broken until this is on.
+- [ ] **Verify the SES identity** for `fanwire.daviddems.com` and request
+      production access (a new SES account is sandboxed and can only send to
+      verified addresses). Until then `NOTIFICATION_FROM_ADDRESS` stays unset and
+      email notification is a deliberate no-op.
+- [ ] **Confirm the ACM certificate validated** and the A/AAAA aliases resolve:
+      `nslookup fanwire.daviddems.com` should return CloudFront addresses.
+- [ ] **Re-run the IAM gate against reality.** `iam-policy.test.ts` reads
+      synthesized templates; a deploy is the first time AWS itself evaluates
+      them. Expect the GuardDuty bucket-policy interaction to differ from the
+      synthesized guess — it is a documented known gap, not a regression.
+- [ ] **Narrow `cfn-exec-role`** if you took the default `AdministratorAccess`
+      in §3c and a successful deploy has now shown what is actually used.
 
 ---
 

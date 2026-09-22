@@ -45,12 +45,23 @@ jobs:
         run: |
           set -euo pipefail
           git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
-          python - <<'PY'
+          python - "${{ steps.task.outputs.id }}" <<'PY'
           import sys
           sys.path.insert(0, ".ai")
           from agentlib import guard
+          task_id = sys.argv[1]
           paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
-          breaches = [p for p in paths if guard.is_always_forbidden(p)]
+          # The orchestrator commits this task's state and telemetry to its own
+          # branch by design, so the PR carries its own history. Those two paths
+          # are the workflow's bookkeeping, not an agent's writes, and they are
+          # the only thing under `.ai/` this check tolerates — scoped to this
+          # task. A worker's own diff is still checked against the unmodified
+          # always-forbidden set, in agent-worker.yml.
+          breaches = [
+              p for p in paths
+              if guard.is_always_forbidden(p)
+              and not guard.is_orchestrator_bookkeeping(p, task_id)
+          ]
           if breaches:
               print("This branch modifies the agent system's own boundaries:")
               for p in breaches:
@@ -58,7 +69,9 @@ jobs:
               print("\nThese paths are never writable by an agent. If a human authored")
               print("this change, it does not belong on an agent/ branch.")
               raise SystemExit(1)
-          print(f"{len(paths)} changed path(s), none forbidden")
+          book = [p for p in paths if guard.is_orchestrator_bookkeeping(p, task_id)]
+          print(f"{len(paths)} changed path(s), none forbidden "
+                f"({len(book)} orchestrator bookkeeping)")
           PY
 
       - name: Every changed path must be inside the task's scope
@@ -85,6 +98,11 @@ jobs:
           roles = [r for r, v in policy["roles"].items() if v.get("ci_dispatched")]
           bad = []
           for p in paths:
+              # The orchestrator's own state/telemetry for this task belongs to
+              # no role, by design — it is the workflow's bookkeeping, and the
+              # step above has already confirmed it is exactly that.
+              if guard.is_orchestrator_bookkeeping(p, task_id):
+                  continue
               if any(
                   guard.check_diff([p], role, spec, policy, allow_test_edits=allow_tests).ok
                   for role in roles

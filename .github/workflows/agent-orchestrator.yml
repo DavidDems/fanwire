@@ -54,6 +54,11 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.event.workflow_run.head_branch, 'agent/')
     runs-on: ubuntu-latest
+    # One run does one transition and stops, so this is generous by an order of
+    # magnitude. Without it the job inherits GitHub's 6-hour default and a hung
+    # run holds this task's concurrency group for that long, dropping every
+    # transition behind it (handoff.md 5.4, 5.5).
+    timeout-minutes: 15
     steps:
       - name: Resolve the task
         id: task
@@ -92,9 +97,14 @@ jobs:
             failure|timed_out) EVENT=CI_FAILED ;;
             *) echo "CI concluded '$CONCLUSION'; nothing to apply"; exit 0 ;;
           esac
+          # --ignore-terminal: CI re-running on a finished task's branch is
+          # routine (a review PR has to be brought up to date before it can
+          # merge), and the state machine rightly refuses a CI result for a
+          # COMPLETE task. Waking to find nothing to do is not a failure -- it
+          # used to fail the whole run and paint a red X on a healthy pipeline.
           python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
             --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
-            --commit-sha "$SHA"
+            --commit-sha "$SHA" --ignore-terminal
 
       - name: Apply a human-supplied event
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.event != ''
@@ -244,8 +254,24 @@ jobs:
             --base "${{ github.event.repository.default_branch }}" \
             --head "${{ steps.task.outputs.branch }}" \
             --title "${{ steps.task.outputs.id }}: $STATE" \
-            --body-file pr-body.md \
-            || echo "a PR for this branch already exists"
+            --body-file pr-body.md 2> pr-error.txt && exit 0
+          # Only a genuine duplicate is benign. Anything else — most likely
+          # "GitHub Actions is not permitted to create or approve pull
+          # requests", which is a repository setting — must be reported as
+          # itself. A blanket `||` that renames every failure "already exists"
+          # is worse than no handler at all.
+          if grep -qi "already exists" pr-error.txt; then
+            echo "a PR for this branch already exists"
+            exit 0
+          fi
+          echo "::error::could not open the review PR:"
+          cat pr-error.txt
+          echo "If this says Actions is not permitted to create pull requests,"
+          echo "enable Settings -> Actions -> General -> Workflow permissions ->"
+          echo "'Allow GitHub Actions to create and approve pull requests'."
+          echo "The task itself is unaffected; only the PR is missing. Open it"
+          echo "by hand: gh pr create --base ${{ github.event.repository.default_branch }} --head ${{ steps.task.outputs.branch }}"
+          exit 1
 
       - name: Summary
         if: always()

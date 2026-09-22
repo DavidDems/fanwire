@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeCdkBootstrapRolesCaCentral1",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-deploy-role-294321867941-ca-central-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-file-publishing-role-294321867941-ca-central-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-image-publishing-role-294321867941-ca-central-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-ca-central-1"
+      ]
+    },
+    {
+      "Sid": "AssumeCdkBootstrapRolesUsEast1",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-deploy-role-294321867941-us-east-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-file-publishing-role-294321867941-us-east-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-image-publishing-role-294321867941-us-east-1",
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-us-east-1"
+      ]
+    }
+  ]
+}

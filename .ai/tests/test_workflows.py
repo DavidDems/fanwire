@@ -101,3 +101,85 @@ class TestNoWorkflowCanMerge:
         text = path.read_text(encoding="utf-8")
         assert "gh pr merge" not in text
         assert "--auto" not in text
+
+
+class TestNoWorkflowCanApprove:
+    """`gh pr create` needs "Allow GitHub Actions to create and approve pull
+    requests", which also grants approval. Nothing here may use it: a workflow
+    that can approve could satisfy the 1-approval rule on an agent's own PR."""
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    def test_no_workflow_approves_a_pull_request(self, path):
+        if not path.exists():
+            pytest.skip(f"{path.name} not present")
+        text = path.read_text(encoding="utf-8")
+        assert "gh pr review" not in text
+        assert "--approve" not in text
+
+
+class TestAFinishedTaskDoesNotFailTheOrchestrator:
+    """Run 35670385955. CI ran on `agent/DEMO-001` for PR #30 *after* the task
+    had reached COMPLETE. `workflow_run` woke the orchestrator, which tried to
+    apply `CI_PASSED` to a terminal state; the state machine refused —
+    `COMPLETE is terminal; CI_PASSED rejected` — and the step's non-zero exit
+    failed the whole job.
+
+    The refusal is correct and must stay. Failing the run over it is not: every
+    later CI run on a finished task's branch, including the "Update branch" the
+    strict up-to-date policy forces before its review PR can merge, paints a
+    red X that reads as a broken pipeline at exactly the moment someone is
+    deciding whether to merge."""
+
+    def test_the_ci_result_step_tolerates_a_terminal_task(self):
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        text = ORCHESTRATOR.read_text(encoding="utf-8")
+        step = text.split("- name: Apply the CI result", 1)[1].split("- name:", 1)[0]
+        assert "--ignore-terminal" in step, (
+            "an unsolicited CI result on an already-finished task must be a no-op, "
+            "not a failed orchestrator run"
+        )
+
+    def test_the_human_event_step_still_refuses_a_terminal_task(self):
+        # The opposite guarantee: a person explicitly supplying an event is
+        # telling the machine something, and being told "that is impossible" is
+        # the useful answer. Only the unsolicited path may shrug.
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        text = ORCHESTRATOR.read_text(encoding="utf-8")
+        step = text.split("- name: Apply a human-supplied event", 1)[1].split("- name:", 1)[0]
+        assert "--ignore-terminal" not in step
+
+
+class TestEveryJobIsBounded:
+    """A run with no `timeout-minutes` inherits GitHub's 6-hour default. The
+    orchestrator holds its task's concurrency group for as long as it runs, and
+    GitHub keeps only one pending run per group — so one hung orchestrator
+    drops transitions and stalls the task for the rest of the day."""
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    def test_the_job_declares_a_timeout(self, path):
+        if not path.exists():
+            pytest.skip(f"{path.name} not present")
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("timeout-minutes:") and not stripped.startswith("#"):
+                return
+        raise AssertionError(
+            f"{path.name} declares no timeout-minutes, so it inherits the 6-hour default"
+        )
+
+
+class TestPrCreationFailuresAreNotMasked:
+    """The real error — "GitHub Actions is not permitted to create or approve
+    pull requests" — was swallowed by `|| echo "a PR for this branch already
+    exists"`, which reported the wrong cause for a setting that was switched
+    off."""
+
+    def test_the_pr_step_does_not_claim_a_duplicate_on_any_failure(self):
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        text = ORCHESTRATOR.read_text(encoding="utf-8")
+        assert '|| echo "a PR for this branch already exists"' not in text, (
+            "a blanket || masks every gh pr create failure as a duplicate"
+        )
