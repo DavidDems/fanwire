@@ -16,7 +16,14 @@ def valid_spec(**over):
         "task_id": "DEMO-001",
         "objective": "Add a red-baseline demo assertion to prove the workflow runs.",
         "acceptance_criteria": ["`agentctl selfcheck` exits 0 on the demo fixture."],
-        "allowed_paths": ["backend/app/users/**", "backend/tests/users/**"],
+        # The wiki module is here because workflow_policy below turns the
+        # context maintainer on, and its only permitted write has to be inside
+        # the task's allowed_paths or the guard refuses it.
+        "allowed_paths": [
+            "backend/app/users/**",
+            "backend/tests/users/**",
+            "wiki/CodeContext/Modules/0x01-users.md",
+        ],
         "forbidden_paths": ["backend/app/users/models.py"],
         "required_context": ["wiki/CodeContext/Modules/0x01-users.md"],
         "required_skills": ["backend-testing"],
@@ -96,6 +103,51 @@ class TestValidate:
         assert any("max_impl_attempts" in e for e in sp.validate(s, known_skills=set()))
         s["workflow_policy"]["max_impl_attempts"] = 0
         assert any("max_impl_attempts" in e for e in sp.validate(s, known_skills=set()))
+
+    def test_context_maintainer_needs_a_wiki_module_in_allowed_paths(self):
+        # Run 35768890588. USERS-002 set run_context_maintainer true but listed
+        # only backend paths in allowed_paths. The context maintainer then wrote
+        # wiki/CodeContext/Modules/0x01-users.md — exactly what policy.json
+        # permits its role — and the guard refused it as outside_task_scope,
+        # because a spec's allowed_paths NARROWS a role. Result: a task whose
+        # code and tests were green escalated on the bookkeeping step, and the
+        # combination was unsatisfiable from the moment it was written.
+        errors = sp.validate(
+            valid_spec(allowed_paths=["backend/app/users/schemas.py"]),
+            known_skills={"backend-testing"},
+        )
+        assert any("run_context_maintainer" in e for e in errors), errors
+
+    def test_no_such_error_when_the_maintainer_is_off(self):
+        assert (
+            sp.validate(
+                valid_spec(
+                    allowed_paths=["backend/app/users/schemas.py"],
+                    workflow_policy={
+                        "max_impl_attempts": 3,
+                        "require_red_baseline": True,
+                        "allow_test_edits_during_impl": False,
+                        "run_context_maintainer": False,
+                    },
+                ),
+                known_skills={"backend-testing"},
+            )
+            == []
+        )
+
+    def test_a_wiki_module_glob_satisfies_it(self):
+        assert (
+            sp.validate(
+                valid_spec(
+                    allowed_paths=[
+                        "backend/app/users/schemas.py",
+                        "wiki/CodeContext/Modules/*.md",
+                    ]
+                ),
+                known_skills={"backend-testing"},
+            )
+            == []
+        )
 
     def test_errors_accumulate(self):
         s = valid_spec(task_id="nope", allowed_paths=[])

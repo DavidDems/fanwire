@@ -15,7 +15,8 @@
     "infra/lib/config.ts",
     "infra/test/frontend-deployment.test.ts",
     "infra/test/config.test.ts",
-    "infra/test/helpers.ts"
+    "infra/test/helpers.ts",
+    "wiki/CodeContext/Modules/0x00-architecture.md"
   ],
   "forbidden_paths": [
     "infra/package.json",
