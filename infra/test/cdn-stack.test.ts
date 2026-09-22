@@ -148,7 +148,7 @@ describe.each(Object.entries(DOMAIN_MODES))('CDN stack domain mode (%s)', (mode,
       expect(records).toEqual([]);
       return;
     }
-    expect(cfg.Aliases).toEqual(['fanwire.daviddems.ca']);
+    expect(cfg.Aliases).toEqual(['fanwire.daviddems.com']);
     expect(cert).toEqual(
       expect.objectContaining({ MinimumProtocolVersion: 'TLSv1.2_2021', SslSupportMethod: 'sni-only' }),
     );
@@ -157,7 +157,7 @@ describe.each(Object.entries(DOMAIN_MODES))('CDN stack domain mode (%s)', (mode,
       expect(records.sort()).toEqual(['A', 'AAAA']);
       tpl(overrides).hasResourceProperties('AWS::Route53::RecordSet', {
         HostedZoneId: 'Z0123456789ABCDEFGHIJ',
-        Name: 'fanwire.daviddems.ca.',
+        Name: 'fanwire.daviddems.com.',
         AliasTarget: Match.objectLike({ HostedZoneId: Match.anyValue() }),
       });
     } else {

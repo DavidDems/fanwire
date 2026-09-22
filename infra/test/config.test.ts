@@ -13,7 +13,7 @@ describe('loadConfig', () => {
       account: '294321867941',
       region: 'ca-central-1',
       edgeRegion: 'us-east-1',
-      domainName: 'fanwire.daviddems.ca',
+      domainName: 'fanwire.daviddems.com',
       hostedZoneId: undefined,
       hostedZoneName: undefined,
     });

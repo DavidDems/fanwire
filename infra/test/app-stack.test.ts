@@ -248,7 +248,7 @@ describe.each(Object.entries(DOMAIN_MODES))('App stack SES permission (%s)', (mo
       expect(policies).not.toContain('ses:SendEmail');
     } else {
       expect(policies).toContain('ses:SendEmail');
-      expect(policies).toContain(':identity/fanwire.daviddems.ca');
+      expect(policies).toContain(':identity/fanwire.daviddems.com');
     }
   });
 });

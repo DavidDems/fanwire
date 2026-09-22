@@ -47,7 +47,7 @@ describe.each(Object.entries(DOMAIN_MODES))('Edge stack certificate (%s)', (mode
       return;
     }
     t.hasResourceProperties('AWS::CertificateManager::Certificate', {
-      DomainName: 'fanwire.daviddems.ca',
+      DomainName: 'fanwire.daviddems.com',
       ValidationMethod: 'DNS',
     });
     const [cert] = Object.values(certs);

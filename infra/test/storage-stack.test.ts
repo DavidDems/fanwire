@@ -157,7 +157,7 @@ describe.each(Object.entries(DOMAIN_MODES))('Storage stack CORS origin (%s)', (m
       // the distribution's own *.cloudfront.net name isn't known before it exists
       expect(cors).toContain('"AllowedOrigins":["https://*.cloudfront.net"]');
     } else {
-      expect(cors).toContain('"AllowedOrigins":["https://fanwire.daviddems.ca"]');
+      expect(cors).toContain('"AllowedOrigins":["https://fanwire.daviddems.com"]');
     }
   });
 });

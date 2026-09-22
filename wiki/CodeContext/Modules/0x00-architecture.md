@@ -58,7 +58,7 @@ Both of the following are the same Template Method shape (`AbstractEventIngestio
 - **Media upload**: `validateType → scanForMalware → stripMetadata → generateVariants → publish`. Detail in [[0x04-media]].
 
 ## Infra (CDK) — implementation notes
-CDK app in `infra/` (TypeScript). **Synthesized and tested, never deployed.** Env from `cdk.json` context: account `294321867941`, region `ca-central-1`, `edgeRegion` `us-east-1`, `domainName` (default `fanwire.daviddems.ca`, `-c domainName=` for none), optional `hostedZoneId`/`hostedZoneName`. Three domain modes, each covered by tests: no domain (distribution on `*.cloudfront.net`, no cert); domain without zone (ACM cert with DNS validation, the CNAME added by hand, and the edge stack's deploy **waits** until it is; no alias records); domain + zone (cert validated in the zone, A/AAAA aliases). No `fromLookup` anywhere, and AZs are pinned to `a`/`b`, so synth needs no credentials.
+CDK app in `infra/` (TypeScript). **Synthesized and tested, never deployed.** Env from `cdk.json` context: account `294321867941`, region `ca-central-1`, `edgeRegion` `us-east-1`, `domainName` (default `fanwire.daviddems.com`, `-c domainName=` for none), optional `hostedZoneId`/`hostedZoneName`. Three domain modes, each covered by tests: no domain (distribution on `*.cloudfront.net`, no cert); domain without zone (ACM cert with DNS validation, the CNAME added by hand, and the edge stack's deploy **waits** until it is; no alias records); domain + zone (cert validated in the zone, A/AAAA aliases). No `fromLookup` anywhere, and AZs are pinned to `a`/`b`, so synth needs no credentials.
 
 **Stack split** (dependency order):
 | Stack | Region | Contents | Why separate |
