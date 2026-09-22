@@ -4,7 +4,7 @@
   "consecutive_failures": 0,
   "control": "RUN",
   "distilled": null,
-  "escalation_reason": null,
+  "escalation_reason": "guard violation: role context_maintainer wrote outside its permitted paths in run 35768890588",
   "history": [
     {
       "at": "2026-09-22T18:26:29Z",
@@ -75,6 +75,13 @@
       "from": "CONTEXT_MAINTENANCE",
       "note": "context maintainer dispatched",
       "to": "CONTEXT_MAINTENANCE"
+    },
+    {
+      "at": "2026-09-22T18:43:14Z",
+      "event": "GUARD_VIOLATION",
+      "from": "CONTEXT_MAINTENANCE",
+      "note": "guard violation: role context_maintainer wrote outside its permitted paths in run 35768890588",
+      "to": "ESCALATED"
     }
   ],
   "last_ci": {
@@ -89,7 +96,7 @@
     "code_agent": "dbb4f353-842f-40b8-8585-d83807e78772",
     "test_agent": "8078a52d-083c-4986-b796-2dfe9543cd40"
   },
-  "state": "CONTEXT_MAINTENANCE",
+  "state": "ESCALATED",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-22T18:41:50Z"
+  "updated_at": "2026-09-22T18:43:14Z"
 }
