@@ -22,6 +22,37 @@ now three concrete sub-steps instead of an unactionable instruction. `03` has
 four of five Phase 5a answers, which still have to be copied into
 `phase-4-manager-agent.md` by a human because that path is agent-unwritable.
 
+## Commands in this folder are PowerShell, one per line
+
+**A standing rule, for every file here and every one added later.** The person
+reading this folder works in PowerShell on Windows. So:
+
+- **Every command is a single line.** No line continuations, no `\` wrapping.
+  A command that needs three lines gets written as three separate one-line
+  commands instead.
+- **PowerShell syntax, not `sh`.** No `&&`, no `$(date +%s)`, no `sed`/`grep`
+  pipelines, no `VAR=x cmd` prefixes, no here-documents.
+- **No shell scripts.** Not a `.sh` file, not a multi-line block meant to be
+  pasted as one unit. If something genuinely needs a script, it belongs in the
+  repository as a checked-in tool with its own tests, not as prose here.
+- Fences are marked ```` ```powershell ````.
+
+The translations that come up most:
+
+| `sh` | PowerShell |
+|---|---|
+| `a && b` | `a; if ($?) { b }` |
+| `a; b` (unconditional) | `a; b` |
+| `$(date +%s)` | `(Get-Date -UFormat %s)` |
+| `VAR=1 cmd` | `$env:VAR=1; cmd` |
+| `cmd > /dev/null` | `cmd > $null` |
+| `x | grep foo` | `x | Select-String foo` |
+
+This is not a style preference. A `sh` one-liner pasted into PowerShell either
+fails loudly or — worse — half-succeeds: `--caller-reference "fanwire-$(date +%s)"`
+ran with the literal text `fanwire-` after `Get-Date` threw, and the Route 53
+zone was created with a broken idempotency token that nobody noticed.
+
 ## How to use it
 
 Work top to bottom within a file. Each item states **why** it is needed, **what

@@ -128,7 +128,7 @@ below and turns it into the intended **"domain + zone"** mode.
 
 Your SSO session is expired, so start there:
 
-```sh
+```powershell
 aws sso login --profile fanwire-workload
 ```
 
@@ -297,13 +297,13 @@ repo-wide (`AGENTS.md`, "never run it"), and this review is the reason.
 `PATH` for scripts once the dependencies are installed. Nothing was missing from
 your machine and nothing needed a global install.
 
-```sh
-cd infra && npm ci && npm run synth
+```powershell
+cd infra; npm ci; npm run synth
 ```
 
 Now succeeds: eight stacks synthesize to `infra/cdk.out` (`Fanwire-Edge`,
 `-Network`, `-Data`, `-Auth`, `-Storage`, `-Messaging`, `-App`, `-Cdn`), and
-`IAM_GATE_REPORT=1 npx jest test/iam-policy.test.ts` passes 12/12 while printing
+`$env:IAM_GATE_REPORT=1; npx jest test/iam-policy.test.ts` passes 12/12 while printing
 every wildcard it matched.
 
 **This is worth a permanent fix, not a note.** CI installs deps so `infra-synth`
@@ -632,6 +632,107 @@ does nothing until you do it.
       functions — a function that needs no RDS access needs no ENI permissions
       at all. That is a design review, and it wants the real deployed topology
       in front of it.
+
+---
+
+## 7. The dev S3 buckets — your steps, ~10 minutes
+
+**Which bucket this is about.** There are two entirely separate S3 stories, and
+only one of them needs you:
+
+| Bucket | Who creates it | Needs you? |
+|---|---|---|
+| **Frontend** (`StorageStack.frontendBucket`) | CDK, on deploy | **No.** The gap there is that nothing *uploads* to it — that is missing infra code (§5b item 2), not a console step. |
+| **Prod media** (quarantine + public) | CDK, on deploy | No. |
+| **Dev media** (quarantine + public) | **You, by hand, now** | **Yes** — everything below. |
+
+The dev buckets are the decision from [`03`](03-open-decisions.md) §1: real S3
+rather than an emulator, so compose-with-media can be clicked through in a
+browser before anything is deployed. Cost is pennies at dev volume.
+
+The JSON these commands reference is committed at
+[`../infra/dev/`](../infra/dev/) — read it before applying it; the bucket names
+are baked into the policy ARNs.
+
+### 7a. Create them
+
+Every command is one line. Run them in order.
+
+```powershell
+aws sso login --profile fanwire-workload
+aws s3api create-bucket --bucket fanwire-dev-quarantine-294321867941 --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1 --profile fanwire-workload
+aws s3api create-bucket --bucket fanwire-dev-public-media-294321867941 --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1 --profile fanwire-workload
+```
+
+`--create-bucket-configuration LocationConstraint` is required for every region
+except `us-east-1`. Without it the bucket is silently created in Virginia.
+
+### 7b. Lock them down before putting anything in them
+
+```powershell
+aws s3api put-public-access-block --bucket fanwire-dev-quarantine-294321867941 --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false" --profile fanwire-workload
+aws s3api put-public-access-block --bucket fanwire-dev-public-media-294321867941 --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false" --profile fanwire-workload
+aws s3api put-bucket-encryption --bucket fanwire-dev-quarantine-294321867941 --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}' --profile fanwire-workload
+aws s3api put-bucket-encryption --bucket fanwire-dev-public-media-294321867941 --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}' --profile fanwire-workload
+aws s3api put-bucket-policy --bucket fanwire-dev-quarantine-294321867941 --policy file://infra/dev/dev-quarantine-tls-only-policy.json --profile fanwire-workload
+aws s3api put-bucket-policy --bucket fanwire-dev-public-media-294321867941 --policy file://infra/dev/dev-public-media-tls-only-policy.json --profile fanwire-workload
+aws s3api put-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --cors-configuration file://infra/dev/dev-quarantine-cors.json --profile fanwire-workload
+```
+
+Run the `put-bucket-policy` and `put-bucket-cors` lines from the **repository
+root**, since the `file://` paths are relative.
+
+Two deliberate choices, so they are not a surprise:
+
+- `BlockPublicPolicy=false` and `RestrictPublicBuckets=false`, because a bucket
+  policy is exactly what you are about to attach. `BlockPublicAcls` and
+  `IgnorePublicAcls` stay **true** — ACLs are the legacy path and nothing here
+  needs them.
+- **SSE-S3 (`AES256`), not the CMK.** Prod uses the customer-managed key from
+  `DataStack`, which does not exist yet. Dev data is disposable test images; a
+  dev bucket waiting on a prod key would block the thing it exists to unblock.
+
+### 7c. Tell the backend about them
+
+Add these three lines to `backend/.env` (create the file if it is missing —
+it is gitignored, and already holds the dev Cognito values):
+
+```
+MEDIA_QUARANTINE_BUCKET=fanwire-dev-quarantine-294321867941
+MEDIA_PUBLIC_BUCKET=fanwire-dev-public-media-294321867941
+AWS_DEFAULT_REGION=ca-central-1
+```
+
+These map to `media_quarantine_bucket`, `media_public_bucket` and
+`aws_default_region` in `backend/app/settings.py`, whose defaults point at
+bucket names that do not exist. Route tests override the S3 client with `moto`
+and never touch a real bucket, so nothing in CI is affected either way.
+
+### 7d. Confirm it worked
+
+```powershell
+aws s3api get-bucket-location --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
+aws s3api get-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
+aws s3api get-bucket-policy --bucket fanwire-dev-public-media-294321867941 --profile fanwire-workload
+aws s3 ls --profile fanwire-workload | Select-String fanwire-dev
+```
+
+You want `ca-central-1` from the first, the localhost origins from the second,
+the TLS-only deny from the third, and **both** buckets from the fourth.
+
+### 7e. What is still missing after this — not your step
+
+The buckets alone do not make media upload work. Locally there is no GuardDuty,
+so nothing ever issues the scan verdict that moves an object from
+`Quarantined` to `Processed`, and an unprocessed image cannot be attached to a
+post. The decision in [`03`](03-open-decisions.md) §1 included **a dev-only
+script that runs the processing pipeline on demand**, and that script does not
+exist yet.
+
+It is written up as an agent task rather than a step for you — see
+[`.ai/tasks/`](../.ai/tasks/). Until it exists, these buckets accept uploads
+that then sit in `Quarantined` forever, which is the correct behaviour and not
+a bug.
 
 ---
 

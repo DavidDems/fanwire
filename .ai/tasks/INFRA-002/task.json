@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-002",
+  "objective": "Give the frontend bucket a deployment path. StorageStack creates frontendBucket and CdnStack serves it through CloudFront, but nothing ever uploads anything to it, so a deploy produces an empty site. Add a BucketDeployment of the built frontend to CdnStack, gated behind a deployFrontend context flag that defaults off, so credential-free synth in CI is unaffected.",
+  "acceptance_criteria": [
+    "With context deployFrontend unset, the synthesized Fanwire-Cdn template contains no Custom::CDKBucketDeployment resource, and all three domain modes still synthesize with no missing context and no error annotations.",
+    "With context deployFrontend set to true, the synthesized Fanwire-Cdn template contains exactly one Custom::CDKBucketDeployment resource.",
+    "That deployment targets the frontend bucket, not the public-media bucket.",
+    "That deployment sets a CloudFront invalidation on the distribution for path /* so a redeploy is visible rather than cached.",
+    "loadConfig exposes the flag as a typed boolean on FanwireConfig, defaulting to false when the context key is absent.",
+    "With deployFrontend true, the IAM wildcard gate still passes in all three domain modes, or any new wildcard is added to ALLOW_LIST with a written reason."
+  ],
+  "allowed_paths": [
+    "infra/lib/cdn-stack.ts",
+    "infra/lib/config.ts",
+    "infra/test/frontend-deployment.test.ts",
+    "infra/test/config.test.ts",
+    "infra/test/helpers.ts"
+  ],
+  "forbidden_paths": [
+    "infra/package.json",
+    "infra/cdk.json",
+    "infra/lib/app.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/aws-stack.md"
+  ],
+  "required_skills": [
+    "infra-cdk",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
