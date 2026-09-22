@@ -1,5 +1,5 @@
 {
-  "attempt": 0,
+  "attempt": 1,
   "branch": "agent/USERS-002",
   "consecutive_failures": 0,
   "control": "RUN",
@@ -33,16 +33,34 @@
       "from": "TESTS_COMMITTED",
       "note": "baseline CI started (expected RED)",
       "to": "BASELINE_CI"
+    },
+    {
+      "at": "2026-09-22T18:35:10Z",
+      "event": "CI_FAILED",
+      "from": "BASELINE_CI",
+      "note": "baseline is red, as required",
+      "to": "READY_FOR_IMPLEMENTATION"
+    },
+    {
+      "at": "2026-09-22T18:35:10Z",
+      "event": "DISPATCH_CODE_AGENT",
+      "from": "READY_FOR_IMPLEMENTATION",
+      "note": "code agent dispatched (attempt 1)",
+      "to": "CODE_AGENT_RUNNING"
     }
   ],
-  "last_ci": null,
+  "last_ci": {
+    "commit": "679bf25d0e5870bb5015aad051cdfc89ca49d1dd",
+    "conclusion": "failure",
+    "run_id": "35767687867"
+  },
   "max_attempts": 3,
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {
     "test_agent": "8078a52d-083c-4986-b796-2dfe9543cd40"
   },
-  "state": "BASELINE_CI",
+  "state": "CODE_AGENT_RUNNING",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-22T18:31:10Z"
+  "updated_at": "2026-09-22T18:35:10Z"
 }
