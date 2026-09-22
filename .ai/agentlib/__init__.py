@@ -6,4 +6,4 @@ without an install, a lockfile, or a third-party parser. See
 `.ai/docs/architecture.md`.
 """
 
-__all__ = ["ciresult", "guard", "orchestrator", "spec", "state", "telemetry"]
+__all__ = ["ciresult", "decision", "guard", "orchestrator", "spec", "state", "telemetry"]

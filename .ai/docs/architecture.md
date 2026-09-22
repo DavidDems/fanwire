@@ -153,8 +153,42 @@ holds a credential; it never holds the value.
 
 ## Provider independence
 
-One file is provider-specific: `.ai/bin/invoke_agent.sh`. It takes a prompt and
-a role, and returns the normalised result shape in `agentlib/agentresult.py`.
-Adding a provider means a `case` branch there and an entry in `config.json`.
-It means touching nothing in `.github/workflows/` and nothing in the state
-machine.
+Two files are provider-specific, one per *kind* of call:
+
+| Seam | Verb | Contract | Used by |
+|---|---|---|---|
+| `.ai/bin/invoke_agent.sh` | run an agent and let it work | `agentlib/agentresult.py` | roles that write code, tests or prose |
+| `.ai/bin/ask_jev.py` | ask a bounded question | `agentlib/decision.py` | every typed decision |
+
+Adding a text provider means a `case` branch in the first and an entry in
+`config.json`. Adding a decision provider means the same in the second. Neither
+touches `.github/workflows/` or the state machine.
+
+They are separate because the calls are genuinely different shapes, not because
+of vendor. An agent takes a prompt and returns prose that we have to parse and
+then distrust. A System One model takes a state plus typed questions and returns
+answers that cannot be outside the declared option set. Forcing the second
+through the first would mean inventing a prompt file and a prose trailer for
+something that has neither.
+
+### What a System One model cannot do
+
+It does not generate strings. That bounds where it is usable: it can make a
+decision a role was being asked to make, but it cannot write the code, the
+tests, the wiki page or the commit subject that role also produces. The split
+is per *decision*, not per role — the Manager's choice between three options is
+typed, while the sentence explaining an escalation is still an Opus call.
+
+### Why the answers are re-checked anyway
+
+`agentlib/decision.py` validates every answer against the caller's own option
+set and a confidence gate, even though the provider guarantees schema
+conformance. The wire is not the boundary; that module is. A guarantee made by
+a remote service stops being true the day the endpoint is wrong, mocked or
+replayed, and the failure would be a workflow event nobody declared.
+
+Every gate falls back in the conservative direction: uncertainty costs a human
+a minute, never the task's retry budget. `agentctl selfcheck` proves each
+fallback is a value its own question can actually return — a check that matters
+because a bad fallback is only reachable on the low-confidence path, which is
+the path that is rarely exercised and always matters.

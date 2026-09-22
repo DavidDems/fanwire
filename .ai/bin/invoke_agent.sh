@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-# The one provider-specific file in the system.
+# The provider seam for AGENT calls: run an agent and let it work.
 #
 #   invoke_agent.sh <role> <prompt-file> <output-file>
 #
+# There is a second, separate seam for typed decisions - `.ai/bin/ask_jev.py`,
+# contract in `.ai/agentlib/decision.py`. Use that one for "ask a bounded
+# question, get an answer with calibrated confidence"; this one is for "run an
+# agent that writes code, tests or prose". Do not route a decision through
+# here: it would mean inventing a prompt and a prose trailer for a
+# request/response call that has neither.
+#
 # Everything else - the state machine, the guard, the prompts, the telemetry,
-# the workflows - is provider-agnostic. Supporting a second provider means
+# the workflows - is provider-agnostic. Supporting a second text provider means
 # adding a branch to the `case` below and an entry in `.ai/config.json`. It
 # means touching nothing in `.github/workflows/`.
 #

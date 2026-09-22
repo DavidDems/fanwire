@@ -42,6 +42,9 @@ from agentlib import (
     promptbuild,
 )
 from agentlib import (
+    decision as dec,
+)
+from agentlib import (
     spec as spec_mod,
 )
 from agentlib import (
@@ -53,6 +56,17 @@ from agentlib import (
 
 TASKS_DIR = AI_ROOT / "tasks"
 SKILLS_DIR = AI_ROOT / "skills"
+QUESTIONS_DIR = AI_ROOT / "questions"
+
+# Decision point -> the function that turns typed answers into a workflow
+# outcome. Adding a decision means adding a questions file, an entry in
+# config.json's `decisions`, and a line here; selfcheck checks all three agree.
+DECISION_POINTS = {
+    "manager": dec.manager_outcome,
+    "distiller_origin": dec.origin_outcome,
+    "flake": dec.flake_outcome,
+    "spec_readiness": dec.spec_outcome,
+}
 
 OK, FAILED, USAGE = 0, 1, 2
 
@@ -347,6 +361,53 @@ def cmd_session_id(args) -> int:
     return OK
 
 
+# ---------------------------------------------------------------- typed decisions
+
+
+def cmd_decide(args) -> int:
+    """Turn a provider's typed answers into a workflow outcome.
+
+    Split from `.ai/bin/ask_jev.py` on purpose: that script is transport and
+    nothing else, this is where the repository's policy is applied. It means
+    every gate can be exercised — in tests, in selfcheck, and by a human
+    holding a recorded answers file — without a network call or an API key.
+
+    Always exits 0. A decision point that cannot reach its provider still
+    produces an outcome, because every gate has a conservative fallback; an
+    unreachable provider must make the system careful, not stuck.
+    """
+    cfg = config()
+    point = cfg.get("decisions", {}).get(args.point)
+    if point is None:
+        die(f"no decision point {args.point!r} in config.json", USAGE)
+
+    try:
+        doc = dec.load_questions(AI_ROOT / point["questions"])
+    except dec.QuestionError as exc:
+        die(str(exc), USAGE)
+
+    if not point.get("enabled", True):
+        # Disabled is not an error, and deliberately not a separate code path:
+        # it runs the same gates with no answers, so "turned off" and "provider
+        # unreachable" produce byte-identical behaviour. One path, tested once.
+        print(f"::notice::decision point {args.point!r} is disabled; using fallbacks")
+        answers = {}
+    else:
+        answers = dec.parse(args.answers) if args.answers else {}
+
+    outcome = DECISION_POINTS[args.point](doc, answers)
+
+    if args.field:
+        value = outcome.get(args.field)
+        if value is None:
+            die(f"no field {args.field!r} in this outcome: {sorted(outcome)}", USAGE)
+        # Lowercase booleans so a workflow `if:` can compare them directly.
+        print(str(value).lower() if isinstance(value, bool) else value)
+    else:
+        print(json.dumps(outcome, indent=2, sort_keys=True))
+    return OK
+
+
 def cmd_telemetry_from_run(args) -> int:
     """Record one invocation from a normalised agent result.
 
@@ -532,6 +593,31 @@ def cmd_selfcheck(args) -> int:
         if role not in cfg["roles"]:
             problems.append(f"config.json has no model for role {role}")
 
+    # Typed decision points. The questions file, config.json's `decisions`
+    # entry and DECISION_POINTS must all name each other, and every gate's
+    # fallback must be a value its own question can actually return. None of
+    # that is visible at runtime until a low-confidence answer arrives, which
+    # is the worst possible time to discover a typo.
+    declared = cfg.get("decisions", {})
+    for name, point in sorted(declared.items()):
+        if name not in DECISION_POINTS:
+            problems.append(f"config.json declares decision {name!r} with no outcome function")
+            continue
+        qpath = AI_ROOT / point.get("questions", "")
+        if not qpath.is_file():
+            problems.append(f"decision {name!r}: no questions file at {point.get('questions')!r}")
+            continue
+        try:
+            dec.load_questions(qpath)
+        except dec.QuestionError as exc:
+            problems.append(f"decision {name!r}: {exc}")
+    for name in sorted(set(DECISION_POINTS) - set(declared)):
+        problems.append(f"decision point {name!r} has no entry in config.json's `decisions`")
+
+    for qpath in sorted(QUESTIONS_DIR.glob("*.json")):
+        if not any(AI_ROOT / p.get("questions", "") == qpath for p in declared.values()):
+            problems.append(f"{qpath.name} is not referenced by any decision in config.json")
+
     skills = known_skills()
     for d in sorted(TASKS_DIR.glob("*/task.json")):
         try:
@@ -678,6 +764,12 @@ def build_parser() -> argparse.ArgumentParser:
         sp = sub.add_parser(name, help=f"read {name.replace('-', ' ')} from an agent result")
         sp.add_argument("--agent-result", required=True)
         sp.set_defaults(func=func)
+
+    p_dec = sub.add_parser("decide", help="typed answers -> a workflow outcome")
+    p_dec.add_argument("point", choices=sorted(DECISION_POINTS))
+    p_dec.add_argument("--answers", help="a file written by .ai/bin/ask_jev.py")
+    p_dec.add_argument("--field", help="print one field instead of the whole outcome")
+    p_dec.set_defaults(func=cmd_decide)
 
     tfr = sub.add_parser("telemetry-from-run", help="record one invocation (used by agent-worker)")
     tfr.add_argument("--task", required=True)

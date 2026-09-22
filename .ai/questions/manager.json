@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "_comment": [
+    "The Manager's strategy call, as a typed question rather than a sentence",
+    "parsed out of prose. See .ai/prompts/manager.md for the same three",
+    "options written for a language model - the definitions must stay in step.",
+    "",
+    "`questions` is sent to the provider verbatim (.ai/bin/ask_jev.py); `gates`",
+    "never leaves this repository. Keeping them in one file means the fallback",
+    "for a low-confidence answer is reviewed next to the question that produces",
+    "it, instead of living in a workflow `if:` nobody reads.",
+    "",
+    "The fallback is ESCALATE on purpose. A Manager that is unsure is precisely",
+    "the situation the escalation path exists for, and .ai/prompts/manager.md",
+    "already says it: 'Escalating early is cheap. Three more failed attempts",
+    "are not.'"
+  ],
+
+  "questions": {
+    "decision": {
+      "type": "choice",
+      "instructions": "A software task running in an automated agent workflow has stalled and needs a strategy decision. The state describes the task specification, the branch diff, the distilled test failures, and the history of what has already been attempted. Decide what the workflow should do next.",
+      "criteria": {
+        "MANAGER_RETRY": "The approach is correct and the tests pin the right behaviour. One more implementation attempt, given better information, will land it. Only correct when the state shows something specific that would change on the next attempt.",
+        "MANAGER_RESCOPE": "The tests themselves are wrong: they pin the wrong behaviour, or they passed with no implementation present and therefore constrain nothing. The task must go back to the test agent with a corrected contract.",
+        "ESCALATE": "A human is required. The task needs an architectural decision, contradicts committed documentation, requires a dependency or permission it does not have, or the cause of the failure cannot be determined from the state provided."
+      }
+    },
+
+    "retry_would_differ": {
+      "type": "noul",
+      "instructions": "Does the state contain specific, actionable information that would make the next implementation attempt behave differently from the one that just failed? Answer false if a retry would repeat the same approach with the same information.",
+      "_why": "Guards the single most expensive failure mode in the loop: a MANAGER_RETRY that burns an attempt re-running an identical attempt. .ai/prompts/manager.md states the rule for the prose path ('Retrying with the same information is not a decision, it is a delay'); this makes it checkable."
+    }
+  },
+
+  "gates": {
+    "decision": {
+      "min_confidence": 0.75,
+      "fallback": "ESCALATE",
+      "_why": "Higher than the 0.70 default. This decision spends either a human's attention or a third of the retry budget, and the two are not equally recoverable."
+    },
+    "retry_would_differ": {
+      "min_confidence": 0.65,
+      "fallback": false,
+      "_why": "False on low confidence: unable to show a retry would differ is treated the same as knowing it would not. The caller downgrades RETRY to ESCALATE when this is false, so the conservative answer costs a human a look, not an attempt."
+    }
+  }
+}
