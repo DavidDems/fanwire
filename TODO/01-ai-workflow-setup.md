@@ -250,6 +250,8 @@ gh workflow run agent-orchestrator.yml -f task_id=<ID> -f event=CI_FAILED   # or
 
 A stalled task is never a lost task; the state file stays accurate.
 
+**DONE**
+
 ### 7b. Revoke the old `fanwire token` PAT ⬅ **do this too**
 
 A second, older fine-grained PAT (`fanwire token`) exists with **read/write on
@@ -288,6 +290,8 @@ gh workflow disable agent-worker.yml
 The state file stays accurate while they are off, and `gh workflow enable`
 resumes exactly where it stopped.
 
+**ALREADY DONE**
+
 ---
 
 ### 9. Merge PR #29 before merging PR #30
@@ -322,6 +326,8 @@ instance). It is cosmetic: `agent-orchestrator` is not a required check, the
 state file stays `COMPLETE`, and nothing is lost. Merge on the strength of
 `guard` and the six `test-agent` checks.
 
+**DONE**
+
 ### 10. Let Actions open the review PR ✅
 
 `gh pr create` failed with *"GitHub Actions is not permitted to create or
@@ -349,6 +355,8 @@ the existing check that no workflow can merge. CODEOWNERS is the second layer.
 **Unproven:** no workflow-opened PR has appeared yet, because the setting was
 off for every run so far. The next task to reach `COMPLETE` is the test.
 
+**DONE "Allow GitHub Actions to create and approve pull requests" is already enabled**
+
 ### 11. Head branches are deleted on merge ✅
 
 Turned on 2026-09-21 (`delete_branch_on_merge: true`) — the mechanical fix for
@@ -363,6 +371,8 @@ listed here rather than done:
 ```sh
 git branch -r --merged origin/main | sed 's#origin/##' | grep -v -e main -e HEAD
 ```
+
+**Manually delete all the old branches that have been merged with main**
 
 ---
 
