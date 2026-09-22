@@ -41,6 +41,8 @@ on GuardDuty Malware Protection to clear uploads.
 
 **Confirm:** the workload account row reads Enabled, not Pending or Invited.
 
+**The workload account is enabled on guard duty, the log-archive account is not able to see this directly in the GuardDuty account list because it only has 'PowerUserAccess' and not 'AdministratorAccess'. The log-archive account can add and edit policies in GuardDuty, but cannot view the list of accounts for some reason. But the workload account was added by invitation and was confirmed by using the workload account and navigating to the GuardDuty page, which it had access to.**
+
 ---
 
 ## 2. Buy the domain and create the hosted zone — blocks a full deploy
@@ -73,6 +75,8 @@ you do not need to do anything about it.
 (CDK app / stack table), [`aws-stack.md`](../wiki/CodeContext/Standards/aws-stack.md)
 ("Route 53 for DNS, ACM for TLS").
 
+**I have just bought the domain 'daviddems.com' with godaddy.com. I believe because I previously bought daviddems.ca with hostpapa.com, they purchased my domain after it expired so that they can get me to come back and pay for it. Instead I will just use daviddems.com. The domain is already bought and paid for, all you need to do now is instruct me on what to do so that AWS can use it to serve the deployments to its address.**
+
 ---
 
 ## 3. Review the generated IAM policies — the hard gate before any deploy
@@ -102,6 +106,17 @@ that used to be prose, now a gate that fails the build. See
 
 **Do not** let an agent do this step. `cdk deploy` is out of scope for agents
 repo-wide (`AGENTS.md`, "never run it"), and this review is the reason.
+
+**What I have to do for this step is not clear to me, I ran 'cd infra && npm run synth' and got the following output:**
+``npm run synth
+
+> fanwire-infra@0.1.0 synth
+> cdk synth --quiet
+
+'cdk' is not recognized as an internal or external command,
+operable program or batch file.``
+The exception list is not human-readable and I don't understand the risks I should be aware of.
+For the second to last step, there is no instruction at all on how to actually 'Attach a scoped permissions policy to `GitHubActionsDeployRole`'.
 
 ---
 
@@ -138,6 +153,8 @@ justified at this scale.
 **Source:** `phase-4-manager-agent.md` "Open, needs a human decision"
 *(unmerged `phase-4-docs` branch)*.
 
+**I have been informed about the budget increase, its okay I approve it**
+
 ---
 
 ## 5. Optional: an API-SPORTS key for live scores in dev
@@ -157,6 +174,8 @@ Lambda already reads it from there.
 
 **Source:** `phase-4-manager-agent.md` frontend checklist item 7
 *(unmerged `phase-4-docs` branch)*.
+
+**Until much later in the project's lifecycle, we will strictly rely on data from existing games in a database. We will not get recent let-alone live game results. Another thing is that using an API key will require modeling how to call the API and transform the data to be usable for this project and the database.**
 
 ---
 

@@ -198,6 +198,21 @@ gh workflow run agent-orchestrator.yml -f task_id=<ID> -f event=CI_FAILED   # or
 
 A stalled task is never a lost task; the state file stays accurate.
 
+**I have several things to clarify before we consider this DONE. Firstly, I already had a fine-grained personal access token created for this project 'fanwire token', I don't remember writing down its value in any file, but its possible I wrote its value into something when I created this PAT.**
+This old PAT's permissions are;
+ Read access to metadata
+ Read and Write access to actions, administration, code, commit statuses, pull requests, secrets, and workflows
+With that being said, I decided to create a new PAT (scoped only for the fanwire repo), called 'AGENT_DISPATCH_TOKEN', it has less permissions than the other one;
+ Read access to metadata
+ Read and Write access to actions and code
+but its value was stored in a safe location on my computer and the PAT exists.
+You said to 'Add it as repository secret `AGENT_DISPATCH_TOKEN`', which I was not exactly sure what you wanted me to do.
+The project has no existing env variables, only github actions 'Repository secrets: ANTHROPIC_API_KEY', so I had to create an environment for this repo so that I could create an env secret.
+This is the new PAT in the repo as you asked:
+Environment secrets;
+AGENT_DISPATCH_TOKEN    fanwire environment
+It exists in the repo, confirm if this is what you wanted.
+
 ### 8. Learn the stop button
 
 Worth doing once, deliberately, while nothing is at stake:
