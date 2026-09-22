@@ -23,7 +23,7 @@ export interface FanwireConfig {
    * CNAME is added by a human; no alias records are created.
    */
   readonly hostedZoneId?: string;
-  /** Apex name of the hosted zone (e.g. `daviddems.ca`). Defaults to domainName. */
+  /** Apex name of the hosted zone (e.g. `daviddems.com`). Defaults to domainName. */
   readonly hostedZoneName?: string;
 }
 

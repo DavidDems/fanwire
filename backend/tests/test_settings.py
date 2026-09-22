@@ -198,6 +198,6 @@ def test_settings_defaults_notification_from_address_empty(monkeypatch):
 
 def test_settings_reads_notification_from_address_from_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("NOTIFICATION_FROM_ADDRESS", "notifications@fanwire.daviddems.ca")
+    monkeypatch.setenv("NOTIFICATION_FROM_ADDRESS", "notifications@fanwire.daviddems.com")
     settings = Settings()
-    assert settings.notification_from_address == "notifications@fanwire.daviddems.ca"
+    assert settings.notification_from_address == "notifications@fanwire.daviddems.com"

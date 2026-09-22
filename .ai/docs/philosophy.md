@@ -199,7 +199,9 @@ Treat this as a live backlog, not a record.
 
 | Friction | Currently | Candidate |
 |---|---|---|
-| Stacked PRs merged top-down never reached `main` | Every brief tells the agent to verify ancestry | A CI check asserting a PR's base is `main`; GitHub's "automatically delete head branches" |
+| Stacked PRs merged top-down never reached `main` | Every brief tells the agent to verify ancestry. **"Automatically delete head branches" is now on** (2026-09-21), which removes the stale-base half | A CI check asserting a PR's base is `main` — still prose |
+| `${{ secrets.X \|\| github.token }}` falls back **silently** when `X` is absent or unreachable, so a mis-scoped secret is indistinguishable from a working one until a task stalls hours later. Cost this project one debugging session | Nothing — the fallback is the bug | A first step in the orchestrator that fails loudly when a *named-as-required* secret is empty. This is squarely "anything whose failure is silent" below, and the one candidate on this list that has already bitten |
+| A workspace's `node_modules` missing makes local `npm run <script>` fail with `'cdk' is not recognized`, which reads as a broken machine rather than an uninstalled devDependency. CI never sees it, because CI always installs | Nothing | `agentctl selfcheck` asserting each workspace is installed, or a `predev` script — one line of output instead of a wrong diagnosis |
 | `git stash` used by subagents — the stash stack is shared across worktrees and sessions | Nothing | A hook or wrapper refusing `git stash` in an agent session |
 | `docker compose run --rm` leaves dependency containers holding host ports; parallel worktrees then fail with "port is already allocated" | A prose rule to run `docker compose down` | A pre-flight port check, or a wrapper script |
 | Lint debt accumulating | `pre-commit` hook, opt-in per clone | Ruff in CI as a required check (the hook is a convenience, not a control) |

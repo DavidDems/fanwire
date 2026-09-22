@@ -12,9 +12,15 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`01-ai-workflow-setup.md`](01-ai-workflow-setup.md) | Making the agent system actually run: **Actions minutes**, secrets, branch protection, the first live task | **Yes** — the agent system does nothing until this is done |
+| [`01-ai-workflow-setup.md`](01-ai-workflow-setup.md) | Making the agent system actually run: **Actions minutes**, secrets, branch protection, the first live task | **Partly.** The pipeline runs and a task has completed. What is left (§7, §7b) costs two manual nudges per task and leaves an unaccounted-for admin token live |
 | [`02-deployment-requirements.md`](02-deployment-requirements.md) | AWS, domain, IAM review, third-party keys — collated from across the wiki | Not yet. Blocks `cdk deploy`, not development |
-| [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks |
+| [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
+
+**Status as of 2026-09-21.** `01` steps 0–6 and 10–11 done, 7/7b/8/9 open.
+`02` §1, §4 and §5 answered; §2 needs a hosted zone and four DNS records; §3 is
+now three concrete sub-steps instead of an unactionable instruction. `03` has
+four of five Phase 5a answers, which still have to be copied into
+`phase-4-manager-agent.md` by a human because that path is agent-unwritable.
 
 ## How to use it
 
