@@ -48,7 +48,7 @@ is what made the first four worker runs fail.
 
 Spend so far: **$0.074**. Check any time with:
 
-```sh
+```powershell
 python .ai/bin/agentctl.py telemetry report
 ```
 
@@ -91,7 +91,7 @@ the workflow with no change on your side —
 
 ### 5. Pre-commit hook ✅
 
-```sh
+```powershell
 git config core.hooksPath .ai/hooks
 ```
 
@@ -116,19 +116,20 @@ nothing depends on the endpoint.
 
 To run it again, or to run any task:
 
-```sh
-git switch main && git pull
-git switch -c agent/<TASK-ID> main && git push -u origin agent/<TASK-ID>
+```powershell
+git switch main; if ($?) { git pull }
+git switch -c agent/<TASK-ID> main; if ($?) { git push -u origin agent/<TASK-ID> }
 gh workflow run agent-orchestrator.yml -f task_id=<TASK-ID>
 ```
 
-Watch it without opening an agent session:
+Watch it without opening an agent session — state lives on the task branch, so
+pull first or you are reading a stale file:
 
-```sh
-git pull                                          # state lives on the branch
-python .ai/bin/agentctl.py status                 # where it is
-python .ai/bin/agentctl.py state show DEMO-001    # why it is there
-python .ai/bin/agentctl.py telemetry report       # what it cost
+```powershell
+git pull
+python .ai/bin/agentctl.py status
+python .ai/bin/agentctl.py state show DEMO-001
+python .ai/bin/agentctl.py telemetry report
 ```
 
 Or from GitHub, without pulling:
@@ -156,7 +157,7 @@ is the design, not a stall.
 
 If it fails:
 
-```sh
+```powershell
 gh run list --workflow=agent-orchestrator.yml --limit 5
 gh run view <id> --log-failed
 ```
@@ -184,7 +185,7 @@ Actions tab. Until the token is added, every task needs two manual nudges.
       and **Contents: read and write**; nothing else. *(Created as
       `AGENT_DISPATCH_TOKEN`, scoped to this repo, with exactly: metadata read,
       actions read/write, code read/write.)*
-- [ ] Add it as a **repository** secret named `AGENT_DISPATCH_TOKEN` —
+- [x] Add it as a **repository** secret named `AGENT_DISPATCH_TOKEN` —
       **Settings → Secrets and variables → Actions → Secrets → Repository
       secrets → New repository secret**. Not an *Environment* secret; see the
       box below.
@@ -203,7 +204,7 @@ bypass warning in step 3 before creating it.
 > Environments exist to gate deployments behind approvals, which is the opposite
 > of what an unattended orchestrator wants.
 >
-> ```sh
+> ```powershell
 > gh secret set AGENT_DISPATCH_TOKEN --repo DavidDems/fanwire   # paste at prompt
 > gh secret list --repo DavidDems/fanwire                       # must list two
 > gh api -X DELETE "repos/DavidDems/fanwire/environments/fanwire%20environment"
@@ -212,7 +213,7 @@ bypass warning in step 3 before creating it.
 > **Confirm it actually took.** Two separate checks, and the first is not
 > evidence of the second:
 >
-> ```sh
+> ```powershell
 > gh secret list --repo DavidDems/fanwire     # 1. is it a repository secret?
 > ```
 >
@@ -229,7 +230,7 @@ bypass warning in step 3 before creating it.
 >
 > So: start a **new** task and watch it cross a CI boundary unattended.
 >
-> ```sh
+> ```powershell
 > python .ai/bin/agentctl.py status                 # did it move past BASELINE_CI on its own?
 > gh run list --workflow=agent-orchestrator.yml --limit 5
 > ```
@@ -243,7 +244,7 @@ bypass warning in step 3 before creating it.
 state: `next_action` returns `await_ci`, which does nothing. You have to supply
 the result yourself, after checking what CI actually concluded:
 
-```sh
+```powershell
 gh run list --workflow=test-agent.yml --branch agent/<ID> --limit 1
 gh workflow run agent-orchestrator.yml -f task_id=<ID> -f event=CI_FAILED   # or CI_PASSED
 ```
@@ -264,8 +265,8 @@ enforce the permission model.
 Nothing in the repo uses it. Before the dispatch token was added the repo had
 exactly one secret (`ANTHROPIC_API_KEY`), so there is nothing to break.
 
-- [ ] **Settings → Developer settings → Personal access tokens → Fine-grained
-      tokens → `fanwire token` → Delete.**
+- [x] **Settings → Developer settings → Personal access tokens → Fine-grained
+      tokens → `fanwire token` → Delete.** *(Revoked 2026-09-22.)*
 
 A token you cannot locate is a token you cannot rotate, and deleting it costs
 nothing because `AGENT_DISPATCH_TOKEN` now covers the only automated use.
@@ -274,7 +275,7 @@ nothing because `AGENT_DISPATCH_TOKEN` now covers the only automated use.
 
 Worth doing once, deliberately, while nothing is at stake:
 
-```sh
+```powershell
 python .ai/bin/agentctl.py state control DEMO-001 --set PAUSE   # stop, keep position
 python .ai/bin/agentctl.py state control DEMO-001 --set RUN     # resume exactly there
 python .ai/bin/agentctl.py state control DEMO-001 --set CANCEL  # stop for good
@@ -282,7 +283,7 @@ python .ai/bin/agentctl.py state control DEMO-001 --set CANCEL  # stop for good
 
 The emergency stop, if something runs away:
 
-```sh
+```powershell
 gh workflow disable agent-orchestrator.yml
 gh workflow disable agent-worker.yml
 ```
@@ -339,7 +340,7 @@ missing.
 
 Enabled 2026-09-21. Verify any time:
 
-```sh
+```powershell
 gh api repos/DavidDems/fanwire/actions/permissions/workflow
 # {"default_workflow_permissions":"read","can_approve_pull_request_reviews":true}
 ```
@@ -364,12 +365,17 @@ the stacked-PR trap that [`03-open-decisions.md`](03-open-decisions.md) asked
 for, and a candidate automation from
 [`philosophy.md`](../.ai/docs/philosophy.md) §6 now closed.
 
-There are still **28 remote branches**, most of them merged phase branches from
-before the setting existed. Deleting them is safe but is a git action, so it is
-listed here rather than done:
+**Done 2026-09-22: 26 stale branches deleted, `main` is the only one left.**
+17 were provably merged (ancestors of `main`). The other 9 were squash-merged,
+so they were not ancestors and needed checking individually — `git cherry`
+compares by patch id, and `git diff main...<branch>` was empty for eight of
+them. The ninth, `phase-2-3-4-manager-prompts`, held four human answers, all of
+which were already on `main` in the same file. Nothing unique was lost.
 
-```sh
-git branch -r --merged origin/main | sed 's#origin/##' | grep -v -e main -e HEAD
+To find deletable branches again later:
+
+```powershell
+git branch -r --merged origin/main | ForEach-Object { $_.Trim() -replace '^origin/','' } | Where-Object { $_ -notmatch '^(main|HEAD)$' }
 ```
 
 **Manually delete all the old branches that have been merged with main**
