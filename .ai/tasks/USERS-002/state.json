@@ -1,0 +1,103 @@
+{
+  "attempt": 1,
+  "branch": "agent/USERS-002",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-09-23T05:09:55Z",
+      "event": "VALIDATED",
+      "from": "DRAFT",
+      "note": "spec validated",
+      "to": "READY"
+    },
+    {
+      "at": "2026-09-23T05:10:08Z",
+      "event": "DISPATCH_TEST_AGENT",
+      "from": "READY",
+      "note": "test agent dispatched",
+      "to": "TEST_AGENT_RUNNING"
+    },
+    {
+      "at": "2026-09-23T05:13:18Z",
+      "event": "AGENT_COMMITTED",
+      "from": "TEST_AGENT_RUNNING",
+      "note": "5073e459eb6e283185ad0f11a0e036b88edb1761",
+      "to": "TESTS_COMMITTED"
+    },
+    {
+      "at": "2026-09-23T05:13:30Z",
+      "event": "CI_STARTED",
+      "from": "TESTS_COMMITTED",
+      "note": "baseline CI started (expected RED)",
+      "to": "BASELINE_CI"
+    },
+    {
+      "at": "2026-09-23T05:16:29Z",
+      "event": "CI_FAILED",
+      "from": "BASELINE_CI",
+      "note": "baseline is red, as required",
+      "to": "READY_FOR_IMPLEMENTATION"
+    },
+    {
+      "at": "2026-09-23T05:16:29Z",
+      "event": "DISPATCH_CODE_AGENT",
+      "from": "READY_FOR_IMPLEMENTATION",
+      "note": "code agent dispatched (attempt 1)",
+      "to": "CODE_AGENT_RUNNING"
+    },
+    {
+      "at": "2026-09-23T05:18:14Z",
+      "event": "AGENT_COMMITTED",
+      "from": "CODE_AGENT_RUNNING",
+      "note": "4ef3820c3e22f5037f6fa117f9ded473ffd888b5",
+      "to": "IMPL_COMMITTED"
+    },
+    {
+      "at": "2026-09-23T05:18:27Z",
+      "event": "CI_STARTED",
+      "from": "IMPL_COMMITTED",
+      "note": "implementation CI started",
+      "to": "IMPL_CI"
+    },
+    {
+      "at": "2026-09-23T05:22:34Z",
+      "event": "CI_PASSED",
+      "from": "IMPL_CI",
+      "note": "CI green",
+      "to": "CONTEXT_MAINTENANCE"
+    },
+    {
+      "at": "2026-09-23T05:22:34Z",
+      "event": "DISPATCH_MAINTAINER",
+      "from": "CONTEXT_MAINTENANCE",
+      "note": "context maintainer dispatched",
+      "to": "CONTEXT_MAINTENANCE"
+    },
+    {
+      "at": "2026-09-23T05:23:52Z",
+      "event": "MAINTAINER_DONE",
+      "from": "CONTEXT_MAINTENANCE",
+      "note": "context updated",
+      "to": "COMPLETE"
+    }
+  ],
+  "last_ci": {
+    "commit": "6f309552948ee64cc5cc8f53f0e47d2fcebffbe8",
+    "conclusion": "success",
+    "run_id": "35821865469"
+  },
+  "max_attempts": 3,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {
+    "code_agent": "1a9008e0-8616-44bf-81d3-69ff048a7588",
+    "context_maintainer": "95b22d1a-3414-48af-a2ee-9a7fa2f99863",
+    "test_agent": "d8e6458c-3fc0-4c53-9965-32780aeb55f0"
+  },
+  "state": "COMPLETE",
+  "task_id": "USERS-002",
+  "updated_at": "2026-09-23T05:23:52Z"
+}
