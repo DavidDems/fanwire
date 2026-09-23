@@ -26,6 +26,13 @@
       "from": "TEST_AGENT_RUNNING",
       "note": "5073e459eb6e283185ad0f11a0e036b88edb1761",
       "to": "TESTS_COMMITTED"
+    },
+    {
+      "at": "2026-09-23T05:13:30Z",
+      "event": "CI_STARTED",
+      "from": "TESTS_COMMITTED",
+      "note": "baseline CI started (expected RED)",
+      "to": "BASELINE_CI"
     }
   ],
   "last_ci": null,
@@ -35,7 +42,7 @@
   "sessions": {
     "test_agent": "d8e6458c-3fc0-4c53-9965-32780aeb55f0"
   },
-  "state": "TESTS_COMMITTED",
+  "state": "BASELINE_CI",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-23T05:13:18Z"
+  "updated_at": "2026-09-23T05:13:30Z"
 }
