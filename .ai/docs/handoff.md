@@ -1,4 +1,4 @@
-# Handoff — agent system, as of 2026-09-21
+# Handoff — agent system, as of 2026-09-23
 
 **Read this if you are picking up the AI development pipeline.** It records
 what exists, what has actually been proven by running it, what has not, and
@@ -12,25 +12,40 @@ Written at the end of the session that built the system and ran it four times.
 
 ## 1. Where things stand in one paragraph
 
-The agent system is built, merged to `main`, covered by 182 tests, and **it
-works**. DEMO-001 ran end to end on 2026-09-21 — `DRAFT` to `COMPLETE`, one
-attempt, no retries, no escalation, $0.2738. Getting there took five live runs
-and thirteen bugs, every one in the workflow layer rather than the tested core.
+The agent system is built, merged to `main`, covered by 211 tests, and **the
+whole chain now runs unattended**. DEMO-001 went `DRAFT` to `COMPLETE` on
+2026-09-21. USERS-002 on 2026-09-22 went further in the one way that mattered:
+the orchestrator **woke itself after CI** with no human nudge, which is the leg
+that had stalled every previous task twice. Seventeen bugs so far, none of them
+in the tested core.
 
-Two things still need a human: a dispatch PAT (the `workflow_run` leg of the
-chain does not fire under `GITHUB_TOKEN` — confirmed, not theoretical), and the
-repository setting that lets Actions open a PR. Both are in
-[`../../TODO/01-ai-workflow-setup.md`](../../TODO/01-ai-workflow-setup.md).
+**Nothing is waiting on a human to make the pipeline work.** The dispatch token
+is a repository secret and proven; Actions may open PRs and has; branch
+protection, the pre-commit hook and the red-baseline gate all hold. What is left
+is ordinary work, not setup.
 
-**Update 2026-09-21, later the same day.** The repository setting is **done**
-(`can_approve_pull_request_reviews: true`, with `default_workflow_permissions`
-left at `read`), and so is `delete_branch_on_merge`. The PAT exists with the
-right scopes but **is not yet reaching the workflows**: it was created as an
-*environment* secret, which no job can read because none declares
-`environment:`. `${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}` then
-falls back silently, so the stall looks identical to having no token at all.
-It has to be a **repository** secret — TODO/01 §7 has the command and, more
-importantly, how to confirm it took.
+**Where USERS-002 actually is.** Its first run reached green implementation CI
+and then escalated on the bookkeeping step — bug 16, a spec I wrote that was
+impossible to satisfy. #34 was closed unmerged, the branch deleted, and the task
+is back at `DRAFT` awaiting a clean rebuild. The code that run produced was
+correct; it was discarded on purpose, so the rerun is a genuine first pass
+rather than a repair.
+
+## 1a. The one thing that will surprise you next
+
+**A PR opened by the workflow arrives with no checks at all.** #34 sat
+`BLOCKED` reporting nothing, because workflows on a PR authored by
+`github-actions[bot]` land in `action_required` and wait for a human to approve
+the run before CI will execute.
+
+This is not §5.2's `paths-ignore` trap and not a misconfiguration — it is
+GitHub's default for bot-authored PRs, and no workflow had ever opened one
+before, so nobody had hit it. Approve the run from the Actions tab and the
+checks proceed normally.
+
+It is worth deciding deliberately whether that is a feature. A human gate
+between an agent finishing and CI spending minutes on its work is arguably the
+right shape for this system.
 
 ## 2. What exists
 
@@ -41,13 +56,13 @@ importantly, how to confirm it took.
 | `.github/workflows/` — orchestrator, worker, guard, plus the existing quality gate | Built, all four have now run |
 | `.ai/prompts/`, `.ai/skills/` | Built; the test-agent prompt has been exercised once, for real |
 | `.ai/tasks/DEMO-001/` | The validation task. Reached `COMPLETE` 2026-09-21 |
-| `.ai/telemetry/` | Working; two invocations, $0.2738 for the full task |
+| `.ai/telemetry/` | Working; DEMO-001 cost $0.2738, USERS-002's discarded run ~$0.25 |
 | `.ai/docs/` | philosophy, architecture, state-machine, permissions, threat-model, operations, this file |
-| `TODO/` | Human-facing setup checklist. Steps 0–6 and 10–11 done; 7, 7b, 8, 9 outstanding |
+| `TODO/` | Human-facing checklist. **01 is effectively done** — every setup step closed. 02 is AWS/domain (zone live, bootstrapped, IAM attached; dev S3 buckets outstanding). 03 holds the answered product decisions |
 
-Merged: PRs #23 (the system), #25, #26, #27, #28 (fixes from live runs).
-`main` is at `60f14bd`. **Open:** #29 (guard fix, all checks green, waiting on
-your approval) and #30 (the DEMO-001 work, blocked on #29).
+Merged: #23 (the system), #25–#33, #35. #34 was the workflow's own first PR
+and was **closed unmerged** on purpose (bug 16). No PR is open except the one
+carrying this document.
 
 Note `agentctl status` reports `DEMO-001` as `DRAFT` when run from any branch
 other than `agent/DEMO-001` — state lives on the task branch by design (§8), so
@@ -106,7 +121,8 @@ Distinguish this carefully from "is implemented".
 - The distiller and the manager decision path — no failure has yet routed
   through them.
 - **The context maintainer succeeding.** Its one run was refused by the guard
-  (bug 16), so the wiki-update step has still never completed.
+  (bug 16), so the wiki-update step has still never completed. USERS-002's
+  rebuild is the next chance.
 - Any retry at all: `attempt` has never gone past 1 on any task.
 - **An agent PR merging.** #34 exists but is `BLOCKED` with **no checks
   reported** — workflows on a PR opened by `github-actions[bot]` land in
@@ -114,7 +130,7 @@ Distinguish this carefully from "is implemented".
   That is a new operational step nobody had hit before, because no workflow had
   ever opened a PR.
 
-## 4. The fourteen bugs, and what they have in common
+## 4. The seventeen bugs, and what they have in common
 
 Recorded because the pattern matters more than the list.
 
@@ -135,10 +151,17 @@ Recorded because the pattern matters more than the list.
 | 13 | Nothing stopped a workflow from *approving* a PR once PR-creation is enabled | #29 |
 | 14 | `agent-guard` flagged the orchestrator's own state commits as an agent breaching `.ai/` — a required check that **no agent PR could ever pass** | #29 |
 | 15 | CI re-running on a **finished** task's branch woke the orchestrator, which tried to apply `CI_PASSED` to a COMPLETE task. The state machine correctly refused; the step's non-zero exit failed the whole run, painting a red X on a healthy pipeline every time a completed task's review PR was brought up to date | #31 |
-| 16 | A spec with `run_context_maintainer: true` and no `wiki/CodeContext/Modules/*.md` in `allowed_paths` is **unsatisfiable**: the maintainer's only permitted write is refused as `outside_task_scope`, so a task whose code and tests are green escalates on the bookkeeping step. Cost a whole successful USERS-002 pass. Not a workflow bug this time — a **Director** bug, in a spec, that nothing validated | pending |
+| 16 | A spec with `run_context_maintainer: true` and no `wiki/CodeContext/Modules/*.md` in `allowed_paths` is **unsatisfiable**: the maintainer's only permitted write is refused as `outside_task_scope`, so a task whose code and tests are green escalates on the bookkeeping step. Cost a whole successful USERS-002 pass. Not a workflow bug this time — a **Director** bug, in a spec, that nothing validated | #35 |
+| 17 | A human branch cut while HEAD was on `agent/USERS-002` carried two `[agent-state]` commits and a **mid-flight `state.json`** onto `main` through #35. The next run of that task would have read `TEST_AGENT_RUNNING` from `main` and stalled — a task that looks rebuilt and cannot move | #36 |
 
-**Every single one was in the workflow layer, and none was visible to the unit
-tests.** The tested core was right each time. `next_action` was always handed a
+**Bugs 1–15 were in the workflow layer, and none was visible to the unit
+tests. Bugs 16 and 17 were not in the workflow layer at all** — 16 was a task
+spec, 17 was a branch point. The honest generalisation is not "workflow YAML is
+where this breaks" but **"the artifacts the tested core consumes are where this
+breaks"**: YAML it never parses, JSON specs it is handed, and the git history
+it is run against. The core itself has been right every time.
+
+Of the originals: The tested core was right each time. `next_action` was always handed a
 state dict, so the CLI wrapper was never exercised (#1). The role→event mapping
 lived in YAML, where no test could reach it (#2). `yaml.safe_load` validates
 syntax, not context availability (#10).
@@ -270,29 +293,22 @@ change — that is what the file is for.
 
 ## 6. Immediate next steps
 
-Rewritten 2026-09-21 after DEMO-001 completed; the earlier list (reset the stuck
-task, watch the red baseline) is done and gone.
+Rewritten 2026-09-23. Setup is finished; everything here is ordinary work.
 
-1. **Make the dispatch token reachable.** Repository secret, not an environment
-   secret — §5.1 and TODO/01 §7. Nothing else on this list is worth doing first,
-   because every task still needs two manual nudges until it is fixed.
-2. **Revoke the old `fanwire token` PAT.** It holds `administration`, `secrets`
-   and `workflows` write on this repo and its value is unaccounted for. A token
-   with `workflows: write` can rewrite the permission model this system is built
-   on. TODO/01 §7b.
-3. **Merge #29, then update-branch and merge #30.** #30's `agent-guard` failure
-   is bug 14 and only clears once #29's fix is in its merge base — a bare re-run
-   fails again.
-4. **Then watch for the two still-unproven things**, in this order: an agent PR
-   that `agent-guard` passes (§3), and a PR **opened by the workflow** rather
-   than by hand — the setting that blocked it is now on, so the next completed
-   task is the test.
-5. **Exercise a failure path on purpose.** Everything in §3's "still not proven"
-   list is a success path that happened to work first time. A task with a
-   deliberately impossible acceptance criterion would exercise the distiller,
-   the manager decision and a real retry for the cost of one cheap run.
-6. Then decide whether DEMO-001's endpoint is worth keeping, and point the
-   system at a real task.
+1. **Rebuild USERS-002.** Cut `agent/USERS-002` from a `main` that no longer
+   carries the leaked `state.json` (bug 17) and dispatch. It is the first task
+   expected to run `DRAFT`→`COMPLETE` *including* the context-maintainer step,
+   which has still never completed.
+2. **Approve the run on the PR it opens** (§1a) and merge it. That closes the
+   last unproven item: an agent PR reaching `main`.
+3. **Then INFRA-002**, which unblocks the first real deploy — nothing uploads
+   the frontend to S3 today, so a deploy serves an empty bucket.
+4. **Exercise a failure path on purpose.** The distiller, the manager decision
+   and any retry at all remain unproven; `attempt` has never gone past 1 on any
+   task. A task with a deliberately impossible criterion buys all three for the
+   price of one cheap run.
+5. The dev S3 buckets (`TODO/02` §7) and then MEDIA-002, if browser-clickable
+   media matters before the frontend exists.
 
 ## 7. How to work on this system
 
@@ -308,6 +324,22 @@ task, watch the red baseline) is done and gone.
 - When you fix something a live run exposed, record the run id in the commit
   message. Every bug above is traceable to one, and that is what made the
   pattern in §4 visible.
+- **Cut every branch from `origin/main` explicitly**, not from whatever HEAD
+  happens to be:
+
+  ```powershell
+  git switch -c <name> origin/main
+  ```
+
+  `git switch -c <name>` alone branches from the current HEAD, and in a session
+  that has been inspecting a task branch that is not `main`. Bug 17 is what
+  that looks like: a PR that reviewed as a two-file change and merged another
+  task's mid-flight state onto `main`. The `pre-push` hook now refuses it, but
+  the hook is a convenience and `--no-verify` skips it.
+- **State on `main` is not inert.** `.ai/tasks/<ID>/state.json` is what the next
+  run of that task reads. A finished state arriving with a merged agent PR is
+  the design; anything mid-flight on `main` means something leaked, and the
+  task it names will stall rather than start.
 
 ## 8. Open questions worth a reasoning pass
 
