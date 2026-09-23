@@ -35,20 +35,26 @@
         "Invoked via .ai/bin/ask_jev.py, never invoke_agent.sh."
       ],
       "_routing_note": [
-        "Reached through Vercel AI Gateway rather than api.typesafe.ai. The",
-        "gateway speaks TypeSafe's own request and response shape at",
-        "/typesafe/v1/systemone, so this is a base-URL and model-id change",
-        "and nothing more - the wire format ask_jev.py builds is identical.",
+        "PARKED - no call to this provider has ever returned 200. Do not merge",
+        "this branch to main until one has. See _parked_note below.",
         "",
-        "The credential is an AI GATEWAY key, not a TypeSafe key. It is named",
-        "for what it is: the same key can reach every model in the gateway",
-        "catalogue, so calling it TYPESAFE_API_KEY would understate its blast",
-        "radius to whoever rotates it next.",
+        "Reached through Vercel AI Gateway, which fronts this model at",
+        "/typesafe/v1/systemone and speaks TypeSafe's own request and response",
+        "shape - so the alternative route is this block's endpoint, model and",
+        "secret name, and nothing else. No code, no tests.",
         "",
-        "`model` can be swapped for a `vmc/<slug>` virtual model without any",
-        "code change if provider routing or fallbacks are ever needed. Not",
-        "used today: there is one provider for this model, and the indirection",
-        "this file already gives is the same indirection a virtual model sells."
+        "  vercel (here)  ai-gateway.vercel.sh/typesafe/v1/systemone",
+        "                 model typesafe-ai/jev, AI_GATEWAY_API_KEY",
+        "  direct         api.typesafe.ai/v1/systemone",
+        "                 model jev-latest, TYPESAFE_API_KEY",
+        "",
+        "Direct is the better long-term home and was tried first; TypeSafe",
+        "closed public signup, so no key can be obtained. The gateway holds a",
+        "valid key but will not provision the free credit for a Hobby team:",
+        "/v1/credits answers 200 with a zero balance while inference returns",
+        "customer_verification_required with a card on file. That is a known",
+        "and unresolved fault on their side, fixed in the one documented case",
+        "only by Vercel staff correcting the team entitlement by hand."
       ]
     }
   },
