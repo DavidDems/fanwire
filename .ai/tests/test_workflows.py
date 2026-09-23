@@ -183,3 +183,60 @@ class TestPrCreationFailuresAreNotMasked:
         assert '|| echo "a PR for this branch already exists"' not in text, (
             "a blanket || masks every gh pr create failure as a duplicate"
         )
+
+
+class TestTheGateStaysAuthoritative:
+    """`test-agent.yml` skips suites a change cannot affect. These pin the
+    properties that make that safe, each of which fails silently if broken:
+    a green run that proved nothing, or a cache that quietly stops being used.
+    """
+
+    @pytest.fixture
+    def gate(self) -> str:
+        path = WORKFLOWS / "test-agent.yml"
+        if not path.exists():
+            pytest.skip("test-agent.yml not present")
+        return path.read_text(encoding="utf-8")
+
+    def test_a_dispatched_run_never_skips_a_suite(self, gate):
+        """The orchestrator gets its verdict from workflow_dispatch. If the
+        path filter applied there, a red baseline could report success and the
+        state machine would believe tests pin something that pins nothing."""
+        assert '"$EVENT" != "pull_request"' in gate, (
+            "non-PR events must bypass the path filter entirely"
+        )
+
+    def test_changing_the_gate_itself_runs_everything(self, gate):
+        """Trusting the filter to decide whether to test the filter is how a
+        broken gate ships green."""
+        for escape in (".github/workflows/", "docker-compose.yml", "docker/"):
+            assert escape in gate, f"{escape} must force a full run"
+
+    def test_the_aggregate_check_reports_even_when_jobs_skip(self, gate):
+        """A required check that names a skipped job never reports at all, and
+        a protected branch reads that as 'waiting' forever."""
+        assert "  gate:" in gate
+        assert "if: always()" in gate
+        # Comments discuss success(); what matters is that no `if:` uses it.
+        conditions = [
+            line
+            for line in gate.splitlines()
+            if line.strip().startswith("if:") and "success()" in line
+        ]
+        assert not conditions, (
+            "success() treats a skipped dependency as failure; a skip must pass here: "
+            + "; ".join(conditions)
+        )
+
+    def test_the_built_image_tags_match_what_compose_runs(self, gate):
+        """The one coupling with no error path. CI builds the image under a
+        tag; compose runs the service by its own `image:`. If the two drift,
+        compose silently rebuilds from scratch and the layer cache stops
+        working, with nothing failing to say so."""
+        compose = (WORKFLOWS / ".." / ".." / "docker-compose.yml").resolve()
+        if not compose.exists():
+            pytest.skip("docker-compose.yml not present")
+        text = compose.read_text(encoding="utf-8")
+        for tag in ("fanwire-backend-test:latest", "fanwire-frontend-test:latest"):
+            assert f"image: {tag}" in text, f"docker-compose.yml must tag {tag}"
+            assert f"tags: {tag}" in gate, f"test-agent.yml must build {tag}"

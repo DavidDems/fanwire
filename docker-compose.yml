@@ -34,6 +34,12 @@ services:
       - "${DYNAMODB_HOST_PORT:-8000}:8000"
 
   backend-test:
+    # A stable tag rather than the generated `fanwire-backend-test` name.
+    # Compose reuses an image with this tag instead of rebuilding, which is
+    # what lets CI build it once with a layer cache (see test-agent.yml) and
+    # lets a local `compose run` skip the rebuild too. `build` still applies
+    # when the tag is absent, so nothing changes on a clean machine.
+    image: fanwire-backend-test:latest
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
@@ -58,6 +64,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
   frontend-test:
+    image: fanwire-frontend-test:latest
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
