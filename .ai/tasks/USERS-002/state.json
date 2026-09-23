@@ -12,6 +12,13 @@
       "from": "DRAFT",
       "note": "spec validated",
       "to": "READY"
+    },
+    {
+      "at": "2026-09-23T05:10:08Z",
+      "event": "DISPATCH_TEST_AGENT",
+      "from": "READY",
+      "note": "test agent dispatched",
+      "to": "TEST_AGENT_RUNNING"
     }
   ],
   "last_ci": null,
@@ -19,7 +26,7 @@
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {},
-  "state": "READY",
+  "state": "TEST_AGENT_RUNNING",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-23T05:09:55Z"
+  "updated_at": "2026-09-23T05:10:08Z"
 }
