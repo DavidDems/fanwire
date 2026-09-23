@@ -14,7 +14,6 @@ from datetime import date
 
 import pytest
 from sqlalchemy import select
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.eventbus import InMemoryEventPublisher, PostEventBus
@@ -29,12 +28,6 @@ from app.posts.service import (
     unlike_post,
 )
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -106,9 +99,7 @@ def test_report_post_duplicate_is_a_no_op(session_factory):
         assert event_names == [POST_REPORTED]  # not published a second time
 
         reports = session.scalars(
-            select(Report).where(
-                Report.post_id == post.id, Report.reporter_id == reporter.id
-            )
+            select(Report).where(Report.post_id == post.id, Report.reporter_id == reporter.id)
         ).all()
         assert len(reports) == 1
 
@@ -167,9 +158,7 @@ def test_like_post_creates_a_like_row(session_factory):
         assert result.user_id == liker.id
         assert result.post_id == post.id
         fetched = session.scalar(
-            select(PostLike).where(
-                PostLike.user_id == liker.id, PostLike.post_id == post.id
-            )
+            select(PostLike).where(PostLike.user_id == liker.id, PostLike.post_id == post.id)
         )
         assert fetched is not None
 
@@ -199,9 +188,7 @@ def test_unlike_post_deletes_the_row(session_factory):
         unlike_post(session, user_id=liker.id, post_id=post.id)
 
         fetched = session.scalar(
-            select(PostLike).where(
-                PostLike.user_id == liker.id, PostLike.post_id == post.id
-            )
+            select(PostLike).where(PostLike.user_id == liker.id, PostLike.post_id == post.id)
         )
         assert fetched is None
 

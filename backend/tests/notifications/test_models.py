@@ -13,16 +13,9 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -62,9 +55,7 @@ def test_notification_round_trip_defaults_cleared_at_null(session_factory):
         session.add(notification)
         session.commit()
 
-        fetched = session.scalar(
-            select(Notification).where(Notification.id == notification.id)
-        )
+        fetched = session.scalar(select(Notification).where(Notification.id == notification.id))
         assert fetched is not None
         assert fetched.recipient_user_id == recipient.id
         assert fetched.type == NotificationType.FOLLOW

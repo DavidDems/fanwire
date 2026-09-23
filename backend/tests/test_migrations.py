@@ -19,18 +19,11 @@ from pathlib import Path
 import pytest
 from alembic.config import Config
 from sqlalchemy import text
-from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

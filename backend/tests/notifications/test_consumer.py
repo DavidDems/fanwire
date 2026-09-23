@@ -21,17 +21,10 @@ from datetime import date
 
 import pytest
 from sqlalchemy import select
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.posts.models import Post
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -70,9 +63,7 @@ def test_reply_creates_notification_for_parent_author(session_factory):
         parent = Post(author_id=parent_author.id, text="parent post")
         session.add(parent)
         session.commit()
-        reply = Post(
-            author_id=replier.id, text="a reply", is_reply=True, parent_post_id=parent.id
-        )
+        reply = Post(author_id=replier.id, text="a reply", is_reply=True, parent_post_id=parent.id)
         session.add(reply)
         session.commit()
 
@@ -104,7 +95,9 @@ def test_self_reply_is_skipped(session_factory):
         parent = Post(author_id=author.id, text="own post")
         session.add(parent)
         session.commit()
-        reply = Post(author_id=author.id, text="replying to myself", is_reply=True, parent_post_id=parent.id)
+        reply = Post(
+            author_id=author.id, text="replying to myself", is_reply=True, parent_post_id=parent.id
+        )
         session.add(reply)
         session.commit()
 
@@ -289,9 +282,7 @@ def test_email_suppressed_when_preference_disabled_but_notification_still_create
     with session_factory() as session:
         followed = _make_user(session, username="disabled_pref_followed")
         follower = _make_user(session, username="disabled_pref_follower")
-        session.add(
-            NotificationPreference(user_id=followed.id, email_notifications_enabled=False)
-        )
+        session.add(NotificationPreference(user_id=followed.id, email_notifications_enabled=False))
         session.commit()
 
         sender = RecordingEmailSender()

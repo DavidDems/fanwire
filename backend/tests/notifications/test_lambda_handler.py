@@ -19,7 +19,6 @@ from pathlib import Path
 import boto3
 import pytest
 from moto import mock_aws
-from testcontainers.postgres import PostgresContainer
 
 import app.dependencies as app_dependencies
 from app.db import Base, make_engine, make_session_factory
@@ -32,12 +31,6 @@ FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 def _load_fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

@@ -9,18 +9,11 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.models import Team
 from app.media.models import Media
 from app.users.models import Follow, User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -82,7 +75,9 @@ def test_user_username_is_unique(session_factory):
 
 def test_user_preferred_team_id_requires_existing_team(session_factory):
     with session_factory() as session:
-        session.add(_make_user(cognito_sub="sub-c", username="bad_team_user", preferred_team_id=999_999))
+        session.add(
+            _make_user(cognito_sub="sub-c", username="bad_team_user", preferred_team_id=999_999)
+        )
         with pytest.raises(IntegrityError):
             session.commit()
 

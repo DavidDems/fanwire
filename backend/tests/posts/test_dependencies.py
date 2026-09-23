@@ -20,7 +20,6 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_event_bus
@@ -31,12 +30,6 @@ from app.posts.models import Post
 from app.posts.moderation import ModerationContext, PostRejected
 from app.settings import Settings
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -132,9 +125,7 @@ def test_get_publish_post_facade_wires_a_working_facade(session_factory):
         bus = get_event_bus()
         get_event_bus.cache_clear()
 
-        facade = get_publish_post_facade(
-            session=session, moderation_chain=chain, event_bus=bus
-        )
+        facade = get_publish_post_facade(session=session, moderation_chain=chain, event_bus=bus)
 
         assert isinstance(facade, PublishPostFacade)
         assert isinstance(bus, PostEventBus)

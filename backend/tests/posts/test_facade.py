@@ -15,7 +15,6 @@ from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.eventbus import InMemoryEventPublisher, PostEventBus
@@ -36,12 +35,6 @@ from app.posts.moderation import (
     PostRejected,
 )
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -115,9 +108,7 @@ def test_publish_plain_post_persists_and_fires_post_created(session_factory):
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
         request = CreatePostRequest(author_id=author.id, text="hello world")
         post = facade.publish(request)
@@ -145,18 +136,12 @@ def test_publish_with_resolvable_mention_creates_event_mention_and_fires_both_ev
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
-        request = CreatePostRequest(
-            author_id=author.id, text=f"great game #GameId{game.id}"
-        )
+        request = CreatePostRequest(author_id=author.id, text=f"great game #GameId{game.id}")
         post = facade.publish(request)
 
-        mention = session.scalar(
-            select(EventMention).where(EventMention.post_id == post.id)
-        )
+        mention = session.scalar(select(EventMention).where(EventMention.post_id == post.id))
         assert mention is not None
         assert mention.game_id == game.id
         assert mention.raw_token == f"#GameId{game.id}"
@@ -178,13 +163,9 @@ def test_publish_with_unresolvable_mention_creates_no_event_mention_and_only_fir
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
-        request = CreatePostRequest(
-            author_id=author.id, text="unknown game #GameId999999"
-        )
+        request = CreatePostRequest(author_id=author.id, text="unknown game #GameId999999")
         post = facade.publish(request)
 
         assert post.id is not None
@@ -209,9 +190,7 @@ def test_publish_with_processed_media_attaches_it(session_factory):
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
         request = CreatePostRequest(
             author_id=author.id, text="post with image", media_ids=[media.id]
@@ -234,9 +213,7 @@ def test_publish_with_non_processed_media_raises_and_persists_nothing(session_fa
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
         request = CreatePostRequest(
             author_id=author.id, text="post with unprocessed image", media_ids=[media.id]
@@ -257,9 +234,7 @@ def test_publish_with_nonexistent_media_id_raises_media_not_found(session_factor
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=NeverRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
         request = CreatePostRequest(
             author_id=author.id, text="post with bogus media", media_ids=[999_999]
@@ -280,9 +255,7 @@ def test_publish_moderation_rejection_raises_and_persists_nothing(session_factor
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        facade = PublishPostFacade(
-            session=session, moderation_chain=AlwaysRejects(), event_bus=bus
-        )
+        facade = PublishPostFacade(session=session, moderation_chain=AlwaysRejects(), event_bus=bus)
 
         request = CreatePostRequest(author_id=author.id, text="whatever")
 

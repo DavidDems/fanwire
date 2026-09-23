@@ -13,17 +13,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.models import Game, Team
 from app.events.service import GameRef, game_ids_for_team, games_by_ids
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
