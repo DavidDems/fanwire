@@ -183,3 +183,50 @@ class TestPrCreationFailuresAreNotMasked:
         assert '|| echo "a PR for this branch already exists"' not in text, (
             "a blanket || masks every gh pr create failure as a duplicate"
         )
+
+
+class TestTheTypedDecisionSeam:
+    """The Manager's decision is a typed question, not parsed prose.
+
+    Each of these pins a property that only exists in workflow YAML, and each
+    one fails in a way a unit test cannot see: silently spending an Opus call
+    that was not needed, or leaving a task in MANAGER_RUNNING forever.
+    """
+
+    def test_the_decision_is_asked_before_the_agent_is_invoked(self, worker):
+        """Ordering is the whole design: the answer decides whether an agent
+        runs at all. Reversed, the saving disappears and the call is pure cost."""
+        decide = worker.index("id: decide")
+        agent = worker.index("id: agent")
+        assert decide < agent, "the typed decision must be asked before the agent step"
+
+    def test_the_agent_step_is_skippable_for_the_manager(self, worker):
+        assert "steps.decide.outputs.needs_prose == 'true'" in worker, (
+            "the Manager's agent invocation must be conditional on needing prose"
+        )
+
+    def test_the_manager_event_comes_from_the_typed_decision(self, worker):
+        assert "${{ steps.decide.outputs.decision }}" in worker
+        assert "manager-decision --agent-result" not in worker, (
+            "the Manager's event must not be parsed back out of model prose"
+        )
+
+    def test_a_skipped_agent_still_advances_the_workflow(self, worker):
+        """Without this the common path — a Manager that needed no prose —
+        never advances, and the task sits in MANAGER_RUNNING forever."""
+        assert "steps.agent.outcome == 'skipped'" in worker
+
+    def test_the_decision_call_gets_no_github_token(self, worker):
+        """Same least-privilege rule as the agent step: a step holding a
+        provider credential must not also be able to reach the GitHub API."""
+        block = worker.split("id: decide", 1)[1].split("- name:", 1)[0]
+        assert "AI_GATEWAY_API_KEY" in block, "the decision step needs its provider credential"
+        assert 'GITHUB_TOKEN: ""' in block and 'GH_TOKEN: ""' in block, (
+            "the decision step must blank both GitHub tokens"
+        )
+
+    def test_a_provider_outage_does_not_fail_the_job(self, worker):
+        """ask_jev.py always leaves a parseable file and every gate falls back
+        conservatively, so an outage must make the system careful, not stuck."""
+        block = worker.split("id: decide", 1)[1].split("- name: Record", 1)[0]
+        assert "|| true" in block, "an unreachable decision provider must not fail the job"

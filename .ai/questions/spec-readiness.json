@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "_comment": [
+    "Is this task specification actually testable, before anything is",
+    "dispatched against it?",
+    "",
+    "`agentctl task validate` already checks a spec's structure - required",
+    "fields, known skills, well-formed path globs. Structure is not the thing",
+    "that wastes a budget. A spec that is complete and well-formed but whose",
+    "acceptance criteria say 'the feed should feel responsive' sends the test",
+    "agent to write tests against nothing, and the cost of finding that out is",
+    "the full three attempts plus a Manager call.",
+    "",
+    "This runs once per task, before DISPATCH_TEST_AGENT, and costs a fraction",
+    "of a cent. It is the cheapest gate in the system by a wide margin.",
+    "",
+    "It gates dispatch; it never edits the spec. Only the Director changes a",
+    "task contract (.ai/prompts/manager.md), and that stays true here."
+  ],
+
+  "questions": {
+    "testability": {
+      "type": "score",
+      "instructions": "The state contains a task specification for an automated coding workflow: its description, its acceptance criteria, and the paths it is permitted to change. A test agent will read this and must write failing tests that pin the required behaviour BEFORE any implementation exists. Grade how well the acceptance criteria support that.",
+      "criteria": ["testable", "underspecified", "untestable"],
+      "legend": "testable: each acceptance criterion names an observable behaviour with a determinable pass/fail outcome. underspecified: the intent is clear but at least one criterion leaves the expected result, the inputs, or the boundary conditions unstated, so a test author would have to guess. untestable: the criteria are subjective, self-contradictory, or describe no observable behaviour at all."
+    },
+
+    "paths_sufficient": {
+      "type": "noul",
+      "instructions": "Could the acceptance criteria be satisfied entirely within the paths this task is permitted to change? Answer false if satisfying them would clearly require editing a file outside those paths.",
+      "_why": "The permission model refuses out-of-scope writes at guard time, by which point an attempt has already been spent. A spec whose criteria cannot be met inside its own allowed_paths is a Director error, and catching it before dispatch costs nothing."
+    }
+  },
+
+  "gates": {
+    "testability": {
+      "min_confidence": 0.70,
+      "fallback": "underspecified",
+      "_why": "Not 'testable': an unsure grader must not wave a task through. 'underspecified' routes to a human, who spends a minute, rather than to the test agent, which would spend the budget."
+    },
+    "paths_sufficient": {
+      "min_confidence": 0.70,
+      "fallback": true,
+      "_why": "True on low confidence, so an uncertain answer does not block a legitimate task on a question the model could not read well. The guard still enforces the real boundary at commit time - this question is an early warning, not the control."
+    }
+  }
+}

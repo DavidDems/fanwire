@@ -54,6 +54,31 @@ Nothing below is done by this repository's files; a human has to switch it on.
    from Code Owners" is enabled.
 4. **A runner with the provider CLI.** `agent-worker.yml` calls
    `.ai/bin/invoke_agent.sh`, which expects the provider's CLI on `PATH`.
+5. **Two repository secrets.** `ANTHROPIC_API_KEY` for the agent seam, and
+   `AI_GATEWAY_API_KEY` for the typed-decision seam (`.ai/bin/ask_jev.py`, which
+   needs no CLI and no install — it is stdlib and one POST).
+
+   `AI_GATEWAY_API_KEY` is not required for the system to run. Without it
+   every decision falls back conservatively: the Manager escalates, no red run
+   is forgiven as a flake, and no spec is blocked before dispatch. Setting
+   `decisions.<point>.enabled: false` in `config.json` does the same for one
+   decision — it runs the identical fallback path, so "turned off" and
+   "unreachable" cannot diverge.
+
+   **Conservative is not the same as unchanged.** Without a working key the
+   Manager escalates *every* time, where before the seam it chose between
+   `MANAGER_RETRY`, `MANAGER_RESCOPE` and `ESCALATE` from an Opus call. Nothing
+   is lost or corrupted, and no task advances on a guess — but automatic retry
+   and re-scope stop happening, and a human is asked for each one. That is a
+   safe degradation, not a free one.
+
+> **This seam is PARKED and must not reach `main` yet.** No call to the
+> decision provider has ever returned 200, so the confidence gates every
+> outcome depends on are unverified. Merging before that is what would turn
+> the paragraph above from a note into an incident. The merge precondition is
+> one successful response, checked for a `confidence` field on every answer.
+> `.ai/config.json` → `providers.jev._routing_note` records both routes and
+> why each is currently blocked.
 
 ## Starting a task
 

@@ -16,7 +16,80 @@
   "providers": {
     "anthropic": {
       "api_key_secret": "ANTHROPIC_API_KEY",
-      "invoke": "claude"
+      "invoke": "claude",
+      "_kind": "agent",
+      "_note": "Generates text and edits files. Invoked via .ai/bin/invoke_agent.sh."
+    },
+    "jev": {
+      "api_key_secret": "AI_GATEWAY_API_KEY",
+      "api_key_env": "AI_GATEWAY_API_KEY",
+      "endpoint": "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
+      "model": "typesafe-ai/jev",
+      "invoke": "ask_jev.py",
+      "_kind": "decision",
+      "_note": [
+        "A System One model: typed questions in, typed answers with calibrated",
+        "confidence out. It does NOT generate strings, so it cannot replace a",
+        "role that writes code, tests, wiki prose or a commit subject - only",
+        "the decision such a role was also being asked to make.",
+        "Invoked via .ai/bin/ask_jev.py, never invoke_agent.sh."
+      ],
+      "_routing_note": [
+        "PARKED - no call to this provider has ever returned 200. Do not merge",
+        "this branch to main until one has. See _parked_note below.",
+        "",
+        "Reached through Vercel AI Gateway, which fronts this model at",
+        "/typesafe/v1/systemone and speaks TypeSafe's own request and response",
+        "shape - so the alternative route is this block's endpoint, model and",
+        "secret name, and nothing else. No code, no tests.",
+        "",
+        "  vercel (here)  ai-gateway.vercel.sh/typesafe/v1/systemone",
+        "                 model typesafe-ai/jev, AI_GATEWAY_API_KEY",
+        "  direct         api.typesafe.ai/v1/systemone",
+        "                 model jev-latest, TYPESAFE_API_KEY",
+        "",
+        "Direct is the better long-term home and was tried first; TypeSafe",
+        "closed public signup, so no key can be obtained. The gateway holds a",
+        "valid key but will not provision the free credit for a Hobby team:",
+        "/v1/credits answers 200 with a zero balance while inference returns",
+        "customer_verification_required with a card on file. That is a known",
+        "and unresolved fault on their side, fixed in the one documented case",
+        "only by Vercel staff correcting the team entitlement by hand."
+      ]
+    }
+  },
+
+  "_decisions_note": [
+    "Typed decision points. Each names a questions file under .ai/questions/,",
+    "which carries both the wire payload and the confidence gate that governs",
+    "its answer. `enabled: false` makes the caller skip the call and use each",
+    "gate's fallback - so turning a decision off is always the conservative",
+    "direction, and an expired API key degrades to exactly the behaviour the",
+    "system had before this provider existed.",
+    "",
+    "Every one of these was previously either prose parsed out of a model's",
+    "final message, or not asked at all."
+  ],
+  "decisions": {
+    "manager": {
+      "questions": "questions/manager.json",
+      "enabled": true,
+      "_replaces": "the `decision` field of .ai/prompts/manager.md's fenced trailer"
+    },
+    "distiller_origin": {
+      "questions": "questions/distiller.json",
+      "enabled": true,
+      "_replaces": "the origin-classification half of .ai/prompts/distiller.md"
+    },
+    "flake": {
+      "questions": "questions/flake.json",
+      "enabled": true,
+      "_replaces": "nothing - previously every red run cost an attempt"
+    },
+    "spec_readiness": {
+      "questions": "questions/spec-readiness.json",
+      "enabled": true,
+      "_replaces": "nothing - previously an untestable spec was found by spending the budget"
     }
   },
 
@@ -24,7 +97,14 @@
     "manager": {
       "provider": "anthropic",
       "model": "claude-opus-5",
-      "_why": "Strategy, ambiguous-failure interpretation, escalation calls. Invoked rarely and only when reasoning is actually needed."
+      "_why": "Prose only, and only on the escalation path. The decision itself is now a typed question (decisions.manager) rather than a sentence parsed out of this model's final message.",
+      "_prose_when": "ESCALATE",
+      "_prose_note": [
+        "MANAGER_RETRY and MANAGER_RESCOPE take a templated reason built from",
+        "the decision, its confidence and the trigger - no model call at all.",
+        "ESCALATE is the one outcome a human reads before acting, so it is the",
+        "one worth paying an Opus call to explain."
+      ]
     },
     "test_agent": {
       "provider": "anthropic",
@@ -64,7 +144,12 @@
     "prices": {
       "anthropic/claude-opus-5": { "input_per_mtok": 15.0, "output_per_mtok": 75.0 },
       "anthropic/claude-sonnet-5": { "input_per_mtok": 3.0, "output_per_mtok": 15.0 },
-      "anthropic/claude-haiku-4-5-20251001": { "input_per_mtok": 1.0, "output_per_mtok": 5.0 }
+      "anthropic/claude-haiku-4-5-20251001": { "input_per_mtok": 1.0, "output_per_mtok": 5.0 },
+      "jev/jev-latest": {
+        "input_per_mtok": 0.042,
+        "output_per_mtok": 0.0,
+        "_note": "Output tokens are free on this provider's published pricing. Recorded as an explicit 0.0 rather than omitted, because an absent price records a null cost and would make these calls look unmeasured rather than cheap."
+      }
     }
   },
 

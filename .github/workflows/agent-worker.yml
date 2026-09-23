@@ -97,12 +97,55 @@ jobs:
           echo "--- prompt ($(wc -c < "$RUNNER_TEMP/prompt.md") bytes) ---"
           head -40 "$RUNNER_TEMP/prompt.md"
 
+      # The Manager's strategy call is a choice between three known options,
+      # so it is asked as a typed question rather than parsed out of prose.
+      # It runs BEFORE the agent step, because its answer decides whether an
+      # agent is needed at all: MANAGER_RETRY and MANAGER_RESCOPE take a
+      # templated reason and no model call, and only ESCALATE — the one
+      # outcome a human reads before acting — is worth an Opus invocation.
+      #
+      # `|| true`: a provider that cannot be reached must not fail the job.
+      # ask_jev.py always leaves a parseable file, and `agentctl decide` turns
+      # an empty one into ESCALATE. An outage makes this system careful, not
+      # stuck. See .ai/agentlib/decision.py.
+      - name: Decide the Manager's strategy
+        id: decide
+        if: env.ROLE == 'manager'
+        env:
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          # Same rule as the agent step below: the decision call gets the
+          # provider credential and no GitHub token.
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+        run: |
+          set -euo pipefail
+          python .ai/bin/ask_jev.py \
+            --questions .ai/questions/manager.json \
+            --state-file "$RUNNER_TEMP/context.json" \
+            --out "$RUNNER_TEMP/jev-answers.json" || true
+          python .ai/bin/agentctl.py decide manager \
+            --answers "$RUNNER_TEMP/jev-answers.json" > "$RUNNER_TEMP/outcome.json"
+          cat "$RUNNER_TEMP/outcome.json"
+          for field in decision needs_prose reason; do
+            python .ai/bin/agentctl.py decide manager \
+              --answers "$RUNNER_TEMP/jev-answers.json" --field "$field" \
+              > "$RUNNER_TEMP/field.txt"
+            echo "$field<<EOF" >> "$GITHUB_OUTPUT"
+            cat "$RUNNER_TEMP/field.txt" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          done
+
       - name: Record the start time
         id: clock
         run: echo "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Invoke the agent
         id: agent
+        # Skipped for a Manager that already has its decision and does not need
+        # prose — the common case, and the whole point of asking the typed
+        # question first. Every other role writes code, tests or wiki text,
+        # which a System One model cannot produce, so they always run.
+        if: env.ROLE != 'manager' || steps.decide.outputs.needs_prose == 'true'
         continue-on-error: true
         env:
           # The one provider-specific seam in the whole system. Everything else
@@ -189,17 +232,36 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Two ways to get here: an agent ran and passed the guard, or the Manager
+      # reached a decision that needed no agent at all. The second is skipped,
+      # not successful, so it has to be named explicitly — a bare
+      # `steps.agent.outcome == 'success'` would leave those tasks stuck in
+      # MANAGER_RUNNING forever.
       - name: Advance the workflow
-        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        if: |
+          (steps.agent.outcome == 'success' && steps.guard.outcome == 'success')
+          || (env.ROLE == 'manager' && steps.agent.outcome == 'skipped')
         run: |
           set -euo pipefail
+          REASON=""
           case "$ROLE" in
             context_maintainer) EVENT=MAINTAINER_DONE ;;
-            manager)            EVENT="$(python .ai/bin/agentctl.py manager-decision --agent-result "$RUNNER_TEMP/agent-result.json")" ;;
+            manager)
+              # Read from the typed decision, never from the agent's prose.
+              # When the Manager was invoked for an escalation write-up, that
+              # prose is the `reason` — it explains the decision, it does not
+              # make it.
+              EVENT="${{ steps.decide.outputs.decision }}"
+              REASON="${{ steps.decide.outputs.reason }}"
+              if [ "${{ steps.agent.outcome }}" = "success" ]; then
+                REASON="$(python .ai/bin/agentctl.py summary-line --agent-result "$RUNNER_TEMP/agent-result.json")"
+              fi
+              ;;
             *)                  EVENT=AGENT_COMMITTED ;;
           esac
           python .ai/bin/agentctl.py state advance "$TASK_ID" \
             --event "$EVENT" --commit-sha "${{ steps.commit.outputs.sha }}" \
+            ${REASON:+--reason "$REASON"} \
             --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result "$RUNNER_TEMP/agent-result.json")"
 
       - name: Push state and work
