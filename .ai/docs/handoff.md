@@ -1,4 +1,4 @@
-# Handoff — agent system, as of 2026-09-23
+# Handoff — agent system, as of 2026-09-23 (USERS-002 pass)
 
 **Read this if you are picking up the AI development pipeline.** It records
 what exists, what has actually been proven by running it, what has not, and
@@ -27,12 +27,15 @@ is a repository secret and proven; Actions may open PRs and has; branch
 protection, the pre-commit hook and the red-baseline gate all hold. What is left
 is ordinary work, not setup.
 
-**Where USERS-002 actually is.** Its first run reached green implementation CI
-and then escalated on the bookkeeping step — bug 16, a spec I wrote that was
-impossible to satisfy. #34 was closed unmerged, the branch deleted, and the task
-is back at `DRAFT` awaiting a clean rebuild. The code that run produced was
-correct; it was discarded on purpose, so the rerun is a genuine first pass
-rather than a repair.
+**USERS-002 is done, and it is the first complete pass this system has had.**
+Rebuilt and rerun on 2026-09-23 after bug 16 escalated its first attempt:
+`DRAFT` to `COMPLETE` in 14 minutes, one attempt, no retries, no escalation,
+**$0.38**. Eleven transitions, every one unattended — including
+`CONTEXT_MAINTENANCE`, which had never once succeeded. The workflow opened
+[#38](https://github.com/DavidDems/fanwire/pull/38) itself.
+
+Nothing in the loop needed a human between `gh workflow run` and the PR
+appearing. That is the whole thing working, once, end to end.
 
 ## 1a. The one thing that will surprise you next
 
@@ -120,18 +123,27 @@ Distinguish this carefully from "is implemented".
 - A red baseline red for the right reason on a *real* task: `assert 201 == 422`
   against the age gate, not a contrived assertion.
 
+**Proven on 2026-09-23, by USERS-002's rebuild — the first complete pass:**
+- **`CONTEXT_MAINTENANCE`.** The last untested role. It read the implementation
+  diff and wrote one sentence into `0x01-users.md` documenting the rule, the
+  `field_validator`, the 422 shape and the leap-year handling. In scope, on the
+  first try, for $0.076. The wiki edit lands in the same human-reviewed PR as
+  the code, which is what that design was for.
+- **Eleven transitions with no human in the loop.** `gh workflow run` to an
+  open PR, 14 minutes, one attempt, no retries, no escalation. Every wake after
+  CI came from `workflow_run`.
+- **A full-cost number for a real task: $0.38** — test agent $0.151, code agent
+  $0.151, context maintainer $0.076. All sonnet; the manager was never needed.
+
 **Still not proven:**
 - The distiller and the manager decision path — no failure has yet routed
-  through them.
-- **The context maintainer succeeding.** Its one run was refused by the guard
-  (bug 16), so the wiki-update step has still never completed. USERS-002's
-  rebuild is the next chance.
+  through them. Both are on the happy path's far side, and nothing has taken
+  that side yet.
 - Any retry at all: `attempt` has never gone past 1 on any task.
-- **An agent PR merging.** #34 exists but is `BLOCKED` with **no checks
-  reported** — workflows on a PR opened by `github-actions[bot]` land in
-  `action_required` and need a human to approve the run before CI executes.
-  That is a new operational step nobody had hit before, because no workflow had
-  ever opened a PR.
+- **An agent PR merging.** #38 is open, authored by `app/github-actions`, and
+  arrives with **no checks reported** — see §1a. The checks are
+  `action_required`, waiting on a human to approve the run. Approve it, merge
+  it, and this line can go.
 
 ## 4. The seventeen bugs, and what they have in common
 
@@ -296,21 +308,28 @@ change — that is what the file is for.
 
 ## 6. Immediate next steps
 
-Rewritten 2026-09-23. Setup is finished; everything here is ordinary work.
+Rewritten 2026-09-23 after USERS-002 completed. Setup is finished and the loop
+is proven; everything here is ordinary work.
 
-1. **Rebuild USERS-002.** Cut `agent/USERS-002` from a `main` that no longer
-   carries the leaked `state.json` (bug 17) and dispatch. It is the first task
-   expected to run `DRAFT`→`COMPLETE` *including* the context-maintainer step,
-   which has still never completed.
-2. **Approve the run on the PR it opens** (§1a) and merge it. That closes the
-   last unproven item: an agent PR reaching `main`.
-3. **Then INFRA-002**, which unblocks the first real deploy — nothing uploads
-   the frontend to S3 today, so a deploy serves an empty bucket.
-4. **Exercise a failure path on purpose.** The distiller, the manager decision
-   and any retry at all remain unproven; `attempt` has never gone past 1 on any
-   task. A task with a deliberately impossible criterion buys all three for the
-   price of one cheap run.
-5. The dev S3 buckets (`TODO/02` §7) and then MEDIA-002, if browser-clickable
+1. **Approve the checks on [#38](https://github.com/DavidDems/fanwire/pull/38)
+   and merge it.** It arrives with none reported (§1a). Merging it closes the
+   last unproven item in §3 — an agent PR reaching `main` — and lands the age
+   gate plus its wiki entry together.
+
+   Worth a reviewer's eye first: the validator's `except ValueError` fallback
+   triggers when **today** is Feb 29, not when the *birth date* is, and the
+   docstring says the latter. The logic is right and the comment is not, which
+   is the sort of thing the human gate exists to catch.
+
+2. **INFRA-002**, which unblocks the first real deploy — nothing uploads the
+   frontend to S3 today, so a deploy serves an empty bucket behind a correct
+   distribution.
+3. **Exercise a failure path on purpose.** The distiller, the manager decision
+   and any retry at all remain unproven, and every task so far has gone green
+   first time. A task with a deliberately impossible acceptance criterion buys
+   all three for the price of one cheap run — and it is better to learn what
+   `MANAGER_REVIEW` does on a task nobody needs.
+4. The dev S3 buckets (`TODO/02` §7) and then MEDIA-002, if browser-clickable
    media matters before the frontend exists.
 
 Those are the *tasks*. The **known-open defects** — the conditions this document
