@@ -87,14 +87,32 @@ Distinguish this carefully from "is implemented".
   create or approve pull requests". A repository setting; the task still
   completes, only the PR is missing.
 
+**Proven on 2026-09-22, by USERS-002:**
+- **`workflow_run` wakes the orchestrator after CI.** Run 35768127169, 12
+  seconds after the baseline CI finished, no human nudge. This is the leg that
+  stalled DEMO-001 twice and it is the *only* thing that ever tested
+  `AGENT_DISPATCH_TOKEN`. §5.1 is now closed.
+- **A guard violation escalating, being pushed, and discarding the work**
+  (fixed in #27, never exercised until now). Run 35768890588: the context
+  maintainer's write was refused, its work discarded, the task escalated, and
+  the state committed and pushed. Exactly the designed behaviour, against a
+  real violation nobody staged.
+- **The workflow opened its own PR.** #34, author `app/github-actions`. The
+  setting was off for every earlier run, so this had never happened.
+- A red baseline red for the right reason on a *real* task: `assert 201 == 422`
+  against the age gate, not a contrived assertion.
+
 **Still not proven:**
-- The distiller, the context maintainer, the manager decision path — DEMO-001
-  passed first time, so no failure path ran.
-- A guard violation escalating and being pushed (fixed in #27, never exercised).
-- Any retry at all: `attempt` never went past 1.
-- **An agent PR merging.** `agent-guard` ran on one for the first time and
-  failed it (bug 14). Fixed in #29, and the fix is verified against the real
-  branch diff — but no agent PR has actually merged yet.
+- The distiller and the manager decision path — no failure has yet routed
+  through them.
+- **The context maintainer succeeding.** Its one run was refused by the guard
+  (bug 16), so the wiki-update step has still never completed.
+- Any retry at all: `attempt` has never gone past 1 on any task.
+- **An agent PR merging.** #34 exists but is `BLOCKED` with **no checks
+  reported** — workflows on a PR opened by `github-actions[bot]` land in
+  `action_required` and need a human to approve the run before CI executes.
+  That is a new operational step nobody had hit before, because no workflow had
+  ever opened a PR.
 
 ## 4. The fourteen bugs, and what they have in common
 
@@ -116,7 +134,8 @@ Recorded because the pattern matters more than the list.
 | 12 | `gh pr create`'s blanket `\|\|` reported every failure as "already exists", hiding a repository setting | #29 |
 | 13 | Nothing stopped a workflow from *approving* a PR once PR-creation is enabled | #29 |
 | 14 | `agent-guard` flagged the orchestrator's own state commits as an agent breaching `.ai/` — a required check that **no agent PR could ever pass** | #29 |
-| 15 | CI re-running on a **finished** task's branch woke the orchestrator, which tried to apply `CI_PASSED` to a COMPLETE task. The state machine correctly refused; the step's non-zero exit failed the whole run, painting a red X on a healthy pipeline every time a completed task's review PR was brought up to date | pending |
+| 15 | CI re-running on a **finished** task's branch woke the orchestrator, which tried to apply `CI_PASSED` to a COMPLETE task. The state machine correctly refused; the step's non-zero exit failed the whole run, painting a red X on a healthy pipeline every time a completed task's review PR was brought up to date | #31 |
+| 16 | A spec with `run_context_maintainer: true` and no `wiki/CodeContext/Modules/*.md` in `allowed_paths` is **unsatisfiable**: the maintainer's only permitted write is refused as `outside_task_scope`, so a task whose code and tests are green escalates on the bookkeeping step. Cost a whole successful USERS-002 pass. Not a workflow bug this time — a **Director** bug, in a spec, that nothing validated | pending |
 
 **Every single one was in the workflow layer, and none was visible to the unit
 tests.** The tested core was right each time. `next_action` was always handed a
