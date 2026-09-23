@@ -221,9 +221,12 @@ def validate_questions(doc: dict[str, Any], name: str = "questions") -> list[str
             if not isinstance(criteria, dict) or len(criteria) < 2:
                 problems.append(f"{where}: 'criteria' must be an object of at least 2 options")
         elif qtype == "score":
-            scale = q.get("scale")
-            if not isinstance(scale, list) or len(scale) < 2:
-                problems.append(f"{where}: 'scale' must be a list of at least 2 levels")
+            # An array, and named `criteria` exactly as `choice` is - the wire
+            # distinguishes the two by JSON type, not by field name. The docs
+            # call this `scale`; the API does not, and the API is the contract.
+            levels = q.get("criteria")
+            if not isinstance(levels, list) or len(levels) < 2:
+                problems.append(f"{where}: 'criteria' must be a list of at least 2 levels")
 
     problems += _validate_gates(doc, questions, name)
     return problems
@@ -276,8 +279,8 @@ def _options(question: dict[str, Any]) -> set[str] | None:
         criteria = question.get("criteria")
         return set(criteria) if isinstance(criteria, dict) else set()
     if question.get("type") == "score":
-        scale = question.get("scale")
-        return set(scale) if isinstance(scale, list) else set()
+        levels = question.get("criteria")
+        return set(levels) if isinstance(levels, list) else set()
     return None
 
 

@@ -220,7 +220,7 @@ class TestTheTypedDecisionSeam:
         """Same least-privilege rule as the agent step: a step holding a
         provider credential must not also be able to reach the GitHub API."""
         block = worker.split("id: decide", 1)[1].split("- name:", 1)[0]
-        assert "TYPESAFE_API_KEY" in block, "the decision step needs its provider credential"
+        assert "AI_GATEWAY_API_KEY" in block, "the decision step needs its provider credential"
         assert 'GITHUB_TOKEN: ""' in block and 'GH_TOKEN: ""' in block, (
             "the decision step must blank both GitHub tokens"
         )

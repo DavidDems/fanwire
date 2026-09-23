@@ -22,7 +22,7 @@
     "testability": {
       "type": "score",
       "instructions": "The state contains a task specification for an automated coding workflow: its description, its acceptance criteria, and the paths it is permitted to change. A test agent will read this and must write failing tests that pin the required behaviour BEFORE any implementation exists. Grade how well the acceptance criteria support that.",
-      "scale": ["testable", "underspecified", "untestable"],
+      "criteria": ["testable", "underspecified", "untestable"],
       "legend": "testable: each acceptance criterion names an observable behaviour with a determinable pass/fail outcome. underspecified: the intent is clear but at least one criterion leaves the expected result, the inputs, or the boundary conditions unstated, so a test author would have to guess. untestable: the criteria are subjective, self-contradictory, or describe no observable behaviour at all."
     },
 

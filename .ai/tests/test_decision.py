@@ -276,3 +276,33 @@ class TestSpecOutcome:
         out = dec.spec_outcome(self.doc, {})
         assert out["blocks_dispatch"] is False
         assert out["testability"] == "underspecified"
+
+
+class TestTheWireShapeMatchesTheLiveApi:
+    """Field names confirmed against the live endpoint, not against the docs.
+
+    The published TypeSafe docs describe a `score` question's levels as
+    `scale`. The API rejects that:
+
+        questions.severity.criteria: Invalid input: expected array,
+        received undefined
+
+    Both question types use `criteria`; the wire tells them apart by JSON type
+    (an object for `choice`, an array for `score`). This is pinned because it
+    is exactly the kind of thing a docs-driven edit would quietly revert, and
+    the only way to find out would be a 400 in a live workflow run.
+    """
+
+    def test_a_score_declares_its_levels_as_a_criteria_array(self):
+        doc = dec.load_questions(QUESTIONS_DIR / "spec-readiness.json")
+        testability = doc["questions"]["testability"]
+        assert isinstance(testability["criteria"], list)
+        assert "scale" not in testability, "the API rejects `scale`; use `criteria`"
+
+    def test_a_scale_field_is_not_accepted_as_a_substitute(self):
+        doc = {"questions": {"v": {"type": "score", "instructions": "x", "scale": ["a", "b"]}}}
+        assert any("criteria" in p for p in dec.validate_questions(doc))
+
+    def test_a_choice_still_declares_criteria_as_an_object(self):
+        doc = dec.load_questions(QUESTIONS_DIR / "manager.json")
+        assert isinstance(doc["questions"]["decision"]["criteria"], dict)

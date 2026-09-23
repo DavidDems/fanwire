@@ -55,10 +55,10 @@ Nothing below is done by this repository's files; a human has to switch it on.
 4. **A runner with the provider CLI.** `agent-worker.yml` calls
    `.ai/bin/invoke_agent.sh`, which expects the provider's CLI on `PATH`.
 5. **Two repository secrets.** `ANTHROPIC_API_KEY` for the agent seam, and
-   `TYPESAFE_API_KEY` for the typed-decision seam (`.ai/bin/ask_jev.py`, which
+   `AI_GATEWAY_API_KEY` for the typed-decision seam (`.ai/bin/ask_jev.py`, which
    needs no CLI and no install — it is stdlib and one POST).
 
-   `TYPESAFE_API_KEY` is not required to run the system. Without it every
+   `AI_GATEWAY_API_KEY` is not required to run the system. Without it every
    decision falls back conservatively: the Manager escalates to a human, no
    red run is forgiven as a flake, and no spec is blocked before dispatch.
    That is the behaviour the system had before the seam existed, so a missing

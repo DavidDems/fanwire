@@ -73,9 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     out_path = Path(args.out)
     config = _config()
     provider = config.get("providers", {}).get("jev", {})
-    model = provider.get("model", "jev-latest")
-    endpoint = provider.get("endpoint", "https://api.typesafe.ai/v1/systemone")
-    key_var = provider.get("api_key_env", "TYPESAFE_API_KEY")
+    model = provider.get("model", "typesafe-ai/jev")
+    endpoint = provider.get("endpoint", "https://ai-gateway.vercel.sh/typesafe/v1/systemone")
+    key_var = provider.get("api_key_env", "AI_GATEWAY_API_KEY")
 
     # Written up front so every downstream reader has a parseable file even if
     # this process dies on the next line.

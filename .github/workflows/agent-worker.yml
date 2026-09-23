@@ -112,7 +112,7 @@ jobs:
         id: decide
         if: env.ROLE == 'manager'
         env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           # Same rule as the agent step below: the decision call gets the
           # provider credential and no GitHub token.
           GITHUB_TOKEN: ""
