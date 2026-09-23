@@ -29,7 +29,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+MINIMUM_AGE_YEARS = 16
 
 
 class CreateUserRequest(BaseModel):
@@ -37,6 +39,28 @@ class CreateUserRequest(BaseModel):
     date_of_birth: date
     description: str | None = None
     preferred_team_id: int | None = None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def _validate_minimum_age(cls, value: date) -> date:
+        """Reject a date_of_birth that isn't strictly in the past, or that
+        makes the person younger than MINIMUM_AGE_YEARS whole years old
+        today. Whole-years is computed by shifting the birth date forward
+        by MINIMUM_AGE_YEARS and comparing to today, rather than subtracting
+        floats, so a Feb 29 birth date compares correctly against a non-leap
+        "today" (see wiki/CodeContext/Modules/0x01-users.md)."""
+        today = date.today()
+        if value >= today:
+            raise ValueError("date_of_birth must be in the past")
+        try:
+            earliest_valid_dob = today.replace(year=today.year - MINIMUM_AGE_YEARS)
+        except ValueError:
+            earliest_valid_dob = today.replace(
+                month=3, day=1, year=today.year - MINIMUM_AGE_YEARS
+            )
+        if value > earliest_valid_dob:
+            raise ValueError(f"must be at least {MINIMUM_AGE_YEARS} years old")
+        return value
 
 
 class PublicUserOut(BaseModel):
