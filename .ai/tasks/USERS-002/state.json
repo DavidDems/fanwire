@@ -47,6 +47,13 @@
       "from": "READY_FOR_IMPLEMENTATION",
       "note": "code agent dispatched (attempt 1)",
       "to": "CODE_AGENT_RUNNING"
+    },
+    {
+      "at": "2026-09-23T05:18:14Z",
+      "event": "AGENT_COMMITTED",
+      "from": "CODE_AGENT_RUNNING",
+      "note": "4ef3820c3e22f5037f6fa117f9ded473ffd888b5",
+      "to": "IMPL_COMMITTED"
     }
   ],
   "last_ci": {
@@ -58,9 +65,10 @@
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {
+    "code_agent": "1a9008e0-8616-44bf-81d3-69ff048a7588",
     "test_agent": "d8e6458c-3fc0-4c53-9965-32780aeb55f0"
   },
-  "state": "CODE_AGENT_RUNNING",
+  "state": "IMPL_COMMITTED",
   "task_id": "USERS-002",
-  "updated_at": "2026-09-23T05:16:29Z"
+  "updated_at": "2026-09-23T05:18:14Z"
 }
