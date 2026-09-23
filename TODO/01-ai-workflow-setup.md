@@ -1,6 +1,16 @@
 # 01 — Making the AI workflow live
 
-**Status: the pipeline works. DEMO-001 completed end to end on 2026-09-21.**
+**Status: done. The pipeline runs unattended — nothing in this file is
+blocking any more.**
+
+Updated 2026-09-23. Every step below is closed. The last one to land was the
+dispatch token, and it is no longer a matter of belief: on 2026-09-22 the
+orchestrator woke itself 12 seconds after CI finished (run 35768127169), with
+no nudge, on the leg that had stalled every previous task twice.
+
+This file is kept as the record of how the thing was stood up and what each
+setting is for. **For what to do next, read
+[`.ai/docs/handoff.md`](../.ai/docs/handoff.md) §6.**
 
 ```
 DRAFT → READY → TEST_AGENT_RUNNING → TESTS_COMMITTED → BASELINE_CI
@@ -46,7 +56,10 @@ It must be a **Claude Console** API key. A Pro/Max plan does not grant API
 access, and an Organization-settings key is not the same thing — that mismatch
 is what made the first four worker runs fail.
 
-Spend so far: **$0.074**. Check any time with:
+Spend so far: **$0.95** across every task and every discarded run. A complete
+task costs about **$0.38** — USERS-002 on 2026-09-23 was test agent $0.151,
+code agent $0.151, context maintainer $0.076, all sonnet, with the manager
+never invoked. Check any time with:
 
 ```powershell
 python .ai/bin/agentctl.py telemetry report
@@ -386,13 +399,22 @@ git branch -r --merged origin/main | ForEach-Object { $_.Trim() -replace '^origi
 
 - [x] `agentctl status` shows `DEMO-001` as `COMPLETE`
 - [x] `agentctl telemetry report` shows a full task's cost — $0.2738
-- [ ] `AGENT_DISPATCH_TOKEN` is a **repository** secret and an
-      `agent-orchestrator` run woke on `workflow_run` after CI *(step 7)*
-- [ ] The old `fanwire token` PAT is revoked *(step 7b)*
-- [ ] A PR was opened **by the workflow**, and you merged it *(step 10 is now
-      enabled, so the next completed task should do this; the first one was
-      opened by hand)*
-- [ ] You have paused and resumed a task at least once *(step 8)*
+- [x] `AGENT_DISPATCH_TOKEN` is a **repository** secret and an
+      `agent-orchestrator` run woke on `workflow_run` after CI — run
+      35768127169, 2026-09-22
+- [x] The old `fanwire token` PAT is revoked *(2026-09-22)*
+- [x] A PR was opened **by the workflow** — twice now. #34 (closed unmerged:
+      the task behind it escalated on a spec bug, #35) and **#38, from the
+      first complete pass**. Merging one is the last thing outstanding, and is
+      step 1 of [`handoff.md`](../.ai/docs/handoff.md) §6
+- [x] You have paused and resumed a task at least once *(step 8)*
+
+⚠️ **One thing to expect the first time the workflow opens a PR for you:** it
+arrives with **no checks reported at all**, and reads as blocked. Workflows on a
+PR authored by `github-actions[bot]` land in `action_required` and wait for a
+human to approve the run before CI executes. Approve it from the Actions tab.
+Arguably a feature — a human gate between an agent finishing and CI spending
+minutes on its work — but decide that deliberately rather than by default.
 
 Then the pipeline is live, and
 [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) §6 becomes the standing

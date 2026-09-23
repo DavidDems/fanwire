@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Refuse to push a human branch that is secretly built on an agent branch.
+#
+# Why this exists (2026-09-22): `spec-maintainer-gate` was created while HEAD
+# was on `agent/USERS-002` rather than `main`. The PR looked like a two-file
+# change in review, merged cleanly, and carried two `[agent-state]` commits and
+# a mid-flight `state.json` (`TEST_AGENT_RUNNING`) onto `main` with it.
+#
+# That is worse than untidy. Task state on `main` is read by the next run of
+# that task: a fresh `agent/USERS-002` cut from `main` would have started by
+# reading "a test agent is already running", and stalled. The task looked
+# rebuilt and would not have moved.
+#
+# A merged agent PR putting its own finished `state.json` on `main` is the
+# design and is fine. A *human* branch dragging one along is not, and the two
+# are indistinguishable once merged.
+#
+# Scope: a convenience, like `pre-commit`. It runs on a developer's machine,
+# `--no-verify` skips it, and CI does not use it. The permission model does not
+# depend on it. See README.md, "What a hook is not".
+
+set -uo pipefail
+
+status=0
+zero="0000000000000000000000000000000000000000"
+
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue          # a branch deletion
+  branch="${local_ref#refs/heads/}"
+
+  # Agent branches are *supposed* to carry these; that is where they are made.
+  case "$branch" in
+    agent/*) continue ;;
+  esac
+
+  # What this push would add that `main` does not already have. Using the
+  # remote's `main` rather than the remote branch's tip deliberately: the
+  # question is what reaches `main` on merge, not what is new on this branch.
+  base="$(git rev-parse --verify --quiet origin/main)" || continue
+
+  offenders="$(git log --format='%h %s' "$base..$local_sha" 2>/dev/null \
+    | grep -E '^[0-9a-f]+ \[agent-state\]' || true)"
+
+  if [ -n "$offenders" ]; then
+    printf '\npre-push: %s carries agent bookkeeping commits.\n\n' "$branch" >&2
+    printf '%s\n' "$offenders" | sed 's/^/    /' >&2
+    printf '\n  This branch was almost certainly created while HEAD was on an\n' >&2
+    printf '  agent/* branch. Merging it would put another task'"'"'s mid-flight\n' >&2
+    printf '  state.json on main, which the next run of that task would read.\n\n' >&2
+    printf '  Rebuild it on main:\n' >&2
+    printf '    git switch -c %s-clean origin/main\n' "$branch" >&2
+    printf '    git checkout %s -- <the files you meant to change>\n\n' "$branch" >&2
+    status=1
+  fi
+done
+
+exit $status

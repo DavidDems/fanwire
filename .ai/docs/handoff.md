@@ -1,4 +1,4 @@
-# Handoff — agent system, as of 2026-09-21
+# Handoff — agent system, as of 2026-09-23 (USERS-002 pass)
 
 **Read this if you are picking up the AI development pipeline.** It records
 what exists, what has actually been proven by running it, what has not, and
@@ -6,31 +6,52 @@ what to be careful of. It is a snapshot, not a design document — for the
 design read [architecture.md](architecture.md), and for the reasoning and the
 review protocol read [philosophy.md](philosophy.md).
 
+**If you were sent here to fix the open defects, go straight to §9.** It is a
+brief written for you, and its first instruction is not to start fixing.
+
 Written at the end of the session that built the system and ran it four times.
 
 ---
 
 ## 1. Where things stand in one paragraph
 
-The agent system is built, merged to `main`, covered by 182 tests, and **it
-works**. DEMO-001 ran end to end on 2026-09-21 — `DRAFT` to `COMPLETE`, one
-attempt, no retries, no escalation, $0.2738. Getting there took five live runs
-and thirteen bugs, every one in the workflow layer rather than the tested core.
+The agent system is built, merged to `main`, covered by 211 tests, and **the
+whole chain now runs unattended**. DEMO-001 went `DRAFT` to `COMPLETE` on
+2026-09-21. USERS-002 on 2026-09-22 went further in the one way that mattered:
+the orchestrator **woke itself after CI** with no human nudge, which is the leg
+that had stalled every previous task twice. Seventeen bugs so far, none of them
+in the tested core.
 
-Two things still need a human: a dispatch PAT (the `workflow_run` leg of the
-chain does not fire under `GITHUB_TOKEN` — confirmed, not theoretical), and the
-repository setting that lets Actions open a PR. Both are in
-[`../../TODO/01-ai-workflow-setup.md`](../../TODO/01-ai-workflow-setup.md).
+**Nothing is waiting on a human to make the pipeline work.** The dispatch token
+is a repository secret and proven; Actions may open PRs and has; branch
+protection, the pre-commit hook and the red-baseline gate all hold. What is left
+is ordinary work, not setup.
 
-**Update 2026-09-21, later the same day.** The repository setting is **done**
-(`can_approve_pull_request_reviews: true`, with `default_workflow_permissions`
-left at `read`), and so is `delete_branch_on_merge`. The PAT exists with the
-right scopes but **is not yet reaching the workflows**: it was created as an
-*environment* secret, which no job can read because none declares
-`environment:`. `${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}` then
-falls back silently, so the stall looks identical to having no token at all.
-It has to be a **repository** secret — TODO/01 §7 has the command and, more
-importantly, how to confirm it took.
+**USERS-002 is done, and it is the first complete pass this system has had.**
+Rebuilt and rerun on 2026-09-23 after bug 16 escalated its first attempt:
+`DRAFT` to `COMPLETE` in 14 minutes, one attempt, no retries, no escalation,
+**$0.38**. Eleven transitions, every one unattended — including
+`CONTEXT_MAINTENANCE`, which had never once succeeded. The workflow opened
+[#38](https://github.com/DavidDems/fanwire/pull/38) itself.
+
+Nothing in the loop needed a human between `gh workflow run` and the PR
+appearing. That is the whole thing working, once, end to end.
+
+## 1a. The one thing that will surprise you next
+
+**A PR opened by the workflow arrives with no checks at all.** #34 sat
+`BLOCKED` reporting nothing, because workflows on a PR authored by
+`github-actions[bot]` land in `action_required` and wait for a human to approve
+the run before CI will execute.
+
+This is not §5.2's `paths-ignore` trap and not a misconfiguration — it is
+GitHub's default for bot-authored PRs, and no workflow had ever opened one
+before, so nobody had hit it. Approve the run from the Actions tab and the
+checks proceed normally.
+
+It is worth deciding deliberately whether that is a feature. A human gate
+between an agent finishing and CI spending minutes on its work is arguably the
+right shape for this system.
 
 ## 2. What exists
 
@@ -41,13 +62,13 @@ importantly, how to confirm it took.
 | `.github/workflows/` — orchestrator, worker, guard, plus the existing quality gate | Built, all four have now run |
 | `.ai/prompts/`, `.ai/skills/` | Built; the test-agent prompt has been exercised once, for real |
 | `.ai/tasks/DEMO-001/` | The validation task. Reached `COMPLETE` 2026-09-21 |
-| `.ai/telemetry/` | Working; two invocations, $0.2738 for the full task |
+| `.ai/telemetry/` | Working; DEMO-001 cost $0.2738, USERS-002's discarded run ~$0.25 |
 | `.ai/docs/` | philosophy, architecture, state-machine, permissions, threat-model, operations, this file |
-| `TODO/` | Human-facing setup checklist. Steps 0–6 and 10–11 done; 7, 7b, 8, 9 outstanding |
+| `TODO/` | Human-facing checklist. **01 is effectively done** — every setup step closed. 02 is AWS/domain (zone live, bootstrapped, IAM attached; dev S3 buckets outstanding). 03 holds the answered product decisions |
 
-Merged: PRs #23 (the system), #25, #26, #27, #28 (fixes from live runs).
-`main` is at `60f14bd`. **Open:** #29 (guard fix, all checks green, waiting on
-your approval) and #30 (the DEMO-001 work, blocked on #29).
+Merged: #23 (the system), #25–#33, #35. #34 was the workflow's own first PR
+and was **closed unmerged** on purpose (bug 16). No PR is open except the one
+carrying this document.
 
 Note `agentctl status` reports `DEMO-001` as `DRAFT` when run from any branch
 other than `agent/DEMO-001` — state lives on the task branch by design (§8), so
@@ -87,16 +108,44 @@ Distinguish this carefully from "is implemented".
   create or approve pull requests". A repository setting; the task still
   completes, only the PR is missing.
 
-**Still not proven:**
-- The distiller, the context maintainer, the manager decision path — DEMO-001
-  passed first time, so no failure path ran.
-- A guard violation escalating and being pushed (fixed in #27, never exercised).
-- Any retry at all: `attempt` never went past 1.
-- **An agent PR merging.** `agent-guard` ran on one for the first time and
-  failed it (bug 14). Fixed in #29, and the fix is verified against the real
-  branch diff — but no agent PR has actually merged yet.
+**Proven on 2026-09-22, by USERS-002:**
+- **`workflow_run` wakes the orchestrator after CI.** Run 35768127169, 12
+  seconds after the baseline CI finished, no human nudge. This is the leg that
+  stalled DEMO-001 twice and it is the *only* thing that ever tested
+  `AGENT_DISPATCH_TOKEN`. §5.1 is now closed.
+- **A guard violation escalating, being pushed, and discarding the work**
+  (fixed in #27, never exercised until now). Run 35768890588: the context
+  maintainer's write was refused, its work discarded, the task escalated, and
+  the state committed and pushed. Exactly the designed behaviour, against a
+  real violation nobody staged.
+- **The workflow opened its own PR.** #34, author `app/github-actions`. The
+  setting was off for every earlier run, so this had never happened.
+- A red baseline red for the right reason on a *real* task: `assert 201 == 422`
+  against the age gate, not a contrived assertion.
 
-## 4. The fourteen bugs, and what they have in common
+**Proven on 2026-09-23, by USERS-002's rebuild — the first complete pass:**
+- **`CONTEXT_MAINTENANCE`.** The last untested role. It read the implementation
+  diff and wrote one sentence into `0x01-users.md` documenting the rule, the
+  `field_validator`, the 422 shape and the leap-year handling. In scope, on the
+  first try, for $0.076. The wiki edit lands in the same human-reviewed PR as
+  the code, which is what that design was for.
+- **Eleven transitions with no human in the loop.** `gh workflow run` to an
+  open PR, 14 minutes, one attempt, no retries, no escalation. Every wake after
+  CI came from `workflow_run`.
+- **A full-cost number for a real task: $0.38** — test agent $0.151, code agent
+  $0.151, context maintainer $0.076. All sonnet; the manager was never needed.
+
+**Still not proven:**
+- The distiller and the manager decision path — no failure has yet routed
+  through them. Both are on the happy path's far side, and nothing has taken
+  that side yet.
+- Any retry at all: `attempt` has never gone past 1 on any task.
+- **An agent PR merging.** #38 is open, authored by `app/github-actions`, and
+  arrives with **no checks reported** — see §1a. The checks are
+  `action_required`, waiting on a human to approve the run. Approve it, merge
+  it, and this line can go.
+
+## 4. The seventeen bugs, and what they have in common
 
 Recorded because the pattern matters more than the list.
 
@@ -116,10 +165,18 @@ Recorded because the pattern matters more than the list.
 | 12 | `gh pr create`'s blanket `\|\|` reported every failure as "already exists", hiding a repository setting | #29 |
 | 13 | Nothing stopped a workflow from *approving* a PR once PR-creation is enabled | #29 |
 | 14 | `agent-guard` flagged the orchestrator's own state commits as an agent breaching `.ai/` — a required check that **no agent PR could ever pass** | #29 |
-| 15 | CI re-running on a **finished** task's branch woke the orchestrator, which tried to apply `CI_PASSED` to a COMPLETE task. The state machine correctly refused; the step's non-zero exit failed the whole run, painting a red X on a healthy pipeline every time a completed task's review PR was brought up to date | pending |
+| 15 | CI re-running on a **finished** task's branch woke the orchestrator, which tried to apply `CI_PASSED` to a COMPLETE task. The state machine correctly refused; the step's non-zero exit failed the whole run, painting a red X on a healthy pipeline every time a completed task's review PR was brought up to date | #31 |
+| 16 | A spec with `run_context_maintainer: true` and no `wiki/CodeContext/Modules/*.md` in `allowed_paths` is **unsatisfiable**: the maintainer's only permitted write is refused as `outside_task_scope`, so a task whose code and tests are green escalates on the bookkeeping step. Cost a whole successful USERS-002 pass. Not a workflow bug this time — a **Director** bug, in a spec, that nothing validated | #35 |
+| 17 | A human branch cut while HEAD was on `agent/USERS-002` carried two `[agent-state]` commits and a **mid-flight `state.json`** onto `main` through #35. The next run of that task would have read `TEST_AGENT_RUNNING` from `main` and stalled — a task that looks rebuilt and cannot move | #36 |
 
-**Every single one was in the workflow layer, and none was visible to the unit
-tests.** The tested core was right each time. `next_action` was always handed a
+**Bugs 1–15 were in the workflow layer, and none was visible to the unit
+tests. Bugs 16 and 17 were not in the workflow layer at all** — 16 was a task
+spec, 17 was a branch point. The honest generalisation is not "workflow YAML is
+where this breaks" but **"the artifacts the tested core consumes are where this
+breaks"**: YAML it never parses, JSON specs it is handed, and the git history
+it is run against. The core itself has been right every time.
+
+Of the originals: The tested core was right each time. `next_action` was always handed a
 state dict, so the CLI wrapper was never exercised (#1). The role→event mapping
 lived in YAML, where no test could reach it (#2). `yaml.safe_load` validates
 syntax, not context availability (#10).
@@ -251,29 +308,34 @@ change — that is what the file is for.
 
 ## 6. Immediate next steps
 
-Rewritten 2026-09-21 after DEMO-001 completed; the earlier list (reset the stuck
-task, watch the red baseline) is done and gone.
+Rewritten 2026-09-23 after USERS-002 completed. Setup is finished and the loop
+is proven; everything here is ordinary work.
 
-1. **Make the dispatch token reachable.** Repository secret, not an environment
-   secret — §5.1 and TODO/01 §7. Nothing else on this list is worth doing first,
-   because every task still needs two manual nudges until it is fixed.
-2. **Revoke the old `fanwire token` PAT.** It holds `administration`, `secrets`
-   and `workflows` write on this repo and its value is unaccounted for. A token
-   with `workflows: write` can rewrite the permission model this system is built
-   on. TODO/01 §7b.
-3. **Merge #29, then update-branch and merge #30.** #30's `agent-guard` failure
-   is bug 14 and only clears once #29's fix is in its merge base — a bare re-run
-   fails again.
-4. **Then watch for the two still-unproven things**, in this order: an agent PR
-   that `agent-guard` passes (§3), and a PR **opened by the workflow** rather
-   than by hand — the setting that blocked it is now on, so the next completed
-   task is the test.
-5. **Exercise a failure path on purpose.** Everything in §3's "still not proven"
-   list is a success path that happened to work first time. A task with a
-   deliberately impossible acceptance criterion would exercise the distiller,
-   the manager decision and a real retry for the cost of one cheap run.
-6. Then decide whether DEMO-001's endpoint is worth keeping, and point the
-   system at a real task.
+1. **Approve the checks on [#38](https://github.com/DavidDems/fanwire/pull/38)
+   and merge it.** It arrives with none reported (§1a). Merging it closes the
+   last unproven item in §3 — an agent PR reaching `main` — and lands the age
+   gate plus its wiki entry together.
+
+   Worth a reviewer's eye first: the validator's `except ValueError` fallback
+   triggers when **today** is Feb 29, not when the *birth date* is, and the
+   docstring says the latter. The logic is right and the comment is not, which
+   is the sort of thing the human gate exists to catch.
+
+2. **INFRA-002**, which unblocks the first real deploy — nothing uploads the
+   frontend to S3 today, so a deploy serves an empty bucket behind a correct
+   distribution.
+3. **Exercise a failure path on purpose.** The distiller, the manager decision
+   and any retry at all remain unproven, and every task so far has gone green
+   first time. A task with a deliberately impossible acceptance criterion buys
+   all three for the price of one cheap run — and it is better to learn what
+   `MANAGER_REVIEW` does on a task nobody needs.
+4. The dev S3 buckets (`TODO/02` §7) and then MEDIA-002, if browser-clickable
+   media matters before the frontend exists.
+
+Those are the *tasks*. The **known-open defects** — the conditions this document
+records but nothing has fixed — are a separate job with its own brief: **§9**.
+It starts with an independent review of the flow rather than with a fix, and
+says why. Do not start §9's items from this list; start them from §9.
 
 ## 7. How to work on this system
 
@@ -289,6 +351,22 @@ task, watch the red baseline) is done and gone.
 - When you fix something a live run exposed, record the run id in the commit
   message. Every bug above is traceable to one, and that is what made the
   pattern in §4 visible.
+- **Cut every branch from `origin/main` explicitly**, not from whatever HEAD
+  happens to be:
+
+  ```powershell
+  git switch -c <name> origin/main
+  ```
+
+  `git switch -c <name>` alone branches from the current HEAD, and in a session
+  that has been inspecting a task branch that is not `main`. Bug 17 is what
+  that looks like: a PR that reviewed as a two-file change and merged another
+  task's mid-flight state onto `main`. The `pre-push` hook now refuses it, but
+  the hook is a convenience and `--no-verify` skips it.
+- **State on `main` is not inert.** `.ai/tasks/<ID>/state.json` is what the next
+  run of that task reads. A finished state arriving with a merged agent PR is
+  the design; anything mid-flight on `main` means something leaked, and the
+  task it names will stall rather than start.
 
 ## 8. Open questions worth a reasoning pass
 
@@ -306,3 +384,195 @@ Not bugs — judgement calls the next person should make deliberately:
   (§5.2). An `agent-state` branch was the alternative.
 - **What is the next thing to automate?** `philosophy.md` §6 holds the standing
   backlog and the rule that proposals must cite a trace.
+
+## 9. Brief: close the open items, starting with an independent flow review
+
+**This section is addressed to the agent picking up the unfinished work.** It
+is a task, not a summary. Read §5, §7 and §8 first; they are the evidence it
+rests on.
+
+### 9.0 What you are, before you plan anything
+
+The work below touches `.ai/`, `.github/` and this file. Those are in
+`agentlib.guard.ALWAYS_FORBIDDEN` and **no CI-dispatched role can write them** —
+not the test agent, not the code agent, not the context maintainer.
+`policy.json` grants them to nobody, and a task spec narrows a role, never
+widens one.
+
+So you are working as the **Director**: a human-driven session whose changes
+land as an ordinary human-reviewed PR from a non-`agent/*` branch. You are not
+dispatched by the orchestrator and not bound by `policy.json`. The only things
+bounding you are judgement and the human reading your diff.
+
+Do not try to route this work through `agentctl task` and the pipeline. A spec
+naming those paths fails validation — the correct answer to the wrong question.
+**Bug 16 was this exact mistake**: a spec that could not be satisfied,
+discovered by burning a live run instead of by reading the permission model.
+
+### 9.1 Do the review before the fixes
+
+Every item in §9.2 changes *when automated work fires*. Sixteen of this
+system's seventeen recorded bugs were in that layer. So establish what the
+current behaviour actually is **before** changing any of it — and you are not
+the one who gets to establish it.
+
+**Dispatch a subagent whose only job is to enumerate the flow.** Narrow scope,
+read-only, no fixes, no opinion on §9.2. Its deliverable is what happens
+*today*, under every condition, with a citation per claim.
+
+Give it this, and nothing more:
+
+> Enumerate every condition under which this repository performs automated
+> work, and what the system does in each. Read-only: change no file, open no
+> PR, propose no fix.
+>
+> Sources, in order of authority: `.github/workflows/*.yml`,
+> `.ai/agentlib/state.py`, `.ai/agentlib/orchestrator.py`, `.ai/policy.json`,
+> and the real run history (`gh run list`, `gh run view <id> --log`). Where the
+> YAML and the Python disagree about what should happen, say so — that gap is
+> the finding, not a detail to reconcile.
+>
+> Produce a table whose rows are every reachable combination of:
+>
+> - **Trigger** — `workflow_dispatch` (orchestrator, worker, test-agent),
+>   `workflow_run` on `test-agent` completion, `pull_request`, `push`.
+> - **Branch** — `agent/*` versus anything else, and `main` specifically.
+> - **Task state** — every member of `state.STATES`, including the terminal
+>   ones and `MANAGER_REVIEW`.
+> - **Control flag** — `RUN`, `PAUSE`, `CANCEL`.
+> - **`workflow_run.conclusion`** — enumerate *every* value GitHub can emit,
+>   not only the ones the workflow names, and check them against the `case`
+>   statement. Report any value that falls through.
+>
+> For each row state: which job runs, which `if:` admits or skips it, which
+> event reaches the state file, what the next action is, and **what wakes the
+> task next**. A row whose answer to that last question is "nothing" is the
+> highest-value finding in this exercise — it is a silent stall.
+>
+> Also answer, with citations:
+>
+> - When two triggers arrive for one task while a run is in flight, GitHub
+>   keeps one pending run per concurrency group and drops the rest. Which
+>   transitions can be lost that way, and is the loss detectable afterwards
+>   from the state file alone?
+> - Which paths reach a `*_RUNNING` state that nothing exits?
+> - Which retry and transition budgets count which failures, and is there a
+>   failure path no budget counts? Bug 5 was one of those.
+> - `test-agent.yml`'s `pull_request` trigger ignores `.ai/tasks/**` and
+>   `.ai/telemetry/**`. Which real PR shapes therefore produce no checks at
+>   all?
+>
+> Report only findings you can cite. Say plainly where you could not determine
+> something rather than inferring it. "No finding" is an acceptable answer for
+> any row and is worth more than a guess.
+
+### 9.2 The open items
+
+Ordered by what each costs while it stays open. Each says what *done* means,
+because none is done when the code merely changes.
+
+1. **The CI half of bug 17.** The `pre-push` hook refuses a non-`agent/*`
+   branch carrying `[agent-state]` commits, but a hook is a convenience and
+   `--no-verify` skips it. The control is a required check that a
+   non-`agent/*` PR's diff touches no `.ai/tasks/*/state.json`.
+   *Done when:* a PR shaped like #35 fails a required check, and the rule lives
+   in `test_workflows.py` so removing it fails the build.
+   ⚠️ **Coordinate first.** CI was being reworked on another branch as of
+   2026-09-23 — a new model (`jev`) and test-speed work. Rebase onto that or
+   you will collide in the same files.
+
+2. **Unhandled `workflow_run` conclusions.** The orchestrator's `case` maps
+   `success` and `failure|timed_out`; everything else exits 0 having applied
+   nothing. Whether the remaining values are reachable for a CI run on a task
+   branch, and what state the task is left in, is a question for §9.1's review
+   — not for your intuition.
+   *Done when:* every reachable conclusion either advances the state or is
+   documented as deliberately inert, with the reason.
+
+3. **§5.4, concurrency dropping a transition.** The design assumes GitHub
+   queues runs per concurrency group. It does not — it keeps one pending and
+   drops the rest. Never observed; "never observed" and "does not happen" are
+   different claims.
+   *Done when:* either a lost transition is detectable from the state file, or
+   the design stops depending on queuing that does not exist.
+
+4. **§5.6, the unpinned provider CLI.** `npm install -g
+   @anthropic-ai/claude-code` on every run: it can change under you and break
+   the workflow with no change on your side, and costs 20–30s an invocation.
+   *Done when:* a version is pinned, and moving the pin is visible in a diff.
+
+5. **§1a, `action_required` on bot-authored PRs.** A PR the workflow opens
+   arrives with no checks until a human approves the run.
+   *Done when:* the decision is written down either way. This one may
+   legitimately end in "keep it, and here is why".
+
+6. **§5.3, a skipped required check.** `agent-guard` skips on non-`agent/*`
+   branches, and GitHub has treated the skip as satisfying the requirement on
+   every PR so far. It works, and it is load-bearing.
+   *Done when:* you have confirmed that behaviour is guaranteed rather than
+   incidental, or stopped relying on it.
+
+Not on this list: §8's judgement calls. Those want a human's opinion, not a
+change.
+
+### 9.3 The independence requirement
+
+**The review in §9.1 and the fixes in §9.2 must not come from the same
+reasoning.** The value of a second pass is that it can disagree with the first,
+and it cannot do that once it has been told what to conclude.
+
+- The subagent gets §9.1's prompt and nothing else. It does **not** get §9.2,
+  this section, or any theory you have formed. Naming a suspected bug to a
+  reviewer gets it confirmed rather than tested.
+- It reports *before* you plan. If you have already written a fix, you are
+  doing this backwards.
+- **Verify, do not accept.** A subagent's report is evidence, not a result.
+  Every claim you act on carries a citation you have opened yourself — a
+  `file:line`, or a run id whose log you have read. §4's whole lesson is that
+  this system's failures were invisible to the layer that looked most
+  authoritative, and a confident summary is not better evidence than a log.
+- Where its findings and §9.4 disagree, **the disagreement is the finding**.
+  Investigate it; do not pick the answer you like.
+
+### 9.4 Sealed until the review reports
+
+Do not read this subsection until §9.1's subagent has delivered. It exists so
+its independence can be checked afterwards, and reading it first destroys the
+only property that makes the exercise worth running.
+
+<details>
+<summary>Conditions the author of §9 suspected, 2026-09-23 — spoilers</summary>
+
+Written before any review, as a scoring key. Findings that match are
+corroboration. Findings absent here are why the review was commissioned. A miss
+tells you how much weight that reviewer's "no finding" deserves elsewhere.
+
+- A `workflow_run` whose conclusion is `cancelled` falls through the `case` to
+  `exit 0`, leaving a task in `BASELINE_CI` or `IMPL_CI` waiting on a result
+  that will never arrive. `next_action` returns `await_ci`, which does nothing,
+  and no further CI run is scheduled. Suspected silent stall, recoverable only
+  by a hand-supplied event.
+- `PAUSE` is checked inside `state.advance`, which raises `Paused`. Whether a
+  paused task still consumes dispatches or a concurrency slot before that raise
+  is not obvious from the code.
+- The orchestrator's `if:` admits **every** `workflow_dispatch`, including one
+  naming a task with no spec. What that produces is untested.
+- §5.2 plus a bookkeeping-only PR: a diff of only state and telemetry gets no
+  checks, and a required check that never reports is indistinguishable from one
+  pending forever.
+
+</details>
+
+### 9.5 What not to do
+
+- **Do not wire deployment into any of this.** §5.7 is not a preference. A
+  pipeline that can deploy is a different risk class, and this permission model
+  was not designed for it.
+- **Do not give any workflow merge or approval permission**, and do not remove
+  the tests asserting neither exists.
+- **Do not widen `AGENT_DISPATCH_TOKEN`.** It is owned by a person and inherits
+  that person's ruleset bypass (§5.1). The PR-creation step is pinned to
+  `github.token` to keep agent PRs bot-authored; leave it pinned.
+- **Do not fix more than you can evidence.** Every entry in §4 traces to a run
+  id, and that traceability is what made the pattern visible. A change with no
+  trace behind it is a guess wearing a commit message.

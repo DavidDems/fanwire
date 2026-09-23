@@ -12,7 +12,8 @@
   ],
   "allowed_paths": [
     "backend/app/users/schemas.py",
-    "backend/tests/users/test_age_gate.py"
+    "backend/tests/users/test_age_gate.py",
+    "wiki/CodeContext/Modules/0x01-users.md"
   ],
   "forbidden_paths": [
     "backend/app/users/models.py",

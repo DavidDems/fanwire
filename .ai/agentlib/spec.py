@@ -140,7 +140,46 @@ def validate(spec: dict, known_skills: Iterable[str]) -> list[str]:
     if "workflow_policy" in spec:
         errors.extend(_validate_policy(spec["workflow_policy"]))
 
+    errors.extend(_validate_maintainer_can_write(spec))
+
     return errors
+
+
+def _validate_maintainer_can_write(spec: dict) -> list[str]:
+    """`run_context_maintainer` with no wiki module in `allowed_paths` is a
+    contradiction the machine can only discover by burning a run.
+
+    A spec's `allowed_paths` NARROWS a role; it never widens one. The context
+    maintainer's whole job is editing `wiki/CodeContext/Modules/*.md`, which
+    `policy.json` grants it — but if the task does not also allow that path, the
+    guard refuses the write as `outside_task_scope`, discards the work and
+    escalates. That happens *after* the code agent has finished and CI has gone
+    green, so the cost is a whole successful task landing in ESCALATED over
+    bookkeeping. Run 35768890588.
+    """
+    policy = spec.get("workflow_policy")
+    if not isinstance(policy, dict):
+        return []
+    if not policy.get("run_context_maintainer", WORKFLOW_POLICY_DEFAULTS["run_context_maintainer"]):
+        return []
+
+    allowed = spec.get("allowed_paths")
+    if not isinstance(allowed, list):
+        return []  # already reported by the allowed_paths check
+
+    prefix = "wiki/CodeContext/Modules/"
+    if any(isinstance(p, str) and p.startswith(prefix) and p.endswith(".md") for p in allowed):
+        return []
+
+    return [
+        (
+            "workflow_policy.run_context_maintainer is true but allowed_paths contains no "
+            f"{prefix}*.md entry — the maintainer's only permitted write would be refused as "
+            "outside_task_scope, escalating the task after the code agent has already "
+            "succeeded. Add the module file this task documents, or set "
+            "run_context_maintainer to false."
+        )
+    ]
 
 
 def _validate_policy(policy: Any) -> list[str]:
