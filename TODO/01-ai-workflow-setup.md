@@ -56,7 +56,10 @@ It must be a **Claude Console** API key. A Pro/Max plan does not grant API
 access, and an Organization-settings key is not the same thing — that mismatch
 is what made the first four worker runs fail.
 
-Spend so far: **$0.074**. Check any time with:
+Spend so far: **$0.95** across every task and every discarded run. A complete
+task costs about **$0.38** — USERS-002 on 2026-09-23 was test agent $0.151,
+code agent $0.151, context maintainer $0.076, all sonnet, with the manager
+never invoked. Check any time with:
 
 ```powershell
 python .ai/bin/agentctl.py telemetry report
@@ -400,10 +403,10 @@ git branch -r --merged origin/main | ForEach-Object { $_.Trim() -replace '^origi
       `agent-orchestrator` run woke on `workflow_run` after CI — run
       35768127169, 2026-09-22
 - [x] The old `fanwire token` PAT is revoked *(2026-09-22)*
-- [x] A PR was opened **by the workflow** — #34, author `app/github-actions`.
-      Closed unmerged on purpose: the task behind it escalated on a spec bug
-      (#35). **Merging one is still outstanding**, and is step 2 of
-      [`handoff.md`](../.ai/docs/handoff.md) §6
+- [x] A PR was opened **by the workflow** — twice now. #34 (closed unmerged:
+      the task behind it escalated on a spec bug, #35) and **#38, from the
+      first complete pass**. Merging one is the last thing outstanding, and is
+      step 1 of [`handoff.md`](../.ai/docs/handoff.md) §6
 - [x] You have paused and resumed a task at least once *(step 8)*
 
 ⚠️ **One thing to expect the first time the workflow opens a PR for you:** it
