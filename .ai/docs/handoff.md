@@ -243,21 +243,43 @@ workflows using it act *as that person* — and would inherit that person's
 ruleset bypass. The PR-creation step is deliberately pinned to `github.token`
 so agent PRs stay bot-authored; keep it that way, and do not widen the PAT.
 
-### 5.2 `paths-ignore` can strand a PR
+### 5.2 `paths-ignore` can strand a PR — still open
 
 `test-agent.yml`'s `pull_request` trigger ignores `.ai/tasks/**` and
 `.ai/telemetry/**`, so state commits do not re-run CI. Consequence: **a PR whose
-diff is *only* those paths never runs CI, so required checks never report and
-the PR cannot merge.** Agent PRs normally contain code too, so this is latent
-rather than active — but if you ever see a PR blocked with no checks at all,
-this is why.
+diff is *only* those paths never triggers the workflow, so `gate` never reports
+and the PR cannot merge.** Agent PRs normally contain code too, so this is latent
+rather than active — but if you ever see a PR blocked with no checks at all, this
+is one of the two causes (the other is §1a).
 
-### 5.3 A skipped required check
+Note this is distinct from the **path filtering** added 2026-09-23, which is a
+`changes` job deciding which suites to *run* within a triggered workflow. That
+one is safe by construction: filtering applies to `pull_request` only, and a
+`workflow_dispatch` run — how the orchestrator gets its authoritative verdict —
+always runs every job. A skipped suite reports success, and a red baseline
+reporting success would tell the state machine that tests pin something when they
+pinned nothing. Trigger-level `paths-ignore` is the older, coarser mechanism and
+is the one that can still strand a PR.
 
-`agent-guard` is a required check and skips itself on non-`agent/*` branches.
-GitHub has treated the skip as satisfying the requirement on every PR so far
-(#25, #26, #27 all merged). It works; know that it is load-bearing before you
-change the `if:` condition.
+### 5.3 A skipped required check — closed 2026-09-23 (#43)
+
+**Was:** `agent-guard` is a required check that skips itself on non-`agent/*`
+branches, and GitHub had treated the skip as satisfying the requirement on every
+PR so far. It worked, and it was load-bearing on behaviour nobody had confirmed
+was guaranteed.
+
+**Now:** the required checks are two **aggregate** jobs, `gate` (in
+`test-agent.yml`) and `guard-gate` (in `agent-guard.yml`), not the individual
+suites. Each runs `if: always()`, depends on the real jobs, and maps their
+results explicitly — a skip becomes a deliberate pass with a logged reason, a
+failure or cancellation becomes a failure. Neither uses `success()`, which treats
+a skipped dependency as not-success and is the trap that made the old shape
+fragile.
+
+**The general rule this buys: require the aggregate, not the leaves.** Naming
+individual jobs means a renamed or path-skipped job silently stops being
+required — it does not fail, it disappears from the gate. If you add a suite, add
+it to `gate`'s `needs:`; the ruleset does not need touching.
 
 ### 5.4 Concurrency can drop a transition
 
@@ -506,11 +528,13 @@ because none is done when the code merely changes.
    *Done when:* the decision is written down either way. This one may
    legitimately end in "keep it, and here is why".
 
-6. **§5.3, a skipped required check.** `agent-guard` skips on non-`agent/*`
-   branches, and GitHub has treated the skip as satisfying the requirement on
-   every PR so far. It works, and it is load-bearing.
-   *Done when:* you have confirmed that behaviour is guaranteed rather than
-   incidental, or stopped relying on it.
+6. ~~**§5.3, a skipped required check.**~~ **Closed 2026-09-23 by #43**, while
+   this brief was being written — the CI work replaced the individual required
+   checks with the `gate` / `guard-gate` aggregates, which map a skip to an
+   explicit pass instead of relying on GitHub's undocumented treatment of one.
+   Left in place, struck through, as a worked example of what *done* looks like
+   for the rest of this list: the fragile behaviour was not confirmed, it was
+   removed from the critical path.
 
 Not on this list: §8's judgement calls. Those want a human's opinion, not a
 change.

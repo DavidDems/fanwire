@@ -43,7 +43,7 @@ Both merged 2026-09-19 (#18 at 00:40:57Z, #19 at 00:41:12Z), in the right order.
 Enabled 2026-09-21 (`delete_branch_on_merge: true`) — the stacked-PR trap is now
 mechanical rather than a rule to remember, closing that candidate automation in
 [`.ai/docs/philosophy.md`](../.ai/docs/philosophy.md) §6. The 28 pre-existing
-remote branches are unaffected; see [`01`](01-ai-workflow-setup.md) §11.
+remote branches were cleaned out the same day, leaving only `main`. The settings themselves are recorded in `wiki/GeneralContext/Architecture/github-automation-setup.md`.
 
 ---
 

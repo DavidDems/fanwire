@@ -110,6 +110,9 @@ Grants are never used. `grant*()` emits wildcard actions such as `kms:GenerateDa
 - The HTTP API has stage throttling only. HTTP APIs have no usage plans, so per-user rate limiting is app-level.
 - Nothing here creates an SES identity. Notifications get `ses:SendEmail` on `identity/<domainName>` only when a domain is configured, and Cognito uses its default email sender. `app.notifications.email.SesEmailSender` (Phase 4 Lambda-handlers unit) is built to match: it skips sending (no raise, no PII logged) whenever `NOTIFICATION_FROM_ADDRESS` is unset, which is every environment until a domain exists.
 - With no custom domain, CloudFront's default certificate can't enforce `TLSv1.2_2021` for viewers.
+- **Nothing uploads the frontend to its bucket.** `StorageStack` creates `frontendBucket` and `CdnStack` serves it through CloudFront with OAC and a SPA fallback, but no construct, script or workflow ever puts `dist/` in it — there is no `BucketDeployment` anywhere in `infra/lib/`. A deploy today produces a correct, *empty* bucket behind a correct distribution. Tracked as task `INFRA-002`, which gates the deployment behind a `deployFrontend` context flag: `frontend/dist` is gitignored, so an unconditional `BucketDeployment` would break credential-free synth in CI.
+- **There is no frontend-only deploy.** `CdnStack` takes `AppStack`'s HTTP API as an origin, and `AppStack` depends on `Network`, `Data`, `Auth`, `Storage` and `Messaging`. The first `cdk deploy` therefore brings up all eight stacks — VPC, NAT instance, RDS, Cognito, queues and four Lambdas — with the full monthly cost and 30–45 minutes of wall clock, not just a static site.
+- **The frontend has no configuration mechanism.** No `VITE_*` variable is read anywhere in `frontend/src`, and `frontend/.env.local` serves only the dev Cognito pool. The production user pool and SPA client ids exist only *after* `Fanwire-Auth` deploys, while Vite bakes env vars in at build time — so the ordering is deploy → read outputs → build → upload. A design decision for whoever builds the upload path, not a command to run.
 - **Still deferred** (Phase 4 Lambda-handlers unit): no production migration runner exists. `alembic` is a dependency and `backend/alembic/` is real, but `docker/backend.Dockerfile`'s `lambda` target (per [[wiki/CodeContext/Standards/build-deployment|Build & Deployment]]) doesn't copy it or run `alembic upgrade head` anywhere in the deploy path — a real deploy today ships schema changes with no automated migration step. Running migrations from a throwaway one-off task (a `CMD` override of the same image) or a CDK custom resource is future work.
 
 ## Security posture (account/project-level)
@@ -131,7 +134,20 @@ Per-entity security requirements live in each module's own file. Project-wide it
 **CI access (OIDC)** — in `fanwire-workload`:
 - OIDC identity provider `token.actions.githubusercontent.com` registered.
 - Role `GitHubActionsDeployRole`, trust policy restricted to `repo:DavidDems/fanwire:ref:refs/heads/main` (audience `sts.amazonaws.com`) — only a workflow run from `main` in this exact repo can assume it.
-- No permissions policy attached yet. CI cannot deploy or touch anything through this role until its permissions are scoped deliberately, once the CDK stacks exist and a human has reviewed the generated IAM policy (immediately before the first `cdk deploy` — see [[wiki/GeneralContext/Prompts/first-pass-manager-agent|first-pass-manager-agent]] Phase 6).
+- **Permissions policy attached 2026-09-22** (`CdkBootstrapAssumeRole`), after the human IAM review. It grants exactly one action — `sts:AssumeRole` — on the eight CDK bootstrap roles (four per region, `ca-central-1` and `us-east-1`). CI holds **no service permissions at all**; it can only step into the roles `cdk bootstrap` created. The policy is committed at `infra/iam/github-actions-deploy-role-policy.json` so it is reviewable as a diff rather than as console JSON.
+- The alternative — enumerating every service the stacks touch — was rejected deliberately: that policy is hundreds of actions wide, changes with every stack change, and is too large to actually read, which is the failure the IAM gate exists to prevent.
+- **Nothing assumes this role yet.** No workflow references it, and `cdk deploy` remains out of scope repo-wide. It exists so a later, separately-reviewed deploy workflow has something correct to assume.
+
+**DNS (Route 53)** — the domain is live as of 2026-09-22.
+- Registrar: **GoDaddy**, domain `daviddems.com`. The apex and its nameservers stay there.
+- Hosted zone `Z04139742PYZYKIOGHWGR` in `fanwire-workload` for the **subdomain** `fanwire.daviddems.com` only. Four NS records at the registrar delegate that label to Route 53; nothing else on `daviddems.com` is affected. Verified resolving from a public resolver.
+- Chosen over moving the whole domain because the blast radius is one label rather than all DNS for the domain, and undoing it is "delete four NS records". The trade-off accepted: DNS is administered in two places, and any other subdomain stays manual at the registrar.
+- `infra/cdk.json` names the zone (`domainName`, `hostedZoneId`, `hostedZoneName`), which puts the app in its intended **"domain + zone"** mode — ACM validates against the zone automatically instead of waiting for a hand-added CNAME.
+- The earlier default `fanwire.daviddems.ca` is gone; that domain lapsed and was taken by its old registrar.
+
+**CDK bootstrap** — both regions, 2026-09-22, default qualifier `hnb659fds`.
+- `CDKToolkit` in `ca-central-1` and `us-east-1` (the second because CloudFront's cert must live there). Ten `cdk-hnb659fds-*` roles exist.
+- ⚠️ **`cdk-hnb659fds-cfn-exec-role-*` holds `AdministratorAccess`**, the bootstrap default, and this is the real privilege in the deployment design. It is **not** what `infra/test/iam-policy.test.ts` inspects — that walks this app's stacks, not the bootstrap stack. It is defensible (only CloudFormation can use it, CI reaches it only via the deploy role, and the OIDC trust limits that to `main` of this repo) but it is admin, and it was accepted knowingly rather than discovered. Narrowing it once a successful deploy shows what is actually used is recorded as post-deploy work.
 
 **CloudTrail**
 - Trail `fanwire-workload-trail` in `fanwire-workload`: multi-region, log file validation on, management events (read + write) only.
@@ -139,7 +155,9 @@ Per-entity security requirements live in each module's own file. Project-wide it
 
 **GuardDuty**
 - Delegated administrator: `fanwire-log-archive` (`801132668027`); Organizations trusted access enabled; auto-enable for new Organizations accounts on.
-- `fanwire-workload` and the management account added as member accounts. Org-account-list propagation into the delegated-admin view was still settling as of this setup pass — re-confirm `fanwire-workload` shows GuardDuty status **Enabled** before treating this control as live.
+- `fanwire-workload` and the management account added as member accounts, by invitation.
+- **Confirmed Enabled 2026-09-22**, checked from inside `fanwire-workload` itself. The delegated-admin account list reads empty from `fanwire-log-archive` because listing Organizations members needs permissions `PowerUserAccess` deliberately excludes — that exclusion is the point of that permission set, not a misconfiguration.
+- Two consequences: membership is **by invitation**, so a future fourth account will not self-enroll; and **Malware Protection for S3 is a separate feature** from GuardDuty core. The latter is what `media/` actually depends on — an upload never leaves `Quarantined` without a scan verdict — and it can only be enabled against a bucket that exists, so it belongs to the first deploy.
 
 **AWS Config** — enabled in `fanwire-workload` only (not `log-archive` or management).
 - Recording strategy: all resource types, no overrides — global IAM resource types included, recorded in `ca-central-1`.
