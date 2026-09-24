@@ -32,3 +32,5 @@ No live AWS deploy exists yet.
 - **For anyone reviewing or improving the agent pipeline:** `.ai/docs/philosophy.md`, then `.ai/README.md`.
 
 Build, test and run commands live in `AGENTS.md` — they are the same commands CI uses, so there is one copy rather than two that drift.
+
+<!-- CI gate verification: docs-only change. Delete this line. -->
