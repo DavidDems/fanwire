@@ -17,7 +17,6 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_event_bus, get_session
@@ -41,12 +40,6 @@ class NeverRejects(ModerationCheck):
 class AlwaysRejects(ModerationCheck):
     def check(self, context: ModerationContext) -> None:
         raise PostRejected("always rejects")
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -188,9 +181,7 @@ def test_create_plain_repost_succeeds(app, client, session_factory):
         original_id = original.id
     _as_user(app, author)
 
-    response = client.post(
-        "/posts", json={"is_repost": True, "original_post_id": original_id}
-    )
+    response = client.post("/posts", json={"is_repost": True, "original_post_id": original_id})
 
     assert response.status_code == 201
     body = response.json()
@@ -248,9 +239,7 @@ def test_create_post_with_processed_media_attaches_it(app, client, session_facto
         media_id = media.id
     _as_user(app, author)
 
-    response = client.post(
-        "/posts", json={"text": "check this out", "media_ids": [media_id]}
-    )
+    response = client.post("/posts", json={"text": "check this out", "media_ids": [media_id]})
 
     assert response.status_code == 201
     post_id = response.json()["id"]
@@ -290,9 +279,7 @@ def test_create_post_with_unprocessed_media_returns_409(app, client, session_fac
         media_id = media.id
     _as_user(app, author)
 
-    response = client.post(
-        "/posts", json={"text": "unprocessed media", "media_ids": [media_id]}
-    )
+    response = client.post("/posts", json={"text": "unprocessed media", "media_ids": [media_id]})
 
     assert response.status_code == 409
 
@@ -450,9 +437,7 @@ def test_unlike_post_succeeds(app, client, session_factory):
 
 def test_unlike_post_when_not_liked_returns_404(app, client, session_factory):
     with session_factory() as session:
-        author = _make_user(
-            session, cognito_sub="sub-notliked-author", username="notliked_author"
-        )
+        author = _make_user(session, cognito_sub="sub-notliked-author", username="notliked_author")
         liker = _make_user(session, cognito_sub="sub-notliker", username="notliker")
         post = Post(author_id=author.id, text="never liked post")
         session.add(post)
@@ -499,7 +484,12 @@ def test_report_post_duplicate_returns_204_and_creates_no_second_row(app, client
         post = Post(author_id=author.id, text="reportable post")
         session.add(post)
         session.commit()
-        report_post(session, PostEventBus(InMemoryEventPublisher()), post_id=post.id, reporter_id=reporter.id)
+        report_post(
+            session,
+            PostEventBus(InMemoryEventPublisher()),
+            post_id=post.id,
+            reporter_id=reporter.id,
+        )
         post_id = post.id
     _as_user(app, reporter)
 
@@ -517,9 +507,7 @@ def test_report_post_duplicate_returns_204_and_creates_no_second_row(app, client
 
 def test_report_post_nonexistent_returns_404(app, client, session_factory):
     with session_factory() as session:
-        reporter = _make_user(
-            session, cognito_sub="sub-report-404", username="report_404_reporter"
-        )
+        reporter = _make_user(session, cognito_sub="sub-report-404", username="report_404_reporter")
     _as_user(app, reporter)
 
     response = client.post("/posts/999999/report")

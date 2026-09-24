@@ -21,7 +21,6 @@ import pytest
 from botocore.exceptions import ClientError
 from moto import mock_aws
 from PIL import Image
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.media.models import Media, MediaStatus
@@ -44,12 +43,6 @@ def s3_client():
         client.create_bucket(Bucket=QUARANTINE_BUCKET)
         client.create_bucket(Bucket=PUBLIC_BUCKET)
         yield client
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

@@ -14,16 +14,9 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -41,7 +34,9 @@ def _make_notification_and_recipient(session):
     recipient = User(
         cognito_sub="sub-chan-recipient", username="chan_recipient", date_of_birth=date(1990, 1, 1)
     )
-    actor = User(cognito_sub="sub-chan-actor", username="chan_actor", date_of_birth=date(1990, 1, 1))
+    actor = User(
+        cognito_sub="sub-chan-actor", username="chan_actor", date_of_birth=date(1990, 1, 1)
+    )
     session.add_all([recipient, actor])
     session.commit()
 
@@ -57,8 +52,11 @@ def _make_notification_and_recipient(session):
 
 
 def test_notification_factory_creates_in_app_channel(session_factory):
-    from app.notifications.channels import InAppNotificationChannel, NotificationChannel
-    from app.notifications.channels import NotificationFactory
+    from app.notifications.channels import (
+        InAppNotificationChannel,
+        NotificationChannel,
+        NotificationFactory,
+    )
     from app.notifications.email import RecordingEmailSender
 
     factory = NotificationFactory(RecordingEmailSender())
@@ -69,8 +67,11 @@ def test_notification_factory_creates_in_app_channel(session_factory):
 
 
 def test_notification_factory_creates_email_channel(session_factory):
-    from app.notifications.channels import EmailNotificationChannel, NotificationChannel
-    from app.notifications.channels import NotificationFactory
+    from app.notifications.channels import (
+        EmailNotificationChannel,
+        NotificationChannel,
+        NotificationFactory,
+    )
     from app.notifications.email import RecordingEmailSender
 
     factory = NotificationFactory(RecordingEmailSender())

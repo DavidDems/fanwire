@@ -10,18 +10,11 @@ from datetime import UTC, date, datetime
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.models import Game, Team
 from app.posts.models import EventMention, Post, PostLike, Report
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -209,9 +202,7 @@ def test_post_like_round_trip(session_factory):
         session.commit()
 
         fetched = session.scalar(
-            select(PostLike).where(
-                PostLike.user_id == liker.id, PostLike.post_id == post.id
-            )
+            select(PostLike).where(PostLike.user_id == liker.id, PostLike.post_id == post.id)
         )
         assert fetched is not None
         assert fetched.created_at is not None
@@ -266,9 +257,7 @@ def test_event_mention_round_trip(session_factory):
         session.add(mention)
         session.commit()
 
-        fetched = session.scalar(
-            select(EventMention).where(EventMention.post_id == post.id)
-        )
+        fetched = session.scalar(select(EventMention).where(EventMention.post_id == post.id))
         assert fetched is not None
         assert fetched.game_id == game.id
         assert fetched.raw_token == "$BOS"
@@ -285,9 +274,7 @@ def test_event_mention_requires_existing_game(session_factory):
         session.add(post)
         session.commit()
 
-        session.add(
-            EventMention(post_id=post.id, game_id=999_999, raw_token="#GameId999999")
-        )
+        session.add(EventMention(post_id=post.id, game_id=999_999, raw_token="#GameId999999"))
         with pytest.raises(IntegrityError):
             session.commit()
 

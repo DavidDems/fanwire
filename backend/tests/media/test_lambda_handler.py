@@ -34,7 +34,6 @@ import boto3
 import pytest
 from moto import mock_aws
 from PIL import Image
-from testcontainers.postgres import PostgresContainer
 
 import app.dependencies as app_dependencies
 from app.db import Base, make_engine, make_session_factory
@@ -55,12 +54,6 @@ def _jpeg_bytes() -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (10, 10), (255, 0, 0)).save(buffer, format="JPEG")
     return buffer.getvalue()
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

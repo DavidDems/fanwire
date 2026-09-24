@@ -44,7 +44,6 @@ import requests
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from moto import mock_aws
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
@@ -56,12 +55,6 @@ from app.users.dependencies import get_current_user
 from app.users.models import User
 
 QUARANTINE_BUCKET = "fanwire-test-quarantine"
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

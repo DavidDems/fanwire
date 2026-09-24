@@ -12,19 +12,12 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.media.models import Media, MediaStatus
 from app.media.service import MediaView, processed_media_for_posts
 from app.posts.models import Post
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

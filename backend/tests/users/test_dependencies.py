@@ -14,7 +14,6 @@ from datetime import date
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
@@ -130,12 +129,6 @@ def test_get_token_verifier_differs_for_different_settings():
 # Resolves the verified token's `sub` to this app's local User row. Needs a
 # real Postgres-backed session (via testcontainers, same fixture pattern as
 # backend/tests/users/test_service.py) since it queries the users table.
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

@@ -21,7 +21,6 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from testcontainers.postgres import PostgresContainer
 
 from app.db import make_engine, make_session_factory
 from app.dependencies import get_event_bus, get_session, get_settings
@@ -72,12 +71,6 @@ def test_get_event_bus_returns_a_cached_instance(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
 
     assert get_event_bus() is get_event_bus()
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 def _make_probe_app() -> FastAPI:

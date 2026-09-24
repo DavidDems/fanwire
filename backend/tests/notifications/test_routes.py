@@ -14,7 +14,6 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
@@ -22,12 +21,6 @@ from app.notifications.models import Notification, NotificationPreference, Notif
 from app.notifications.routes import router
 from app.users.dependencies import get_current_user
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -85,9 +78,7 @@ def test_list_notifications_returns_only_own_active_notifications_most_recent_fi
 ):
     with session_factory() as session:
         me = _make_user(session, cognito_sub="sub-list-me", username="list_me")
-        other_recipient = _make_user(
-            session, cognito_sub="sub-list-other", username="list_other"
-        )
+        other_recipient = _make_user(session, cognito_sub="sub-list-other", username="list_other")
         actor = _make_user(session, cognito_sub="sub-list-actor", username="list_actor")
 
         base = datetime(2026, 1, 1, tzinfo=UTC)
@@ -207,7 +198,9 @@ def test_clear_someone_elses_notification_returns_404(app, client, session_facto
     with session_factory() as session:
         me = _make_user(session, cognito_sub="sub-clear-other-me", username="clear_other_me")
         owner = _make_user(session, cognito_sub="sub-clear-owner", username="clear_owner")
-        actor = _make_user(session, cognito_sub="sub-clear-other-actor", username="clear_other_actor")
+        actor = _make_user(
+            session, cognito_sub="sub-clear-other-actor", username="clear_other_actor"
+        )
         notification = Notification(
             recipient_user_id=owner.id,
             type=NotificationType.FOLLOW,

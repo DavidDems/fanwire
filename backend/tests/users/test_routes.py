@@ -18,7 +18,6 @@ from datetime import date
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_event_bus, get_session
@@ -30,12 +29,6 @@ from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
 from app.users.routes import router
 from app.users.service import create_user, follow, soft_delete_user
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
