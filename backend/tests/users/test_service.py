@@ -10,7 +10,6 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.eventbus import InMemoryEventPublisher, PostEventBus
@@ -36,12 +35,6 @@ from app.users.service import (
     unfollow,
     update_profile,
 )
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

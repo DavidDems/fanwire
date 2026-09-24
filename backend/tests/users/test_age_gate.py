@@ -19,7 +19,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_event_bus, get_session
@@ -29,7 +28,12 @@ from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
 from app.users.routes import router
 
-TODAY = date.today()
+# The DTZ011 suppression below is deliberate and pre-existing. The age gate
+# is evaluated against the server's local date, so this suite's notion of
+# "today" has to match it; `datetime.now(tz=UTC).date()` would disagree
+# either side of midnight for any non-UTC deployment and make these tests
+# flaky by clock. Suppressed rather than changed - not this branch's call.
+TODAY = date.today()  # noqa: DTZ011
 
 
 def _years_before_today(years: int) -> date:
@@ -39,12 +43,6 @@ def _years_before_today(years: int) -> date:
         # TODAY is a Feb 29 that doesn't exist `years` back -- nudge to Mar 1
         # rather than let the whole test run depend on the calendar.
         return TODAY.replace(month=3, day=1, year=TODAY.year - years)
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()

@@ -19,7 +19,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.interfaces import NormalizedLiveScore, SportsDataSource
@@ -30,12 +29,6 @@ from app.media.models import Media, MediaStatus
 from app.posts.models import EventMention, Post
 from app.posts.service import like_post
 from app.users.models import User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -162,9 +155,7 @@ def test_assemble_post_views_like_count_and_liked_by_viewer(session_factory):
         like_post(session, user_id=liker.id, post_id=post.id)
         like_post(session, user_id=other_liker.id, post_id=post.id)
 
-        viewer_result = assemble_post_views(
-            session, [post], viewer_id=liker.id, live_scores=None
-        )
+        viewer_result = assemble_post_views(session, [post], viewer_id=liker.id, live_scores=None)
         guest_result = assemble_post_views(session, [post], viewer_id=None, live_scores=None)
 
         assert viewer_result[0].like_count == 2
@@ -219,9 +210,7 @@ def test_assemble_post_views_live_score_within_window(session_factory):
         home = _make_team(session, api_sports_team_id=201)
         away = _make_team(session, api_sports_team_id=202)
         recent_date = datetime.now(UTC) - timedelta(hours=1)
-        game = _make_game(
-            session, home, away, api_sports_game_id=9001, date=recent_date
-        )
+        game = _make_game(session, home, away, api_sports_game_id=9001, date=recent_date)
         post = _make_post(session, author, text="live game")
         session.add(EventMention(post_id=post.id, game_id=game.id, raw_token="#GameId"))
         session.commit()

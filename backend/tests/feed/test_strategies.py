@@ -19,7 +19,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from app.db import Base, make_engine, make_session_factory
 from app.events.models import Game, Team
@@ -31,12 +30,6 @@ from app.feed.strategies import (
 )
 from app.posts.models import EventMention, Post
 from app.users.models import Follow, User
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
@@ -140,9 +133,7 @@ def test_follows_and_preferred_team_strategy_includes_preferred_team_mentions(se
         game = _make_game(session, home, away, api_sports_game_id=6001)
 
         mentioning_post = _make_post(session, stranger, text="mentions preferred team's game")
-        session.add(
-            EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId")
-        )
+        session.add(EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId"))
         session.commit()
 
         unrelated_post = _make_post(session, stranger, text="unrelated stranger post")
@@ -166,9 +157,7 @@ def test_follows_and_preferred_team_strategy_without_preferred_team_ignores_ment
         game = _make_game(session, home, away, api_sports_game_id=7001)
 
         mentioning_post = _make_post(session, stranger, text="mentions a game")
-        session.add(
-            EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId")
-        )
+        session.add(EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId"))
         session.commit()
 
         strategy = FollowsAndPreferredTeamStrategy(viewer.id, None)

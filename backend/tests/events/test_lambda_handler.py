@@ -22,7 +22,6 @@ import boto3
 import pytest
 from moto import mock_aws
 from sqlalchemy import select
-from testcontainers.postgres import PostgresContainer
 
 import app.dependencies as app_dependencies
 from app.db import Base, make_engine, make_session_factory
@@ -70,12 +69,6 @@ def _sample_game(**overrides) -> NormalizedGame:
     }
     defaults.update(overrides)
     return NormalizedGame(**defaults)
-
-
-@pytest.fixture(scope="module")
-def postgres_url():
-    with PostgresContainer("postgres:16-alpine") as pg:
-        yield pg.get_connection_url().replace("psycopg2", "psycopg")
 
 
 @pytest.fixture()
