@@ -140,3 +140,48 @@ jobs:
               print("This PR is open for a human to look at, not to merge as-is.")
               raise SystemExit(1)
           PY
+
+  # One check that always reports, whatever `guard` above decided to do.
+  #
+  # `guard` runs only on `agent/` branches, so on a human PR it is skipped and
+  # never reports at all. A required status check naming a skipped job reads as
+  # "still waiting" on a protected branch, not "not needed" — so requiring
+  # `guard` directly would mean no human-authored PR could ever merge.
+  #
+  # Without this job the alternative is not requiring the guard at all, and a
+  # check that is not required does not block a merge when it fails. The
+  # enforcement backstop would be advisory: a red X that a human can click past
+  # at exactly the moment they are deciding whether to trust an agent's diff.
+  #
+  # So: require THIS job on `main`. It passes when the guard passed and when
+  # the guard correctly did not apply, and fails when the guard failed.
+  #
+  # `success()` is deliberately not used — it treats a skipped dependency as
+  # not-success, which is the case this job exists to distinguish.
+  guard-gate:
+    if: always()
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report the guard
+        env:
+          RESULT: ${{ needs.guard.result }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          case "$RESULT" in
+            success)
+              echo "the agent guard passed on $HEAD_REF" ;;
+            skipped)
+              # Not an agent branch. Governed by review and CODEOWNERS instead,
+              # per the `guard` job's own condition.
+              echo "$HEAD_REF is not an agent/ branch; the agent guard does not apply"
+              if [ "${HEAD_REF#agent/}" != "$HEAD_REF" ]; then
+                echo "::error::$HEAD_REF IS an agent branch but the guard was skipped"
+                exit 1
+              fi ;;
+            *)
+              echo "::error::the agent guard reported '$RESULT' on $HEAD_REF"
+              exit 1 ;;
+          esac

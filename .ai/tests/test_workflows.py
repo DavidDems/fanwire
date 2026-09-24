@@ -240,3 +240,54 @@ class TestTheGateStaysAuthoritative:
         for tag in ("fanwire-backend-test:latest", "fanwire-frontend-test:latest"):
             assert f"image: {tag}" in text, f"docker-compose.yml must tag {tag}"
             assert f"tags: {tag}" in gate, f"test-agent.yml must build {tag}"
+
+
+class TestTheGuardCanBeARequiredCheck:
+    """`agent-guard` is the enforcement backstop, but it runs only on `agent/`
+    branches — so on a human PR it is skipped and never reports. A required
+    check naming a skipped job reads as "waiting" on a protected branch, which
+    would stop any human PR merging; not requiring it at all makes the
+    backstop advisory, because a non-required failing check does not block a
+    merge. `guard-gate` is what resolves that, and it is the job to require.
+    """
+
+    @pytest.fixture
+    def guard_wf(self) -> str:
+        path = WORKFLOWS / "agent-guard.yml"
+        if not path.exists():
+            pytest.skip("agent-guard.yml not present")
+        return path.read_text(encoding="utf-8")
+
+    def test_there_is_an_always_reporting_aggregate(self, guard_wf):
+        assert "  guard-gate:" in guard_wf
+        block = guard_wf.split("  guard-gate:", 1)[1]
+        assert "if: always()" in block
+        assert "needs: guard" in block
+
+    def test_a_skipped_guard_on_an_agent_branch_is_an_error(self, guard_wf):
+        """The one case a skip is NOT benign: if the guard's own condition
+        ever breaks, every agent PR would sail through reporting success."""
+        block = guard_wf.split("  guard-gate:", 1)[1]
+        assert "HEAD_REF#agent/" in block, (
+            "guard-gate must fail when an agent/ branch skipped the guard"
+        )
+
+    def test_a_failed_guard_fails_the_aggregate(self, guard_wf):
+        block = guard_wf.split("  guard-gate:", 1)[1]
+        assert "exit 1" in block
+
+    def test_the_aggregate_does_not_use_success(self, guard_wf):
+        offenders = [
+            line
+            for line in guard_wf.splitlines()
+            if line.strip().startswith("if:") and "success()" in line
+        ]
+        assert not offenders, (
+            "success() treats the skipped-guard case as failure, which is the "
+            "case this job exists to distinguish: " + "; ".join(offenders)
+        )
+
+    def test_the_guard_itself_still_only_runs_on_agent_branches(self, guard_wf):
+        """The aggregate must not be an excuse to widen the guard onto human
+        PRs, which are governed by review and CODEOWNERS instead."""
+        assert "startsWith(github.head_ref, 'agent/')" in guard_wf
