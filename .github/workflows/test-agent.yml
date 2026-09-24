@@ -11,6 +11,28 @@ name: test-agent
 # executor (.ai/docs/architecture.md). agent-orchestrator.yml triggers it by
 # workflow_dispatch on a task branch and reads its conclusion; no agent is ever
 # believed about whether tests passed. Nothing else manages workflow state.
+#
+# ---------------------------------------------------------------------------
+# Speed
+#
+# Every run used to take the same ~3m50s whether the PR changed a Lambda
+# handler or a single wiki sentence. That flatness was the diagnosis: the time
+# was setup, not testing. Two things fix it, and both are below.
+#
+#   1. Layer caching. `docker compose run` rebuilt the whole backend image on
+#      every run - pip installing psycopg, pillow, boto3, moto and
+#      testcontainers from scratch - because nothing persisted between runs.
+#      The image is now built by buildx against a cache keyed on the files
+#      that actually affect it.
+#   2. Path filtering. A PR that only touches `wiki/` or `.ai/docs/` has
+#      nothing for the backend suite to prove, so it no longer runs it.
+#
+# THE SAFETY RULE for #2: filtering applies to `pull_request` ONLY. A
+# workflow_dispatch run - which is how the agent orchestrator gets its
+# authoritative verdict - always runs every job. A skipped suite reports
+# success, and a red baseline that reports success would tell the state
+# machine the tests pin something when they pinned nothing. See the `changes`
+# job, which hard-codes `true` for every non-PR event.
 
 on:
   pull_request:
@@ -29,17 +51,109 @@ permissions:
   contents: read
 
 jobs:
+  # Which suites does this change actually need? Computed with git rather than
+  # a third-party filter action: this workflow is the security boundary the
+  # whole agent system trusts, and a `git diff` is a thing we can read.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+      agent: ${{ steps.filter.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Needed to diff against the base commit. The repository is small;
+          # this costs a couple of seconds and is what makes the rest cheap.
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "$EVENT is not a pull request - running the whole gate"
+            printf 'backend=true\nfrontend=true\ninfra=true\nagent=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$BASE_SHA"...HEAD > /tmp/changed.txt
+          echo "--- changed ---"; cat /tmp/changed.txt; echo "---------------"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import pathlib
+
+          changed = [
+              line.strip()
+              for line in pathlib.Path("/tmp/changed.txt").read_text().splitlines()
+              if line.strip()
+          ]
+
+          # A change to the gate itself, or to how any image is built, re-runs
+          # everything. Trusting a filter to decide whether to test the filter
+          # is how a broken gate ships green.
+          EVERYTHING = (".github/workflows/", "docker-compose.yml", "docker/")
+
+          GROUPS = {
+              "backend": ("backend/",),
+              "frontend": ("frontend/",),
+              "infra": ("infra/",),
+              "agent": (".ai/",),
+          }
+
+          if any(p.startswith(EVERYTHING) for p in changed):
+              for name in GROUPS:
+                  print(f"{name}=true")
+              raise SystemExit(0)
+
+          for name, prefixes in GROUPS.items():
+              hit = any(p.startswith(prefixes) for p in changed)
+              print(f"{name}={'true' if hit else 'false'}")
+          PY
+          echo "--- decided ---"; cat "$GITHUB_OUTPUT"
+
   backend-test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Docker's own actions, kept to the same major-version pinning as the
+      # actions/* above. buildx is what makes a layer cache possible at all;
+      # the plain daemon has nowhere to persist one between runs.
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          target: test
+          # Must match docker-compose.yml's `image:` so `compose run` finds
+          # this image instead of building its own.
+          tags: fanwire-backend-test:latest
+          load: true
+          cache-from: type=gha,scope=backend-test
+          cache-to: type=gha,mode=max,scope=backend-test
       - name: Run backend test suite
         run: docker compose run --rm backend-test
 
   frontend-test:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/frontend.Dockerfile
+          target: test
+          tags: fanwire-frontend-test:latest
+          load: true
+          cache-from: type=gha,scope=frontend-test
+          cache-to: type=gha,mode=max,scope=frontend-test
       - name: Run frontend test suite
         run: docker compose run --rm frontend-test
 
@@ -48,6 +162,8 @@ jobs:
   # permission guard and the telemetry writer the same way the application
   # suites gate the application.
   agent-infra-test:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,12 +178,19 @@ jobs:
         run: python .ai/bin/agentctl.py selfcheck
 
   pip-audit:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          # This job installed the whole dev tree - moto, testcontainers,
+          # pillow - from scratch on every run, in parallel with the backend
+          # image doing the same thing.
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
       - name: Install backend package
         working-directory: backend
         run: pip install -e ".[dev]"
@@ -82,12 +205,16 @@ jobs:
         run: pip-audit --ignore-vuln PYSEC-2026-1325
 
   npm-audit:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -101,6 +228,8 @@ jobs:
   # Synth stages the Lambda image's build context but doesn't build the
   # image, so no Docker is needed here.
   infra-synth:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -117,3 +246,46 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run synth
+
+  # One check that always reports, whatever the filter decided.
+  #
+  # Required status checks name a JOB, and a job the filter skipped never
+  # reports at all - which a protected branch reads as "still waiting", not as
+  # "not needed", and the PR can never merge. This job always runs, so it is
+  # the one to require on `main` once branch protection is switched on.
+  #
+  # `success()` is deliberately not used: it treats a skipped dependency as
+  # not-success. Here a skip is the correct outcome and must pass, while a
+  # failure or a cancellation must not.
+  gate:
+    if: always()
+    needs:
+      - changes
+      - backend-test
+      - frontend-test
+      - agent-infra-test
+      - pip-audit
+      - npm-audit
+      - infra-synth
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the gate
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+
+          results = json.loads(os.environ["RESULTS"])
+          bad = sorted(
+              name
+              for name, job in results.items()
+              if job.get("result") in {"failure", "cancelled"}
+          )
+          for name, job in sorted(results.items()):
+              print(f"  {job.get('result','?'):<10} {name}")
+          if bad:
+              sys.exit("gate failed: " + ", ".join(bad))
+          print("\ngate passed")
+          PY
