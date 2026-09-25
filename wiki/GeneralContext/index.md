@@ -62,10 +62,13 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - `phase-2-manager-agent.md` — Phase 2 (`posts/`), plus closing the Phase 1 routes gap it documents.
 - `phase-3-manager-agent.md` — Phase 3 (`notifications/`, `feed/`, `search/`).
 - `phase-4-manager-agent.md` — Phase 4: closed the unbuilt Phase 3 `feed/`/`search/` gap, the `users/me` gap and CDK infra (synth-only). Its Status section holds the human-decision log and the frontend human-input checklist.
-- `phase-5a-frontend-manager-agent.md` — Phase 5a: frontend foundation + typed client, auth (real dev Cognito), profile/follow, compose.
-- `phase-5b-frontend-manager-agent.md` — Phase 5b: feed, notifications, search UIs, then the whole-build summary and rolled-up process outcomes. `cdk deploy` stays out of scope throughout, gated on human IAM review.
+- `phase-5a-frontend-manager-agent.md` — Phase 5a: frontend foundation + typed client, auth (real dev Cognito), profile/follow, compose. **Superseded** — see below.
+- `phase-5b-frontend-manager-agent.md` — Phase 5b: feed, notifications, search UIs, then the whole-build summary and rolled-up process outcomes. **Superseded** — see below.
+- `frontend-build-handoff.md` — **the live one.** The frontend pass as it is actually being run: seven `FRONTEND-00N` task specs in `.ai/tasks/`, `001` merged, `002`–`007` outstanding. Read this rather than 5a/5b.
 
-Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above).
+**Why 5a and 5b are superseded, and why they are kept.** They describe the same seven units, but under the execution model that predates `.ai/` — a manager agent delegating to subagents, with the unit contract living in prose. That contract is now a validated `task.json` whose `allowed_paths` are enforced in CI, and the acceptance criteria are tests before they are anything else. The two files remain because their *settled facts* (the `/api` prefix strip, the ID-token rule, the DOB privacy rule, the two-mechanism search constraint) are still correct and are cited from the specs. Follow their facts; do not follow their process.
+
+Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above). That question is now largely answered: the enforcement lives in `.ai/policy.json`, `agentctl guard check` and the CI gates, per the Process note.
 
 ### Reports
 `wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. Still unwritten by automation: the agent system records machine output as structured state and telemetry under `.ai/` (`agentctl status`, `agentctl telemetry report`) rather than as prose reports here, so these folders are awaiting a use that genuinely needs prose. `wiki/GeneralContext/` is not writable by any agent worker.

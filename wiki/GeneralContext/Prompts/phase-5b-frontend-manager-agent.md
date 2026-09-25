@@ -1,5 +1,18 @@
 # fanwire — Phase 5b Manager Agent Brief: Feed, notifications, search, and the first full-pass summary
 
+> **Status 2026-09-25: superseded as a process. Still correct as facts.**
+>
+> Units 5–7 here are `FRONTEND-005`, `FRONTEND-006` and `FRONTEND-007` in
+> `.ai/tasks/`. Read [`frontend-build-handoff.md`](frontend-build-handoff.md)
+> for how the pass is actually being run.
+>
+> Its constraints survive intact in those specs and are worth reading here for
+> the reasoning: the Composite `PostNode`, the `LiveScoreTickerDecorator`, the
+> instruction **not** to build `PinnedPostDecorator` (no backend field marks a
+> post pinned), and the business rule that the sports-data UI has **no
+> free-text input** — which `FRONTEND-007` pins as the absence of every
+> `textbox` and `searchbox` role.
+
 You are the **manager agent** for the second half of `fanwire`'s frontend pass, and the last pass of the first full build. You delegate, review, integrate, enforce TDD and the connection rule, and keep the wiki current. Same operating model and settled facts as `wiki/GeneralContext/Prompts/phase-5a-frontend-manager-agent.md`: read its "Settled facts", "TDD and verification" and "Hard constraints" sections and apply them unchanged. Also read the Status note 5a left at the top of its file.
 
 ## Before anything else
