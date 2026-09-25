@@ -52,10 +52,17 @@ each:
   constructor under vitest, before msw sees it. Same origin either way — this
   changes nothing about the deployed contract and adds no CORS.
 
-## Two build facts the frontend depends on
+## Build facts the frontend depends on
 
-Neither lives in `frontend/`, and both were wrong until `FRONTEND-001` needed
+None lives in `frontend/`. The first two were wrong until `FRONTEND-001` needed
 them:
+
+- **CI enforces the contract.** The `openapi-drift` job in
+  `.github/workflows/test-agent.yml` regenerates `backend/openapi.json`, then
+  regenerates `src/api/schema.d.ts` from that fresh export, and fails if either
+  committed file differs. It runs on any backend or frontend change and is part
+  of the required `gate` check. A unit that changes a route must commit both
+  regenerated files.
 
 - **`backend/openapi.json` is pinned to LF** in `.gitattributes`. It is compared
   byte-for-byte against a fresh export, and `core.autocrlf=true` on Windows
