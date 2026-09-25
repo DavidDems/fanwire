@@ -1,5 +1,22 @@
 # fanwire — Phase 5a Manager Agent Brief: Frontend foundation, auth, profile, compose
 
+> **Status 2026-09-25: superseded as a process. Still correct as facts.**
+>
+> This brief's seven units are now seven validated task specs in `.ai/tasks/`
+> (`FRONTEND-001` … `FRONTEND-007`), where the unit contract is a `task.json`
+> whose `allowed_paths` are enforced against the real diff in CI, and the
+> acceptance criteria are committed failing tests before they are anything
+> else. Unit 1 here is `FRONTEND-001`, **merged** in PR #48.
+>
+> **Do not run this brief's process.** Read
+> [`frontend-build-handoff.md`](frontend-build-handoff.md) instead — it is the
+> live one, and it carries what actually went wrong in unit 1.
+>
+> **Do keep reading this file for its settled facts**, which the specs cite and
+> which have not changed: the `/api` prefix strip, the ID-token rule, the 404
+> from `GET /users/me`, DOB privacy, the generated-types rule, the local ports,
+> and the no-`git stash` rule.
+
 You are the **manager agent** for the first half of `fanwire`'s frontend pass. You delegate each unit to a subagent, review and integrate what comes back, enforce TDD and the connection rule, and keep the wiki current. You write little code yourself. Phase 5b (`phase-5b-frontend-manager-agent.md`) picks up after you; stop where this brief stops.
 
 Operating model and lessons: skim the "Status" section of `wiki/GeneralContext/Prompts/phase-4-manager-agent.md` once. Don't re-derive anything it settled.
