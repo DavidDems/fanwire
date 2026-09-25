@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-002",
+  "objective": "Real Cognito authentication for the SPA: an AuthService interface with one implementation over amazon-cognito-identity-js, the sign-up / confirm / sign-in / forgot-password / profile-creation pages, a route guard, and the wiring that feeds the ID token to FRONTEND-001's apiClient token provider.",
+  "acceptance_criteria": [
+    "AuthService is an interface, and every page and hook depends on the interface rather than on the amazon-cognito-identity-js implementation; tests inject a double of the interface and never mock the library.",
+    "The implementation exposes signUp, confirmSignUp, resendConfirmationCode, signIn, signOut, forgotPassword, confirmForgotPassword, refreshSession and getIdToken, and no production code branches on environment to choose an implementation.",
+    "apiClient's token provider returns the current Cognito ID token, so an authenticated request carries 'Authorization: Bearer <id token>'; it returns null when no session exists, and the request then carries no Authorization header.",
+    "A signed-in user whose GET /users/me returns 404 is routed to profile creation, not to an error view.",
+    "A signed-in user whose GET /users/me returns 200 is routed to the feed, and profile creation is not reachable for them.",
+    "An anonymous user hitting a protected route is redirected to sign-in, and is sent on to the route they originally requested after a successful sign-in.",
+    "Profile creation submits POST /users with username and date_of_birth, offers the teams from GET /events/teams as the preferred-team choice, and surfaces a 422 from the age gate as a field-level message rather than a generic failure.",
+    "Sign-up, confirm, sign-in and forgot-password each render a field-level error from the corresponding Cognito failure, and none of them logs or renders the pool id, client id or any token.",
+    "Every form input has an associated label, every control is reachable by keyboard, and the tests query by role and label rather than by test id."
+  ],
+  "allowed_paths": [
+    "frontend/src/auth/**",
+    "frontend/src/routes/**",
+    "frontend/src/api/client.ts",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "frontend/src/App.tsx",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/features/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

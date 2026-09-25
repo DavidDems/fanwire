@@ -343,9 +343,14 @@ is proven; everything here is ordinary work.
    docstring says the latter. The logic is right and the comment is not, which
    is the sort of thing the human gate exists to catch.
 
-2. **INFRA-002**, which unblocks the first real deploy — nothing uploads the
-   frontend to S3 today, so a deploy serves an empty bucket behind a correct
-   distribution.
+2. **The first deploy**, which now has its own sequencing document:
+   [`TODO/04-first-deploy.md`](../../TODO/04-first-deploy.md). It names every
+   remaining change, splits them by who is permitted to make it (Director /
+   agent / human-at-AWS), and orders them. The nine agent specs it sequences —
+   `FRONTEND-001`…`007`, `INFRA-002`, `INFRA-003` — are written and validated.
+   Read §2 of that file before dispatching any of them: a Director prerequisite
+   that has not landed makes its dependent task unsatisfiable, which is bug 16's
+   shape and costs a live run to discover.
 3. **Exercise a failure path on purpose.** The distiller, the manager decision
    and any retry at all remain unproven, and every task so far has gone green
    first time. A task with a deliberately impossible acceptance criterion buys

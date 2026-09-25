@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-001",
+  "objective": "Lay the frontend foundation every later unit builds on: a deterministic OpenAPI export from the backend, the generated typed client with an injected-token auth middleware, a single validated configuration module, the react-router shell, the react-query provider, and the msw test harness. No feature behaviour — this unit is the skeleton and the contract.",
+  "acceptance_criteria": [
+    "Running backend/scripts/export_openapi.py writes backend/openapi.json with sorted keys, two-space indentation and a trailing newline; running it a second time produces a byte-identical file.",
+    "A backend test fails when the committed backend/openapi.json differs from a freshly exported one, and names the drift in its failure message.",
+    "frontend/src/config.ts throws at module load when a required VITE_ variable is absent or empty, and the error names the missing variable.",
+    "frontend/src/config.ts exposes apiBaseUrl, cognitoRegion, cognitoUserPoolId, cognitoClientId and mediaBaseUrl as typed non-empty strings when all variables are present.",
+    "A test asserts that no file under frontend/src other than config.ts reads import.meta.env.",
+    "apiClient sends an Authorization header of 'Bearer <token>' from its injected token provider on every request, and sends no Authorization header at all when the provider returns null.",
+    "apiClient is constructed as createClient<paths> against the generated frontend/src/api/schema.d.ts, and npm run typecheck passes.",
+    "The router renders a distinct view for each of /, /compose, /notifications, /search, /profile/:userId and the auth routes, and renders a not-found view for an unmatched path.",
+    "A component rendered through the shared test render helper has both a QueryClientProvider and a router in scope, and each test file gets a fresh QueryClient with retries disabled.",
+    "frontend/src/test/server.ts exports an msw server whose handlers are typed against paths from the generated schema, and an unhandled request fails the test rather than passing silently."
+  ],
+  "allowed_paths": [
+    "backend/scripts/export_openapi.py",
+    "backend/openapi.json",
+    "backend/tests/test_export_openapi.py",
+    "frontend/src/main.tsx",
+    "frontend/src/App.tsx",
+    "frontend/src/App.test.tsx",
+    "frontend/src/setupTests.ts",
+    "frontend/src/config.ts",
+    "frontend/src/config.test.ts",
+    "frontend/src/api/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/features/**",
+    "frontend/src/auth/**",
+    "backend/app/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "backend-testing",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

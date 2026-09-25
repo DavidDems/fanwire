@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-004",
+  "objective": "The compose experience: a PostBuilder that assembles and validates a CreatePostRequest, a ComposeMediator through which the text box, the mention autocomplete and the media widget communicate, a DraftSnapshot undo, quick-post templates cloned from a prototype, and direct-to-S3 media upload via the presigned POST from POST /media/uploads.",
+  "acceptance_criteria": [
+    "PostBuilder accumulates text, media ids and reply/repost context across separate calls, and build() rejects a post with neither text nor media rather than sending an empty request.",
+    "The text box, the mention autocomplete and the media widget exchange state only through ComposeMediator; no two of those components import each other.",
+    "Typing '#' offers games from GET /events/games and typing '$' offers teams from GET /events/teams, and selecting a suggestion inserts the mention token the backend parses.",
+    "DraftSnapshot captures the draft before live-event data is attached, and undo restores the exact prior draft including text, media ids and reply context.",
+    "PostTemplate.clone() produces an independent draft, and editing a draft created from a template leaves the template itself unchanged.",
+    "Media upload sends a multipart POST of the presigned fields plus the file directly to the returned upload_url, and never sends file bytes to the API.",
+    "A file whose type is outside jpeg/png/webp, or whose size exceeds the max_bytes returned by POST /media/uploads, is rejected client-side with a visible message before any upload is attempted.",
+    "After upload the widget polls GET /media/{media_id} and only allows attaching the media once its state is Processed; media still Quarantined cannot be attached.",
+    "Submitting a valid draft issues POST /posts with the built request, clears the composer on success, and preserves the draft on failure so the user does not lose their text."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/compose/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x04-media.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

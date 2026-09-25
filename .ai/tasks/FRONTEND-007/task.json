@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-007",
+  "objective": "Search, as two deliberately separate user interfaces: a free-text bar over GET /search/accounts and GET /search/posts rendering accounts first then posts, each independently paginated; and a sports-data filter control with no free-text input at all, driven by dropdowns over GET /search/games/filters, GET /events/teams and GET /search/games.",
+  "acceptance_criteria": [
+    "The free-text bar calls GET /search/accounts and GET /search/posts independently, and renders the account results above the post results.",
+    "Accounts and posts each have their own load-more control driven by their own next_offset, and loading more of one does not refetch the other.",
+    "Post results render through the feed unit's PostNode components rather than a search-specific post renderer.",
+    "The sports-data UI renders no text input of any kind; a test asserts the absence of every textbox and searchbox role within it.",
+    "The season options come from GET /search/games/filters, the team options from GET /events/teams, and the position options from the filters response's positions field.",
+    "Applying the filters calls GET /search/games with the selected season, team and position, and changing a filter re-queries rather than filtering the previous results client-side.",
+    "An empty result set from either UI renders an explicit no-results state naming what was searched.",
+    "The free-text bar renders on both the home page and the search route, and both entry points reach the same results view."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/search/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/features/feed/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
