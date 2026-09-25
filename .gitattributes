@@ -1,0 +1,22 @@
+# Generated artifacts that are compared byte-for-byte.
+#
+# `backend/openapi.json` is the committed frontend/backend contract. A test
+# regenerates it and compares it to the committed copy, and a CI job will do
+# the same, so a difference is supposed to mean "a backend route changed and
+# the schema was not refreshed".
+#
+# With no attribute and `core.autocrlf=true` — the default on Windows — git
+# checks that file out with CRLF while the export script writes LF. The
+# comparison then fails on a fresh clone, on a machine where nothing is wrong,
+# and reports it as contract drift. Measured: 2429 carriage returns introduced
+# by a single checkout, and `test_committed_openapi_json_matches_a_fresh_export`
+# red because of them.
+#
+# A gate that cries wolf on a clean checkout gets ignored, and this one is the
+# only thing standing between a changed route and a silently broken TypeScript
+# client.
+#
+# `eol=lf` rather than `-text`: these stay diffable and reviewable, they are
+# just never translated.
+backend/openapi.json          text eol=lf
+frontend/src/api/schema.d.ts  text eol=lf

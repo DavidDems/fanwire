@@ -22,6 +22,21 @@ RUN pip install --no-cache-dir .[dev]
 COPY backend/tests ./tests
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
+# The test stage must contain everything the suite asserts about, not just the
+# application. `scripts/` and the committed OpenAPI document are here because
+# test_export_openapi.py regenerates the schema and compares it to the
+# committed copy — the gate that stops a changed backend route from silently
+# breaking the generated TypeScript client. Without these two lines that suite
+# passes locally and fails in CI, reporting a missing file rather than the
+# missing COPY that caused it.
+COPY backend/scripts ./scripts
+# `jso[n]`, not `json`, and the brackets are load-bearing. COPY fails the build
+# when a literal source is missing, but a glob matching nothing is allowed — so
+# this line is valid both before FRONTEND-001 lands `backend/openapi.json` and
+# after. Without it the fix could not reach `main` until the file it copies
+# already existed, and the branch creating that file needs the fix to go green:
+# each waiting on the other. Verified both ways against a real build.
+COPY backend/openapi.jso[n] ./
 ENTRYPOINT ["python", "-m", "pytest"]
 
 # --- dev stage: `backend-dev` in docker-compose.yml — a real, clickable
