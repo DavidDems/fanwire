@@ -204,6 +204,44 @@ jobs:
         # dependencies are bumped.
         run: pip-audit --ignore-vuln PYSEC-2026-1325
 
+  # `backend/openapi.json` is the committed frontend/backend contract: the
+  # TypeScript client is generated from it, so a route change that does not
+  # refresh it builds the client against a schema the API no longer serves.
+  # Regenerate it here, outside the backend image, and fail on any difference.
+  #
+  # `git status --porcelain` rather than `git diff --exit-code`: a diff only
+  # sees tracked files, so a deleted-and-regenerated or never-committed schema
+  # would pass. Runtime dependencies only - the export imports `app.main` and
+  # nothing else, with no database or AWS configured.
+  openapi-drift:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install backend package (runtime dependencies only)
+        working-directory: backend
+        run: pip install -e .
+      - name: Regenerate the OpenAPI document
+        working-directory: backend
+        run: python scripts/export_openapi.py
+      - name: Fail on any drift from the committed contract
+        run: |
+          set -euo pipefail
+          drift="$(git status --porcelain -- backend/openapi.json)"
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            git --no-pager diff --stat -- backend/openapi.json || true
+            echo "::error file=backend/openapi.json::backend/openapi.json is out of date. From backend/, run: python scripts/export_openapi.py, then regenerate the client with npm run gen:api-types in frontend/, and commit both."
+            exit 1
+          fi
+          echo "backend/openapi.json matches a fresh export"
+
   npm-audit:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -265,6 +303,7 @@ jobs:
       - frontend-test
       - agent-infra-test
       - pip-audit
+      - openapi-drift
       - npm-audit
       - infra-synth
     runs-on: ubuntu-latest

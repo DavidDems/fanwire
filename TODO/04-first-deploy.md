@@ -59,7 +59,7 @@ successful pass. Check §2 before dispatching anything in §3.
       build time; today the stage runs `npm run build` with none of them set, so
       it can only ever produce a bundle configured for nothing. Needed by §4
       phase 3, not by any agent task.
-- [ ] **`.github/workflows/test-agent.yml`: an OpenAPI drift gate.** A job that
+- [x] **`.github/workflows/test-agent.yml`: an OpenAPI drift gate.** A job that
       regenerates `backend/openapi.json` and fails on any diff, added to
       `gate`'s `needs:`. **Add it after `FRONTEND-001` merges**, not before —
       the file it checks does not exist yet, and a required check that fails on
