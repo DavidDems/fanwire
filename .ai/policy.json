@@ -39,10 +39,20 @@
         "frontend/src/**/__tests__/**",
         "infra/test/**"
       ],
+      "_deny_note": [
+        "There is deliberately no `frontend/src/**/*.tsx` entry here, though the",
+        "symmetry with the other trees invites one. `deny` is evaluated BEFORE",
+        "`write`, and a component test IS a .tsx file - that pattern denied the",
+        "test agent its own output, and every FRONTEND-* task would have",
+        "escalated on its first commit. The glob engine has no negation, so the",
+        "exception cannot be written into the pattern.",
+        "Nothing is lost: `write` above admits only *.test.ts, *.test.tsx and",
+        "__tests__/**, so a production .tsx is already refused as 'not in this",
+        "role's write allowlist'. tests/test_policy.py pins both halves."
+      ],
       "deny": [
         "backend/app/**",
         "backend/alembic/**",
-        "frontend/src/**/*.tsx",
         "infra/lib/**",
         "infra/bin/**",
         "wiki/**"
