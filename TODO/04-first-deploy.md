@@ -50,11 +50,11 @@ successful pass. Check §2 before dispatching anything in §3.
 
 ### Still to do
 
-- [ ] **`docker/backend.Dockerfile`, `lambda` target: copy `alembic/` and
+- [x] **`docker/backend.Dockerfile`, `lambda` target: copy `alembic/` and
       `alembic.ini`.** `INFRA-003` is unsatisfiable without it — `docker/**` is
       denied to the code agent, so the agent cannot add it and cannot work
       around it.
-- [ ] **`docker/frontend.Dockerfile`, `build` stage: accept the `VITE_*` values
+- [x] **`docker/frontend.Dockerfile`, `build` stage: accept the `VITE_*` values
       as build args and pass them into `npm run build`.** Vite inlines them at
       build time; today the stage runs `npm run build` with none of them set, so
       it can only ever produce a bundle configured for nothing. Needed by §4
@@ -66,7 +66,7 @@ successful pass. Check §2 before dispatching anything in §3.
       every PR blocks the work that would fix it.
       Per `handoff.md` §4, add its structural assertion to
       `.ai/tests/test_workflows.py` in the same commit.
-- [ ] **`frontend/.env.local`** (untracked, per-developer): the dev pool's
+- [x] **`frontend/.env.local`** (untracked, per-developer): the dev pool's
       `VITE_COGNITO_REGION`, `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`,
       plus `VITE_API_BASE_URL=/api` and `VITE_MEDIA_BASE_URL`. Needed the moment
       `FRONTEND-001`'s `config.ts` lands, because it throws on a missing value by

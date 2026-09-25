@@ -63,5 +63,12 @@ CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --
 # --- lambda stage: this is what actually gets pushed to ECR and deployed.
 # Kept last so a plain `docker build` (no --target) produces the deployable
 # image by default.
+#
+# Migrations ship in the deployed image because INFRA-003's migration runner
+# is this same image with a different command override, not a second image.
+# alembic.ini's `script_location = %(here)s/alembic` resolves against the
+# ini's own directory, so it finds these under LAMBDA_TASK_ROOT.
 FROM base AS lambda
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./
 CMD ["app.main.handler"]
