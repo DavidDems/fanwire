@@ -70,6 +70,14 @@ aws s3api create-bucket --bucket fanwire-dev-quarantine-294321867941 --region ca
 aws s3api create-bucket --bucket fanwire-dev-public-media-294321867941 --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1 --profile fanwire-workload
 ```
 
+**DONE, here was the outputs:**
+{
+    "Location": "http://fanwire-dev-quarantine-294321867941.s3.amazonaws.com/"
+}
+{
+    "Location": "http://fanwire-dev-public-media-294321867941.s3.amazonaws.com/"
+}
+
 `--create-bucket-configuration LocationConstraint` is required for every region
 except `us-east-1`. Without it the bucket is silently created in Virginia.
 
@@ -84,6 +92,8 @@ aws s3api put-bucket-policy --bucket fanwire-dev-quarantine-294321867941 --polic
 aws s3api put-bucket-policy --bucket fanwire-dev-public-media-294321867941 --policy file://infra/dev/dev-public-media-tls-only-policy.json --profile fanwire-workload
 aws s3api put-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --cors-configuration file://infra/dev/dev-quarantine-cors.json --profile fanwire-workload
 ```
+
+**ALL DONE, NO OUTPUT FROM ANY COMMAND WHICH SUGGESTS EVERYTHING WORKED**
 
 Two deliberate choices, so they are not a surprise:
 
@@ -112,6 +122,8 @@ These map to `media_quarantine_bucket`, `media_public_bucket` and
 bucket names that do not exist. Route tests override the S3 client with `moto`
 and never touch a real bucket, so CI is unaffected either way.
 
+**DONE, all three lines have been appended to the existing cognito values in '/backend/.env'**
+
 ### 1d. Confirm it worked
 
 ```powershell
@@ -123,6 +135,44 @@ aws s3 ls --profile fanwire-workload | Select-String fanwire-dev
 
 You want `ca-central-1` from the first, the localhost origins from the second,
 the TLS-only deny from the third, and **both** buckets from the fourth.
+
+**DONE, all 4 outputs that were needed were received, the implementation seems to have worked perfectly.**
+-1: aws s3api get-bucket-location --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
+{
+    "LocationConstraint": "ca-central-1"
+}
+-2: aws s3api get-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
+{
+    "CORSRules": [
+        {
+            "AllowedHeaders": [
+                "*"
+            ],
+            "AllowedMethods": [
+                "POST",
+                "GET",
+                "HEAD"
+            ],
+            "AllowedOrigins": [
+                "http://localhost:5173",
+                "http://localhost:8001"
+            ],
+            "ExposeHeaders": [
+                "ETag",
+                "Location"
+            ],
+            "MaxAgeSeconds": 3000
+        }
+    ]
+}
+-3: aws s3api get-bucket-policy --bucket fanwire-dev-public-media-294321867941 --profile fanwire-workload
+{
+    "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyPlaintextTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::fanwire-dev-public-media-294321867941\",\"arn:aws:s3:::fanwire-dev-public-media-294321867941/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
+}
+-4:  aws s3 ls --profile fanwire-workload | Select-String fanwire-dev
+
+2026-09-25 11:34:16 fanwire-dev-public-media-294321867941
+2026-09-25 11:34:23 fanwire-dev-quarantine-294321867941
 
 ### 1e. What is still missing after this — not your step
 
