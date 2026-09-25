@@ -294,10 +294,11 @@ class TestTheGuardCanBeARequiredCheck:
 
 
 class TestTheOpenApiContractCannotDrift:
-    """`backend/openapi.json` is what the frontend's typed client is generated
-    from. A route change that does not refresh it compiles cleanly and fails
-    at runtime, so a CI job regenerates it and fails on any difference. Each
-    check below is a way that job could exist and still pass everything."""
+    """`backend/openapi.json` is what the frontend's TypeScript types
+    (`frontend/src/api/schema.d.ts`) are generated from. If either is stale,
+    the client compiles cleanly and fails at runtime, so a CI job regenerates
+    both and fails on any difference. Each check below is a way that job could
+    exist and still pass everything."""
 
     @pytest.fixture
     def gate(self) -> str:
@@ -322,19 +323,31 @@ class TestTheOpenApiContractCannotDrift:
         job = self.job(gate, "openapi-drift")
         assert "python scripts/export_openapi.py" in job
 
+    def test_the_types_are_generated_from_the_fresh_schema(self, gate):
+        """Generated from the committed schema instead, the types would match
+        a stale contract and pass."""
+        job = self.job(gate, "openapi-drift")
+        assert "npm run gen:api-types" in job
+        assert job.index("python scripts/export_openapi.py") < job.index("npm run gen:api-types"), (
+            "the types must be regenerated after the schema, from the fresh export"
+        )
+
     def test_the_job_fails_on_untracked_as_well_as_modified(self, gate):
-        """`git diff --exit-code` sees tracked files only: a schema that was
+        """`git diff --exit-code` sees tracked files only: a file that was
         never committed would be regenerated and pass."""
         job = self.job(gate, "openapi-drift")
-        assert "git status --porcelain -- backend/openapi.json" in job
+        assert "git status --porcelain -- backend/openapi.json frontend/src/api/schema.d.ts" in job
         assert "exit 1" in job
 
-    def test_the_job_runs_whenever_the_backend_suite_does(self, gate):
-        """Backend changes are what move the schema. Keyed on the same filter
-        output, it also inherits the non-PR bypass that makes a dispatched
-        run authoritative."""
+    def test_the_job_runs_on_backend_or_frontend_changes(self, gate):
+        """A route change moves both files; a hand-edit of the generated types
+        moves only the second. Keyed on the filter outputs, it also inherits
+        the non-PR bypass that makes a dispatched run authoritative."""
         job = self.job(gate, "openapi-drift")
-        assert "if: needs.changes.outputs.backend == 'true'" in job
+        assert (
+            "if: needs.changes.outputs.backend == 'true'"
+            " || needs.changes.outputs.frontend == 'true'" in job
+        )
 
     def test_the_aggregate_gate_depends_on_it(self, gate):
         """Only `gate` is required on `main`. A job outside its `needs:` can

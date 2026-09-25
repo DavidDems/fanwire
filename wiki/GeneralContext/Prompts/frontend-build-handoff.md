@@ -218,7 +218,7 @@ convenience:
 
 From `TODO/04-first-deploy.md` §2 — check before the unit that needs each:
 
-- [ ] **The OpenAPI drift gate** in `.github/workflows/test-agent.yml`: a job
+- [x] **The OpenAPI drift gate** in `.github/workflows/test-agent.yml`: a job
       that regenerates `backend/openapi.json` and fails on any diff, added to
       `gate`'s `needs:`. The file now exists, so this is unblocked and should be
       done soon — without it a backend route change silently breaks the
