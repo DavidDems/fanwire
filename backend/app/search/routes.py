@@ -54,7 +54,7 @@ def _next_offset(offset: int, limit: int, returned_count: int) -> int | None:
     return offset + limit if returned_count == limit else None
 
 
-@router.get("/accounts", response_model=AccountsPage)
+@router.get("/accounts", response_model=AccountsPage, summary="Drift gate negative test")
 def search_accounts(
     q: str = Query(..., min_length=1, max_length=100),
     limit: int = Query(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT),
