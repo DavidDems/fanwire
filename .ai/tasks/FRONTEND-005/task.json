@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-005",
+  "objective": "The feed: GET /feed with infinite scroll on next_before_id, a Composite PostNode that renders a post and a thread uniformly at any depth, a LiveScoreTickerDecorator for posts carrying live scores, optimistic like/unlike, and reply/repost entry points into the compose unit.",
+  "acceptance_criteria": [
+    "The feed renders from GET /feed and loads the next page using next_before_id from the previous response, stopping cleanly when the response reports no further page.",
+    "A guest with no token and a signed-in user render through the same feed component, and no component branches on which feed strategy the API chose.",
+    "A single PostNode component renders both a standalone post and a post with replies, at any nesting depth, without a separate thread-specific component.",
+    "GET /feed/thread/{post_id} returns root plus direct replies, and expanding a reply calls the same endpoint for that reply rather than fetching the whole thread again.",
+    "A post whose live_scores field is non-empty renders wrapped in LiveScoreTickerDecorator; a post with an empty live_scores renders unwrapped, and the decorator is not in the tree.",
+    "Liking a post updates the like state and count before the request returns, and a failure restores both.",
+    "Media renders from the public-media key joined to the configured media base URL; a media item that fails to load renders no image at all rather than a broken image element.",
+    "The reply and repost controls open the compose unit pre-seeded with the reply or repost context, and do not reimplement any part of composing.",
+    "No PinnedPostDecorator exists anywhere in the diff."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/features/compose/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

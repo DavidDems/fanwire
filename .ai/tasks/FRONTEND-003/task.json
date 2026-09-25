@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-003",
+  "objective": "Profile viewing and editing, plus the follow relationship: the signed-in user's own profile and settings, another user's public profile, follower/following counts, and follow/unfollow with an optimistic update that rolls back on error.",
+  "acceptance_criteria": [
+    "The own-profile view reads GET /users/me and renders the date of birth; the public profile view reads GET /users/{user_id} and renders no date of birth anywhere in its output.",
+    "Settings submits PATCH /users/me for description and preferred team, sends only the fields the user changed, and leaves the others absent from the request body rather than sending them as null.",
+    "The preferred-team control offers the teams from GET /events/teams and submits a team id, not a team name.",
+    "Follow state comes from GET /users/me/following; following a user issues POST /users/{user_id}/follow and unfollowing issues DELETE, and the button reflects the current state before either call returns.",
+    "A failed follow or unfollow restores the previous button state and follower count, and surfaces an error the user can see.",
+    "Follower and following counts update optimistically alongside the button and are re-derived from the server response once it arrives.",
+    "The follow control is not rendered on the signed-in user's own profile.",
+    "An anonymous visitor can view a public profile, and the follow control prompts sign-in rather than issuing an unauthenticated request."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/profile/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

@@ -11,7 +11,7 @@ It is also the first project built through an intentional AI development pipelin
 | `backend/` | FastAPI — `users`, `events`, `posts`, `media`, `notifications`, `feed`, `search`. Real, tested. |
 | `frontend/` | React + Vite. Scaffold; Phase 5 builds it out. |
 | `infra/` | AWS CDK app. Synthesized and tested, **never deployed** — gated on an IAM review. |
-| `.ai/` | The agent system that builds this repo. Committed and tested; not yet run live. |
+| `.ai/` | The agent system that builds this repo. Live: two tasks have run `DRAFT`→`COMPLETE` unattended. Start at `.ai/README.md`, state of play in `.ai/docs/handoff.md`. |
 | `wiki/` | Every AI-facing file: per-module decisions, standards, task prompts. Start at `wiki/index.md`. |
 | `TODO/` | **Things only you can do.** Start here. |
 
@@ -19,11 +19,12 @@ No live AWS deploy exists yet.
 
 ## What needs you
 
-`TODO/` — one folder, three files, ordered:
+`TODO/` — and it is nearly empty now. Nothing in it blocks the pipeline any more.
 
-1. **`TODO/01-ai-workflow-setup.md`** — blocking. The agent system does nothing until this is done: an API key, branch protection, and the first live task. ~30 minutes.
-2. **`TODO/02-deployment-requirements.md`** — AWS, domain, the IAM review. Blocks `cdk deploy`, not development.
-3. **`TODO/03-open-decisions.md`** — questions agents have asked and are waiting on.
+1. **`TODO/02-deployment-requirements.md`** — the dev S3 buckets (~10 minutes), plus a checklist that only becomes actionable after a first deploy.
+2. **`TODO/03-open-decisions.md`** — answered product decisions, four of which still need copying into `wiki/GeneralContext/Prompts/phase-4-manager-agent.md`.
+
+The setup checklist that used to be `TODO/01` is gone: every item was completed, and what is durable about it moved to `wiki/GeneralContext/Architecture/github-automation-setup.md`. A finished item does not stay in `TODO/` as a tick — it becomes current-state fact in the wiki.
 
 ## Where things are documented
 

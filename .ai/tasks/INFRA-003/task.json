@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-003",
+  "objective": "Give the deployed app a way to apply its schema. There is no production migration runner: alembic is a dependency and backend/alembic/ is real, but nothing in the deploy path ever runs 'alembic upgrade head', so a real deploy ships schema changes with no migration step. Add a migration handler and a Lambda that runs it on demand, sharing the existing image, invoked by a human and by nothing else.",
+  "acceptance_criteria": [
+    "The synthesized Fanwire-App template contains a migration function whose code is the same DockerImageAsset the api function uses; the template contains no second image asset.",
+    "The migration function's image cmd override targets the migration handler, not app.main.handler.",
+    "Nothing in any synthesized template invokes the migration function automatically: it is the target of no EventBridge rule, no event source mapping, no Lambda schedule and no custom resource.",
+    "The migration function runs in the same VPC and app subnets and uses the same Lambda security group as the api function, so it can reach RDS.",
+    "The migration function's timeout is at least 300 seconds and its reserved concurrency is 1.",
+    "The IAM wildcard gate in infra/test/iam-policy.test.ts passes in all three domain modes, or any new wildcard is added to ALLOW_LIST with a written reason.",
+    "The migration handler runs alembic upgrade head programmatically against Settings.database_url and returns the head revision it arrived at.",
+    "A failed migration causes the handler to raise rather than return a success result, so an operator sees a failed invocation rather than a green one.",
+    "The handler does not log or return the database URL, its password, or any value derived from them."
+  ],
+  "allowed_paths": [
+    "backend/app/migrate.py",
+    "backend/tests/test_migrate.py",
+    "infra/lib/app-stack.ts",
+    "infra/test/app-stack.test.ts",
+    "infra/test/iam-policy.test.ts",
+    "wiki/CodeContext/Modules/0x00-architecture.md"
+  ],
+  "forbidden_paths": [
+    "infra/package.json",
+    "infra/cdk.json",
+    "infra/lib/app.ts",
+    "infra/lib/data-stack.ts",
+    "backend/alembic/versions/**",
+    "backend/pyproject.toml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/build-deployment.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "infra-cdk",
+    "backend-testing",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

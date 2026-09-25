@@ -12,15 +12,20 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`01-ai-workflow-setup.md`](01-ai-workflow-setup.md) | Making the agent system actually run: **Actions minutes**, secrets, branch protection, the first live task | **Partly.** The pipeline runs and a task has completed. What is left (§7, §7b) costs two manual nudges per task and leaves an unaccounted-for admin token live |
-| [`02-deployment-requirements.md`](02-deployment-requirements.md) | AWS, domain, IAM review, third-party keys — collated from across the wiki | Not yet. Blocks `cdk deploy`, not development |
+| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left of deployment: the dev S3 buckets, and a post-deploy checklist | Barely. One ~10-minute item is available; the rest needs a deploy to exist first |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
 
-**Status as of 2026-09-21.** `01` steps 0–6 and 10–11 done, 7/7b/8/9 open.
-`02` §1, §4 and §5 answered; §2 needs a hosted zone and four DNS records; §3 is
-now three concrete sub-steps instead of an unactionable instruction. `03` has
-four of five Phase 5a answers, which still have to be copied into
-`phase-4-manager-agent.md` by a human because that path is agent-unwritable.
+**Status as of 2026-09-24.** `01` is **deleted** — every item in it was
+completed, and its durable content now lives at
+`wiki/GeneralContext/Architecture/github-automation-setup.md`. `02` is trimmed to
+the dev S3 buckets plus a post-deploy checklist; everything finished moved into
+`wiki/CodeContext/Modules/0x00-architecture.md` ("AWS account state" and "Known
+gaps"). `03` holds the answered product decisions, four of which still have to be
+copied into `phase-4-manager-agent.md` by a human.
+
+This folder is doing what it was supposed to: shrinking. A completed item does
+not stay here as a tick — it becomes current-state fact in the wiki and the entry
+is removed, because a checklist of done things is a place where stale facts hide.
 
 ## Commands in this folder are PowerShell, one per line
 

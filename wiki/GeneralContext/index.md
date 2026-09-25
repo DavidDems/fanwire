@@ -54,6 +54,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **Business rules**: `wiki/GeneralContext/Architecture/business-rules.md`
 - **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — interim, GuardDuty-finding response, priority-of-suspicion order; revisit once Phase 6 CDK stacks land.
 - **Dev auth setup**: `wiki/GeneralContext/Architecture/dev-auth-setup.md`: the human-created real Cognito dev user pool that local dev and browser testing use (decided 2026-09-18, no emulator or fake).
+- **GitHub automation setup**: `wiki/GeneralContext/Architecture/github-automation-setup.md`: the repository settings the `.ai/` pipeline depends on and why — secrets (and the repository-vs-environment trap), the ruleset and its aggregate required checks, the solo-repo approval bypass, `action_required` on bot-authored PRs, and how to run/stop a task. The one part of the agent system not under version control, so not diffable and not testable.
 
 ### Task prompts
 `wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:

@@ -56,6 +56,7 @@
         "backend/app/**",
         "backend/alembic/**",
         "backend/scripts/**",
+        "backend/openapi.json",
         "frontend/src/**",
         "frontend/public/**",
         "infra/lib/**",
@@ -95,6 +96,15 @@
       ]
     }
   },
+
+  "_openapi_json_note": [
+    "backend/openapi.json is the committed frontend/backend contract: the code",
+    "agent regenerates it with backend/scripts/export_openapi.py, and CI fails",
+    "the build on any drift. It is granted as one exact path rather than a tree,",
+    "because a backend route change that does not refresh it silently breaks the",
+    "generated TypeScript client - and the agent that changed the route is the",
+    "only one positioned to refresh it."
+  ],
 
   "_dependency_changes": [
     "backend/pyproject.toml, frontend/package.json, infra/package.json, docker/** and",

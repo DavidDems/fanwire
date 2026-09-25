@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-006",
+  "objective": "The notifications view: the list from GET /notifications, optimistic clearing via POST /notifications/{id}/clear, the email-preference toggle over GET and PUT /notifications/preference, and rendering of the follow, reply and repost notification types with the actor's username resolved and cached.",
+  "acceptance_criteria": [
+    "The notification list renders from GET /notifications, and an empty response renders an empty state rather than a spinner or a blank page.",
+    "Clearing a notification removes it from the list before POST /notifications/{id}/clear returns, and a failed clear restores it to its original position.",
+    "Follow, reply and repost notifications each render a distinct message naming the actor, and an unrecognised notification type renders a generic entry rather than throwing.",
+    "The actor's username comes from GET /users/{user_id} and is cached by react-query, so a list containing several notifications from the same actor issues one request for that actor, not one per notification.",
+    "The email-preference control reflects the value from GET /notifications/preference on load and submits PUT /notifications/preference on change.",
+    "A failed preference update restores the previous toggle position and shows an error the user can see.",
+    "A reply or repost notification links to the post it refers to, and a follow notification links to the actor's profile."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/notifications/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "backend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
