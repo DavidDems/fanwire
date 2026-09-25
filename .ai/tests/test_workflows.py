@@ -291,3 +291,53 @@ class TestTheGuardCanBeARequiredCheck:
         """The aggregate must not be an excuse to widen the guard onto human
         PRs, which are governed by review and CODEOWNERS instead."""
         assert "startsWith(github.head_ref, 'agent/')" in guard_wf
+
+
+class TestTheOpenApiContractCannotDrift:
+    """`backend/openapi.json` is what the frontend's typed client is generated
+    from. A route change that does not refresh it compiles cleanly and fails
+    at runtime, so a CI job regenerates it and fails on any difference. Each
+    check below is a way that job could exist and still pass everything."""
+
+    @pytest.fixture
+    def gate(self) -> str:
+        path = WORKFLOWS / "test-agent.yml"
+        if not path.exists():
+            pytest.skip("test-agent.yml not present")
+        return path.read_text(encoding="utf-8")
+
+    @staticmethod
+    def job(gate: str, name: str) -> str:
+        assert f"\n  {name}:\n" in gate, f"test-agent.yml has no `{name}` job"
+        body = gate.split(f"\n  {name}:\n", 1)[1]
+        # A job ends where the next two-space-indented key begins.
+        lines = []
+        for line in body.splitlines():
+            if line.startswith("  ") and not line.startswith("   ") and line.strip():
+                break
+            lines.append(line)
+        return "\n".join(lines)
+
+    def test_the_job_regenerates_the_committed_schema(self, gate):
+        job = self.job(gate, "openapi-drift")
+        assert "python scripts/export_openapi.py" in job
+
+    def test_the_job_fails_on_untracked_as_well_as_modified(self, gate):
+        """`git diff --exit-code` sees tracked files only: a schema that was
+        never committed would be regenerated and pass."""
+        job = self.job(gate, "openapi-drift")
+        assert "git status --porcelain -- backend/openapi.json" in job
+        assert "exit 1" in job
+
+    def test_the_job_runs_whenever_the_backend_suite_does(self, gate):
+        """Backend changes are what move the schema. Keyed on the same filter
+        output, it also inherits the non-PR bypass that makes a dispatched
+        run authoritative."""
+        job = self.job(gate, "openapi-drift")
+        assert "if: needs.changes.outputs.backend == 'true'" in job
+
+    def test_the_aggregate_gate_depends_on_it(self, gate):
+        """Only `gate` is required on `main`. A job outside its `needs:` can
+        fail on every PR and block nothing."""
+        needs = self.job(gate, "gate").split("needs:", 1)[1].split("runs-on:", 1)[0]
+        assert "- openapi-drift" in needs
