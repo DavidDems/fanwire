@@ -11,3 +11,10 @@
 reports
 wiki
 reference
+# Per-developer config: backend/.env and frontend/.env.local hold the dev
+# Cognito pool and database values. In the build context they would reach the
+# frontend image through `COPY frontend/ .`, and Vite reads .env.local in
+# production mode too - so a build missing a VITE_* argument would silently
+# ship a bundle pointed at the dev pool. None is tracked; none belongs here.
+**/.env
+**/.env.*

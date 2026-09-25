@@ -224,9 +224,9 @@ From `TODO/04-first-deploy.md` §2 — check before the unit that needs each:
       done soon — without it a backend route change silently breaks the
       generated client. Add its structural assertion to
       `.ai/tests/test_workflows.py` in the same commit, per `handoff.md` §4.
-- [ ] `docker/frontend.Dockerfile`: thread the `VITE_*` values into the `build`
+- [x] `docker/frontend.Dockerfile`: thread the `VITE_*` values into the `build`
       stage as build args. Needed for the deploy, not for any unit.
-- [ ] `docker/backend.Dockerfile` `lambda` target: copy `alembic/` and
+- [x] `docker/backend.Dockerfile` `lambda` target: copy `alembic/` and
       `alembic.ini`. **`INFRA-003` is unsatisfiable until this lands.**
 - [ ] Confirm no new frontend dependency is needed. Everything the six units
       call for is already in `package.json`, which the code agent cannot write.
