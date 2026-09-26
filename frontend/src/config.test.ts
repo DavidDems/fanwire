@@ -11,9 +11,14 @@
  * you first read the property": the failure has to happen while something is
  * still watching.
  *
- * `vitest.config` sets `globals: false`, so every helper is imported. Vite does
- * not load `.env.local` in test mode, so the values below are the only ones
- * these tests see.
+ * `vitest.config` sets `globals: false`, so every helper is imported.
+ *
+ * Vite *does* load `.env.local` in test mode — the opposite of what this
+ * comment claimed until the harness was fixed, and the belief that let a test
+ * pass locally and fail in a container with no env file. What makes the values
+ * below the only ones these tests see is that every case stubs all five
+ * explicitly, over the top of `vite.config.ts`'s `test.env`, which in turn
+ * outranks `.env.local`.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
