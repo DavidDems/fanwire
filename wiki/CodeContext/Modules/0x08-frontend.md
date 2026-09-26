@@ -73,6 +73,29 @@ them:
   reporting a missing file rather than the missing `COPY`. The `jso[n]` glob is
   deliberate — see the comment there.
 
+## Test harness facts
+
+Both exist so a test can use an ordinary static `import` of the thing it tests.
+Both were found by a test that passed locally and could not pass in
+`frontend-test`, which is the same shape as the two build facts above.
+`src/test/harness.test.ts` pins them, so neither is a rule anybody has to
+remember:
+
+- **`vite.config.ts`'s `test.env` supplies all five `VITE_*` values.**
+  `config.ts` throws at module load on a missing one, and `.dockerignore`
+  excludes `**/.env.*` — so the container and CI have no env file, while a
+  developer's machine has `.env.local` and hides the failure. `test.env` also
+  outranks `.env.local` (`.env.[mode]` beats `.env.local`), so a test run reads
+  the same fake pool id everywhere and the real dev pool is never reachable
+  from a test.
+- **`setupTests.ts` calls `server.listen()` at module scope, not in
+  `beforeAll`.** `openapi-fetch`'s `createClient` captures `globalThis.fetch`
+  when it is constructed, and `api/client.ts` constructs `apiClient` at module
+  load. A setup file's `beforeAll` runs *after* the test file's whole import
+  graph, so listening from a hook left every statically imported `apiClient`
+  holding the unpatched fetch: its requests left for the real network and
+  failed as `ECONNREFUSED`, with nothing pointing at msw.
+
 ## Settled contracts
 
 These are decided and are not re-litigated by a unit that finds them
