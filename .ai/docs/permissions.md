@@ -95,8 +95,29 @@ were judged not good enough:
   told not to browse, but nothing stops it reading another file in the
   checkout. Write is what is enforced, and write is what determines blast
   radius.
-- **The Director** is not sandboxed. It is a human-supervised interactive
-  session whose output goes through ordinary review.
+- **The Director** is not sandboxed, deliberately. It is a human-supervised
+  interactive session whose output goes through ordinary review, and it has no
+  path restrictions at all — including `.ai/`, `.github/`, `wiki/GeneralContext/`
+  and `AGENTS.md`. That is a decision, not an oversight (human, 2026-09-28):
+  keeping the agent system in repair means editing the agent system, and a tier
+  that cannot do so has to hand every workflow bug back to a person who then has
+  to write the patch anyway. Three of the first four defects in the frontend
+  pass were in exactly those trees.
+
+  What bounds it is the branch, not a path list. A Director works on an
+  ordinary human-named branch, where `agent-guard` does not apply and the
+  `main` ruleset does: one approving code-owner review, no self-merge, no
+  force-push, branches must be up to date. **The review is the only control**,
+  so the Director is expected to name a restricted-tree edit in the PR body
+  rather than leave a reviewer to notice it.
+
+  The split is safe only because a dispatched worker cannot reach the other
+  tier: `agent-worker.yml` builds its push target as `agent/<task id>` itself
+  and blanks both token variables for the model step, so no worker can put a
+  diff on a branch the guard does not cover. `test_workflows.py`'s
+  `TestAWorkerCannotEscapeItsOwnBranch` pins that, and it is the single
+  property this whole model rests on — if it ever fails, the tiers have
+  collapsed into one.
 - **Branch protection and CODEOWNERS** are GitHub repository settings, not
   files in this repo. `.github/CODEOWNERS` is committed; requiring review on
   `main` and requiring `agent-guard` to pass are settings a human must switch
