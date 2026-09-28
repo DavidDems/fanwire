@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useParams } from "react-router-dom";
 
 /**
  * Placeholder views — one per route in the shell that no unit has filled in yet.
@@ -55,16 +54,6 @@ export function SearchView() {
   return (
     <Page heading="Search">
       <p>Finding people, posts and games lands here.</p>
-    </Page>
-  );
-}
-
-export function ProfileView() {
-  const { userId } = useParams<{ userId: string }>();
-
-  return (
-    <Page heading="Profile">
-      <p>User {userId}</p>
     </Page>
   );
 }
