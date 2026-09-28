@@ -34,6 +34,7 @@ import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
 import { FakeAuthService, profileFound, profileMissing, teamsAre, testSession } from "../test/auth";
 import { server } from "../test/server";
+import { publicProfilesById, usernameForId } from "../test/users";
 import { routes } from "./routes";
 
 /**
@@ -55,7 +56,9 @@ interface View {
 const VIEWS: View[] = [
   { path: "/", heading: /^feed$/i, as: "anonymous" },
   { path: "/search", heading: /^search$/i, as: "anonymous" },
-  { path: "/profile/42", heading: /^profile$/i, as: "anonymous" },
+  // FRONTEND-003 replaced the placeholder with the real page, whose heading is
+  // the viewed user's username. The route stays public and stays anonymous here.
+  { path: "/profile/42", heading: new RegExp(`^${usernameForId(42)}$`, "i"), as: "anonymous" },
   { path: "/sign-in", heading: /^sign\s*-?\s*in$/i, as: "anonymous" },
   { path: "/sign-up", heading: /^sign\s*-?\s*up$/i, as: "anonymous" },
   { path: "/confirm", heading: /^confirm/i, as: "anonymous" },
@@ -80,9 +83,12 @@ const VIEWS: View[] = [
 
 /** Install the API responses that visitor implies, and return their session. */
 function arrange(as: Visitor): AuthService {
+  // `/profile/:userId` is a public read path, so its response is installed for
+  // every visitor rather than only the signed-in ones.
+  server.use(publicProfilesById(), teamsAre());
   if (as === "anonymous") return new FakeAuthService();
 
-  server.use(as === "member" ? profileFound() : profileMissing(), teamsAre());
+  server.use(as === "member" ? profileFound() : profileMissing());
   return new FakeAuthService({ session: testSession() });
 }
 
@@ -118,11 +124,19 @@ describe("the route table", () => {
     expect(await screen.findByRole("heading", { name: view.heading })).toBeInTheDocument();
   });
 
-  it("renders the user id from the /profile/:userId segment", async () => {
-    renderAt("/profile/42", arrange("anonymous"));
+  it("fetches the user id in the /profile/:userId segment, not a fixed one", async () => {
+    // Each id's fixture carries its own username, and the username is the
+    // heading — so a page that always read one id would render the wrong name
+    // rather than pass twice.
+    for (const userId of [7, 42]) {
+      renderAt(`/profile/${userId}`, arrange("anonymous"));
 
-    await screen.findByRole("heading", { name: /^profile$/i });
-    expect(screen.getByText(/42/)).toBeInTheDocument();
+      expect(
+        await screen.findByRole("heading", { name: new RegExp(`^${usernameForId(userId)}$`, "i") }),
+        `/profile/${userId} must show the profile of user ${userId}`,
+      ).toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it("renders a distinct view for every route", async () => {
