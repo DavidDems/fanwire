@@ -151,6 +151,80 @@ class TestAFinishedTaskDoesNotFailTheOrchestrator:
         assert "--ignore-terminal" not in step
 
 
+class TestAHandAuthoredBranchDoesNotDriveTheOrchestrator:
+    """Runs 36205815256 and 36366090454. `agent/FRONTEND-002` was cut by hand,
+    as `wiki/GeneralContext/Prompts/frontend-build-handoff.md` instructs: the
+    `agent/` prefix is what makes `agent-guard.yml` check the diff against the
+    spec's `allowed_paths`, which is free verification worth having. But
+    `workflow_run` keys off that same prefix, so CI finishing on the branch
+    woke the orchestrator, which tried to apply `CI_PASSED` to a task with no
+    state file and exited 2.
+
+    Failing is the mild half. `agentctl next` answers `validate` for a
+    stateless task, so simply letting the run continue would have created a
+    state file, committed it onto an open review PR, and gone on to dispatch a
+    paid worker for work a human had already finished — which is the one thing
+    the current pass exists to avoid.
+
+    `agent-guard.yml` had this right already ("no state file; treating as a
+    hand-authored branch"). This pins the same rule in the other workflow that
+    reads the branch name."""
+
+    def _steps(self, text: str) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for chunk in text.split("      - name: ")[1:]:
+            out[chunk.split("\n", 1)[0].strip()] = chunk
+        return out
+
+    def test_the_orchestrator_asks_whether_it_owns_the_task(self):
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        step = self._steps(ORCHESTRATOR.read_text(encoding="utf-8")).get(
+            "Is this a task this orchestrator drives?"
+        )
+        assert step is not None, "the orchestrator must decide whether the task is its own"
+        assert "state.json" in step, (
+            "presence of the task's state file is what distinguishes a dispatched task "
+            "from a hand-authored branch"
+        )
+        assert 'echo "drive=' in step
+
+    def test_a_dispatch_can_still_bootstrap_a_brand_new_task(self):
+        # The opposite guarantee, and the reason this cannot be a blanket
+        # "skip when there is no state file": a person naming a task id is how
+        # a task is started, and a new task has no state file either.
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        step = self._steps(ORCHESTRATOR.read_text(encoding="utf-8"))[
+            "Is this a task this orchestrator drives?"
+        ]
+        assert "workflow_dispatch" in step, (
+            "a human-dispatched run must proceed even with no state file, or no task "
+            "could ever be bootstrapped"
+        )
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Apply the CI result",
+            "Decide the next action",
+            "Commit the state change",
+        ],
+    )
+    def test_every_state_touching_step_is_gated(self, name: str):
+        # These three are the whole gate. Every other action step is already
+        # conditioned on `decide.outputs.kind`, which stays empty when
+        # "Decide the next action" is skipped, so they fall out on their own.
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        step = self._steps(ORCHESTRATOR.read_text(encoding="utf-8"))[name]
+        head = step.split("run: |", 1)[0]
+        assert "steps.drive.outputs.drive == 'true'" in head, (
+            f"{name!r} reads or writes task state, so it must not run on a branch "
+            f"this orchestrator never dispatched"
+        )
+
+
 class TestEveryJobIsBounded:
     """A run with no `timeout-minutes` inherits GitHub's 6-hour default. The
     orchestrator holds its task's concurrency group for as long as it runs, and

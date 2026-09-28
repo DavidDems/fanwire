@@ -84,8 +84,40 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Is this a task this orchestrator drives?
+        id: drive
+        env:
+          TASK_ID: ${{ steps.task.outputs.id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # A `workflow_run` wake means only "CI finished on a branch called
+          # agent/<something>". It does not mean this orchestrator ever
+          # dispatched that task. The handoff has a human cut `agent/<ID>` by
+          # hand on purpose — that prefix is what makes agent-guard.yml check
+          # the diff against the spec's allowed_paths — and such a branch has
+          # no state file. agent-guard.yml already says exactly this ("no state
+          # file; treating as a hand-authored branch") and exits 0; this is the
+          # same rule in the one other workflow that keys off the branch name.
+          #
+          # Without it the run does not merely fail: `agentctl next` answers
+          # `validate` for a stateless task, so the steps below would create a
+          # state file, commit it onto somebody's open PR, and go on to
+          # dispatch a paid worker for work a human had already done by hand.
+          #
+          # It must NOT extend to workflow_dispatch. A person naming a task id
+          # is how a new task is bootstrapped, and a new task has no state file
+          # either — answering "not mine" there would mean nothing could ever
+          # start.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
+            echo "drive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drive=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TASK_ID has no state file; agent/$TASK_ID is hand-authored, so there is nothing to drive"
+          fi
+
       - name: Apply the CI result
-        if: github.event_name == 'workflow_run'
+        if: github.event_name == 'workflow_run' && steps.drive.outputs.drive == 'true'
         env:
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_ID: ${{ github.event.workflow_run.id }}
@@ -115,6 +147,11 @@ jobs:
 
       - name: Decide the next action
         id: decide
+        # Every action step below is gated on `decide.outputs.kind`, so leaving
+        # this unset is what makes the whole rest of the job no-op on a
+        # hand-authored branch. Only this step, the CI-result step above and
+        # the commit step below need the gate; the others fall out.
+        if: steps.drive.outputs.drive == 'true'
         run: |
           set -euo pipefail
           ACTION=$(python .ai/bin/agentctl.py next "${{ steps.task.outputs.id }}")
@@ -192,6 +229,9 @@ jobs:
       # --- persist and hand off -------------------------------------------
 
       - name: Commit the state change
+        # Nothing to commit when nothing decided anything, and a hand-authored
+        # branch must never receive an orchestrator commit it did not ask for.
+        if: steps.drive.outputs.drive == 'true'
         run: |
           set -euo pipefail
           git config user.name "fanwire-agent-orchestrator"
