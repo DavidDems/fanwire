@@ -7,8 +7,9 @@ what the frontend does with them, and nothing that belongs to a backend module.
 
 ## State
 
-**Foundation, authentication and the profile page** (`FRONTEND-001` …
-`FRONTEND-003`). Compose, feed, notifications and search are still placeholders.
+**Foundation, authentication, the profile page and the composer**
+(`FRONTEND-001` … `FRONTEND-004`). Feed, notifications and search are still
+placeholders.
 
 What is real:
 
@@ -19,12 +20,13 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages, the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the four remaining placeholders) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the three remaining placeholders) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
+| `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` (the `users/` network fixtures) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` and `compose.ts` (the per-unit network fixtures) |
 
-Compose, feed, notifications and search are `FRONTEND-004` … `007`, sequenced in
+Feed, notifications and search are `FRONTEND-005` … `007`, sequenced in
 `TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` — they are in
 one file so that units do not contend over the route table.
 
