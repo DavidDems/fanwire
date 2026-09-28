@@ -7,8 +7,9 @@ what the frontend does with them, and nothing that belongs to a backend module.
 
 ## State
 
-**Foundation, authentication and the profile page** (`FRONTEND-001` …
-`FRONTEND-003`). Compose, feed, notifications and search are still placeholders.
+**Foundation, authentication, the profile page and the composer**
+(`FRONTEND-001` … `FRONTEND-004`). Feed, notifications and search are still
+placeholders.
 
 What is real:
 
@@ -19,12 +20,13 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages, the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the four remaining placeholders) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the three remaining placeholders) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
+| `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` (the `users/` network fixtures) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` and `compose.ts` (the per-unit network fixtures) |
 
-Compose, feed, notifications and search are `FRONTEND-004` … `007`, sequenced in
+Feed, notifications and search are `FRONTEND-005` … `007`, sequenced in
 `TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` — they are in
 one file so that units do not contend over the route table.
 
@@ -209,6 +211,17 @@ remember:
   graph, so listening from a hook left every statically imported `apiClient`
   holding the unpatched fetch: its requests left for the real network and
   failed as `ECONNREFUSED`, with nothing pointing at msw.
+- **A handler never calls `request.formData()`** (`FRONTEND-004`, the third one
+  of these). The runtime's multipart parser reaches into the `Blob` it is
+  building, and jsdom implements `slice`, `size` and `type` and nothing else —
+  no `stream()`, `arrayBuffer()` or `text()`. The host's Node 22 tolerates that;
+  the Node 20 in `docker/frontend.Dockerfile` and CI throws
+  `AssertionError [ERR_ASSERTION]: false == true` from inside msw's handler
+  lookup, so the assertion fails as an empty recording pointing nowhere near the
+  cause. `src/test/compose.ts` reads `arrayBuffer()` and parses the multipart
+  itself, which is the stronger check anyway: the ordering of the parts is the
+  contract S3 enforces. Neither the encoding nor Node 20 is at fault — that body
+  parses correctly under both versions with plain undici.
 
 ## Settled contracts
 
@@ -234,6 +247,106 @@ inconvenient:
   validates at load and throws on a missing value. Vite inlines `VITE_*` at build
   time, so the production bundle is only correct for the environment it was built
   against — see `TODO/04-first-deploy.md` for why that forces a two-phase deploy.
+
+## Compose (`FRONTEND-004`)
+
+`src/features/compose/`, wired at `/compose` behind `RequireAuth`. The page owns
+one `ComposeMediator` and hands it to all three controls; that is the whole of
+the wiring between them.
+
+**The four patterns are assigned by [[wiki/CodeContext/Standards/gof-patterns|GoF patterns]], not chosen here**, and
+each owns one piece:
+
+| Piece | Pattern |
+|---|---|
+| Assembling `CreatePostRequest` across steps | `PostBuilder`, validation in `build()` |
+| Text box ↔ autocomplete ↔ media widget | `ComposeMediator` |
+| Undo after a mention is inserted | `DraftSnapshot` (Memento) |
+| Quick-post templates | `PostTemplate.clone()` (Prototype) |
+
+- **The mediator's isolation is enforced from disk**, by
+  `component-isolation.test.ts`, which reads the three component sources and
+  checks the import specifiers in all six ordered pairs. A behavioural test
+  cannot see this: a media widget that imports the text box directly and pokes at
+  it still renders and still passes every rendering test. Same shape, and the
+  same reason, as `auth/sdk-isolation.test.ts` and `test/env-usage.test.ts`.
+- **`getDraft()` returns the same object until something changes the draft.** It
+  is the `useSyncExternalStore` snapshot, which React compares by identity, so a
+  fresh object per call is an infinite render loop rather than a failing
+  assertion. Every mutation publishes a *new* draft object and nothing edits the
+  published one in place.
+- **A quick-post template is cloned, never handed out.** `clone()` copies the
+  media-id array too: a shallow copy passes every obvious test and fails on the
+  *second* use of the same template.
+- **File bytes go straight to the bucket and never through `apiClient`.** Two
+  reasons, both hard: routing them through FastAPI would put a Lambda body-size
+  limit in front of every image, and `apiClient` attaches the Cognito **ID
+  token** — sending that to S3 would leak it to a service that has no use for it.
+  So `POST /media/uploads` (the ticket) goes through `apiClient` and carries the
+  token; the multipart POST to `upload_url` is a plain `fetch` with no
+  `Authorization` header at all.
+- **The presigned fields go first, in the order the API returned them, and
+  `file` goes last** — S3 ignores everything after the file part. The body is
+  encoded explicitly rather than by handing a `FormData` to `fetch`, which makes
+  that ordering checkable instead of a property of whichever multipart serializer
+  the runtime has. It also has to be: jsdom 25's `Blob` implements `slice`,
+  `size` and `type` and nothing else, so serializing a `FormData` that carries a
+  file — which reads the blob through `Blob.stream()` — hangs under test. The
+  file's bytes are read with `FileReader` for the same reason (`arrayBuffer()` is
+  absent there), so there is one code path rather than a branch whose tested half
+  is not the shipped half.
+- **The real status values are `uploaded`, `scanning`, `processed` and
+  `rejected`** — lower-case, four of them, from `MediaStatus` in the generated
+  schema. **There is no `Quarantined` value**: where prose says quarantined it
+  means *not yet `processed`*, and both `uploaded` and `scanning` are
+  un-attachable. `rejected` is a visible failure with no attach control at all.
+  The widget polls `GET /media/{media_id}` through react-query's
+  `refetchInterval` and stops at a terminal status.
+- **Locally there is no GuardDuty, so an upload against the real dev buckets
+  stays un-`processed` forever.** That is correct behaviour, not a hang: nothing
+  moves the row past `uploaded`, and the widget says so and leaves the attach
+  control disabled. The dev-only script that would run the processing pipeline on
+  demand is `MEDIA-002` and does not exist yet ([[0x04-media]]).
+- **No `URL.createObjectURL` anywhere.** jsdom does not implement it and
+  `setupTests.ts` is not this unit's to change — and the served thumbnail is the
+  honest thing to show anyway, since it is what everyone else sees once the post
+  is published, EXIF-stripped and resized by the pipeline rather than the
+  original off the user's disk. The widget shows the file's **name** while the
+  upload is pending and an `<img>` at `config.mediaBaseUrl` + `s3_key_thumbnail`
+  once it is `processed`.
+- **The file input carries no `accept` attribute.** The browser's own filter
+  drops a file the user chose without telling them why, and the type rule —
+  jpeg, png and webp, SVG excluded by name ([[0x04-media]] Security
+  requirements) — is one the user has to be able to read. The client-side type
+  and size checks are for that message only; S3's policy and the processing
+  Lambda's Pillow parse are the real gates and run regardless. `max_bytes` exists
+  only in the ticket response, so the size check necessarily comes *after*
+  `POST /media/uploads` and necessarily before the bucket POST.
+- **`#` inserts `#GameId<id>`, which the backend resolves; `$TOR` is carried in
+  the text and deliberately resolves to nothing.** `app.posts.mentions` implements
+  `#GameId<digits>` only — a bare team abbreviation does not identify one `Game`
+  and `EventMention.game_id` is `NOT NULL`, so an unresolvable token is dropped
+  from mention creation while the post text is kept exactly as authored
+  ([[0x03-posts]] `EventMention` → Open decisions, "Scope note"). This unit does
+  not invent a resolution rule or a different `$` format.
+- **Game suggestions filter on the id.** `GameOut` carries team *ids*, scores and
+  a date and no human-readable name, so the id the user is typing is the only
+  thing to match against; the date and score are what tell two games apart in the
+  label. A data-model limit, not a UI choice.
+- **Nothing is fetched when the page mounts.** Games and teams are asked for when
+  the user types `#` or `$`, templates are stored in the app, and the media poll
+  starts at the first upload. `routes.test.tsx` renders `/compose` under
+  `onUnhandledRequest: "error"`, so a query on mount would break a file this unit
+  is not allowed to touch.
+- **A failed `POST /posts` preserves the draft** — the text, the attachment, a
+  message saying what happened, and a retry that sends the same request. Losing a
+  user's typed text on a 500 is the worst thing this page can do and the failure
+  most likely to survive review, because the happy path is what gets clicked. The
+  composer is cleared in exactly one place, `onSuccess`, and clearing it clears
+  the media widget's own card as well: the draft alone cannot say a reset
+  happened, since an emptied draft and a never-filled one are the same value, so
+  the widget watches a reset counter on the mediator. A stale thumbnail over an
+  empty composer is the failure that guards against.
 
 ## Open decisions
 
