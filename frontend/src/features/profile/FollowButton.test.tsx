@@ -115,10 +115,16 @@ describe("following and unfollowing", () => {
   it("issues POST /users/{user_id}/follow", async () => {
     const user = userEvent.setup();
     const { follow, following, viewed } = signedInScene([]);
+
+    // The overrides go in only once the starting state has actually been
+    // served. msw answers asynchronously and the session resolves a microtask
+    // later, so installing them before the first read lands means the page
+    // never sees the state this test is about.
+    const button = await screen.findByRole("button", FOLLOW);
     following.answerWith([VIEWED_USER_ID]);
     viewed.answerWith(publicProfile({ follower_count: 4 }));
 
-    await user.click(await screen.findByRole("button", FOLLOW));
+    await user.click(button);
 
     await waitFor(() => {
       expect(follow.calls).toEqual([{ method: "POST", userId: VIEWED_USER_ID }]);
@@ -128,10 +134,12 @@ describe("following and unfollowing", () => {
   it("issues DELETE /users/{user_id}/follow", async () => {
     const user = userEvent.setup();
     const { follow, following, viewed } = signedInScene([VIEWED_USER_ID]);
+
+    const button = await screen.findByRole("button", UNFOLLOW);
     following.answerWith([]);
     viewed.answerWith(publicProfile({ follower_count: 2 }));
 
-    await user.click(await screen.findByRole("button", UNFOLLOW));
+    await user.click(button);
 
     await waitFor(() => {
       expect(follow.calls).toEqual([{ method: "DELETE", userId: VIEWED_USER_ID }]);
@@ -141,11 +149,14 @@ describe("following and unfollowing", () => {
   it("flips the button and raises the follower count before the follow returns", async () => {
     const user = userEvent.setup();
     const { follow, following, viewed } = signedInScene([]);
+
+    // Starting state first, then the overrides the refetch will find — see the
+    // note on "issues POST" above.
+    await screen.findByText("3 followers");
     following.answerWith([VIEWED_USER_ID]);
     viewed.answerWith(publicProfile({ follower_count: 4 }));
     const release = follow.hold();
 
-    await screen.findByText("3 followers");
     await user.click(screen.getByRole("button", FOLLOW));
 
     expect(await screen.findByRole("button", UNFOLLOW)).toBeInTheDocument();
@@ -162,11 +173,12 @@ describe("following and unfollowing", () => {
   it("flips the button and lowers the follower count before the unfollow returns", async () => {
     const user = userEvent.setup();
     const { follow, following, viewed } = signedInScene([VIEWED_USER_ID]);
+
+    await screen.findByText("3 followers");
     following.answerWith([]);
     viewed.answerWith(publicProfile({ follower_count: 2 }));
     const release = follow.hold();
 
-    await screen.findByText("3 followers");
     await user.click(screen.getByRole("button", UNFOLLOW));
 
     expect(await screen.findByRole("button", FOLLOW)).toBeInTheDocument();

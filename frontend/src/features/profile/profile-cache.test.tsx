@@ -103,9 +103,12 @@ describe("what a follow invalidates", () => {
     const user = userEvent.setup();
     const { viewed, following } = renderViewingProfile();
 
+    // The overrides are what the invalidation's refetch will find, so they go
+    // in only once the first read has been served — otherwise they answer it.
+    const button = await screen.findByRole("button", { name: /^follow$/i });
     following.answerWith([VIEWED_USER_ID]);
     viewed.answerWith(publicProfile({ follower_count: 4 }));
-    await user.click(await screen.findByRole("button", { name: /^follow$/i }));
+    await user.click(button);
 
     await waitFor(() => {
       expect(viewed.requests.length).toBeGreaterThan(1);
@@ -124,9 +127,11 @@ describe("what a follow invalidates", () => {
     );
 
     const { viewed, following } = renderViewingProfile(queryClient);
+
+    const button = await screen.findByRole("button", { name: /^follow$/i });
     following.answerWith([VIEWED_USER_ID]);
     viewed.answerWith(publicProfile({ follower_count: 4 }));
-    await user.click(await screen.findByRole("button", { name: /^follow$/i }));
+    await user.click(button);
 
     await waitFor(() => {
       expect(viewed.requests.length).toBeGreaterThan(1);

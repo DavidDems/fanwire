@@ -124,10 +124,12 @@ describe("the settings form", () => {
     const user = userEvent.setup();
     const patch = renderSettings();
 
-    await user.selectOptions(
-      preferredTeam(),
-      await screen.findByRole("option", { name: "Phoenix Suns" }),
-    );
+    // The awaited lookup is hoisted out of the argument list on purpose:
+    // arguments evaluate left to right, so `preferredTeam()` — a `getByRole` —
+    // would otherwise run on the first tick, against a page still showing its
+    // loading status. Which variant to render is not knowable synchronously.
+    const suns = await screen.findByRole("option", { name: "Phoenix Suns" });
+    await user.selectOptions(preferredTeam(), suns);
     await user.click(save());
 
     await waitFor(() => {
@@ -142,10 +144,8 @@ describe("the settings form", () => {
     const user = userEvent.setup();
     const patch = renderSettings();
 
-    await user.selectOptions(
-      preferredTeam(),
-      await screen.findByRole("option", { name: "Phoenix Suns" }),
-    );
+    const suns = await screen.findByRole("option", { name: "Phoenix Suns" });
+    await user.selectOptions(preferredTeam(), suns);
     await user.click(save());
 
     await waitFor(() => {
