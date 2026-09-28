@@ -106,29 +106,77 @@ export interface S3UploadOptions {
   onRequest?: (upload: RecordedUpload) => void;
 }
 
+/**
+ * The multipart body, read from the bytes actually on the wire.
+ *
+ * **Not `request.formData()`**, which cannot be used here. Under jsdom the
+ * runtime's own multipart parser reaches into the `Blob` it is building and
+ * jsdom implements only `slice`, `size` and `type` — no `stream()`,
+ * `arrayBuffer()` or `text()`. On Node 22 that happens to survive; on the Node
+ * 20 the `frontend-test` image and CI run, it throws
+ * `AssertionError [ERR_ASSERTION]: false == true` from inside msw's handler
+ * lookup, and the upload assertions fail with an empty recording and no useful
+ * message. Passing locally and failing only in the container is the exact
+ * defect class [[0x08-frontend]] "Test harness facts" already records twice.
+ *
+ * Reading the raw bytes is also the stronger assertion. The ordering of the
+ * parts *is* the contract — S3 ignores everything after the `file` part — so
+ * checking what was serialized beats trusting a parser to tell us.
+ */
+function parseMultipart(
+  contentType: string,
+  body: Uint8Array,
+): Pick<RecordedUpload, "fieldNames" | "fields" | "file"> {
+  const matched = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType);
+  if (matched === null) throw new Error(`no multipart boundary in "${contentType}"`);
+  const boundary = (matched[1] ?? matched[2]).trim();
+
+  // latin1 maps every byte to the code unit of the same value, so the file's
+  // bytes survive the round trip and come back out through `charCodeAt`.
+  const text = new TextDecoder("latin1").decode(body);
+  const fieldNames: string[] = [];
+  const fields: Record<string, string> = {};
+  let file: File | null = null;
+
+  for (const section of text.split(`--${boundary}`)) {
+    const headerEnd = section.indexOf("\r\n\r\n");
+    // The preamble and the closing `--` have no headers of their own.
+    if (headerEnd === -1) continue;
+
+    const headers = section.slice(0, headerEnd);
+    const name = /name="([^"]*)"/.exec(headers)?.[1];
+    if (name === undefined) continue;
+
+    // A part's content ends with the CRLF that introduces the next boundary.
+    const content = section.slice(headerEnd + 4, section.length - 2);
+    fieldNames.push(name);
+
+    const filename = /filename="([^"]*)"/.exec(headers)?.[1];
+    if (filename === undefined) {
+      fields[name] = content;
+      continue;
+    }
+    file = new File([Uint8Array.from(content, (character) => character.charCodeAt(0))], filename, {
+      type: /content-type:\s*([^\r\n]+)/i.exec(headers)?.[1] ?? "",
+    });
+  }
+
+  return { fieldNames, fields, file };
+}
+
 /** The bucket itself: the presigned POST target, not an API route. */
 export function s3Upload(options: S3UploadOptions = {}): RequestHandler {
   const { status = 204, onRequest } = options;
 
   return http.post(TEST_UPLOAD_URL, async ({ request }) => {
     if (onRequest) {
-      const form = await request.clone().formData();
-      const fieldNames: string[] = [];
-      const fields: Record<string, string> = {};
-      let file: File | null = null;
-
-      for (const [name, value] of form.entries()) {
-        fieldNames.push(name);
-        if (typeof value === "string") fields[name] = value;
-        else file = value;
-      }
-
       onRequest({
         url: request.url,
         authorization: request.headers.get("Authorization"),
-        fieldNames,
-        fields,
-        file,
+        ...parseMultipart(
+          request.headers.get("Content-Type") ?? "",
+          new Uint8Array(await request.clone().arrayBuffer()),
+        ),
       });
     }
 
