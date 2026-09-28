@@ -91,6 +91,54 @@ class TestTheAgentGetsNoGitHubToken:
         assert 'GH_TOKEN: ""' in invoke
 
 
+class TestAWorkerCannotEscapeItsOwnBranch:
+    """The single property the two-tier permission model rests on.
+
+    A dispatched worker is restricted by `agent-guard.yml`, which runs only on
+    branches named `agent/*`. A Director is unrestricted and is bounded by
+    code-owner review on an ordinary branch instead. That split is only worth
+    anything if a worker cannot put its diff somewhere the guard does not look
+    — one push to `main`, or to `feature/x`, and the guard never runs and the
+    tiers have silently become one.
+
+    Two things make it hold, and neither is obvious from reading the job top to
+    bottom: the push target is built by the workflow from its own dispatch
+    input, and the model step has no credential to push with. Pinned here so
+    that a later edit moving the branch name somewhere an agent can influence
+    fails a test instead of quietly widening every worker's blast radius."""
+
+    def test_the_push_target_is_built_by_the_workflow(self, worker):
+        assert "BRANCH: agent/${{ github.event.inputs.task_id }}" in worker, (
+            "the branch a worker pushes to must be constructed by the workflow from its "
+            "dispatch input, never taken from anything the agent can write"
+        )
+
+    def test_the_worker_pushes_nowhere_else(self, worker):
+        pushes = [
+            line.strip()
+            for line in worker.splitlines()
+            if "git push" in line and not line.strip().startswith("#")
+        ]
+        assert pushes, "expected the worker to push its work somewhere"
+        for push in pushes:
+            assert 'HEAD:"$BRANCH"' in push, (
+                f"{push!r} sends a worker's diff somewhere other than its own task branch, "
+                f"where agent-guard would never see it"
+            )
+
+    def test_the_checkout_is_the_same_task_branch(self, worker):
+        assert "ref: agent/${{ github.event.inputs.task_id }}" in worker
+
+    def test_the_guard_covers_exactly_that_namespace(self):
+        path = WORKFLOWS / "agent-guard.yml"
+        if not path.exists():
+            pytest.skip("agent-guard.yml not present")
+        assert "startsWith(github.head_ref, 'agent/')" in path.read_text(encoding="utf-8"), (
+            "the guard must key off the same prefix the worker is pinned to, or a worker "
+            "branch exists that nothing checks"
+        )
+
+
 class TestNoWorkflowCanMerge:
     """Nothing in the system may merge its own work."""
 
