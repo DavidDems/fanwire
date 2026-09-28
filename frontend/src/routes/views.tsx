@@ -34,14 +34,6 @@ export function FeedView() {
   );
 }
 
-export function ComposeView() {
-  return (
-    <Page heading="Compose">
-      <p>Writing a post lands here.</p>
-    </Page>
-  );
-}
-
 export function NotificationsView() {
   return (
     <Page heading="Notifications">
