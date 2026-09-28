@@ -5,16 +5,10 @@ import { ForgotPasswordPage } from "../auth/ForgotPasswordPage";
 import { ProfileSetupPage } from "../auth/ProfileSetupPage";
 import { SignInPage } from "../auth/SignInPage";
 import { SignUpPage } from "../auth/SignUpPage";
+import { ProfilePage } from "../features/profile/ProfilePage";
 import { AppLayout } from "./AppLayout";
 import { RequireAuth, RequireNewProfile } from "./guards";
-import {
-  ComposeView,
-  FeedView,
-  NotFoundView,
-  NotificationsView,
-  ProfileView,
-  SearchView,
-} from "./views";
+import { ComposeView, FeedView, NotFoundView, NotificationsView, SearchView } from "./views";
 
 /**
  * The route table, as data rather than JSX elements, so it can be handed to
@@ -52,7 +46,9 @@ export const routes: RouteObject[] = [
         ),
       },
       { path: "search", element: <SearchView /> },
-      { path: "profile/:userId", element: <ProfileView /> },
+      // FRONTEND-003's page. Still public, and still one route: the id in the
+      // path is what selects the own-profile variant from the public one.
+      { path: "profile/:userId", element: <ProfilePage /> },
 
       // FRONTEND-002's pages.
       { path: "sign-in", element: <SignInPage /> },

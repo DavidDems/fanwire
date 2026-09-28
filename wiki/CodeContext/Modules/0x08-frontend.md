@@ -7,8 +7,8 @@ what the frontend does with them, and nothing that belongs to a backend module.
 
 ## State
 
-**Foundation plus authentication** (`FRONTEND-001`, `FRONTEND-002`). Profile,
-compose, feed, notifications and search are still placeholders.
+**Foundation, authentication and the profile page** (`FRONTEND-001` …
+`FRONTEND-003`). Compose, feed, notifications and search are still placeholders.
 
 What is real:
 
@@ -19,13 +19,14 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages, the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the five remaining placeholders) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the auth forms share |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the four remaining placeholders) |
+| `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` (the `users/` network fixtures) |
 
-Profile, compose, feed, notifications and search are `FRONTEND-003` … `007`,
-sequenced in `TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` —
-they are in one file so that units do not contend over the route table.
+Compose, feed, notifications and search are `FRONTEND-004` … `007`, sequenced in
+`TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` — they are in
+one file so that units do not contend over the route table.
 
 ## Auth (`FRONTEND-002`)
 
@@ -73,6 +74,67 @@ differs, code does not, and `App` is the single place that chooses it.
   server (a Pydantic 422 naming `date_of_birth`), surfaced on that field in the
   server's own words rather than re-implemented here, because validating in two
   places is how the two rules drift apart.
+
+## Profile and follow (`FRONTEND-003`)
+
+`/profile/:userId` is **one public route with two variants**, chosen by
+comparing the id in the path to the signed-in user's. There is no `/settings`
+route: settings are a section of a page the user already has an address for, and
+a second route would be a second place to decide who is allowed to see it.
+
+- **Date of birth is private, and the component tree is what guarantees it.**
+  `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
+  `PublicUserOut` (which does not). The one thing they share, `ProfileSummary`,
+  takes a username and two numbers — **not a user object** — so it cannot render
+  a field it was never handed. The alternative, one header taking a whole user
+  and showing what it finds, is precisely how the backend leaked this field
+  before `PublicUserOut` was split off `MeOut` ([[0x01-users]]), and asserting
+  "we do not render it" would have left that shape in place.
+- **Three cache entries, and they stay three.** The viewed user is
+  `["users", <numeric id>]` — a number, because that is what the path parameter
+  is in the generated schema, and `["users", "42"]` is a different entry that
+  would refetch on every render without ever looking wrong. The follow set is
+  `["users", "me", "following"]`. The caller's own profile stays on
+  `PROFILE_QUERY_KEY` from `auth/profile.ts` — this page adds no second
+  `GET /users/me`.
+- **Invalidation names exact keys.** `queryKey` is a *prefix* match, so
+  `invalidateQueries({ queryKey: ["users"] })` would refetch every other profile
+  the session has looked at as collateral for following one person. Every
+  invalidation here passes `exact: true`.
+- **Follow is optimistic through react-query's mutation lifecycle.** `onMutate`
+  cancels the two in-flight reads (one landing late would overwrite the patch
+  with the answer it was already carrying), snapshots both entries and patches
+  them; `onError` restores the snapshot and raises a `role="alert"`; `onSettled`
+  invalidates, because the server decides the counts and somebody else may have
+  followed them meanwhile. **Rollback restores the follower count, not just the
+  button** — those are the two things a user sees change. The count lives in the
+  viewed profile's cache entry, which is why local state beside it is not an
+  option: it drifts out of sync after the second interaction.
+- **The follow set is read by `ProfilePage`, not by the button.** The button is
+  the last thing on the page to mount, so owning the query would start it only
+  once the profile had arrived, and the button would spend that round trip
+  telling someone who already follows them to "Follow".
+- **An anonymous visitor sees the control and is sent to sign-in by it**,
+  carrying `state.from` the way `routes/guards.tsx` does. No authenticated read
+  is issued at all without a session — not the profile, not the follow set, not
+  the write — because a 401 here is a failure the page would then have to
+  explain away on a route that is deliberately public.
+- **`PATCH /users/me` carries only the fields that changed.** The backend reads
+  the body with `model_fields_set` semantics ([[0x01-users]]): a field *absent*
+  is left untouched, while a field present as `null` clears it. Sending every
+  control on every save would therefore wipe whatever the user did not touch.
+  Emptying the description is the one case `null` is correct for — that is the
+  user asking for it to be cleared. `username` and `date_of_birth` are not on
+  `UpdateMeRequest` and are not editable here.
+- **This unit ships without a profile-picture control.** The upload widget
+  belongs to `FRONTEND-004`, which has not landed; a second uploader here would
+  be a duplicate media path ([[0x00-architecture]] Connection rule) and would
+  need deleting rather than merging. `profile_picture_media_id` is never sent.
+- **`AppLayout` links "Your profile" by id**, because the route has no fixed
+  address for "me". It renders only for a visitor who has a profile, and reads
+  it through the same shared query gated on the same session the guards use —
+  so the shell asks the API nothing until somebody signs in, and never links to
+  `/profile/undefined`.
 
 ## Contracts the foundation pins
 
