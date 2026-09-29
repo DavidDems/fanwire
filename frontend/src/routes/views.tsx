@@ -26,14 +26,6 @@ function Page({ heading, children }: { heading: string; children?: ReactNode }) 
   );
 }
 
-export function FeedView() {
-  return (
-    <Page heading="Feed">
-      <p>Posts land here.</p>
-    </Page>
-  );
-}
-
 export function SearchView() {
   return (
     <Page heading="Search">
