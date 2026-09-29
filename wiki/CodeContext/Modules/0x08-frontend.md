@@ -191,11 +191,11 @@ them:
 
 ## Test harness facts
 
-Both exist so a test can use an ordinary static `import` of the thing it tests.
-Both were found by a test that passed locally and could not pass in
-`frontend-test`, which is the same shape as the two build facts above.
-`src/test/harness.test.ts` pins them, so neither is a rule anybody has to
-remember:
+These exist so a test can use an ordinary static `import` of the thing it tests,
+and an ordinary `FormData` to upload a file. Each was found by a test that passed
+locally and could not pass in `frontend-test`, which is the same shape as the two
+build facts above. `src/test/harness.test.ts` pins them, so none is a rule
+anybody has to remember:
 
 - **`vite.config.ts`'s `test.env` supplies all five `VITE_*` values.**
   `config.ts` throws at module load on a missing one, and `.dockerignore`
@@ -211,17 +211,30 @@ remember:
   graph, so listening from a hook left every statically imported `apiClient`
   holding the unpatched fetch: its requests left for the real network and
   failed as `ECONNREFUSED`, with nothing pointing at msw.
-- **A handler never calls `request.formData()`** (`FRONTEND-004`, the third one
-  of these). The runtime's multipart parser reaches into the `Blob` it is
-  building, and jsdom implements `slice`, `size` and `type` and nothing else —
-  no `stream()`, `arrayBuffer()` or `text()`. The host's Node 22 tolerates that;
-  the Node 20 in `docker/frontend.Dockerfile` and CI throws
+- **`setupTests.ts` gives jsdom's `Blob` the readers it does not implement** —
+  `arrayBuffer()`, `text()` and `stream()`, built on the `FileReader` jsdom does
+  provide, and installed only when absent so a future jsdom wins over the patch.
+  jsdom stops at `slice`, `size` and `type`, and every path that serializes a
+  body containing a file reaches for one of the three — so without them a
+  `FormData` carrying a `File` cannot be sent from a test and a handler cannot
+  read one back. **It has to live in the setup file**: the body is serialized by
+  the runtime, long after any per-test setup, so no fixture can reach it, which
+  is why `FRONTEND-004` could not fix it from inside its own permitted paths.
+  The failure this removes was the nastiest of the three. On a developer's Node
+  22 it survives; on the Node 20 in `docker/frontend.Dockerfile` and CI it throws
   `AssertionError [ERR_ASSERTION]: false == true` from inside msw's handler
-  lookup, so the assertion fails as an empty recording pointing nowhere near the
-  cause. `src/test/compose.ts` reads `arrayBuffer()` and parses the multipart
-  itself, which is the stronger check anyway: the ordering of the parts is the
-  contract S3 enforces. Neither the encoding nor Node 20 is at fault — that body
-  parses correctly under both versions with plain undici.
+  lookup, so the test fails as an empty recording, points nowhere near the cause,
+  and does so only in the container. Neither the multipart encoding nor Node 20
+  is at fault — that same body parses under both versions with plain undici; it
+  is the jsdom interaction.
+  - **`features/compose/MediaWidget.tsx` still hand-encodes its multipart body
+    and reads the file with `FileReader`, and `src/test/compose.ts` still parses
+    that body by hand.** Both predate this fix and are the workaround for it, not
+    a pattern to copy: a new upload uses an ordinary `FormData` and an ordinary
+    `request.formData()`. They are kept only until a follow-up removes them, and
+    the one thing worth carrying forward is the assertion `src/test/compose.ts`
+    makes — the presigned fields first and `file` last, because that ordering is
+    the contract S3 enforces.
 
 ## Settled contracts
 
