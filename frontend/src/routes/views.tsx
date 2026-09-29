@@ -34,14 +34,6 @@ export function FeedView() {
   );
 }
 
-export function NotificationsView() {
-  return (
-    <Page heading="Notifications">
-      <p>What happened while you were away lands here.</p>
-    </Page>
-  );
-}
-
 export function SearchView() {
   return (
     <Page heading="Search">
