@@ -15,15 +15,46 @@
  *     NotResource at all;
  *   - any Allow statement whose Principal is `*`;
  *   - any AWS managed policy attached to a role, except
- *     AWSLambdaBasicExecutionRole (only CDK's own cross-region-reference
- *     custom resource provider uses it; our Lambdas get explicit statements);
+ *     AWSLambdaBasicExecutionRole (only CDK's own bundled custom-resource
+ *     providers use it; our Lambdas get explicit statements);
  *   - any IAM user or group.
  *
  * Exceptions live in ALLOW_LIST below, each with the reason AWS requires
  * it. Every entry must still match something (see the last test), so the
  * list can't silently rot into a blanket pass.
  */
-import { DOMAIN_MODES, STACK_NAMES, synthFanwire, CfnResource } from './helpers';
+import {
+  DOMAIN_MODES,
+  DOMAIN_MODES_DEPLOYING,
+  STACK_NAMES,
+  cleanupFrontendDist,
+  ensureFrontendDist,
+  synthFanwire,
+  CfnResource,
+} from './helpers';
+
+/**
+ * The gate runs over every domain mode twice: with the frontend deployment
+ * flag off (what CI and a bare `cdk synth` get) and on (what a human deploying
+ * the SPA gets). Without the second pass the gate could never see the policies
+ * `BucketDeployment` generates, and the allow-list entries covering them would
+ * fail the rot check below.
+ */
+const GATE_MODES: Record<string, Record<string, unknown>> = {
+  ...DOMAIN_MODES,
+  ...Object.fromEntries(
+    Object.entries(DOMAIN_MODES_DEPLOYING).map(([mode, overrides]) => [`${mode}, deployFrontend`, overrides]),
+  ),
+};
+
+// `deployFrontend` stages `frontend/dist` as an asset; it is gitignored and
+// absent on a clean checkout, so synth would throw without this.
+beforeAll(() => {
+  ensureFrontendDist();
+});
+afterAll(() => {
+  cleanupFrontendDist();
+});
 
 interface Finding {
   readonly stack: string;
@@ -49,8 +80,33 @@ const actionsOf = (s: Record<string, unknown>): string[] => {
 };
 const onlyActions = (s: Record<string, unknown> | undefined, allowed: string[]) =>
   !!s && actionsOf(s).length > 0 && actionsOf(s).every((a) => allowed.includes(a));
+/** Stricter than `onlyActions`: the statement's action set must be exactly `expected`. */
+const exactActions = (s: Record<string, unknown> | undefined, expected: string[]) =>
+  !!s && json(actionsOf(s).slice().sort()) === json(expected.slice().sort());
 const hasCondition = (s: Record<string, unknown> | undefined, needle: string) =>
   !!s && json(s.Condition ?? {}).includes(needle);
+
+/**
+ * The three statements `aws-s3-deployment.BucketDeployment` writes onto its
+ * handler role, verbatim as CDK emits them. `BucketDeployment` builds them
+ * with `grantRead`/`grantReadWrite` on whatever role it is handed, so a
+ * hand-written narrow role does not avoid them -- these action sets are not
+ * ours to choose, which is why they are pinned exactly rather than loosely.
+ */
+const DEPLOYMENT_ASSET_READ = ['s3:GetBucket*', 's3:GetObject*', 's3:List*'];
+const DEPLOYMENT_DESTINATION_WRITE = [
+  's3:Abort*',
+  's3:DeleteObject*',
+  's3:GetBucket*',
+  's3:GetObject*',
+  's3:List*',
+  's3:PutObject',
+  's3:PutObjectLegalHold',
+  's3:PutObjectRetention',
+  's3:PutObjectTagging',
+  's3:PutObjectVersionTagging',
+];
+const DEPLOYMENT_INVALIDATION = ['cloudfront:CreateInvalidation', 'cloudfront:GetInvalidation'];
 
 /**
  * Keep this list as short as possible. Each entry names the one narrow
@@ -156,10 +212,47 @@ const ALLOW_LIST: AllowListEntry[] = [
   {
     id: 'cdk-custom-resource-basic-execution',
     reason:
-      'CDK\'s cross-region-reference custom resource provider (Custom::CrossRegionExportWriter/Reader) attaches ' +
-      'AWSLambdaBasicExecutionRole for its own logging and exposes no way to replace it. It only grants ' +
-      'logs:CreateLogGroup/CreateLogStream/PutLogEvents.',
+      'CDK\'s own bundled custom-resource providers attach AWSLambdaBasicExecutionRole for their logging and expose no ' +
+      'way to replace it: the cross-region-reference provider (Custom::CrossRegionExportWriter/Reader) and, when ' +
+      'deployFrontend is on, the aws-s3-deployment handler (Custom::CDKBucketDeployment). It only grants ' +
+      'logs:CreateLogGroup/CreateLogStream/PutLogEvents. Our own Lambdas get explicit statements instead.',
     matches: (f) => f.kind === 'managedPolicy' && f.value.includes('policy/service-role/AWSLambdaBasicExecutionRole'),
+  },
+  {
+    id: 'bucket-deployment-staging-asset-read',
+    reason:
+      'The BucketDeployment handler reads the built SPA out of the CDK bootstrap staging bucket ' +
+      '(`cdk-<qualifier>-assets-<account>-<region>`), which CDK renders with {"Ref":"AWS::Partition"} rather than a ' +
+      'literal partition, so the generic s3-object-arns entry does not reach it. Scoped here to that one bucket ' +
+      'name shape, object ARNs only (a single trailing `/*`), and the exact read-only action set below.',
+    matches: (f) =>
+      f.kind === 'resource' &&
+      (f.value.match(/\*/g) ?? []).length === 1 &&
+      /\/\*"\]\]\}$|\/\*"$/.test(f.value) &&
+      /:s3:::cdk-[a-z0-9]+-assets-/.test(f.value) &&
+      exactActions(f.statement, DEPLOYMENT_ASSET_READ),
+  },
+  {
+    id: 'bucket-deployment-grant-action-wildcards',
+    reason:
+      'aws-s3-deployment builds its handler policy with grantRead (staging bucket) and grantReadWrite (destination ' +
+      'bucket) and offers no hook to narrow them, so `s3:GetBucket*`, `s3:GetObject*`, `s3:List*`, `s3:DeleteObject*` ' +
+      'and `s3:Abort*` come from the construct, not from us -- `Abort*` is AbortMultipartUpload, which the CLI needs ' +
+      'for any file over the 8MB multipart threshold. Both statements stay scoped to concrete bucket ARNs (checked ' +
+      'separately by the resource entries), and each of the two action sets is matched exactly, so a widened grant ' +
+      'fails the build.',
+    matches: (f) =>
+      f.kind === 'action' &&
+      (exactActions(f.statement, DEPLOYMENT_ASSET_READ) || exactActions(f.statement, DEPLOYMENT_DESTINATION_WRITE)),
+  },
+  {
+    id: 'cloudfront-invalidation-no-resource-scope',
+    reason:
+      'CreateInvalidation/GetInvalidation have no resource-level permissions in CloudFront ' +
+      '(https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/access-control-managing-permissions.html), ' +
+      'so IAM only accepts Resource "*" for them. Without the invalidation CloudFront keeps serving the previous ' +
+      'index.html after a redeploy. Scoped to a statement holding exactly those two actions and nothing else.',
+    matches: (f) => f.kind === 'resource' && f.value === '"*"' && exactActions(f.statement, DEPLOYMENT_INVALIDATION),
   },
 ];
 
@@ -243,7 +336,7 @@ function allFindings(overrides: Record<string, unknown>): Finding[] {
 
 const usedAllowListEntries = new Set<string>();
 
-describe.each(Object.entries(DOMAIN_MODES))('IAM wildcard gate (%s)', (_mode, overrides) => {
+describe.each(Object.entries(GATE_MODES))('IAM wildcard gate (%s)', (_mode, overrides) => {
   test('synthesizes every expected stack', () => {
     expect(synthFanwire(overrides).stackNames().sort()).toEqual(Object.values(STACK_NAMES).sort());
   });
