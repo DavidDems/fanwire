@@ -227,14 +227,9 @@ anybody has to remember:
   and does so only in the container. Neither the multipart encoding nor Node 20
   is at fault — that same body parses under both versions with plain undici; it
   is the jsdom interaction.
-  - **`features/compose/MediaWidget.tsx` still hand-encodes its multipart body
-    and reads the file with `FileReader`, and `src/test/compose.ts` still parses
-    that body by hand.** Both predate this fix and are the workaround for it, not
-    a pattern to copy: a new upload uses an ordinary `FormData` and an ordinary
-    `request.formData()`. They are kept only until a follow-up removes them, and
-    the one thing worth carrying forward is the assertion `src/test/compose.ts`
-    makes — the presigned fields first and `file` last, because that ordering is
-    the contract S3 enforces.
+  The workaround it existed to remove is gone: `MediaWidget` builds an ordinary
+  `FormData` and `src/test/compose.ts` reads it back with `request.formData()`.
+  An upload is written the plain way here.
 
 ## Settled contracts
 
@@ -299,15 +294,12 @@ each owns one piece:
   token; the multipart POST to `upload_url` is a plain `fetch` with no
   `Authorization` header at all.
 - **The presigned fields go first, in the order the API returned them, and
-  `file` goes last** — S3 ignores everything after the file part. The body is
-  encoded explicitly rather than by handing a `FormData` to `fetch`, which makes
-  that ordering checkable instead of a property of whichever multipart serializer
-  the runtime has. It also has to be: jsdom 25's `Blob` implements `slice`,
-  `size` and `type` and nothing else, so serializing a `FormData` that carries a
-  file — which reads the blob through `Blob.stream()` — hangs under test. The
-  file's bytes are read with `FileReader` for the same reason (`arrayBuffer()` is
-  absent there), so there is one code path rather than a branch whose tested half
-  is not the shipped half.
+  `file` goes last** — S3 ignores everything after the file part. It is an
+  ordinary `FormData`, which serializes in insertion order, so appending in that
+  order is the whole of it and `fetch` derives the `Content-Type` and its
+  boundary; setting that header by hand would override the boundary the body was
+  written with. The ordering is not left to a comment — `MediaWidget.test.tsx`
+  asserts the field order that actually reaches the bucket.
 - **The real status values are `uploaded`, `scanning`, `processed` and
   `rejected`** — lower-case, four of them, from `MediaStatus` in the generated
   schema. **There is no `Quarantined` value**: where prose says quarantined it

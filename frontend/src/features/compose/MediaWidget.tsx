@@ -72,96 +72,25 @@ async function requestUploadTicket(mimeType: string): Promise<CreateUploadRespon
 }
 
 /**
- * The chosen file's bytes.
- *
- * `FileReader` rather than `file.arrayBuffer()`: `arrayBuffer`, `text` and
- * `stream` are all absent from jsdom 25's `Blob`, which implements `slice`,
- * `size` and `type` and nothing else. `FileReader` is the one reader present in
- * every browser this ships to *and* under test, so it is one code path rather
- * than a branch whose tested half is not the shipped half.
- */
-function readFileBytes(file: File): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => {
-      reject(reader.error ?? new Error("That file could not be read."));
-    };
-    reader.onload = () => {
-      resolve(new Uint8Array(reader.result as ArrayBuffer));
-    };
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-/**
- * The presigned POST body, encoded here rather than by handing `FormData` to
- * `fetch`.
- *
- * Two reasons, both about this request specifically. **Order is part of the
- * contract**: S3 ignores everything that follows the `file` part, so the
- * presigned fields go first, in the order the API returned them, and the file
- * goes last — encoding it here is what makes that visible and checkable instead
- * of a property of whichever multipart serializer the runtime happens to have.
- * And the runtimes differ: a `FormData` carrying a file cannot be serialized at
- * all under jsdom, because doing so reads the blob through `Blob.stream()`,
- * which jsdom does not implement.
- */
-function encodeMultipart(
-  fields: Record<string, string>,
-  file: File,
-  bytes: Uint8Array,
-  boundary: string,
-): ArrayBuffer {
-  const encoder = new TextEncoder();
-  // A quote in a filename would end the `filename="…"` parameter early. The name
-  // is cosmetic to S3 — the object's key comes from the `key` field — so the
-  // quotes are simply dropped rather than escaped into something S3 might keep.
-  const filename = file.name.replace(/"/g, "");
-
-  const parts: Uint8Array[] = [];
-  for (const [name, value] of Object.entries(fields)) {
-    parts.push(
-      encoder.encode(
-        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
-      ),
-    );
-  }
-  parts.push(
-    encoder.encode(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
-        `Content-Type: ${file.type}\r\n\r\n`,
-    ),
-  );
-  parts.push(bytes);
-  parts.push(encoder.encode(`\r\n--${boundary}--\r\n`));
-
-  const buffer = new ArrayBuffer(parts.reduce((total, part) => total + part.byteLength, 0));
-  const body = new Uint8Array(buffer);
-  let offset = 0;
-  for (const part of parts) {
-    body.set(part, offset);
-    offset += part.byteLength;
-  }
-  return buffer;
-}
-
-/**
  * The multipart POST to the bucket.
  *
- * A plain `fetch`, and no `Authorization` header: the bucket has no use for our
- * ID token and sending it there would leak it. The boundary only has to be
- * unpredictable enough not to occur in the body, which is why it is not drawn
- * from `crypto`.
+ * A plain `fetch`, and **no `Authorization` header**: the bucket has no use for
+ * our ID token and sending it there would leak it. No `Content-Type` header
+ * either — `fetch` derives it from the `FormData`, and setting it by hand would
+ * override the boundary the body was actually written with.
+ *
+ * **The presigned fields go first, in the order the API returned them, and the
+ * file goes last**, because S3 ignores everything that follows the `file` part.
+ * `FormData` serializes in insertion order, so appending in that order is the
+ * whole of it; `MediaWidget.test.tsx` asserts the order that reaches the bucket
+ * rather than trusting this comment.
  */
 async function uploadToBucket(ticket: CreateUploadResponse, file: File): Promise<void> {
-  const boundary = `----fanwireUpload${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-  const body = encodeMultipart(ticket.fields, file, await readFileBytes(file), boundary);
+  const body = new FormData();
+  for (const [name, value] of Object.entries(ticket.fields)) body.append(name, value);
+  body.append("file", file);
 
-  const response = await fetch(ticket.upload_url, {
-    method: "POST",
-    headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
-    body,
-  });
+  const response = await fetch(ticket.upload_url, { method: "POST", body });
   if (!response.ok) {
     throw new Error(`The upload answered ${response.status}`);
   }
@@ -185,10 +114,12 @@ function isSettled(status: MediaStatus | undefined): boolean {
 /**
  * The served thumbnail's URL.
  *
- * `URL.createObjectURL` is not used anywhere in this widget: jsdom does not
- * implement it, and the served image is the honest thing to show anyway — it is
- * what everyone else will see once the post is published, EXIF-stripped and
- * resized by the pipeline rather than the original off the user's disk.
+ * `URL.createObjectURL` is not used anywhere in this widget, and the reason is
+ * not that jsdom lacks it — the served image is what everyone else will see once
+ * the post is published, EXIF-stripped and resized by the pipeline, rather than
+ * the original off the user's disk. So this is a product decision, not a harness
+ * one, and it does not become a candidate for the kind of `setupTests.ts`
+ * polyfill that `Blob`'s missing readers needed.
  */
 function thumbnailUrl(key: string): string {
   return `${config.mediaBaseUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
