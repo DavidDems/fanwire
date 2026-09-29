@@ -62,6 +62,19 @@ TEST_AGENT_MUST_WRITE = [
     "frontend/src/test/render.test.tsx",
     "frontend/src/features/feed/FeedPage.test.tsx",
     "frontend/src/components/__tests__/Button.tsx",
+    # The `src/test/` kit: msw handler factories, fixtures and render helpers.
+    # These are not `*.test.ts` and they are not implementation — they are the
+    # test agent's *other* output, and this frontend keeps them in `src/test/`
+    # rather than in the `__tests__/**` directory the allowlist already admits.
+    # `src/test/users.ts` and `src/test/compose.ts` are on `main`, written by a
+    # Director in a hand-run pass; a dispatched test agent could not have
+    # produced either, and would have escalated on the commit that tried. Same
+    # shape as the `.tsx` finding this file's docstring describes: the role's
+    # real output did not match the patterns written for it.
+    "frontend/src/test/notifications.ts",
+    "frontend/src/test/users.ts",
+    "frontend/src/test/auth.tsx",
+    "frontend/src/test/server.ts",
 ]
 
 TEST_AGENT_MUST_NOT_WRITE = [
