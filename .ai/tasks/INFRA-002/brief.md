@@ -58,6 +58,18 @@ unconditionally is a wrong answer that passes criterion 2 and fails 1.
     `s3:GetObject*`, `s3:List*` (asset bucket), plus `s3:Abort*`,
     `s3:DeleteObject*` (destination). The existing `s3-object-arns` entry does
     **not** cover these: it matches `kind: 'resource'` only.
+  - the **staging bucket's object ARN**, as a `resource` finding:
+    `{"Fn::Join":["",["arn:",{"Ref":"AWS::Partition"},":s3:::cdk-hnb659fds-assets-<account>-<region>/*"]]}`.
+    This one was **missing from the first version of this note** and was found
+    by the test agent, which checked rather than trusting the list. It escapes
+    `s3-object-arns` because that entry requires the bucket to be a
+    `…Bucket…` `GetAtt`, a literal `arn:…:s3:::` prefix or an `ImportValue`,
+    and CDK renders the partition here as `{"Ref":"AWS::Partition"}` — the
+    `@aws-cdk/core:target-partitions` flag in `cdk.json` does not collapse it.
+    Confirmed by running that entry's own regexes against the literal value,
+    and then confirmed again end to end: with the implementation in place the
+    gate's rot check passes, which it only can if every new entry matches a
+    real statement.
   - `Resource: "*"` on the `cloudfront:GetInvalidation` /
     `cloudfront:CreateInvalidation` statement CDK adds for `distributionPaths`.
     CloudFront invalidation has no resource-level permissions.
