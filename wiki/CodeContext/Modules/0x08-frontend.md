@@ -7,9 +7,9 @@ what the frontend does with them, and nothing that belongs to a backend module.
 
 ## State
 
-**Foundation, authentication, the profile page and the composer**
-(`FRONTEND-001` … `FRONTEND-004`). Feed, notifications and search are still
-placeholders.
+**Foundation, authentication, the profile page, the composer and the
+notifications view** (`FRONTEND-001` … `FRONTEND-004`, `FRONTEND-006`). Feed and
+search are still placeholders.
 
 What is real:
 
@@ -20,13 +20,14 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages, the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the three remaining placeholders) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the two remaining placeholders, plus the catch-all) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
+| `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts` and `compose.ts` (the per-unit network fixtures) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts` and `notifications.ts` (the per-unit network fixtures) |
 
-Feed, notifications and search are `FRONTEND-005` … `007`, sequenced in
+Feed and search are `FRONTEND-005` and `007`, sequenced in
 `TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` — they are in
 one file so that units do not contend over the route table.
 
@@ -366,6 +367,79 @@ each owns one piece:
   happened, since an emptied draft and a never-filled one are the same value, so
   the widget watches a reset counter on the mediator. A stale thumbnail over an
   empty composer is the failure that guards against.
+
+## Notifications (`FRONTEND-006`)
+
+`src/features/notifications/`, wired at `/notifications` behind `RequireAuth`.
+The page owns the list and the clear mutation; the row owns its actor; the
+preference is its own component. Clearing is a soft delete on the backend
+([[0x05-notifications]]) and **nothing here exposes that** — from the UI it is a
+204 and the entry is gone.
+
+- **The list and the preference are sibling cache keys**, `["notifications",
+  "list"]` and `["notifications", "preference"]` — *not* the preference nested
+  under a list at `["notifications"]`. `queryKey` is a prefix match, so the
+  nested spelling makes every clear cancel and refetch the preference, and is
+  correct only for as long as nobody forgets `exact: true`. Two disjoint keys
+  make that wrong turn unavailable rather than merely discouraged. Every
+  invalidation still passes `exact: true`, the way `FRONTEND-003`'s follow
+  control does.
+- **The actor is read under `["users", <numeric id>]` — deliberately the same
+  entry `features/profile` reads a viewed user from**, so opening a profile from
+  a notification finds it warm. The key is *redeclared* rather than imported: a
+  feature folder never reaches into another feature's internals, and a
+  two-element array is a smaller cost than that coupling. The id is a number,
+  because that is what the path parameter is in the generated schema.
+- **The actor is a query per row, and that is what makes it one request per
+  actor.** react-query deduplicates by key while requests are in flight and
+  serves the rest from the entry, so ten rows from one actor issue one
+  `GET /users/{user_id}`. A `useEffect` fetch per row renders exactly the same
+  thing and issues ten — which is why the test counts requests rather than
+  asserting on what is rendered.
+- **The clear mutation lives on the page, not the row, and its rollback is a
+  snapshot.** The row unmounts the instant the optimistic patch lands, so a
+  mutation owned by it would take its own `onError` and its failure message down
+  with it, and the entry would reappear with nothing saying why. `onError`
+  writes the snapshot array back *verbatim*: restoring as `[...remaining,
+  cleared]` puts the entry at the end, which is also what a naive
+  refetch-on-error produces, and an entry that reappears somewhere else reads as
+  a second bug rather than as a failure that was undone. The tests clear the
+  **middle** of three rows for exactly this reason — clearing the last one cannot
+  tell the two rollbacks apart.
+- **Where an entry points is decided by its `type`, never by `reference_id`
+  alone.** On a `follow`, `reference_id` *is* the actor's user id
+  ([[0x05-notifications]]), so a row that sent every `reference_id` to `/posts/`
+  would link to a post whose id is really a user's and look entirely plausible.
+  `reference_id` is nullable, so a reply or repost without one reads the same
+  with plain text where the link would be.
+- **`/posts/:postId` does not exist yet.** A reply or repost links to
+  `/posts/{reference_id}`, which currently lands on the app's own not-found
+  view. That is accepted, not overlooked: the address mirrors the API's own
+  `/posts/{post_id}` and the `/profile/:userId` convention, and adding a route
+  would have meant editing the pinned sweep in `routes.test.tsx` for a page no
+  unit owns. **Whoever builds a post or thread page should serve that address**
+  rather than invent a second one.
+- **An unrecognised `type` renders a generic entry.** The switch could be written
+  exhaustively — `NotificationType` is the closed set `follow | reply | repost`
+  and the compiler would agree — but the bundle outlives the contract it was
+  built against. A list that throws on one row takes down the rows it *does*
+  understand, and one that renders nothing is indistinguishable from a broken
+  fetch.
+- **The email toggle is a native checkbox and is never disabled.** Email is a
+  deliberate no-op in every environment today (`SesEmailSender` skips while
+  `NOTIFICATION_FROM_ADDRESS` is unset, and no SES identity is verified —
+  [[0x05-notifications]]), but that is a **deployment state, not a feature
+  flag**: the toggle stores a real preference, and a control that apologised for
+  the environment it happens to run in would have to be found and removed the day
+  SES is verified. Native over `role="switch"`: focusable, space-operable and
+  readable by assistive technology with no code. Request failures are a
+  `role="alert"` beside the field rather than `Field`'s own message slot, which
+  is the split `FormField` documents.
+- **The page re-decides nothing about who may see it.** `RequireAuth` in the
+  route table is the one place that answers that; a second check here would be a
+  second answer free to disagree with the first, and its "not signed in" branch
+  would be unreachable. `ProfilePage` gates because *its* route is public — this
+  one is not.
 
 ## Open decisions
 

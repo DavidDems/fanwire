@@ -33,6 +33,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
 import { FakeAuthService, profileFound, profileMissing, teamsAre, testSession } from "../test/auth";
+import { notificationsAre, preferenceIs } from "../test/notifications";
 import { server } from "../test/server";
 import { publicProfilesById, usernameForId } from "../test/users";
 import { routes } from "./routes";
@@ -86,6 +87,12 @@ function arrange(as: Visitor): AuthService {
   // `/profile/:userId` is a public read path, so its response is installed for
   // every visitor rather than only the signed-in ones.
   server.use(publicProfilesById(), teamsAre());
+  // `/notifications` renders FRONTEND-006's page for a `member` visitor and it
+  // fetches on mount, so its two reads are answered here for every visitor —
+  // `onUnhandledRequest: "error"` would otherwise fail this file. Nothing here
+  // asserts on either: an empty list and a default preference are the quietest
+  // responses that let the route's heading render.
+  server.use(notificationsAre([]), preferenceIs(true));
   if (as === "anonymous") return new FakeAuthService();
 
   server.use(as === "member" ? profileFound() : profileMissing());

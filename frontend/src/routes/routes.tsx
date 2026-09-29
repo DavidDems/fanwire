@@ -6,10 +6,11 @@ import { ProfileSetupPage } from "../auth/ProfileSetupPage";
 import { SignInPage } from "../auth/SignInPage";
 import { SignUpPage } from "../auth/SignUpPage";
 import { ComposePage } from "../features/compose/ComposePage";
+import { NotificationsPage } from "../features/notifications/NotificationsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { AppLayout } from "./AppLayout";
 import { RequireAuth, RequireNewProfile } from "./guards";
-import { FeedView, NotFoundView, NotificationsView, SearchView } from "./views";
+import { FeedView, NotFoundView, SearchView } from "./views";
 
 /**
  * The route table, as data rather than JSX elements, so it can be handed to
@@ -42,7 +43,7 @@ export const routes: RouteObject[] = [
         path: "notifications",
         element: (
           <RequireAuth>
-            <NotificationsView />
+            <NotificationsPage />
           </RequireAuth>
         ),
       },
