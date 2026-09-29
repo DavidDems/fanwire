@@ -11,14 +11,31 @@
  * pushing a new path and re-rendering `<App />` would silently keep showing the
  * first route. Per-route assertions belong in `routes.test.tsx`, which does not
  * have that problem.
+ *
+ * The empty-feed handler below is here because the default path *is* the feed,
+ * and `FRONTEND-005` turns that view into one that reads `GET /feed` when it
+ * mounts. This file is outside that unit's `allowed_paths`, so the handler it
+ * needs has to be installed by somebody who may write here. Nothing asserts on
+ * it: what this file pins is that `App` wires the route table up at all, and an
+ * empty feed is the quietest answer that lets it.
  */
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { HttpResponse, http } from "msw";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
+import { server, type GetResponseBody } from "./test/server";
 
 // `globals: false`, so Testing Library never registers its own auto-cleanup.
 afterEach(cleanup);
+
+beforeEach(() => {
+  server.use(
+    http.get("*/feed", () =>
+      HttpResponse.json<GetResponseBody<"/feed">>({ items: [], next_before_id: null }),
+    ),
+  );
+});
 
 describe("App", () => {
   it("mounts the router and renders the feed view at the default path", async () => {
