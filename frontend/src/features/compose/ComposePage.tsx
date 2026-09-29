@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
@@ -27,10 +28,34 @@ import { QUICK_POST_TEMPLATES } from "./PostTemplate";
  * is the worst thing this page can do and the failure most likely to survive
  * review, because the happy path is what gets clicked. The composer is cleared in
  * exactly one place: `onSuccess`.
+ *
+ * **The address is how another feature opens this page in a context.**
+ * `?reply_to=` and `?repost_of=` carry a post id into the mediator the composer
+ * is built around. A route is the one seam a feature folder can hand another
+ * without importing it, which is what the connection rule asks for and what lets
+ * `features/feed/` offer a reply control while reimplementing no part of
+ * composing. `src/features/compose/ComposeRoute.test.tsx` pins it.
  */
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
 type PostOut = components["schemas"]["PostOut"];
+
+/**
+ * A post id from the query string, or `null` for anything that is not one.
+ *
+ * The address bar is user input, so this validates at the boundary and does not
+ * propagate a half-value inward: `Number("")` is `0` and `Number("x")` is `NaN`,
+ * and a `NaN` reaches the API as `parent_post_id: null` on a post that still
+ * claims `is_reply: true`. An unusable parameter is therefore no context at all
+ * — the composer opens, and it opens as a plain one.
+ */
+function postIdIn(params: URLSearchParams, name: string): number | null {
+  const raw = params.get(name);
+  if (raw === null) return null;
+
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
 
 async function createPost(body: CreatePostRequest): Promise<PostOut> {
   const { data, response } = await apiClient.POST("/posts", { body });
@@ -41,7 +66,18 @@ async function createPost(body: CreatePostRequest): Promise<PostOut> {
 }
 
 export function ComposePage() {
-  const mediator = useMemo(() => new ComposeMediator(), []);
+  const [searchParams] = useSearchParams();
+  const replyToPostId = postIdIn(searchParams, "reply_to");
+  const repostOfPostId = postIdIn(searchParams, "repost_of");
+
+  // Keyed on the ids rather than built once: the composer is a single mounted
+  // page, so a second reply started from the feed while this one is open changes
+  // only the address, and an empty dependency list would answer it with the
+  // previous post's context. `reset()` returns to whichever one built it.
+  const mediator = useMemo(
+    () => new ComposeMediator({ replyToPostId, repostOfPostId }),
+    [replyToPostId, repostOfPostId],
+  );
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
   const [failure, setFailure] = useState<string | null>(null);
 

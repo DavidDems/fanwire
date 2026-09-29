@@ -339,6 +339,20 @@ each owns one piece:
   a date and no human-readable name, so the id the user is typing is the only
   thing to match against; the date and score are what tell two games apart in the
   label. A data-model limit, not a UI choice.
+- **The address is how another feature opens the composer in a context.**
+  `/compose?reply_to=<id>` and `/compose?repost_of=<id>` are read by
+  `ComposePage` and handed to the `ComposeMediator` it builds; the mediator has
+  taken those two ids since this unit, but nothing outside the page could reach
+  them, so "reply to post 42" had no expression at all. A route is the one seam
+  a feature folder can offer another without being imported by it
+  ([[0x00-architecture]] Connection rule) — which is what lets `features/feed/`
+  own a reply control while reimplementing no part of composing, from a unit
+  that has `features/compose/**` in its `forbidden_paths`. **A parameter that is
+  not a positive integer is no context rather than a broken one**: the address
+  bar is user input, and `Number("x")` is `NaN`, which JSON sends as
+  `parent_post_id: null` on a post still claiming `is_reply: true`. The context
+  is asserted through the `POST /posts` body, because reply context is not
+  content — `canBuild()` says so — and the composer renders nothing for it.
 - **Nothing is fetched when the page mounts.** Games and teams are asked for when
   the user types `#` or `$`, templates are stored in the app, and the media poll
   starts at the first upload. `routes.test.tsx` renders `/compose` under
