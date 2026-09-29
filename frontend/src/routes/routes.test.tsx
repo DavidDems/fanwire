@@ -33,6 +33,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
 import { FakeAuthService, profileFound, profileMissing, teamsAre, testSession } from "../test/auth";
+import { emptyFeed } from "../test/feed";
 import { notificationsAre, preferenceIs } from "../test/notifications";
 import { server } from "../test/server";
 import { publicProfilesById, usernameForId } from "../test/users";
@@ -85,13 +86,16 @@ const VIEWS: View[] = [
 /** Install the API responses that visitor implies, and return their session. */
 function arrange(as: Visitor): AuthService {
   // `/profile/:userId` is a public read path, so its response is installed for
-  // every visitor rather than only the signed-in ones.
-  server.use(publicProfilesById(), teamsAre());
+  // every visitor rather than only the signed-in ones. `/` is the feed, and a
+  // guest request and a signed-in request are the same `GET /feed`
+  // ([[0x06-feed]]), so an empty page is installed for every visitor too — msw
+  // runs with `onUnhandledRequest: "error"` and several cases here render `/`.
+  // Nothing in this file asserts on the feed.
+  server.use(publicProfilesById(), teamsAre(), emptyFeed());
   // `/notifications` renders FRONTEND-006's page for a `member` visitor and it
   // fetches on mount, so its two reads are answered here for every visitor —
-  // `onUnhandledRequest: "error"` would otherwise fail this file. Nothing here
-  // asserts on either: an empty list and a default preference are the quietest
-  // responses that let the route's heading render.
+  // the same reason. Nothing here asserts on either: an empty list and a
+  // default preference are the quietest responses that let the heading render.
   server.use(notificationsAre([]), preferenceIs(true));
   if (as === "anonymous") return new FakeAuthService();
 
