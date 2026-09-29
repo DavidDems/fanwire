@@ -37,7 +37,21 @@
         "frontend/src/**/*.test.ts",
         "frontend/src/**/*.test.tsx",
         "frontend/src/**/__tests__/**",
+        "frontend/src/test/**",
         "infra/test/**"
+      ],
+      "_test_kit_note": [
+        "`frontend/src/test/**` is the frontend's test kit - the msw handler",
+        "factories, fixtures and render helpers a suite is built out of. It is",
+        "the test agent's output just as much as a *.test.tsx file is, but the",
+        "files are named `users.ts`, `auth.tsx`, `notifications.ts` and so on,",
+        "so none of the three patterns above admits one. This repo uses that",
+        "directory rather than the `__tests__/**` convention the allowlist",
+        "already covers.",
+        "Granted as the whole tree rather than by extension: the kit holds both",
+        ".ts and .tsx, and an extension rule would re-create the mismatch it is",
+        "here to remove. The code agent is NOT denied this tree - see",
+        "_test_kit_and_the_code_agent at the bottom of this file."
       ],
       "_deny_note": [
         "There is deliberately no `frontend/src/**/*.tsx` entry here, though the",
@@ -114,6 +128,22 @@
     "because a backend route change that does not refresh it silently breaks the",
     "generated TypeScript client - and the agent that changed the route is the",
     "only one positioned to refresh it."
+  ],
+
+  "_test_kit_and_the_code_agent": [
+    "OPEN, and deliberately not decided here. `code_agent.write` admits",
+    "`frontend/src/**` and denies only `*.test.ts`/`*.test.tsx`, so the code",
+    "agent can write `frontend/src/test/**` - the msw fixtures. That is what",
+    "the `frontend/src/test/server.ts` row in tests/test_policy.py's",
+    "CODE_AGENT_MUST_WRITE currently asserts.",
+    "It is a hole in `allow_test_edits_during_impl: false`. A fixture decides",
+    "what the server answers, so an implementation that may rewrite one can",
+    "weaken the contract without touching a file named *.test.*, and the",
+    "discard-the-whole-diff rule never fires. Closing it means adding",
+    "`frontend/src/test/**` to `code_agent.deny` and reversing that row.",
+    "Left open because it reverses an explicit, deliberate-looking assertion",
+    "about how this system is meant to work, which is a human call. Recorded in",
+    "docs/permissions.md's not-enforced list until it is made."
   ],
 
   "_dependency_changes": [
