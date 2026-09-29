@@ -7,9 +7,9 @@ what the frontend does with them, and nothing that belongs to a backend module.
 
 ## State
 
-**Foundation, authentication, the profile page, the composer and the
-notifications view** (`FRONTEND-001` … `FRONTEND-004`, `FRONTEND-006`). Feed and
-search are still placeholders.
+**Foundation, authentication, the profile page, the composer, the notifications
+view and the feed** (`FRONTEND-001` … `FRONTEND-006`). Search is the last
+placeholder.
 
 What is real:
 
@@ -20,16 +20,17 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages, the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the two remaining placeholders, plus the catch-all) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (shell), `guards.tsx`, `views.tsx` (the one remaining placeholder, plus the catch-all) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
+| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the live-score decorator, the optimistic like and the media |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts` and `notifications.ts` (the per-unit network fixtures) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts` and `feed.ts` (the per-unit network fixtures) |
 
-Feed and search are `FRONTEND-005` and `007`, sequenced in
-`TODO/04-first-deploy.md`. Each lifts its view out of `views.tsx` — they are in
-one file so that units do not contend over the route table.
+Search is `FRONTEND-007`, sequenced in `TODO/04-first-deploy.md`. Each unit
+lifts its view out of `views.tsx` — they were in one file so that units did not
+contend over the route table, and only `SearchView` is left.
 
 ## Auth (`FRONTEND-002`)
 
@@ -441,7 +442,95 @@ preference is its own component. Clearing is a soft delete on the backend
   would be unreachable. `ProfilePage` gates because *its* route is public — this
   one is not.
 
+## Feed and threads (`FRONTEND-005`)
+
+`src/features/feed/`, wired at `/` and **public** — the guest feed is a read path
+by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
+
+- **`PinnedPostDecorator` is deliberately not built, and this is the record of
+  why.** [[wiki/CodeContext/Standards/gof-patterns|GoF patterns]] names it
+  alongside `LiveScoreTickerDecorator`, so the next reader of that document will
+  reasonably ask where it went. **No backend field marks a post as pinned** —
+  [[0x03-posts]] has no such column — so it would decorate a condition that
+  cannot occur. YAGNI, and the acceptance criterion is written as an absence
+  precisely so a test can pin it: `feed-isolation.test.ts` sweeps the whole of
+  `src/` for the name, and assembles that name from fragments so the sweep does
+  not match the file performing it. **Do not re-add it** without a column that
+  makes it mean something.
+- **One request, and the UI never learns which ranking it got.** A guest and a
+  signed-in visitor both issue the same `GET /feed`; the backend picks between
+  `GuestRecentStrategy` and `FollowsAndPreferredTeamStrategy` ([[0x06-feed]]).
+  An `if (isSignedIn) renderPersonalized()` duplicates a decision the backend
+  already made and drifts the moment the ranking changes. This is pinned twice,
+  because neither half is sufficient: behaviourally, the same response is
+  rendered to both visitors and compared whole; and structurally, from disk,
+  because a branch that happens to agree for a fixture passes every behavioural
+  assertion. The structural half bans the *vocabulary* of that decision from the
+  unit's code, with comments stripped first — a good implementation should stay
+  free to explain that the backend chose. It is a lexical proxy for the
+  property, not the property: a branch spelled `if (session)` is caught only by
+  the behavioural half.
+- **Paging is an explicit "Load more" control, not a scroll sentinel**, and that
+  is a harness constraint rather than a UX preference. **jsdom implements no
+  `IntersectionObserver`**, and `src/setupTests.ts` — the only place a polyfill
+  could live — is outside this unit's `allowed_paths`, so a scroll-triggered
+  implementation would have been untestable from inside the unit. Acceptance
+  criterion 1 asks that the next page be loaded *using `next_before_id`* and that
+  it stop when the response reports none; both are properties of the request, not
+  of the gesture. Same shape as the `URL.createObjectURL` decision above, and the
+  second time this class of thing has decided a unit's design.
+- **`getNextPageParam` returns `next_before_id` straight through.** react-query
+  already reads `null` as "no further page", so "stopping cleanly" needed no code
+  of its own — and the cursor is the one the *response* carried, never the last
+  id on screen. Those agree until view assembly silently drops a post whose
+  author was soft-deleted, which [[0x06-feed]] says it does.
+- **Feed pages are not keyed by cursor.** `["feed", "pages"]` is the whole
+  infinite query; `["feed", "thread", <postId>]` is one expanded post. A key
+  carrying `before_id` would make page two an entry that page one could never
+  extend.
+- **The optimistic like's snapshot is not in the button.** A post is not owned by
+  one cache entry: it is in whichever feed page it arrived on *and* in the
+  replies of every thread expanded above it, so state beside the cache moves one
+  copy and leaves another stale **on the same screen**. `onMutate` patches every
+  entry under `["feed"]` that actually holds the post, and that filtered list of
+  entries *is* the rollback context — which is how `onSettled` can still
+  invalidate **exact** keys, computed from the patch rather than assumed. The
+  count moves with the control, and both are restored on failure; those are the
+  two things a user sees change.
+- **Every post renders through one `PostNode`, including at depth.** A thread is
+  replies, and replies are posts ([[wiki/CodeContext/Standards/gof-patterns|GoF patterns]] Composite). The card
+  renders from its `post` **prop** and the thread query supplies only the
+  replies — a node that preferred the thread response's own `root` would render
+  a post from a different cache entry than its parent is rendering from. Every
+  post carries a `Show replies` control, leaf or not: a post cannot know whether
+  it has replies without asking, and uniformity is the criterion.
+- **`GET /feed/thread/{id}` is called per expansion, on the expanded post's own
+  id.** It returns the root plus **direct** replies only; deeper levels expand
+  lazily by calling it again. The endpoint does not offer a whole thread and the
+  shape exists to stop a client trying.
+- **A media item that fails to load leaves no `<img>` in the tree at all** — not
+  hidden, not an alt-text box with a border. A feed full of broken frames is
+  worse than a feed of text. The same answer covers a `null` `s3_key_public`,
+  which the schema allows: there is nothing to point an `<img>` at either way.
+  Media renders from `s3_key_public` (the served image), not
+  `s3_key_thumbnail` — the composer's widget uses the thumbnail, and these are
+  different jobs.
+- **Reply and repost are an address, never an import**:
+  `/compose?reply_to=<id>` and `/compose?repost_of=<id>`, read by `ComposePage`.
+  `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
+  one seam a feature folder can offer another ([[0x00-architecture]] Connection
+  rule) — enforced from disk, along with a ban on importing any sibling feature.
+
+**Known duplication, left deliberately.** The media-URL join
+(`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
+`features/compose/MediaWidget.tsx`. Moving it to `components/` requires editing
+`features/compose/**`, which this unit may not touch — so extracting it here
+would have produced a "shared" module with one caller while the duplicate stayed.
+**Whoever next has both trees in scope should extract it**; it is small, and it
+is recorded so the second copy is a known state rather than a discovery.
+
 ## Open decisions
 
 - Whether the frontend wiki grows past this file into per-feature sections, or
-  stays one file, is the call of whoever finishes `FRONTEND-007`.
+  stays one file, is the call of whoever finishes `FRONTEND-007`. It is now the
+  only unit left, and this file is long.
