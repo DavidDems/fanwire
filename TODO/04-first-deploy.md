@@ -156,10 +156,13 @@ which was not chosen. It is a property of the design, not an oversight.
 > **Live outputs:** `https://fanwire.daviddems.com` ·
 > distribution `E2AXWWXMA8YAE8` · `d3fb0uyhisvzkz.cloudfront.net`
 >
-> **Still outstanding:** Phase 3 (below), and the Lambda concurrency raise to
-> 1000, which is needed regardless of the migration runner — 10 concurrent
-> executions is a ceiling on the whole app, shared by the API function, four
-> consumers and the authorizer.
+> - **Lambda concurrency raise to 1000: approved by AWS 2026-09-30.** The
+>   account-wide ceiling of 10, shared by the API function, four consumers and
+>   the authorizer, is gone. It does **not** bring back
+>   `reservedConcurrentExecutions` on the migration runner — that stays off for
+>   a reason no quota changes; see `0x00-architecture.md`.
+>
+> **Still outstanding:** Phase 3 (below).
 >
 > ### Two things that will catch the next person
 >
