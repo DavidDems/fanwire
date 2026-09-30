@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -18,6 +19,40 @@ import { Construct } from 'constructs';
  * Subnets: `public` (IGW; holds only the NAT instance), `app` (Lambdas;
  * 0.0.0.0/0 -> NAT instance), `data` (RDS; no route out at all).
  */
+/**
+ * NAT instance bootstrap, replacing CDK's `NatInstanceProviderV2` default.
+ * The default failed on the first deploy (2026-09-30): `yum install
+ * iptables-services` was OOM-killed on the 512 MB t4g.nano, so no MASQUERADE
+ * rule existed and the instance forwarded nothing. It also finds the egress
+ * interface with `route`, which AL2023 does not ship.
+ *
+ * `set -euxo pipefail` makes a failure stop the script, and `-x` echoes every
+ * command to the console log (`aws ec2 get-console-output`) -- the only place
+ * a bootstrap failure is visible, since the instance has no SSH.
+ */
+const NAT_BOOTSTRAP = [
+  'set -euxo pipefail',
+  // dnf's metadata load alone exceeds 512 MB of RAM.
+  // Runs once per instance (see the logical-id override below), so no guards.
+  'dd if=/dev/zero of=/swapfile bs=1M count=1024',
+  'chmod 600 /swapfile',
+  'mkswap /swapfile',
+  'swapon /swapfile',
+  'echo "/swapfile none swap defaults 0 0" >> /etc/fstab',
+  'dnf install -y iptables-services',
+  'systemctl enable --now iptables',
+  'echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/custom-ip-forwarding.conf',
+  'sysctl -p /etc/sysctl.d/custom-ip-forwarding.conf',
+  "iface=$(ip route show default | awk '{print $5; exit}')",
+  '[ -n "$iface" ]',
+  'iptables -t nat -A POSTROUTING -o "$iface" -j MASQUERADE',
+  // iptables-services' stock FORWARD chain rejects everything.
+  'iptables -F FORWARD',
+  // Persists the rule for iptables.service. Not `service iptables save`: AL2023
+  // has no /usr/sbin/service; the init script ships with iptables-services.
+  '/usr/libexec/iptables/iptables.init save',
+];
+
 export class NetworkStack extends cdk.Stack {
   readonly vpc: ec2.Vpc;
   /** Attached to every VPC Lambda. */
@@ -43,12 +78,15 @@ export class NetworkStack extends cdk.Stack {
 
     // instanceV2 (not the deprecated v1 provider): configures iptables
     // masquerading in user data and disables source/dest check.
+    const natUserData = ec2.UserData.forLinux();
+    natUserData.addCommands(...NAT_BOOTSTRAP);
     const natProvider = ec2.NatProvider.instanceV2({
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.NANO),
       machineImage: ec2.MachineImage.latestAmazonLinux2023({ cpuType: ec2.AmazonLinuxCpuType.ARM_64 }),
       // Ingress is added explicitly below (HTTPS from the Lambda SG only).
       defaultAllowedTraffic: ec2.NatTrafficDirection.NONE,
       associatePublicIpAddress: true,
+      userData: natUserData,
     });
 
     this.vpc = new ec2.Vpc(this, 'Vpc', {
@@ -100,6 +138,15 @@ export class NetworkStack extends cdk.Stack {
 
     const [natInstance] = natProvider.gatewayInstances;
     if (!natInstance) throw new Error('NAT instance provider created no instance');
+    // cloud-init runs user data only on an instance's first boot, and a
+    // UserData change is otherwise an in-place stop/start -- the new script
+    // would never run. Keying the logical id on the script (what
+    // `Instance.userDataCausesReplacement` does, which the NAT provider does
+    // not expose) makes any change a replacement; the routes follow by Ref.
+    const cfnNat = natInstance.instance;
+    cfnNat.overrideLogicalId(
+      `${this.getLogicalId(cfnNat)}${crypto.createHash('sha256').update(natUserData.render()).digest('hex').slice(0, 16)}`,
+    );
     // No SSH: no key pair, no port 22. Admin via SSM Session Manager only
     // (security.md "Network"). These five actions are AWS's documented
     // minimum for the Session Manager agent; ssmmessages:* have no
