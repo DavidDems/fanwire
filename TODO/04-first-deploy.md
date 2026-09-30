@@ -97,14 +97,19 @@ FRONTEND-002  auth: AuthService, Cognito, route guard, profile creation
                           ├── FRONTEND-006  notifications
                           └── FRONTEND-007  search (two separate UIs)
 
-INFRA-002   BucketDeployment behind the deployFrontend flag   ─┐ independent
-INFRA-003   migration runner (needs the Dockerfile prereq)     ┘ of all of the above
+INFRA-002   BucketDeployment behind the deployFrontend flag   ─┐ DONE 2026-09-29
+INFRA-003   migration runner                                  ┘ (PRs #72, #73)
 MEDIA-002   dev-only media processing script — optional, not on the deploy path
 ```
 
-`INFRA-002` and `INFRA-003` can run at any point and are not on the frontend's
-critical path. `MEDIA-002` is not needed to deploy; it is needed to click
-through a media upload locally.
+**`INFRA-002` and `INFRA-003` are both merged** (2026-09-29). The two mechanisms
+§4 depends on therefore exist: `cdk deploy -c deployFrontend=true` uploads
+`frontend/dist` and invalidates `/*`, and the `Migration` function applies the
+schema when a human invokes it. Nothing in §4 changes — it was written
+anticipating both — but its phases are now executable rather than prospective.
+
+`MEDIA-002` is not needed to deploy; it is needed to click through a media
+upload locally.
 
 **Nothing here merges itself.** Every branch reaches `main` through a
 human-approved PR, and a PR opened by the workflow arrives with no checks until
@@ -129,7 +134,7 @@ There is no way around this ordering short of a runtime-fetched config file,
 which was not chosen. It is a property of the design, not an oversight.
 
 **Phase 1 — bring up the stacks.** All eight, ~30–45 minutes: VPC, NAT instance,
-RDS, Cognito, queues, four Lambdas, the distribution. There is no frontend-only
+RDS, Cognito, queues, five Lambdas, the distribution. There is no frontend-only
 deploy — `CdnStack` needs `AppStack`'s HTTP API id, and `AppStack` depends on
 everything else. Expect the full monthly cost to start here.
 

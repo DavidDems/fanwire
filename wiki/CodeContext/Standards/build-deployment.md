@@ -107,5 +107,24 @@ The first deploy is therefore **a human at a terminal**, in this order:
 
 `docker/cdk-deploy.Dockerfile` pins the CDK CLI/Node version and is what a human should synth or deploy through; nothing in CI invokes it.
 
+### Automated deploy — the intended target, not yet wired
+
+Automated CI/CD deployment on merge to `main` **is** the intended end state, and most of the plumbing for it already exists. What is missing is the workflow and one security decision, so this section records the gap rather than pretending either way.
+
+Already in place:
+
+- `GitHubActionsDeployRole` in `fanwire-workload`, OIDC-federated, trust limited to `main` of this repo — no long-lived keys.
+- Its permissions policy `CdkBootstrapAssumeRole`, attached 2026-09-22 after a human IAM review and committed at `infra/iam/github-actions-deploy-role-policy.json` so it is reviewable as a diff. It grants exactly one action, `sts:AssumeRole`, on the eight CDK bootstrap roles (four per region). **CI holds no service permissions of its own.**
+- `cdk bootstrap` run in both `ca-central-1` and `us-east-1`.
+- `docker/cdk-deploy.Dockerfile`, pinning the CDK CLI/Node version a deploy job would use.
+
+What is deliberately **not** in place, and why:
+
+1. **No deploy workflow exists.** Writing one is a separate, separately-reviewed piece of work. `.ai/docs/handoff.md` §5.7's prohibition is specifically *"do not wire deployment into the **agent** workflows"* — the pipeline that runs AI agents must not be able to reach AWS. That is not a ban on a standalone, human-reviewed deploy workflow; the OIDC role exists precisely so one has something correct to assume.
+2. **`cdk-hnb659fds-cfn-exec-role-*` holds `AdministratorAccess`** — the bootstrap default, and the real privilege in this design (see [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] "AWS account state"). CI cannot use it directly, but CloudFormation can, so **any** job able to run `cdk deploy` can effectively do anything in the account via a template. Narrowing that role once a successful deploy shows what is actually used is recorded as post-deploy work, and it is the thing to do **before** automating, not after.
+3. **The *first* deploy cannot be fully automated regardless**, because of the three-phase ordering in `TODO/04-first-deploy.md` §4: Vite inlines `VITE_*` at build time, the production Cognito ids do not exist until `Fanwire-Auth` has deployed, so the bundle cannot exist before the first deploy. Steady-state deploys after that have no such constraint and are the automatable case. A single-pass "build then deploy" job would work for every deploy *except* the first.
+
+So the order of operations is: first deploy by hand → narrow `cfn-exec-role` against what was actually used → then write the deploy workflow, reviewed on its own.
+
 ## Local dev (`docker-compose.yml`)
 `postgres` (real Postgres, matching RDS — not sqlite) and `dynamodb-local` back the `backend-test` and `frontend-test` one-shot services. This compose file is dev/test tooling only; it is never what's deployed.

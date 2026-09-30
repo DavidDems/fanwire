@@ -19,13 +19,16 @@ wiki, where it belongs as current-state fact rather than a checklist:
   Route 53 and the delegated subdomain, CDK bootstrap, GuardDuty, CloudTrail,
   Config, Budgets: `wiki/CodeContext/Modules/0x00-architecture.md` → "AWS
   account state".
-- **Why the first deploy still cannot serve a website** — no `BucketDeployment`,
-  no frontend-only deploy, no frontend config mechanism, no migration runner:
-  same file → "Known gaps". Those are **agent tasks**, not yours; `INFRA-002`
-  covers the upload path.
-- **The eight IAM wildcard waivers** and your ACCEPT on each: the allow-list in
+- **What the first deploy can and cannot serve** — the upload path
+  (`INFRA-002`), the frontend config mechanism (`FRONTEND-001`) and the
+  migration runner (`INFRA-003`) are all now closed; same file → "Known gaps"
+  for what remains, which is that there is still **no frontend-only deploy** and
+  the app itself is a scaffold until the `FRONTEND-*` units land.
+- **The eleven IAM wildcard waivers** and your ACCEPT on each: the allow-list in
   `infra/test/iam-policy.test.ts`, which is also the gate that fails the build
-  if one stops matching.
+  if one stops matching. `INFRA-002` added three (the `BucketDeployment`
+  handler's grants and the CloudFront invalidation), and the gate now walks each
+  domain mode twice — with `deployFrontend` off and on.
 - **Repository/GitHub settings** (not AWS):
   `wiki/GeneralContext/Architecture/github-automation-setup.md`.
 
@@ -46,7 +49,7 @@ you:
 
 | Bucket | Who creates it | Needs you? |
 |---|---|---|
-| **Frontend** (`StorageStack.frontendBucket`) | CDK, on deploy | **No.** The gap there is that nothing *uploads* to it — missing infra code, tracked as `INFRA-002`. |
+| **Frontend** (`StorageStack.frontendBucket`) | CDK, on deploy | **No.** `INFRA-002` closed the upload gap (merged 2026-09-29): `cdk deploy -c deployFrontend=true` uploads `frontend/dist` and invalidates the distribution. |
 | **Prod media** (quarantine + public) | CDK, on deploy | No. |
 | **Dev media** (quarantine + public) | **You, by hand** | **Yes** — everything below. |
 
