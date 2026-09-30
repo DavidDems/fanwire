@@ -363,7 +363,8 @@ is proven; everything here is ordinary work.
    docstring says the latter. The logic is right and the comment is not, which
    is the sort of thing the human gate exists to catch.
 
-2. **The first deploy**, which now has its own sequencing document:
+2. ~~**The first deploy**~~ — **done 2026-09-30**; the site is live and the
+   outcome is in `TODO/04-first-deploy.md` §4. It had its own sequencing document:
    [`TODO/04-first-deploy.md`](../../TODO/04-first-deploy.md). It names every
    remaining change, splits them by who is permitted to make it (Director /
    agent / human-at-AWS), and orders them. The nine agent specs it sequences —

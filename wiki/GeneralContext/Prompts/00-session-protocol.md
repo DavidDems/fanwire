@@ -59,5 +59,5 @@ behaviour they pin is removed.
 
 - **Never run `cdk deploy` or `npm run deploy`** from any session. It is out of scope for this repo by design — `.ai/docs/handoff.md` §5.7.
 - **Never start `.github/workflows/agent-orchestrator.yml`** for these tasks. It bills metered API credits; a subscription does not cover it (`TODO/04-first-deploy.md` §5).
-- **Every command you hand the human is a single-line PowerShell command.** A multi-line or `sh`-flavoured one half-succeeds on their machine and has already cost a broken Route 53 token.
+- **Every command you hand the human is a single-line PowerShell command.** A multi-line or `sh`-flavoured one half-succeeds on their machine and has already cost a broken Route 53 token. When an `aws` command's output is piped (`| Select-String`, `| Select-Object`), prefix it with `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';` — the CLI otherwise encodes to the Windows code page and dies on the first non-ASCII character.
 - Nothing in this repo has merge permission. Keep it that way.

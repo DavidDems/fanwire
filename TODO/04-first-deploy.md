@@ -1,7 +1,10 @@
 # 04 — The first deploy: everything between here and `fanwire.daviddems.com`
 
 **Written 2026-09-25**, after `TODO/02` closed its last available item (the dev
-S3 buckets). This file is the sequencing document for the rest of the build. It
+S3 buckets). **Its objective was met on 2026-09-30** — see §4. What is still
+open here is §2's last item and `FRONTEND-007` in §3.
+
+This file is the sequencing document for the rest of the build. It
 names every change still needed, says who is allowed to make it, and puts them
 in an order that works.
 
@@ -133,72 +136,65 @@ the bundle.
 There is no way around this ordering short of a runtime-fetched config file,
 which was not chosen. It is a property of the design, not an oversight.
 
-> ## ✅ Phases 1 and 2 are done, 2026-09-30
+> ## ✅ All three phases are done, 2026-09-30
 >
-> **All eight stacks are `CREATE_COMPLETE`**, and the schema is applied. The
-> full record, including what the deploy proved that synth could not, is
-> `wiki/CodeContext/Modules/0x00-architecture.md` → "First deploy, 2026-09-29".
-> In short:
+> `https://fanwire.daviddems.com` serves the SPA; sign-up, verification,
+> login, profile creation and posting all work against production. The full
+> record is `wiki/CodeContext/Modules/0x00-architecture.md` → "First deploy,
+> 2026-09-29" and "Phase 3, 2026-09-30". The rebuild-and-upload recipe (what
+> `06` and any later frontend change needs) is
+> `wiki/CodeContext/Standards/build-deployment.md` → "Rebuilding the SPA".
 >
-> - **Attempt 1** brought up six stacks and rolled `Fanwire-App` back on the
->   `Migration` function's `reservedConcurrentExecutions: 1` — the account's
->   Lambda concurrency limit is 10, and AWS caps a reservation at the limit
->   minus 100, so no function there could reserve any. Fixed by moving "one
->   migration at a time" into a Postgres advisory lock and asserting the
->   reservation absent.
-> - **Attempt 2** completed everything. `Fanwire-Cdn` in 268s, 645s total,
->   because the six healthy stacks skipped in 0s. `ROLLBACK_COMPLETE` is safe
->   to deploy over — a re-run resumes rather than restarts.
-> - **Phase 2** returned `{"revision": "f4a1c9d2b6e7"}`, matching the head in
->   `alembic/versions`. `GET /api/health` returns `{"status":"ok"}` through
->   CloudFront.
+> **Live outputs:** distribution `E2AXWWXMA8YAE8` ·
+> `d3fb0uyhisvzkz.cloudfront.net` · pool `ca-central-1_eSfPUMRq8` · client
+> `1vskugrl60gggpt0lmib4ka85j`.
 >
-> **Live outputs:** `https://fanwire.daviddems.com` ·
-> distribution `E2AXWWXMA8YAE8` · `d3fb0uyhisvzkz.cloudfront.net`
+> What each phase cost, in short:
 >
-> - **Lambda concurrency raise to 1000: approved by AWS 2026-09-30.** The
->   account-wide ceiling of 10, shared by the API function, four consumers and
->   the authorizer, is gone. It does **not** bring back
->   `reservedConcurrentExecutions` on the migration runner — that stays off for
->   a reason no quota changes; see `0x00-architecture.md`.
+> - **Phase 1** rolled back once on `reservedConcurrentExecutions` (account
+>   concurrency limit 10; since raised to 1000, and the reservation stays off).
+> - **Phase 2** returned `{"revision": "f4a1c9d2b6e7"}`.
+> - **Phase 3** served the SPA first time, then exposed that **the NAT
+>   instance had never forwarded anything**: CDK's default bootstrap was
+>   OOM-killed on the t4g.nano. Every authenticated route returned 500 until
+>   PR #75 replaced the bootstrap and `Fanwire-Network` was redeployed.
 >
-> **Still outstanding:** Phase 3 (below).
+> ### Traps that will catch the next person
 >
-> ### Two things that will catch the next person
->
-> **An empty frontend bucket serves `403 AccessDenied`, not `404`.** Until
-> Phase 3 uploads `dist/`, the site returns an S3 `AccessDenied` XML document.
-> That is correct: the OAC policy grants `s3:GetObject` and deliberately not
-> `s3:ListBucket`, so S3 will not confirm whether a missing key exists.
-> Reaching that XML means DNS, TLS, the certificate and OAC all work.
->
-> **Verify the branch before deploying.** Attempt 2 was first run against
-> unfixed `main`: `git switch <branch>` fails when that branch is checked out
-> in another worktree, and PowerShell's `;` does not stop on error, so
-> `npm ci` and `cdk deploy` carried on and reproduced the original failure
-> exactly. Check `git branch --show-current` *and* the synthesized property
-> you think you fixed, as separate commands, before spending 10 minutes on a
-> deploy. Also write the migration's output outside the repo
-> (`$env:TEMP\migrate-out.json`) so it cannot be committed by accident.
+> - **An empty frontend bucket serves `403 AccessDenied`, not `404`** — the OAC
+>   policy grants `s3:GetObject` and not `s3:ListBucket`. Reaching that XML
+>   means DNS, TLS, the certificate and OAC all work.
+> - **Verify the branch before deploying.** `git switch` fails when the branch
+>   is checked out in another worktree, and PowerShell's `;` carries on. Check
+>   `git branch --show-current` and the property you think you changed, as
+>   separate commands.
+> - **`VITE_MEDIA_BASE_URL` is the site origin, not `/media`.** Public keys
+>   already start with `media/`; a `/media` base produces `/media/media/…`.
+> - **Build the bundle in Docker, never with a bare `npm run build`.**
+>   `frontend/.env.local` holds the *dev* pool and Vite reads it in production
+>   mode too; the Docker build excludes it and fails on any missing value.
+> - **`/api/health` proves nothing past API Gateway.** It touches neither the
+>   database nor egress. A logged-in `/api/users/me` is the first real check.
+> - **The infra tests used to leak ~50 MB per synth into `%TEMP%`** and filled
+>   the disk mid-session (fixed in PR #76). If Docker Desktop hangs with no
+>   output, check free space first.
+> - **`aws … | Select-String` can die with `'charmap' codec can't encode`**
+>   when the output holds a non-ASCII character. Prefix the line with
+>   `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';`.
 
-**Phase 1 — bring up the stacks.** All eight, ~30–45 minutes: VPC, NAT instance,
-RDS, Cognito, queues, five Lambdas, the distribution. There is no frontend-only
-deploy — `CdnStack` needs `AppStack`'s HTTP API id, and `AppStack` depends on
-everything else. Expect the full monthly cost to start here.
+The three phases, for reference — each is now a recipe rather than a plan:
 
-Leave `deployFrontend` unset. The frontend bucket comes up correct and empty.
+**Phase 1 — bring up the stacks.** All eight, ~30–45 minutes. There is no
+frontend-only deploy — `CdnStack` needs `AppStack`'s HTTP API id, and
+`AppStack` depends on everything else. Leave `deployFrontend` unset.
 
-**Phase 2 — apply the schema.** Invoke `INFRA-003`'s migration function once, by
-hand, and confirm it returns a head revision. Until this runs, RDS has no tables
-and every API route 500s.
+**Phase 2 — apply the schema.** Invoke `INFRA-003`'s migration function once,
+by hand, and confirm it returns a head revision. Re-run it after any deploy
+that adds a migration.
 
-**Phase 3 — build the bundle against the real outputs, then deploy it.** Read
-`UserPoolId`, `UserPoolClientId`, `CognitoRegion` and `ApiBaseUrl` from the
-stack outputs, write them into the frontend build, build, then redeploy
-`Fanwire-Cdn` with `-c deployFrontend=true`. `INFRA-002`'s `BucketDeployment`
-uploads `frontend/dist` and invalidates `/*` — without that invalidation
-CloudFront keeps serving the previous `index.html` and the deploy looks like it
-did nothing.
+**Phase 3 — build the bundle against the real outputs, then deploy it.** See
+`wiki/CodeContext/Standards/build-deployment.md` → "Rebuilding the SPA" for the
+exact commands.
 
 ### Then, and only then
 

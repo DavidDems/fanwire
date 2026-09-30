@@ -191,10 +191,11 @@ forever, which is correct behaviour and not a bug.
 
 ---
 
-## 2. After the first deploy — not available yet
+## 2. After the first deploy — actionable now (deployed 2026-09-30)
 
-None of this can be done before the resources exist. It is here because each one
-silently does nothing until someone does it.
+The stacks exist as of 2026-09-30 (`TODO/04-first-deploy.md` §4), so every item
+here can be done. It is here because each one silently does nothing until
+someone does it. `wiki/GeneralContext/Prompts/05-post-deploy.md` works it.
 
 - [ ] **GuardDuty Malware Protection for S3** on the quarantine bucket. A
       separate feature from GuardDuty core, and what `media/` actually depends
@@ -204,8 +205,12 @@ silently does nothing until someone does it.
       production access — a new SES account is sandboxed and can only send to
       verified addresses. Until then `NOTIFICATION_FROM_ADDRESS` stays unset and
       email notification is a deliberate no-op.
-- [ ] **Confirm the ACM certificate validated** and the aliases resolve:
-      `nslookup fanwire.daviddems.com` should return CloudFront addresses.
+- [x] **Confirm the ACM certificate validated** and the aliases resolve.
+      Evidenced 2026-09-30: `https://fanwire.daviddems.com` serves the SPA over
+      TLS from distribution `E2AXWWXMA8YAE8`, which needs both.
+- [ ] **Revisit the incident runbook.** It was written pre-CDK and names no
+      real resources; `wiki/GeneralContext/Architecture/incident-runbook.md`
+      says what the revisit must add, and the stacks now exist to name.
 - [ ] **Re-run the IAM gate against reality.** `iam-policy.test.ts` reads
       synthesized templates; a deploy is the first time AWS itself evaluates
       them. Expect the GuardDuty bucket-policy interaction to differ from the

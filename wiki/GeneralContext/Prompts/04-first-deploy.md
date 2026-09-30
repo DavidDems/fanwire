@@ -1,5 +1,10 @@
 # 04 — The first deploy
 
+> **Completed 2026-09-30.** The site is live; `TODO/04-first-deploy.md` §4 has
+> the outcome and its traps. Do not re-run this prompt. To ship a frontend
+> change, follow `wiki/CodeContext/Standards/build-deployment.md` →
+> "Rebuilding the SPA"; for everything after the deploy, run `05`.
+
 **Objective:** get `https://fanwire.daviddems.com` serving the SPA. **The human
 runs every AWS command; you never run `cdk deploy`.** You prepare each phase,
 hand over one-line PowerShell, read the output back and say what it means.

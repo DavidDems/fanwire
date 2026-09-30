@@ -16,3 +16,16 @@ do it there.
 
 Same split as `03`: the human runs AWS, one line of PowerShell at a time, and
 you verify. Fixes to repo code go through the ordinary loop.
+
+**State you inherit (2026-09-30):** all eight stacks are live and egress works
+— the NAT instance's bootstrap was replaced in PR #75 after the default one
+was OOM-killed, which had silently broken every call to Cognito, EventBridge,
+Secrets Manager and SES. The ACM/aliases item is already evidenced. Read
+`TODO/04-first-deploy.md` §4 "Traps" before handing over any command; the
+`charmap` one bites any `aws … | Select-String` line.
+
+**Prove things with a route that exercises them.** Twice in the first deploy a
+green check proved less than it seemed: `/api/health` touches neither the
+database nor egress, and a clean synth says nothing about what happens at
+boot. For each checklist item, name the observable that would fail if it were
+not done, and check that.

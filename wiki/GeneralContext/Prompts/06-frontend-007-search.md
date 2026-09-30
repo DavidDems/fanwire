@@ -2,8 +2,8 @@
 
 **Objective:** the last frontend unit. **Not needed for the first deploy** —
 `/search` already renders a placeholder and the site ships without it. Run it
-whenever you like; afterwards, redo phase 3 of `04` to rebuild and re-upload
-the bundle.
+whenever you like; afterwards, rebuild and re-upload the bundle with
+`wiki/CodeContext/Standards/build-deployment.md` → "Rebuilding the SPA".
 
 **Read:** `00-session-protocol.md`, then `.ai/tasks/FRONTEND-007/` with the
 contracts it names in `required_context` — start at
