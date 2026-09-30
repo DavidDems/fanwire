@@ -45,6 +45,44 @@ build rather than shipping quietly.
 **Reserved concurrency 1**, because two concurrent `alembic upgrade head` runs
 against one database is a lock fight at best.
 
+> **Superseded 2026-09-30 — this was wrong, and the first real deploy proved
+> it.** `cdk deploy` took `Fanwire-App` to `ROLLBACK_COMPLETE` on this one
+> property:
+>
+> ```
+> CREATE_FAILED AWS::Lambda::Function Migration
+> "Resource of type 'AWS::Lambda::Function' ... is not updatable with
+>  parameters provided." (HandlerErrorCode: NotUpdatable)
+> ```
+>
+> AWS caps a reservation at the account's concurrency limit minus 100 (the
+> mandatory unreserved floor). `lambda get-account-settings` reported
+> `ConcurrentExecutions: 10` — the new-account default — so `10 - 100` is
+> negative and **no** function in that account could reserve any concurrency
+> at all. CloudFormation's message named neither concurrency nor quotas.
+>
+> "One migration at a time" is now a **Postgres session-level advisory lock**
+> in `app.migrate`, and the reservation is asserted *absent*. That is the
+> better design regardless of the quota, for two reasons:
+>
+> 1. A reservation couples the template to an account-level quota, so the same
+>    stack is undeployable in any account or region under 101 — a fresh
+>    sandbox, a new region, a reviewer's own account.
+> 2. It only ever constrained this one Lambda. `alembic upgrade head` also runs
+>    from `docker/backend.Dockerfile`'s `dev` CMD and from any shell holding a
+>    `DATABASE_URL`. The lock binds every caller.
+>
+> **The lesson for the pipeline, which is bigger than this task:** 164 infra
+> tests and a green `cdk synth` prove the template is *well-formed*, not that
+> the account will *accept* it. A synth-only gate cannot see account quotas,
+> service limits or regional availability. Any acceptance criterion naming a
+> concrete numeric AWS property is a candidate for this class of failure, and
+> only a real deploy finds it.
+>
+> A mocked test has the same blind spot, and that showed up immediately:
+> mutation-testing the replacement lock with one that acquires nothing left
+> **all 11 mocked tests green** — only the `testcontainers` test caught it.
+
 ## Networking
 
 RDS is in the data subnets and reachable only from the Lambda security group.

@@ -16,6 +16,9 @@ const HANDLERS = {
   ingestion: 'app.events.lambda_handler.handler',
   media: 'app.media.lambda_handler.handler',
   notifications: 'app.notifications.lambda_handler.handler',
+  // INFRA-003: the migration runner is a fifth command override on the same
+  // image, not a fifth image. See `App stack: migration runner` below.
+  migration: 'app.migrate.handler',
 } as const;
 
 function fn(kind: keyof typeof HANDLERS): [string, CfnResource] {
@@ -76,8 +79,8 @@ describe('App stack: one shared Lambda image', () => {
     for (const banned of ['node_modules', '.git', '__pycache__', '.venv', 'cdk.out']) expect(names).not.toContain(banned);
   });
 
-  test('four image functions share one image URI; each overrides only its command', () => {
-    expect(imageFunctions()).toHaveLength(4);
+  test('five image functions share one image URI; each overrides only its command', () => {
+    expect(imageFunctions()).toHaveLength(5);
     const uris = new Set(imageFunctions().map(([, f]) => JSON.stringify((f.Properties?.Code as { ImageUri: unknown }).ImageUri)));
     expect(uris.size).toBe(1);
     for (const kind of Object.keys(HANDLERS) as (keyof typeof HANDLERS)[]) expect(fn(kind)).toBeDefined();
@@ -101,7 +104,7 @@ describe('App stack: functions', () => {
     tpl().resourceCountIs('Custom::LogRetention', 0);
   });
 
-  test('the four backend functions run in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
+  test('every backend function runs in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
     for (const [, f] of imageFunctions()) {
       const vpc = f.Properties?.VpcConfig as { SubnetIds: unknown[]; SecurityGroupIds: unknown[] };
       expect(vpc.SubnetIds).toHaveLength(2);
@@ -237,6 +240,162 @@ describe('App stack: triggers', () => {
     const targets = esms.map((e) => (e.Properties?.FunctionName as { Ref: string }).Ref).sort();
     expect(targets).toEqual([fn('ingestion')[0], fn('media')[0], fn('notifications')[0]].sort());
     for (const e of esms) expect(e.Properties?.FunctionResponseTypes).toEqual(['ReportBatchItemFailures']);
+  });
+});
+
+/**
+ * INFRA-003: the on-demand migration runner.
+ *
+ * Two things are load-bearing and easy to get wrong, so they are asserted
+ * rather than described:
+ *
+ *  1. It is the SAME image as the api function with a different `cmd`. A
+ *     second `DockerImageAsset` is the easy wrong answer -- it doubles the
+ *     build, the ECR footprint and the ways the migration code can differ
+ *     from the code it migrates for.
+ *  2. NOTHING invokes it. Not a rule, not a schedule, not a CloudFormation
+ *     custom resource. DDL inside a stack update makes every deploy a schema
+ *     change, makes rollback ambiguous, and puts `alembic upgrade head`
+ *     inside CloudFormation's timeout semantics. A human runs it once, after
+ *     `cdk deploy`. The sweep below is written so that a later "improvement"
+ *     wiring it to a trigger fails the build instead of shipping quietly.
+ */
+describe('App stack: migration runner', () => {
+  /** Resource types that can cause a Lambda to be invoked without a human. */
+  const INVOKER_TYPES = [
+    'AWS::Events::Rule',
+    'AWS::Events::Target',
+    'AWS::Lambda::EventSourceMapping',
+    'AWS::Scheduler::Schedule',
+    'AWS::Lambda::Permission',
+  ];
+  const isInvoker = (type: string) =>
+    INVOKER_TYPES.includes(type) ||
+    type.startsWith('Custom::') ||
+    type === 'AWS::CloudFormation::CustomResource';
+
+  /**
+   * Every way a template can name a function declared in the app stack: a
+   * same-stack `Ref`/`Fn::GetAtt` quotes the logical id, and a cross-stack
+   * reference goes through an auto-generated export whose name embeds it.
+   */
+  const namesFunction = (resource: CfnResource, logicalId: string) => {
+    const s = JSON.stringify(resource);
+    return (
+      s.includes(`"${logicalId}"`) ||
+      s.includes(`ExportsOutputFnGetAtt${logicalId}`) ||
+      s.includes(`ExportsOutputRef${logicalId}`)
+    );
+  };
+
+  /** Every automatic invoker of `logicalId`, across every stack in the assembly. */
+  const invokersOf = (logicalId: string): string[] => {
+    const s = synth();
+    const hits: string[] = [];
+    for (const stack of s.stackNames()) {
+      for (const [id, r] of Object.entries(s.json(stack).Resources ?? {})) {
+        if (isInvoker(r.Type) && namesFunction(r, logicalId)) hits.push(`${stack}/${id} (${r.Type})`);
+      }
+    }
+    return hits;
+  };
+
+  const uriOf = (f: CfnResource) => JSON.stringify((f.Properties?.Code as { ImageUri: unknown }).ImageUri);
+
+  test('runs the api function\'s image, byte for byte -- no second image asset', () => {
+    const [, migration] = fn('migration');
+    const [, api] = fn('api');
+
+    expect(uriOf(migration)).toBe(uriOf(api));
+    // and nothing else in the app stack introduced a second one either
+    expect(new Set(imageFunctions().map(([, f]) => uriOf(f))).size).toBe(1);
+    // asset-manifest level: one docker image in the whole assembly, still
+    const images = synth()
+      .assembly.artifacts.filter((a): a is cxapi.AssetManifestArtifact => a instanceof cxapi.AssetManifestArtifact)
+      .flatMap((a) => Object.keys(a.contents.dockerImages ?? {}));
+    expect(new Set(images).size).toBe(1);
+  });
+
+  test('overrides the command to the migration handler, not app.main.handler', () => {
+    const [, migration] = fn('migration');
+    expect(migration.Properties?.PackageType).toBe('Image');
+    expect((migration.Properties?.ImageConfig as { Command: string[] }).Command).toEqual([
+      'app.migrate.handler',
+    ]);
+    expect(JSON.stringify(migration.Properties?.ImageConfig)).not.toContain(HANDLERS.api);
+  });
+
+  test('nothing in any stack invokes it: no rule, mapping, schedule, permission or custom resource', () => {
+    // Positive control FIRST: a negative sweep that cannot see a real invoker
+    // proves nothing, so prove it can before trusting the empty result below.
+    // Ingestion is invoked by a schedule and an event source mapping.
+    const ingestionInvokers = invokersOf(fn('ingestion')[0]);
+    expect(ingestionInvokers.join('\n')).toContain('AWS::Scheduler::Schedule');
+    expect(ingestionInvokers.join('\n')).toContain('AWS::Lambda::EventSourceMapping');
+    // ...and that it does not match a function that simply is not there
+    expect(invokersOf('NoSuchFunctionLogicalId')).toEqual([]);
+
+    expect(invokersOf(fn('migration')[0])).toEqual([]);
+    // Belt and braces: the app stack has no custom resource at all, so no
+    // deploy-time DDL can hide in one.
+    expect(Object.values(raw().Resources ?? {}).filter((r) => r.Type.startsWith('Custom::'))).toEqual([]);
+  });
+
+  test('same VPC, app subnets and Lambda security group as the api function (so it can reach RDS)', () => {
+    const [, migration] = fn('migration');
+    const [, api] = fn('api');
+
+    expect(migration.Properties?.VpcConfig).toBeDefined();
+    // equality with the api function, not a hardcoded subnet list: the point
+    // is "wherever the api function is", which is where RDS lets it connect from
+    expect(migration.Properties?.VpcConfig).toEqual(api.Properties?.VpcConfig);
+  });
+
+  test('timeout of at least 300s', () => {
+    const [, migration] = fn('migration');
+
+    expect(typeof migration.Properties?.Timeout).toBe('number');
+    expect(migration.Properties?.Timeout as number).toBeGreaterThanOrEqual(300);
+  });
+
+  /**
+   * This asserted `ReservedConcurrentExecutions === 1` until 2026-09-30, when
+   * the first real `cdk deploy` failed on it and took the whole App stack to
+   * ROLLBACK_COMPLETE:
+   *
+   *   CREATE_FAILED AWS::Lambda::Function Migration
+   *   "Resource of type 'AWS::Lambda::Function' ... is not updatable with
+   *    parameters provided." (HandlerErrorCode: NotUpdatable)
+   *
+   * AWS caps reservable concurrency at the account's limit minus 100 (the
+   * mandatory unreserved floor). The workload account's limit was the
+   * new-account default of 10, so `10 - 100` is negative and **no** function
+   * there could reserve any concurrency at all. CloudFormation surfaced that
+   * as an unrelated-looking `NotUpdatable`.
+   *
+   * It is now asserted absent, deliberately rather than merely dropped. Two
+   * reasons, and the second outlives the quota:
+   *
+   *   1. A reservation couples this stack to an account-level quota, so the
+   *      same template is undeployable in any account or region under 101 --
+   *      a fresh sandbox, a new region, a reviewer's own account.
+   *   2. It was always the weaker guarantee. It constrained only this Lambda,
+   *      while `alembic upgrade head` also runs from the `dev` image's CMD and
+   *      from any laptop holding a DATABASE_URL. The real guarantee now lives
+   *      in Postgres: `app.migrate` takes a session-level advisory lock, which
+   *      binds every caller. See `backend/tests/test_migrate.py`.
+   *
+   * Re-adding a reservation should therefore fail the build and make someone
+   * read this first, which is what the assertion below is for.
+   */
+  test('no reserved concurrency: the lock lives in Postgres, not in a quota', () => {
+    const [, migration] = fn('migration');
+
+    expect(migration.Properties?.ReservedConcurrentExecutions).toBeUndefined();
+    // ...and no other function quietly acquired one either.
+    for (const [, f] of imageFunctions()) {
+      expect(f.Properties?.ReservedConcurrentExecutions).toBeUndefined();
+    }
   });
 });
 

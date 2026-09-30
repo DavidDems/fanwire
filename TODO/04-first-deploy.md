@@ -97,14 +97,19 @@ FRONTEND-002  auth: AuthService, Cognito, route guard, profile creation
                           ├── FRONTEND-006  notifications
                           └── FRONTEND-007  search (two separate UIs)
 
-INFRA-002   BucketDeployment behind the deployFrontend flag   ─┐ independent
-INFRA-003   migration runner (needs the Dockerfile prereq)     ┘ of all of the above
+INFRA-002   BucketDeployment behind the deployFrontend flag   ─┐ DONE 2026-09-29
+INFRA-003   migration runner                                  ┘ (PRs #72, #73)
 MEDIA-002   dev-only media processing script — optional, not on the deploy path
 ```
 
-`INFRA-002` and `INFRA-003` can run at any point and are not on the frontend's
-critical path. `MEDIA-002` is not needed to deploy; it is needed to click
-through a media upload locally.
+**`INFRA-002` and `INFRA-003` are both merged** (2026-09-29). The two mechanisms
+§4 depends on therefore exist: `cdk deploy -c deployFrontend=true` uploads
+`frontend/dist` and invalidates `/*`, and the `Migration` function applies the
+schema when a human invokes it. Nothing in §4 changes — it was written
+anticipating both — but its phases are now executable rather than prospective.
+
+`MEDIA-002` is not needed to deploy; it is needed to click through a media
+upload locally.
 
 **Nothing here merges itself.** Every branch reaches `main` through a
 human-approved PR, and a PR opened by the workflow arrives with no checks until
@@ -128,8 +133,56 @@ the bundle.
 There is no way around this ordering short of a runtime-fetched config file,
 which was not chosen. It is a property of the design, not an oversight.
 
+> ## ✅ Phases 1 and 2 are done, 2026-09-30
+>
+> **All eight stacks are `CREATE_COMPLETE`**, and the schema is applied. The
+> full record, including what the deploy proved that synth could not, is
+> `wiki/CodeContext/Modules/0x00-architecture.md` → "First deploy, 2026-09-29".
+> In short:
+>
+> - **Attempt 1** brought up six stacks and rolled `Fanwire-App` back on the
+>   `Migration` function's `reservedConcurrentExecutions: 1` — the account's
+>   Lambda concurrency limit is 10, and AWS caps a reservation at the limit
+>   minus 100, so no function there could reserve any. Fixed by moving "one
+>   migration at a time" into a Postgres advisory lock and asserting the
+>   reservation absent.
+> - **Attempt 2** completed everything. `Fanwire-Cdn` in 268s, 645s total,
+>   because the six healthy stacks skipped in 0s. `ROLLBACK_COMPLETE` is safe
+>   to deploy over — a re-run resumes rather than restarts.
+> - **Phase 2** returned `{"revision": "f4a1c9d2b6e7"}`, matching the head in
+>   `alembic/versions`. `GET /api/health` returns `{"status":"ok"}` through
+>   CloudFront.
+>
+> **Live outputs:** `https://fanwire.daviddems.com` ·
+> distribution `E2AXWWXMA8YAE8` · `d3fb0uyhisvzkz.cloudfront.net`
+>
+> - **Lambda concurrency raise to 1000: approved by AWS 2026-09-30.** The
+>   account-wide ceiling of 10, shared by the API function, four consumers and
+>   the authorizer, is gone. It does **not** bring back
+>   `reservedConcurrentExecutions` on the migration runner — that stays off for
+>   a reason no quota changes; see `0x00-architecture.md`.
+>
+> **Still outstanding:** Phase 3 (below).
+>
+> ### Two things that will catch the next person
+>
+> **An empty frontend bucket serves `403 AccessDenied`, not `404`.** Until
+> Phase 3 uploads `dist/`, the site returns an S3 `AccessDenied` XML document.
+> That is correct: the OAC policy grants `s3:GetObject` and deliberately not
+> `s3:ListBucket`, so S3 will not confirm whether a missing key exists.
+> Reaching that XML means DNS, TLS, the certificate and OAC all work.
+>
+> **Verify the branch before deploying.** Attempt 2 was first run against
+> unfixed `main`: `git switch <branch>` fails when that branch is checked out
+> in another worktree, and PowerShell's `;` does not stop on error, so
+> `npm ci` and `cdk deploy` carried on and reproduced the original failure
+> exactly. Check `git branch --show-current` *and* the synthesized property
+> you think you fixed, as separate commands, before spending 10 minutes on a
+> deploy. Also write the migration's output outside the repo
+> (`$env:TEMP\migrate-out.json`) so it cannot be committed by accident.
+
 **Phase 1 — bring up the stacks.** All eight, ~30–45 minutes: VPC, NAT instance,
-RDS, Cognito, queues, four Lambdas, the distribution. There is no frontend-only
+RDS, Cognito, queues, five Lambdas, the distribution. There is no frontend-only
 deploy — `CdnStack` needs `AppStack`'s HTTP API id, and `AppStack` depends on
 everything else. Expect the full monthly cost to start here.
 
