@@ -31,6 +31,20 @@ export interface CfnResource {
 const cache = new Map<string, Synthesized>();
 
 /**
+ * Every synth copies the backend image context and the awscli layer into its
+ * outdir (~50 MB with `deployFrontend`), so outdirs left in the OS temp dir
+ * fill the disk within a few dozen runs -- 612 of them hit ENOSPC on
+ * 2026-09-30. Removed after each test file: jest gives every file its own
+ * module registry (so its own `cache`), and kills workers without firing
+ * `process.on('exit')`.
+ */
+const outdirs: string[] = [];
+afterAll(() => {
+  for (const dir of outdirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  cache.clear();
+});
+
+/**
  * Synthesizes the whole app with cdk.json's context plus `overrides`.
  * Cached per override set — synthesis stages the Lambda image context, so
  * doing it once per mode keeps the suite quick.
@@ -41,6 +55,7 @@ export function synthFanwire(overrides: Record<string, unknown> = {}): Synthesiz
   if (hit) return hit;
 
   const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'fanwire-cdk-test-'));
+  outdirs.push(outdir);
   const app = new cdk.App({ outdir, context: { ...cdkJsonContext(), ...overrides } });
   buildFanwire(app);
   const assembly = app.synth();
