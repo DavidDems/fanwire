@@ -35,8 +35,10 @@ export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
- * four functions, the HTTP API in front of the API function, and every
+ * five functions, the HTTP API in front of the API function, and every
  * trigger (Scheduler, SQS event source mappings, async-failure destination).
+ * The fifth function -- the migration runner -- is deliberately the target of
+ * no trigger at all; see `migrationRunner()` below.
  * Every function has its own role with explicit, enumerated statements --
  * no grant*() helpers, no managed policies (see test/iam-policy.test.ts).
  */
@@ -253,6 +255,9 @@ export class AppStack extends cdk.Stack {
     });
     this.sqsTrigger('NotificationTrigger', notifications, messaging.notificationQueue, 10);
 
+    // --- schema migrations, on demand only
+    this.migrationRunner(image, keyRef, common);
+
     // --- HTTP API, reachable only with CloudFront's origin-verify header.
     const authorizerFn = this.originVerifyAuthorizer(data);
     const accessLogs = new logs.LogGroup(this, 'HttpApiAccessLogs', {
@@ -285,7 +290,50 @@ export class AppStack extends cdk.Stack {
     });
   }
 
-  /** One of the four functions running the shared image, with its own role and log group. */
+  /**
+   * The on-demand schema migration runner (`app.migrate.handler`).
+   *
+   * The same `DockerImageAsset` as the other four functions with a different
+   * `cmd` override -- the `lambda` stage copies `alembic/` and `alembic.ini`,
+   * so the code that migrates the schema is byte-for-byte the code that runs
+   * against it. A second image would double the build, the ECR footprint and
+   * the ways the two could drift apart.
+   *
+   * **Nothing invokes this.** No rule, no schedule, no event source mapping,
+   * no CloudFormation custom resource: a human invokes it once after
+   * `cdk deploy`, before the API is expected to work. DDL inside a stack
+   * update would make every deploy a schema change, make rollback ambiguous
+   * and put `alembic upgrade head` inside CloudFormation's timeout and
+   * failure semantics. `test/app-stack.test.ts` sweeps every stack for an
+   * invoker so that a later "improvement" wiring one up fails the build.
+   *
+   * Reserved concurrency 1: two concurrent `alembic upgrade head` runs
+   * against one database is a lock fight at best. No extra statements beyond
+   * what `backendFunction` already gives every function -- it needs its log
+   * group, the ENI actions for the VPC, and `kms:Decrypt` for its encrypted
+   * environment, and nothing else: DATABASE_URL is a CloudFormation dynamic
+   * reference resolved at deploy time, not a Secrets Manager call at runtime.
+   */
+  private migrationRunner(
+    image: ecrAssets.DockerImageAsset,
+    keyRef: kms.IKey,
+    environment: Record<string, string>,
+  ): void {
+    this.backendFunction('Migration', {
+      command: 'app.migrate.handler',
+      // Well clear of the longest plausible `alembic upgrade head` on a cold
+      // database, and it is invoked by hand so nothing is waiting on it.
+      timeout: cdk.Duration.minutes(10),
+      memorySize: 512,
+      reservedConcurrentExecutions: 1,
+      image,
+      keyRef,
+      environment,
+      statements: [],
+    });
+  }
+
+  /** One of the five functions running the shared image, with its own role and log group. */
   private backendFunction(
     id: string,
     opts: {
@@ -296,6 +344,12 @@ export class AppStack extends cdk.Stack {
       keyRef: kms.IKey;
       environment: Record<string, string>;
       statements: iam.PolicyStatement[];
+      /**
+       * Cap on simultaneous executions. Only the migration runner sets it
+       * (to 1); left undefined, the function draws on the account's
+       * unreserved pool as before.
+       */
+      reservedConcurrentExecutions?: number;
     },
   ): lambda.Function {
     const { network } = this.props;
@@ -343,6 +397,7 @@ export class AppStack extends cdk.Stack {
       logGroup,
       timeout: opts.timeout,
       memorySize: opts.memorySize,
+      reservedConcurrentExecutions: opts.reservedConcurrentExecutions,
       environment: opts.environment,
       environmentEncryption: opts.keyRef,
       vpc: network.vpc,
