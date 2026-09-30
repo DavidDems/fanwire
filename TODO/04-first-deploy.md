@@ -133,6 +133,18 @@ the bundle.
 There is no way around this ordering short of a runtime-fetched config file,
 which was not chosen. It is a property of the design, not an oversight.
 
+> **Attempt 1, 2026-09-29: Phase 1 partially succeeded.** Six stacks are up
+> (`Network`, `Data`, `Auth`, `Storage`, `Messaging`, and `Edge` in us-east-1).
+> `Fanwire-App` rolled back on the `Migration` function's
+> `reservedConcurrentExecutions: 1` — the account's Lambda concurrency limit is
+> 10 and AWS caps a reservation at the limit minus 100. `Fanwire-Cdn` was never
+> reached. Fixed by moving the guarantee to a Postgres advisory lock and
+> asserting the reservation absent; see
+> `wiki/CodeContext/Modules/0x00-architecture.md` → "First deploy, 2026-09-29".
+> **`ROLLBACK_COMPLETE` is safe to deploy over**, so re-running Phase 1 resumes
+> rather than restarts. A concurrency raise to 1000 is also requested, and is
+> needed regardless: 10 is a ceiling on the whole app.
+
 **Phase 1 — bring up the stacks.** All eight, ~30–45 minutes: VPC, NAT instance,
 RDS, Cognito, queues, five Lambdas, the distribution. There is no frontend-only
 deploy — `CdnStack` needs `AppStack`'s HTTP API id, and `AppStack` depends on

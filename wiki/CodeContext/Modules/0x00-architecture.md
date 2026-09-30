@@ -118,7 +118,27 @@ Grants are never used. `grant*()` emits wildcard actions such as `kms:GenerateDa
   - **Nothing invokes it**, deliberately: no EventBridge rule, no schedule, no event source mapping, no CloudFormation custom resource. DDL inside a stack update makes every deploy a schema change, makes rollback ambiguous, and puts `alembic upgrade head` inside CloudFormation's timeout and failure semantics. The cost of the manual step is one documented command; the cost of the automatic one is a class of outage. `infra/test/app-stack.test.ts` sweeps every stack for an invoker so a later "improvement" fails the build rather than shipping quietly.
   - **The deploy order is therefore `cdk deploy` → invoke `Migration` once → the API works.** Until it is invoked, RDS has no tables and the other four Lambdas fail against it.
   - On failure the handler raises, so the invocation is recorded as failed rather than green. It never emits `DATABASE_URL`: the exception is raised `from None` — Lambda renders the whole `__cause__` chain to CloudWatch, and SQLAlchemy/psycopg put the connect string in their messages — carrying a redacted rendering of the original error instead, so the error type, host and database survive and the credential does not.
+  - **Only one migration at a time is a Postgres session-level advisory lock** (`pg_try_advisory_lock`, `app.migrate.MIGRATION_LOCK_KEY`), taken before any DDL and held for the whole upgrade. It is *not* `reservedConcurrentExecutions` on the Lambda — that is asserted **absent**, and `infra/test/app-stack.test.ts` fails the build if it comes back. Two reasons: a reservation couples the template to an account-level quota (see the deploy note below), and it only ever constrained that one Lambda, while `alembic upgrade head` also runs from the `dev` image's `CMD` and from any shell holding a `DATABASE_URL`. The lock binds every caller. `try_` rather than the blocking form, so a second migration fails fast with `MigrationLockUnavailable` instead of sitting in a timeout.
 - **`backend/alembic/env.py:25` passes `database_url` to `set_main_option` unescaped**, so a password containing `%` raises `ValueError` with the whole URL in the message. Found while building `INFRA-003`, which fixes it for its own path (`app.migrate._escape_for_configparser`); `env.py` was outside that task's allowed paths and is unchanged. Inside the migration handler this is a crash and **not** a leak, because `env.py` is imported within `alembic.command.upgrade` and therefore inside the handler's redaction. Outside it — `docker compose exec backend-dev alembic upgrade head`, and the `dev` stage's `CMD` — there is no redaction, so a `%` password would put a plaintext credential in the container log. The RDS-generated password currently excludes `%` (`GenerateSecretString.ExcludeCharacters`), so this is latent rather than live; a hand-rotated password is not bound by that.
+- **The account's Lambda concurrency limit is the new-account default of 10**, and that is a ceiling on the whole app, not a detail. The API function, four consumers and the origin-verify authorizer all draw from those 10 concurrent executions. A raise to 1000 was requested 2026-09-29; until it is granted, expect throttling under any real load. Measured with `aws lambda get-account-settings`: `ConcurrentExecutions: 10`, `UnreservedConcurrentExecutions: 10`.
+  - It also made `reservedConcurrentExecutions` unusable anywhere in this account. AWS caps a reservation at the limit minus 100 (the mandatory unreserved floor), so `10 - 100` is negative and no function could reserve anything. That is what rolled the first deploy back, and why "one migration at a time" moved into Postgres.
+
+### First deploy, 2026-09-29 — what actually happened
+Recorded because it is the only evidence that any of the above is real, and because the failure is a class, not an incident.
+
+Six of eight stacks reached `CREATE_COMPLETE` on the first attempt: `Fanwire-Network`, `Data`, `Auth`, `Storage`, `Messaging` in `ca-central-1` and `Fanwire-Edge` in `us-east-1`. `Fanwire-App` went to `ROLLBACK_COMPLETE` and `Fanwire-Cdn` was never attempted.
+
+The single failing resource was the `Migration` function, on `reservedConcurrentExecutions: 1`:
+
+```
+CREATE_FAILED AWS::Lambda::Function Migration
+"Resource of type 'AWS::Lambda::Function' with identifier 'MigrationC13A4580'
+ is not updatable with parameters provided." (HandlerErrorCode: NotUpdatable)
+```
+
+Everything else in the stack reported `Resource creation cancelled` — CloudFormation aborting siblings, not independent failures. Note what the message does *not* say: it names neither concurrency nor a quota, and `NotUpdatable` on a `CREATE` is actively misleading. The diagnosis came from `get-account-settings`, not from the error.
+
+**The lesson, which generalizes past this bug:** 164 infra tests and a green `cdk synth` prove the template is *well-formed*, not that the account will *accept* it. A synth-only gate cannot see account quotas, service limits or regional availability, so every acceptance criterion naming a concrete numeric AWS property carries this risk. The same blind spot exists one level down in the test suite: mutation-testing the replacement advisory lock with one that acquires nothing left all 11 *mocked* tests green, and only the `testcontainers` test caught it.
 
 ## Security posture (account/project-level)
 Per-entity security requirements live in each module's own file. Project-wide items that don't belong to any one module, per [[wiki/CodeContext/Standards/security|Security]]:
