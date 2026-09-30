@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { Match } from 'aws-cdk-lib/assertions';
 import { STACK_NAMES, resourcesOfType, synthFanwire, CfnResource } from './helpers';
 
@@ -53,6 +54,60 @@ describe('Network stack', () => {
       expect(instance?.Properties?.KeyName).toBeUndefined();
       tpl().hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: Match.objectLike({ MetadataOptions: Match.objectLike({ HttpTokens: 'required' }) }),
+      });
+    });
+
+    /**
+     * The first deploy (2026-09-30) booted a NAT instance that forwarded
+     * nothing: CDK's default user data runs `yum install iptables-services`,
+     * which the OOM killer ended on the 512 MB t4g.nano, so no MASQUERADE rule
+     * was ever written and every in-VPC call to the internet failed
+     * (Cognito JWKS -> Errno 99 on every authenticated route).
+     */
+    describe('bootstrap user data', () => {
+      const natInstance = () => {
+        const [entry] = Object.entries(resourcesOfType(raw(), 'AWS::EC2::Instance'));
+        if (!entry) throw new Error('no NAT instance');
+        return entry;
+      };
+      const script = () => {
+        const userData = natInstance()[1].Properties?.UserData as { 'Fn::Base64'?: unknown };
+        const body = userData?.['Fn::Base64'];
+        if (typeof body !== 'string') throw new Error(`user data is not a literal script: ${JSON.stringify(userData)}`);
+        return body;
+      };
+
+      test('stops at the first failing command, and echoes each one to the console log', () => {
+        expect(script()).toMatch(/^#!\/bin\/bash\nset -euxo pipefail\n/);
+      });
+
+      test('enables swap before the package install, so dnf is not OOM-killed on 512 MB', () => {
+        const s = script();
+        const swapOn = s.indexOf('swapon /swapfile');
+        const install = s.search(/\bdnf install\b/);
+        expect(swapOn).toBeGreaterThan(-1);
+        expect(install).toBeGreaterThan(swapOn);
+        expect(s).not.toMatch(/\byum\b/);
+      });
+
+      test('finds the egress interface with `ip route` (AL2023 has no `route`), and refuses an empty one', () => {
+        const s = script();
+        expect(s).not.toMatch(/\$\(route\b/);
+        expect(s).toMatch(/ip route show default/);
+        expect(s).toMatch(/iptables -t nat -A POSTROUTING -o "\$\w+" -j MASQUERADE/);
+        expect(s).toMatch(/\[ -n "\$\w+" \]/);
+      });
+
+      test('persists forwarding and the NAT rule across a reboot', () => {
+        const s = script();
+        expect(s).toContain('net.ipv4.ip_forward=1');
+        expect(s).toMatch(/systemctl enable --now iptables/);
+        expect(s).toMatch(/service iptables save/);
+      });
+
+      test('a changed script replaces the instance: cloud-init runs user data only on first boot', () => {
+        const hash = crypto.createHash('sha256').update(script()).digest('hex').slice(0, 16);
+        expect(natInstance()[0]).toMatch(new RegExp(`${hash}$`));
       });
     });
 
