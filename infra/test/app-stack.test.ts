@@ -351,12 +351,51 @@ describe('App stack: migration runner', () => {
     expect(migration.Properties?.VpcConfig).toEqual(api.Properties?.VpcConfig);
   });
 
-  test('timeout of at least 300s, and reserved concurrency 1 (two upgrades at once is a lock fight)', () => {
+  test('timeout of at least 300s', () => {
     const [, migration] = fn('migration');
 
     expect(typeof migration.Properties?.Timeout).toBe('number');
     expect(migration.Properties?.Timeout as number).toBeGreaterThanOrEqual(300);
-    expect(migration.Properties?.ReservedConcurrentExecutions).toBe(1);
+  });
+
+  /**
+   * This asserted `ReservedConcurrentExecutions === 1` until 2026-09-30, when
+   * the first real `cdk deploy` failed on it and took the whole App stack to
+   * ROLLBACK_COMPLETE:
+   *
+   *   CREATE_FAILED AWS::Lambda::Function Migration
+   *   "Resource of type 'AWS::Lambda::Function' ... is not updatable with
+   *    parameters provided." (HandlerErrorCode: NotUpdatable)
+   *
+   * AWS caps reservable concurrency at the account's limit minus 100 (the
+   * mandatory unreserved floor). The workload account's limit was the
+   * new-account default of 10, so `10 - 100` is negative and **no** function
+   * there could reserve any concurrency at all. CloudFormation surfaced that
+   * as an unrelated-looking `NotUpdatable`.
+   *
+   * It is now asserted absent, deliberately rather than merely dropped. Two
+   * reasons, and the second outlives the quota:
+   *
+   *   1. A reservation couples this stack to an account-level quota, so the
+   *      same template is undeployable in any account or region under 101 --
+   *      a fresh sandbox, a new region, a reviewer's own account.
+   *   2. It was always the weaker guarantee. It constrained only this Lambda,
+   *      while `alembic upgrade head` also runs from the `dev` image's CMD and
+   *      from any laptop holding a DATABASE_URL. The real guarantee now lives
+   *      in Postgres: `app.migrate` takes a session-level advisory lock, which
+   *      binds every caller. See `backend/tests/test_migrate.py`.
+   *
+   * Re-adding a reservation should therefore fail the build and make someone
+   * read this first, which is what the assertion below is for.
+   */
+  test('no reserved concurrency: the lock lives in Postgres, not in a quota', () => {
+    const [, migration] = fn('migration');
+
+    expect(migration.Properties?.ReservedConcurrentExecutions).toBeUndefined();
+    // ...and no other function quietly acquired one either.
+    for (const [, f] of imageFunctions()) {
+      expect(f.Properties?.ReservedConcurrentExecutions).toBeUndefined();
+    }
   });
 });
 

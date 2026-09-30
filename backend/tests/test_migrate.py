@@ -6,12 +6,18 @@ backend image (`docker/backend.Dockerfile`'s `lambda` stage, which copies
 after `cdk deploy`; nothing invokes it automatically -- see
 `infra/test/app-stack.test.ts` for the infrastructure half of this task.
 
-Deliberately **not** an integration test. `tests/test_migrations.py` already
+Mostly **not** an integration test. `tests/test_migrations.py` already
 exercises the migrations themselves against a real testcontainers Postgres;
 what is untested is the *handler* -- how it locates its config, what it
 returns, and what it does (and does not) say when a migration fails. Those
 are decided before a single byte reaches a database, so these drive
 `alembic.command.upgrade` through a spy and need neither Docker nor Postgres.
+
+The one exception is marked `real_advisory_lock`: the "only one migration at
+a time" guarantee is a Postgres session-level advisory lock, and a mock can
+only show that the handler *calls* something. Proving a second holder is
+actually excluded needs a second real connection, so that test opts out of
+the fake lock and uses testcontainers.
 
 The contract these tests pin, so the implementation has something definite to
 satisfy:
@@ -47,15 +53,18 @@ from __future__ import annotations
 import json
 import logging
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from sqlalchemy import text
 
 from alembic import command as alembic_command
 from app import migrate
+from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _ALEMBIC_INI = _BACKEND_DIR / "alembic.ini"
@@ -139,6 +148,34 @@ def failing_upgrade(monkeypatch):
             monkeypatch.setattr(migrate, "upgrade", boom)
 
     return install
+
+
+@pytest.fixture(autouse=True)
+def fake_lock(monkeypatch, request):
+    """Stand in for the Postgres advisory lock in the unit tests.
+
+    The handler takes a session-level advisory lock before running any DDL, so
+    without this every test here would try to open a real connection to
+    `db.internal.invalid`. Records enter/exit so the ordering tests can assert
+    the lock is held *around* the upgrade rather than merely acquired.
+
+    Autouse, with an opt-out marker for the tests that exercise the real lock
+    against a real Postgres.
+    """
+    events: list[str] = []
+    if "real_advisory_lock" in request.keywords:
+        return events
+
+    @contextmanager
+    def _fake(database_url: str):
+        events.append(f"acquired:{database_url}")
+        try:
+            yield
+        finally:
+            events.append("released")
+
+    monkeypatch.setattr(migrate, "_advisory_lock", _fake)
+    return events
 
 
 # ------------------------------------------------------- criterion 7: it migrates
@@ -247,3 +284,105 @@ def test_a_failed_migration_does_not_leak_the_database_url_through_the_exception
         rendered, "the exception that escaped the handler (message and cause chain)"
     )
     _assert_nothing_leaked(caplog, capsys, "failed migration")
+
+
+# ------------------------------- only one migration at a time (the advisory lock)
+#
+# `reservedConcurrentExecutions: 1` used to be the guard here. It was removed
+# on 2026-09-30 after the first real deploy, for two reasons recorded in
+# `wiki/CodeContext/Modules/0x00-architecture.md`: it is weaker than a lock,
+# and it made the stack undeployable in any account whose Lambda concurrency
+# limit is under 101.
+#
+# Weaker, because it only ever constrained *that Lambda*. `alembic upgrade
+# head` also runs from `docker/backend.Dockerfile`'s `dev` CMD, and nothing
+# stops a developer pointing alembic at a real database from a laptop. The
+# lock lives in Postgres, so it binds every caller.
+
+
+def test_handler_holds_the_advisory_lock_around_the_upgrade(db_url, anywhere, upgrades, fake_lock):
+    """Acquired before any DDL and released after -- not merely acquired."""
+    migrate.handler({}, None)
+
+    assert fake_lock == [f"acquired:{db_url}", "released"]
+
+
+def test_handler_refuses_to_run_when_another_migration_holds_the_lock(
+    db_url, anywhere, upgrades, monkeypatch
+):
+    @contextmanager
+    def _held(database_url: str):
+        raise migrate.MigrationLockUnavailable("another migration is already running")
+        yield  # pragma: no cover - unreachable; keeps this a generator
+
+    monkeypatch.setattr(migrate, "_advisory_lock", _held)
+
+    with pytest.raises(migrate.MigrationFailed):
+        migrate.handler({}, None)
+
+    assert upgrades == [], "it must not touch the schema without the lock"
+
+
+def test_the_lock_is_released_even_when_the_upgrade_fails(
+    db_url, anywhere, failing_upgrade, fake_lock
+):
+    """A migration that dies must not strand the lock and block every retry."""
+    failing_upgrade(RuntimeError('relation "users" already exists'))
+
+    with pytest.raises(migrate.MigrationFailed):
+        migrate.handler({}, None)
+
+    assert fake_lock[-1] == "released"
+
+
+def test_a_lock_failure_does_not_leak_the_database_url(
+    db_url, anywhere, upgrades, monkeypatch, caplog, capsys
+):
+    caplog.set_level(logging.DEBUG)
+
+    @contextmanager
+    def _held(database_url: str):
+        # The likeliest real shape: the driver's own error, URL inline.
+        raise migrate.MigrationLockUnavailable(f"could not lock {database_url}")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(migrate, "_advisory_lock", _held)
+
+    with pytest.raises(migrate.MigrationFailed) as excinfo:
+        migrate.handler({}, None)
+
+    _assert_secret_free(
+        "".join(traceback.format_exception(excinfo.value)), "the escaping lock failure"
+    )
+    _assert_nothing_leaked(caplog, capsys, "lock unavailable")
+
+
+@pytest.mark.real_advisory_lock
+def test_the_advisory_lock_really_excludes_a_second_holder(postgres_url):
+    """The guarantee itself, against a real Postgres rather than a fake.
+
+    Proves two things a mock cannot: the key is a session-level advisory lock
+    genuinely visible to another connection, and it is released on exit so the
+    next migration is not blocked forever.
+    """
+    with migrate._advisory_lock(postgres_url):
+        engine = make_engine(postgres_url)
+        try:
+            with engine.connect() as other:
+                held = other.execute(
+                    text("SELECT pg_try_advisory_lock(:k)"),
+                    {"k": migrate.MIGRATION_LOCK_KEY},
+                ).scalar()
+            assert held is False, "a second connection must not take the same lock"
+        finally:
+            engine.dispose()
+
+        with (
+            pytest.raises(migrate.MigrationLockUnavailable),
+            migrate._advisory_lock(postgres_url),
+        ):
+            pass  # pragma: no cover
+
+    # ...and once released, the next migration gets it.
+    with migrate._advisory_lock(postgres_url):
+        pass
