@@ -39,8 +39,16 @@ on:
     # State and telemetry commits are machine bookkeeping with nothing to test,
     # so they must not re-trigger the gate. `.ai/agentlib/**` and the rest of
     # `.ai/` are deliberately NOT ignored - agent-infra-test below covers them.
+    #
+    # Scoped to the two bookkeeping paths, NOT all of `.ai/tasks/**`. Ignoring
+    # the whole directory also silenced a PR whose only change is a task spec
+    # (`task.json` / `brief.md`), and `gate` is a REQUIRED check on `main` - so
+    # such a PR got no `gate` run at all and could never merge. Found on
+    # 2026-09-29 by PR #71, which amends INFRA-002's `allowed_paths` and nothing
+    # else. A spec is also the one input the whole workflow trusts, so it is
+    # worth gating; `agent-infra-test` runs `agentctl task validate` over it.
     paths-ignore:
-      - ".ai/tasks/**"
+      - ".ai/tasks/*/state.json"
       - ".ai/telemetry/**"
   push:
     branches: [main]

@@ -25,6 +25,14 @@ export interface FanwireConfig {
   readonly hostedZoneId?: string;
   /** Apex name of the hosted zone (e.g. `daviddems.com`). Defaults to domainName. */
   readonly hostedZoneName?: string;
+  /**
+   * Upload `frontend/dist` to the frontend bucket as part of the CloudFront
+   * stack. Off unless asked for: the directory is a gitignored build output and
+   * the asset is resolved at synth time, so CI (which never builds the
+   * frontend) must synthesize without it. A human deploying the SPA builds it
+   * first and runs `cdk deploy -c deployFrontend=true`.
+   */
+  readonly deployFrontend: boolean;
 }
 
 function readString(node: Node, key: string): string | undefined {
@@ -34,6 +42,22 @@ function readString(node: Node, key: string): string | undefined {
   return value === '' ? undefined : value;
 }
 
+/**
+ * A boolean context flag, absent meaning false.
+ *
+ * `-c key=true` on the CDK CLI arrives as the *string* `"true"`, while
+ * `cdk.json` or a test App gives a real boolean, so both have to be accepted --
+ * a boolean-only reader would make the documented deploy command silently do
+ * nothing. Only `true`/`"true"` (case- and whitespace-insensitive) turn a flag
+ * on; anything else, including `"false"`, `"0"` and `"no"`, leaves it off.
+ */
+function readBoolean(node: Node, key: string): boolean {
+  const raw: unknown = node.tryGetContext(key);
+  if (typeof raw === 'boolean') return raw;
+  if (raw === undefined || raw === null) return false;
+  return String(raw).trim().toLowerCase() === 'true';
+}
+
 export function loadConfig(node: Node): FanwireConfig {
   const account = readString(node, 'account');
   const region = readString(node, 'region');
@@ -41,6 +65,7 @@ export function loadConfig(node: Node): FanwireConfig {
   const domainName = readString(node, 'domainName');
   const hostedZoneId = readString(node, 'hostedZoneId');
   const hostedZoneName = readString(node, 'hostedZoneName');
+  const deployFrontend = readBoolean(node, 'deployFrontend');
 
   if (!account || !/^\d{12}$/.test(account)) {
     throw new Error(`context "account" must be a 12-digit AWS account id, got ${JSON.stringify(account)}`);
@@ -61,5 +86,5 @@ export function loadConfig(node: Node): FanwireConfig {
     throw new Error(`context "domainName" is not a valid lowercase DNS name: ${domainName}`);
   }
 
-  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName };
+  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName, deployFrontend };
 }

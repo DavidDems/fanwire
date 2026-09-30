@@ -79,15 +79,86 @@ export function resourcesOfType(
  * hostedZoneId" check, because they had only ever cleared the id.
  */
 export const DOMAIN_MODES: Record<string, Record<string, unknown>> = {
-  'no domain': { domainName: '', hostedZoneId: '', hostedZoneName: '' },
+  'no domain': { domainName: '', hostedZoneId: '', hostedZoneName: '', deployFrontend: undefined },
   'domain without hosted zone': {
     domainName: 'fanwire.daviddems.com',
     hostedZoneId: '',
     hostedZoneName: '',
+    deployFrontend: undefined,
   },
   'domain with hosted zone': {
     domainName: 'fanwire.daviddems.com',
     hostedZoneId: 'Z0123456789ABCDEFGHIJ',
     hostedZoneName: 'daviddems.com',
+    deployFrontend: undefined,
   },
 };
+
+/**
+ * `deployFrontend: undefined` above is deliberate and is *not* the same as
+ * leaving the key out.
+ *
+ * These objects are spread over `cdk.json`'s context, and an own property
+ * whose value is `undefined` still wins the spread -- so the key is pinned
+ * explicitly (the `hostedZoneName` lesson) while `node.tryGetContext` still
+ * reports it as genuinely absent, which is the state criterion 1 is about.
+ * Every existing suite therefore keeps synthesizing with the flag unset even
+ * if `cdk.json` ever gains a real `deployFrontend` value.
+ */
+
+/** The same three domain modes, with the frontend deployment flag switched on. */
+export const DOMAIN_MODES_DEPLOYING: Record<string, Record<string, unknown>> = Object.fromEntries(
+  Object.entries(DOMAIN_MODES).map(([mode, overrides]) => [mode, { ...overrides, deployFrontend: true }]),
+);
+
+/**
+ * `frontend/dist` is a build output: gitignored (`.gitignore:17`) and absent on
+ * a clean CI checkout. `s3deploy.Source.asset()` resolves its source at synth
+ * time and throws if the directory is missing, so any test that synthesizes
+ * with `deployFrontend` on has to create it first.
+ *
+ * Cleanup is deliberately timid, because a human may have a real
+ * `npm run build` sitting there. Jest runs test files in parallel worker
+ * processes, and the worker that leaves last is not necessarily the one that
+ * created the directory -- so "we created this" is recorded *in the directory*
+ * (`.fanwire-test-owned`), not in a module variable. Each caller also drops a
+ * pid-named marker while it needs the directory, and the tree is removed only
+ * when it is ours, no marker is left, and nothing but our own placeholder is
+ * inside.
+ */
+export const FRONTEND_DIST = path.resolve(__dirname, '..', '..', 'frontend', 'dist');
+const DIST_MARKER_PREFIX = '.fanwire-test-marker-';
+const DIST_OWNED = '.fanwire-test-owned';
+const DIST_PLACEHOLDER = 'index.html';
+let distMarker: string | undefined;
+
+/** Creates `frontend/dist` if it is missing. Returns its absolute path. */
+export function ensureFrontendDist(): string {
+  if (distMarker) return FRONTEND_DIST;
+  if (!fs.existsSync(FRONTEND_DIST)) {
+    fs.mkdirSync(FRONTEND_DIST, { recursive: true });
+    // An empty directory is not a usable asset source on every platform.
+    fs.writeFileSync(
+      path.join(FRONTEND_DIST, DIST_PLACEHOLDER),
+      '<!doctype html><title>fanwire infra test placeholder</title>\n',
+    );
+    fs.writeFileSync(path.join(FRONTEND_DIST, DIST_OWNED), 'created by infra/test; safe to delete\n');
+  }
+  distMarker = path.join(FRONTEND_DIST, `${DIST_MARKER_PREFIX}${process.pid}`);
+  fs.writeFileSync(distMarker, 'infra/test is synthesizing against this directory\n');
+  return FRONTEND_DIST;
+}
+
+/** Undoes `ensureFrontendDist` -- and only ever that. Never deletes a real build. */
+export function cleanupFrontendDist(): void {
+  if (!distMarker) return;
+  fs.rmSync(distMarker, { force: true });
+  distMarker = undefined;
+  // A directory we did not create is never ours to remove.
+  if (!fs.existsSync(path.join(FRONTEND_DIST, DIST_OWNED))) return;
+  const left = fs.readdirSync(FRONTEND_DIST);
+  // Another worker is still synthesizing against it, or a real build appeared.
+  if (left.some((name) => name.startsWith(DIST_MARKER_PREFIX))) return;
+  if (left.some((name) => name !== DIST_PLACEHOLDER && name !== DIST_OWNED)) return;
+  fs.rmSync(FRONTEND_DIST, { recursive: true, force: true });
+}
