@@ -102,7 +102,9 @@ describe('Network stack', () => {
         const s = script();
         expect(s).toContain('net.ipv4.ip_forward=1');
         expect(s).toMatch(/systemctl enable --now iptables/);
-        expect(s).toMatch(/service iptables save/);
+        // Not `service iptables save`: AL2023 has no /usr/sbin/service unless
+        // initscripts-service is installed. The init script ships with the package.
+        expect(s).toMatch(/^\/usr\/libexec\/iptables\/iptables\.init save$/m);
       });
 
       test('a changed script replaces the instance: cloud-init runs user data only on first boot', () => {
