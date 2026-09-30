@@ -78,3 +78,10 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    # tests/test_migrate.py fakes the migration advisory lock for its unit
+    # tests; this marker opts a test out of that fake so it runs against a real
+    # testcontainers Postgres and proves the lock really does exclude a second
+    # holder. Registered here only to keep pytest from warning on it.
+    "real_advisory_lock: exercises app.migrate._advisory_lock against a real Postgres",
+]

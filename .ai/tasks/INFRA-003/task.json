@@ -7,7 +7,7 @@
     "The migration function's image cmd override targets the migration handler, not app.main.handler.",
     "Nothing in any synthesized template invokes the migration function automatically: it is the target of no EventBridge rule, no event source mapping, no Lambda schedule and no custom resource.",
     "The migration function runs in the same VPC and app subnets and uses the same Lambda security group as the api function, so it can reach RDS.",
-    "The migration function's timeout is at least 300 seconds and its reserved concurrency is 1.",
+    "The migration function's timeout is at least 300 seconds, and it sets NO reserved concurrency -- 'one migration at a time' is a Postgres advisory lock in app.migrate, not a Lambda quota. Amended 2026-09-30 after the first real deploy rolled Fanwire-App back on reservedConcurrentExecutions: 1; see the brief.",
     "The IAM wildcard gate in infra/test/iam-policy.test.ts passes in all three domain modes, or any new wildcard is added to ALLOW_LIST with a written reason.",
     "The migration handler runs alembic upgrade head programmatically against Settings.database_url and returns the head revision it arrived at.",
     "A failed migration causes the handler to raise rather than return a success result, so an operator sees a failed invocation rather than a green one.",
