@@ -100,10 +100,12 @@ GitHub Actions (OIDC-federated role, no long-lived keys, per [[wiki/CodeContext/
 
 The first deploy is therefore **a human at a terminal**, in this order:
 
-1. `cdk deploy` — all eight stacks.
-2. Invoke the `Migration` function once, by hand (`INFRA-003`). Until this runs, RDS has no tables and the other four Lambdas fail against it.
-3. Read `Fanwire-Auth`'s outputs, then `npm run build` in `frontend/` with the real `VITE_*` values — Vite bakes them in at build time, so the bundle cannot be built before the pool exists ([[wiki/CodeContext/Modules/0x08-frontend|0x08 Frontend]]).
-4. `cdk deploy -c deployFrontend=true` — uploads `dist/` and invalidates the distribution (`INFRA-002`).
+1. `cdk deploy` — all eight stacks. **Done 2026-09-30.**
+2. Invoke the `Migration` function once, by hand (`INFRA-003`). Until this runs, RDS has no tables and the other four Lambdas fail against it. **Done 2026-09-30**, returned `{"revision": "f4a1c9d2b6e7"}`.
+3. Read `Fanwire-Auth`'s outputs, then `npm run build` in `frontend/` with the real `VITE_*` values — Vite bakes them in at build time, so the bundle cannot be built before the pool exists ([[wiki/CodeContext/Modules/0x08-frontend|0x08 Frontend]]). **Outstanding.**
+4. `cdk deploy -c deployFrontend=true` — uploads `dist/` and invalidates the distribution (`INFRA-002`). **Outstanding.**
+
+Between steps 1 and 4 the site serves an S3 `403 AccessDenied` XML document rather than a 404 or an error page. That is the expected state of a correct, empty bucket behind a correct distribution, and it is explained in [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] → "First deploy, 2026-09-29" along with everything else the first deploy established.
 
 `docker/cdk-deploy.Dockerfile` pins the CDK CLI/Node version and is what a human should synth or deploy through; nothing in CI invokes it.
 

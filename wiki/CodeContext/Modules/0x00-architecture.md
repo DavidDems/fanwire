@@ -138,6 +138,28 @@ CREATE_FAILED AWS::Lambda::Function Migration
 
 Everything else in the stack reported `Resource creation cancelled` — CloudFormation aborting siblings, not independent failures. Note what the message does *not* say: it names neither concurrency nor a quota, and `NotUpdatable` on a `CREATE` is actively misleading. The diagnosis came from `get-account-settings`, not from the error.
 
+**Resolved on the second attempt.** With the reservation removed and the guarantee moved into a Postgres advisory lock, all eight stacks reached `CREATE_COMPLETE`. `Fanwire-Cdn` took 268s; the whole run 645s — well under the 30–45 minutes estimated above, because six stacks were already up and skipped in 0s.
+
+What the deploy **empirically proved**, as distinct from what synth asserted:
+
+| Verified | By |
+|---|---|
+| ACM certificate, Route 53 aliases, OAC, the SPA-fallback function | `https://fanwire.daviddems.com` resolving and serving over TLS from the distribution |
+| CloudFront `/api/*` → prefix-strip function → origin-verify authorizer → API Gateway → Mangum → FastAPI | `GET /api/health` returning `{"status":"ok"}` |
+| The `Migration` function, its VPC route to RDS, the advisory lock, and every migration | invoking it once: `{"revision": "f4a1c9d2b6e7"}`, matching the head in `alembic/versions` |
+
+Careful with that middle row: `app.main.health_check` returns a static dict and touches no database, so a green `/api/health` proves the request path and **not** the schema. The migration's returned revision is what proves the schema, and it is separate evidence. A route that actually reads a table is what would prove both at once.
+
+**An empty frontend bucket serves `403 AccessDenied`, not `404`.** Between Phase 1 and Phase 3 the site returns:
+
+```xml
+<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>
+```
+
+That is correct and expected, and it is worth writing down because it reads like a broken deploy. The OAC bucket policy grants `s3:GetObject` and deliberately **not** `s3:ListBucket`, so S3 will not confirm whether a missing key exists and answers 403 rather than 404. Reaching that XML at all means DNS, TLS, the certificate and OAC are all working — the only thing missing is an object. It disappears when Phase 3 uploads `dist/`.
+
+**Operator trap, cost one wasted deploy.** The second attempt was first run against the *wrong branch*: `git switch <branch>` fails when that branch is already checked out in another worktree, and PowerShell's `;` does not stop on error, so `npm ci` and `cdk deploy` ran on unfixed `main` and reproduced the original failure exactly. This repo uses worktrees heavily, so verify the branch and the synthesized property before a deploy rather than trusting a chained command to have switched.
+
 **The lesson, which generalizes past this bug:** 164 infra tests and a green `cdk synth` prove the template is *well-formed*, not that the account will *accept* it. A synth-only gate cannot see account quotas, service limits or regional availability, so every acceptance criterion naming a concrete numeric AWS property carries this risk. The same blind spot exists one level down in the test suite: mutation-testing the replacement advisory lock with one that acquires nothing left all 11 *mocked* tests green, and only the `testcontainers` test caught it.
 
 ## Security posture (account/project-level)

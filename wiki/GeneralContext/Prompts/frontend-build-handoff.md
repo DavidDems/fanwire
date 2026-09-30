@@ -59,18 +59,9 @@ FRONTEND-004  compose                   ┘ both unblocked now
                      └── FRONTEND-007  search
 ```
 
-`MEDIA-002` is unrelated to the frontend critical path and can be done at any
-time by anyone.
-
-**`INFRA-002` and `INFRA-003` are both done** (merged 2026-09-29, PRs #72 and
-#73) — so the deploy path they were blocking now exists: `cdk deploy` uploads
-the built SPA when given `-c deployFrontend=true`, and the `Migration` function
-applies the schema when a human invokes it. What that changes for a frontend
-pass is the *ordering*, which is unchanged in substance but now actually
-executable end to end: deploy → invoke `Migration` → read `Fanwire-Auth`'s
-outputs → `npm run build` with the real `VITE_*` values → `cdk deploy
--c deployFrontend=true`. Vite bakes those values in at build time, so the
-bundle still cannot be built before the pool exists.
+`INFRA-002`, `INFRA-003` and `MEDIA-002` are unrelated to the frontend critical
+path and can be done at any time by anyone. `INFRA-003` was blocked on the
+Lambda image carrying `alembic/`; that landed in #54, so it is ready.
 
 **Do `FRONTEND-003` and `FRONTEND-004` next.** They are genuinely independent
 and can run in parallel — but both specs claim `frontend/src/routes/**`,
@@ -336,13 +327,8 @@ The human's stated plan is to adopt the `.ai/` pipeline for ordinary work after
 this first pass, when changes are smaller. That is a reasonable read. One
 caveat worth giving them: **`FRONTEND-001` is the worst possible unit to
 generalise from** — it bootstrapped two generators and had no existing code to
-lean on. `FRONTEND-006` is a fairer test of what a dispatched run costs and how
-well a spec survives with no human in the loop. (`INFRA-003` was the other
-candidate named here, but it was completed on 2026-09-29 by a supervised
-Director session, so it is no longer available as that test — and it would have
-been a poor one anyway: its spec turned out to need a Director to notice that
-`env.py` had the same `%`-escaping bug the task existed to prevent, and that
-`docker/**` being denied made the fix out of scope.)
+lean on. `FRONTEND-006` or `INFRA-003` is a fairer test of what a dispatched run
+costs and how well a spec survives with no human in the loop.
 
 And the three defects above are an argument for one thing specifically: the
 pipeline is sound, but the scaffolding around it still has holes that only

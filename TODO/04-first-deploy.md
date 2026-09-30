@@ -133,17 +133,50 @@ the bundle.
 There is no way around this ordering short of a runtime-fetched config file,
 which was not chosen. It is a property of the design, not an oversight.
 
-> **Attempt 1, 2026-09-29: Phase 1 partially succeeded.** Six stacks are up
-> (`Network`, `Data`, `Auth`, `Storage`, `Messaging`, and `Edge` in us-east-1).
-> `Fanwire-App` rolled back on the `Migration` function's
-> `reservedConcurrentExecutions: 1` — the account's Lambda concurrency limit is
-> 10 and AWS caps a reservation at the limit minus 100. `Fanwire-Cdn` was never
-> reached. Fixed by moving the guarantee to a Postgres advisory lock and
-> asserting the reservation absent; see
+> ## ✅ Phases 1 and 2 are done, 2026-09-30
+>
+> **All eight stacks are `CREATE_COMPLETE`**, and the schema is applied. The
+> full record, including what the deploy proved that synth could not, is
 > `wiki/CodeContext/Modules/0x00-architecture.md` → "First deploy, 2026-09-29".
-> **`ROLLBACK_COMPLETE` is safe to deploy over**, so re-running Phase 1 resumes
-> rather than restarts. A concurrency raise to 1000 is also requested, and is
-> needed regardless: 10 is a ceiling on the whole app.
+> In short:
+>
+> - **Attempt 1** brought up six stacks and rolled `Fanwire-App` back on the
+>   `Migration` function's `reservedConcurrentExecutions: 1` — the account's
+>   Lambda concurrency limit is 10, and AWS caps a reservation at the limit
+>   minus 100, so no function there could reserve any. Fixed by moving "one
+>   migration at a time" into a Postgres advisory lock and asserting the
+>   reservation absent.
+> - **Attempt 2** completed everything. `Fanwire-Cdn` in 268s, 645s total,
+>   because the six healthy stacks skipped in 0s. `ROLLBACK_COMPLETE` is safe
+>   to deploy over — a re-run resumes rather than restarts.
+> - **Phase 2** returned `{"revision": "f4a1c9d2b6e7"}`, matching the head in
+>   `alembic/versions`. `GET /api/health` returns `{"status":"ok"}` through
+>   CloudFront.
+>
+> **Live outputs:** `https://fanwire.daviddems.com` ·
+> distribution `E2AXWWXMA8YAE8` · `d3fb0uyhisvzkz.cloudfront.net`
+>
+> **Still outstanding:** Phase 3 (below), and the Lambda concurrency raise to
+> 1000, which is needed regardless of the migration runner — 10 concurrent
+> executions is a ceiling on the whole app, shared by the API function, four
+> consumers and the authorizer.
+>
+> ### Two things that will catch the next person
+>
+> **An empty frontend bucket serves `403 AccessDenied`, not `404`.** Until
+> Phase 3 uploads `dist/`, the site returns an S3 `AccessDenied` XML document.
+> That is correct: the OAC policy grants `s3:GetObject` and deliberately not
+> `s3:ListBucket`, so S3 will not confirm whether a missing key exists.
+> Reaching that XML means DNS, TLS, the certificate and OAC all work.
+>
+> **Verify the branch before deploying.** Attempt 2 was first run against
+> unfixed `main`: `git switch <branch>` fails when that branch is checked out
+> in another worktree, and PowerShell's `;` does not stop on error, so
+> `npm ci` and `cdk deploy` carried on and reproduced the original failure
+> exactly. Check `git branch --show-current` *and* the synthesized property
+> you think you fixed, as separate commands, before spending 10 minutes on a
+> deploy. Also write the migration's output outside the repo
+> (`$env:TEMP\migrate-out.json`) so it cannot be committed by accident.
 
 **Phase 1 — bring up the stacks.** All eight, ~30–45 minutes: VPC, NAT instance,
 RDS, Cognito, queues, five Lambdas, the distribution. There is no frontend-only
