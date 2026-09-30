@@ -3,11 +3,11 @@
 **Agent-facing.** The package/dependency inventory and the container strategy for everything that gets built and deployed. Pairs with [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] (what runs where), [[wiki/CodeContext/Standards/security|Security]] (CVE/secret scanning gates), and [[wiki/CodeContext/Standards/design-principles|Design principles]] (12-factor, DRY). This doc is current-state only, same convention as `wiki/` — see `AGENTS.md`.
 
 ## State
-`backend/app` (FastAPI), `frontend/src` (React) and `infra/` (CDK, TypeScript: `bin/`, `lib/`, `test/`, `cdk.json`, `package-lock.json`) all exist. `cd infra && npm ci && npm run build && npm run lint && npm test && npm run synth` synthesizes all eight stacks without AWS credentials; CI runs exactly that as the `infra-synth` job in `.github/workflows/test-agent.yml`, which makes `infra/test/iam-policy.test.ts` (no wildcard IAM outside a commented allow-list) a merge gate. **Nothing has been deployed**: there is no `cdk deploy`/`cdk bootstrap` step anywhere, and `GitHubActionsDeployRole` still has no permissions. The one shared Lambda image is a single CDK `DockerImageAsset` (repo-root context, `docker/backend.Dockerfile`, target `lambda`, `linux/amd64`) used by the api, ingestion, media and notifications functions with per-function `cmd` overrides; synth only stages its context, the image is built at deploy time. Stack split, egress, and IAM exceptions: [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] "Infra (CDK) — implementation notes".
+`backend/app` (FastAPI), `frontend/src` (React) and `infra/` (CDK, TypeScript: `bin/`, `lib/`, `test/`, `cdk.json`, `package-lock.json`) all exist. `cd infra && npm ci && npm run build && npm run lint && npm test && npm run synth` synthesizes all eight stacks without AWS credentials; CI runs exactly that as the `infra-synth` job in `.github/workflows/test-agent.yml`, which makes `infra/test/iam-policy.test.ts` (no wildcard IAM outside a commented allow-list) a merge gate. **Nothing has been deployed**: there is no `cdk deploy`/`cdk bootstrap` step anywhere, and `GitHubActionsDeployRole` still has no permissions. The one shared Lambda image is a single CDK `DockerImageAsset` (repo-root context, `docker/backend.Dockerfile`, target `lambda`, `linux/amd64`) used by the api, ingestion, media, notifications and migration functions with per-function `cmd` overrides; synth only stages its context, the image is built at deploy time. Stack split, egress, and IAM exceptions: [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] "Infra (CDK) — implementation notes".
 
 ## Why Docker at all here
 Nothing in this app runs as a long-lived container in production — compute is Lambda, the frontend is a static S3/CloudFront bundle (see [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]). Docker is used for two distinct jobs, and it's worth keeping them mentally separate:
-1. **The actual deployment artifact** for the three backend Lambdas — AWS Lambda's container-image deployment model, not zip+layers (see rationale below).
+1. **The actual deployment artifact** for the five backend Lambdas — AWS Lambda's container-image deployment model, not zip+layers (see rationale below).
 2. **A reproducible build environment** for the frontend bundle and for local/CI test runs — the container is thrown away after producing its output (a `dist/` folder or a test exit code), never deployed itself.
 
 ## Backend — Python packages (`backend/pyproject.toml`)
@@ -78,20 +78,34 @@ Dev/test:
 | API Lambda | `docker/backend.Dockerfile`, target `lambda` | `public.ecr.aws/lambda/python:3.12` | Pushed to ECR, referenced by a CDK `DockerImageFunction`, command = `app.main.handler` |
 | Ingestion Lambda | same image, different command override | same | Same ECR image, CDK overrides `imageConfig.command` — no separate image to build/scan/patch |
 | Media-processing Lambda | same image, different command override | same | Same ECR image, different command override |
+| Notifications Lambda | same image, different command override | same | Same ECR image, command = `app.notifications.lambda_handler.handler` |
+| Migration runner | same image, different command override | same | Same ECR image, command = `app.migrate.handler`. **Invoked by a human, by nothing else** — no rule, schedule, event source mapping or custom resource (`INFRA-003`; see [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] Known gaps) |
 | Backend tests | `docker/backend.Dockerfile`, target `test` | same | Never deployed — run by `docker-compose.yml` locally and by CI |
-| Frontend build | `docker/frontend.Dockerfile`, target `build`/`export` | `node:20-alpine` | Output `dist/` synced to the S3 static-hosting bucket via `aws s3 sync`; the container itself is discarded |
+| Frontend build | `docker/frontend.Dockerfile`, target `build`/`export` | `node:20-alpine` | Output `dist/` uploaded by `CdnStack`'s `BucketDeployment` when `cdk deploy -c deployFrontend=true` is used (`INFRA-002`), **not** `aws s3 sync`; the container itself is discarded |
 | Frontend tests | `docker/frontend.Dockerfile`, target `test` | `node:20-alpine` | Never deployed — same as backend tests |
 | CDK deploy | `docker/cdk-deploy.Dockerfile` | `node:20-alpine` | Never deployed or pushed — pins the exact CDK CLI/Node version CI and local dev both use to `cdk synth`/`cdk deploy` |
 
-**Why one shared image for all three Lambdas instead of three separate images**: they have an identical dependency set (`backend/pyproject.toml`) and differ only in which function gets invoked. Building three images would triple the build/scan/ECR-storage cost for zero behavioral difference — DRY per [[wiki/CodeContext/Standards/design-principles|Design principles]]. If one of the three ever needs a dependency the others don't (unlikely at this app's size), split it then, not preemptively (YAGNI).
+**Why one shared image for all five Lambdas instead of five separate images**: they have an identical dependency set (`backend/pyproject.toml`) and differ only in which function gets invoked. Building five images would multiply the build/scan/ECR-storage cost for zero behavioral difference — DRY per [[wiki/CodeContext/Standards/design-principles|Design principles]]. If one of them ever needs a dependency the others don't (unlikely at this app's size), split it then, not preemptively (YAGNI).
+
+This is load-bearing for the migration runner specifically, and `infra/test/app-stack.test.ts` enforces it: the `Migration` function's `Code.ImageUri` must be byte-identical to the api function's and the assembly must contain exactly one docker image, so the code that migrates the schema cannot drift from the code that runs against it.
 
 **Why container images over zip+layers for Lambda**: Pillow + boto3 + SQLAlchemy + the AWS SDK easily exceed the 250MB unzipped zip+layers limit once you add the ingestion and media-processing paths' dependencies together into one deployment unit; container images support up to 10GB and let `pip install` resolve normally instead of hand-managing layer contents. Cold start is marginally worse than a minimal zip but not enough to matter at this app's traffic level.
 
 ## CI/CD wiring
 GitHub Actions (OIDC-federated role, no long-lived keys, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]):
 - On PR: build `docker/backend.Dockerfile` target `test` and `docker/frontend.Dockerfile` target `test`, run both, results distilled to `wiki/GeneralContext/Reports/test-runs/`, not fed raw into any interactive agent's context.
-- On merge to `main`: build target `lambda`, push to ECR; build target `export`, sync `dist/` to the frontend S3 bucket; run `cdk deploy` via `docker/cdk-deploy.Dockerfile`.
 - `pip-audit` and `npm audit`/Dependabot run in CI per [[wiki/CodeContext/Standards/security|Security]] and block merge on an unpatched critical.
+
+**There is no deploy job, on merge or anywhere else.** No workflow pushes to ECR, uploads `dist/`, or runs `cdk deploy`: that is out of scope repo-wide pending a human IAM review (`AGENTS.md`; `.ai/docs/handoff.md` §5.7 is explicit it must not be added to the agent workflows), and `GitHubActionsDeployRole` holds only `sts:AssumeRole` on the bootstrap roles — no service permissions at all. `.github/workflows/test-agent.yml` is the **one authoritative test executor**, and its `gate` job is a required check on `main` alongside `agent-guard.yml`'s `guard-gate`.
+
+The first deploy is therefore **a human at a terminal**, in this order:
+
+1. `cdk deploy` — all eight stacks.
+2. Invoke the `Migration` function once, by hand (`INFRA-003`). Until this runs, RDS has no tables and the other four Lambdas fail against it.
+3. Read `Fanwire-Auth`'s outputs, then `npm run build` in `frontend/` with the real `VITE_*` values — Vite bakes them in at build time, so the bundle cannot be built before the pool exists ([[wiki/CodeContext/Modules/0x08-frontend|0x08 Frontend]]).
+4. `cdk deploy -c deployFrontend=true` — uploads `dist/` and invalidates the distribution (`INFRA-002`).
+
+`docker/cdk-deploy.Dockerfile` pins the CDK CLI/Node version and is what a human should synth or deploy through; nothing in CI invokes it.
 
 ## Local dev (`docker-compose.yml`)
 `postgres` (real Postgres, matching RDS — not sqlite) and `dynamodb-local` back the `backend-test` and `frontend-test` one-shot services. This compose file is dev/test tooling only; it is never what's deployed.
