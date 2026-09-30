@@ -12,7 +12,18 @@ deploy a schema change, makes rollback ambiguous and puts
 `infra/test/app-stack.test.ts`'s "App stack: migration runner" for the
 infrastructure half, which asserts that.
 
-Four decisions this module is built around:
+Five decisions this module is built around:
+
+**Only one migration at a time, enforced in Postgres.** A session-level
+advisory lock (`pg_try_advisory_lock`), taken before any DDL and held for the
+whole upgrade. This replaced `reservedConcurrentExecutions: 1` on the Lambda
+after the first real deploy failed on it (2026-09-29; the account's Lambda
+concurrency limit was 10, and AWS caps a reservation at the limit minus 100).
+The lock is the better guarantee regardless of that quota: it binds *every*
+caller, and `alembic upgrade head` also runs from `docker/backend.Dockerfile`'s
+`dev` CMD and from any shell holding a `DATABASE_URL`, none of which a Lambda
+reservation ever constrained. `pg_try_advisory_lock` does not block, so a
+second migration fails fast and legibly instead of sitting in a timeout.
 
 **Alembic's Python API, not `subprocess`.** `alembic.command.upgrade` raises
 the real exception; a shelled-out `alembic` gives an exit code and no
@@ -53,6 +64,8 @@ environment at invocation time is what makes an unset or changed
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -60,11 +73,19 @@ from urllib.parse import unquote, urlsplit
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from aws_lambda_powertools import Logger
+from sqlalchemy import text as sql_text
 
 from alembic import command as alembic_command
+from app.db import make_engine
 from app.settings import Settings
 
 logger = Logger()
+
+#: Key for the `pg_try_advisory_lock` that serializes migrations. Any fixed
+#: bigint works -- the value is meaningless to Postgres, it only has to be the
+#: same for every caller. Chosen once and pinned: changing it silently removes
+#: the mutual exclusion between an old deployment and a new one.
+MIGRATION_LOCK_KEY = 8_315_402_771_001
 
 #: `backend/alembic.ini` in the repo, `${LAMBDA_TASK_ROOT}/alembic.ini` in the
 #: image -- resolved from this module's location, never the CWD.
@@ -88,6 +109,17 @@ class MigrationFailed(RuntimeError):
     Deliberately a named subclass and deliberately not `Exception` itself:
     a bare `raise Exception(...)` in a swallow-and-rethrow tells an operator
     nothing, and `infra`'s runbook step wants a distinguishable failure.
+    """
+
+
+class MigrationLockUnavailable(MigrationFailed):
+    """Another migration holds the advisory lock, so this one did not run.
+
+    A subclass of `MigrationFailed` on purpose: from the caller's side this
+    is still "the migration did not happen", and it must still fail the
+    invocation. It is distinguishable so an operator can tell "someone else
+    is already migrating, wait and look again" from "the schema change
+    itself broke", which are different next actions.
     """
 
 
@@ -150,6 +182,47 @@ def _escape_for_configparser(value: str) -> str:
     return value.replace("%", "%%")
 
 
+@contextmanager
+def _advisory_lock(database_url: str) -> Iterator[None]:
+    """Hold the migration lock for the duration of the block.
+
+    A Postgres **session-level** advisory lock, not a row lock and not a
+    Lambda concurrency reservation. `pg_try_advisory_lock` returns
+    immediately rather than blocking, so a second migration fails fast with
+    something an operator can read instead of sitting in a Lambda timeout.
+
+    This binds every caller, which is the whole point: `alembic upgrade head`
+    also runs from `docker/backend.Dockerfile`'s `dev` CMD and from any
+    developer's shell holding a `DATABASE_URL`. Reserved concurrency on the
+    Lambda -- what this replaced, see the history in
+    `infra/test/app-stack.test.ts` -- constrained none of those.
+
+    The lock is tied to this connection, so it is released both explicitly and
+    by the connection closing; a crashed process cannot strand it.
+    """
+    engine = make_engine(database_url)
+    try:
+        with engine.connect() as conn:
+            acquired = conn.execute(
+                sql_text("SELECT pg_try_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY}
+            ).scalar()
+            if not acquired:
+                raise MigrationLockUnavailable(
+                    "another migration already holds the advisory lock "
+                    f"(key {MIGRATION_LOCK_KEY}); it did not run"
+                )
+            try:
+                yield
+            finally:
+                # Best effort: if the connection has already died the lock is
+                # gone with it, which is the outcome we wanted anyway.
+                conn.execute(
+                    sql_text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
+                )
+    finally:
+        engine.dispose()
+
+
 def _build_config(database_url: str) -> Config:
     config = Config(str(ALEMBIC_INI))
     # `alembic/env.py` sets the same option from the same place, but setting
@@ -170,7 +243,18 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, str]:
 
     logger.info("applying migrations", extra={"target": "head"})
     try:
-        alembic_command.upgrade(config, "head")
+        # Nothing touches the schema without the lock, and the lock is held
+        # for the whole upgrade rather than just taken at the start.
+        with _advisory_lock(database_url):
+            alembic_command.upgrade(config, "head")
+    except MigrationLockUnavailable as exc:
+        # Distinct from a failed migration: the schema was not touched, and
+        # the operator's next action is "wait and look again", not "diagnose
+        # a broken migration". Still redacted -- a driver-level lock failure
+        # can carry the connect string just as readily.
+        reason = _redact(str(exc), database_url)
+        logger.error("migration did not run", extra={"reason": reason})
+        raise MigrationLockUnavailable(reason) from None
     # Blind on purpose (hence the noqa): anything a migration script, the
     # driver or alembic itself raises may carry the connect string, and every
     # one of those has to be redacted before it escapes to CloudWatch. Nothing

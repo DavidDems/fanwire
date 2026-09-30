@@ -307,12 +307,24 @@ export class AppStack extends cdk.Stack {
    * failure semantics. `test/app-stack.test.ts` sweeps every stack for an
    * invoker so that a later "improvement" wiring one up fails the build.
    *
-   * Reserved concurrency 1: two concurrent `alembic upgrade head` runs
-   * against one database is a lock fight at best. No extra statements beyond
-   * what `backendFunction` already gives every function -- it needs its log
-   * group, the ENI actions for the VPC, and `kms:Decrypt` for its encrypted
-   * environment, and nothing else: DATABASE_URL is a CloudFormation dynamic
-   * reference resolved at deploy time, not a Secrets Manager call at runtime.
+   * **No reserved concurrency**, deliberately. This carried
+   * `reservedConcurrentExecutions: 1` until the first real `cdk deploy`
+   * (2026-09-29) failed on exactly that and rolled the whole stack back: AWS
+   * caps a reservation at the account's concurrency limit minus 100, and the
+   * workload account was at the new-account default of 10, so no function
+   * there could reserve anything. It is staying off even once the quota is
+   * raised, for two reasons -- a reservation couples this template to an
+   * account-level quota, so it is undeployable in any account or region under
+   * 101; and it was the weaker guarantee anyway, constraining only this
+   * Lambda while `alembic upgrade head` also runs from the `dev` image's CMD
+   * and from any shell with a DATABASE_URL. "One migration at a time" now
+   * lives in Postgres, as an advisory lock in `app.migrate`.
+   *
+   * No extra statements beyond what `backendFunction` already gives every
+   * function -- it needs its log group, the ENI actions for the VPC, and
+   * `kms:Decrypt` for its encrypted environment, and nothing else:
+   * DATABASE_URL is a CloudFormation dynamic reference resolved at deploy
+   * time, not a Secrets Manager call at runtime.
    */
   private migrationRunner(
     image: ecrAssets.DockerImageAsset,
@@ -325,7 +337,6 @@ export class AppStack extends cdk.Stack {
       // database, and it is invoked by hand so nothing is waiting on it.
       timeout: cdk.Duration.minutes(10),
       memorySize: 512,
-      reservedConcurrentExecutions: 1,
       image,
       keyRef,
       environment,
@@ -344,12 +355,6 @@ export class AppStack extends cdk.Stack {
       keyRef: kms.IKey;
       environment: Record<string, string>;
       statements: iam.PolicyStatement[];
-      /**
-       * Cap on simultaneous executions. Only the migration runner sets it
-       * (to 1); left undefined, the function draws on the account's
-       * unreserved pool as before.
-       */
-      reservedConcurrentExecutions?: number;
     },
   ): lambda.Function {
     const { network } = this.props;
@@ -397,7 +402,6 @@ export class AppStack extends cdk.Stack {
       logGroup,
       timeout: opts.timeout,
       memorySize: opts.memorySize,
-      reservedConcurrentExecutions: opts.reservedConcurrentExecutions,
       environment: opts.environment,
       environmentEncryption: opts.keyRef,
       vpc: network.vpc,
