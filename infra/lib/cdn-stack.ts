@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -6,6 +7,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { ORIGIN_VERIFY_HEADER } from './app-stack';
@@ -54,6 +56,14 @@ const SPA_FALLBACK = `function handler(event) {
   }
   return request;
 }`;
+
+/**
+ * The built SPA. A gitignored build output, so it exists only after
+ * `npm run build` in `frontend/` -- `s3deploy.Source.asset()` resolves it at
+ * synth time and throws when it is missing, which is why the deployment is
+ * built only when `deployFrontend` is on.
+ */
+const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 
 /**
  * CloudFront: the only public entry point (security.md "Network").
@@ -166,6 +176,23 @@ export class CdnStack extends cdk.Stack {
     const distributionArn = `arn:aws:cloudfront::${this.account}:distribution/${this.distribution.distributionId}`;
     this.oacBucketPolicy('FrontendBucketPolicy', props.frontendBucket, distributionArn);
     this.oacBucketPolicy('PublicMediaBucketPolicy', props.publicMediaBucket, distributionArn);
+
+    // Opt-in (`cdk deploy -c deployFrontend=true`), for two reasons: the asset
+    // source is gitignored and absent in CI, and uploading a stale `dist` is
+    // worse than not uploading at all. The destination is the *imported*
+    // handle above rather than `props.frontendBucket` -- the real bucket lives
+    // in another stack, and granting on it would drag that stack's KMS key
+    // actions into this role's policy.
+    if (config.deployFrontend) {
+      new s3deploy.BucketDeployment(this, 'FrontendDeployment', {
+        sources: [s3deploy.Source.asset(FRONTEND_DIST)],
+        destinationBucket: frontendBucket,
+        // Without the invalidation CloudFront keeps serving the cached
+        // index.html and the deploy looks like it did nothing.
+        distribution: this.distribution,
+        distributionPaths: ['/*'],
+      });
+    }
 
     if (config.domainName && config.hostedZoneId) {
       const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', {

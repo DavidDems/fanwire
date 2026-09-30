@@ -19,6 +19,10 @@ describe('loadConfig', () => {
       domainName: 'fanwire.daviddems.com',
       hostedZoneId: 'Z04139742PYZYKIOGHWGR',
       hostedZoneName: 'fanwire.daviddems.com',
+      // Not in cdk.json: uploading `frontend/dist` is opt-in, because the
+      // directory is gitignored and CI synthesizes without a frontend build.
+      // A human deploying runs `cdk deploy -c deployFrontend=true`.
+      deployFrontend: false,
     });
   });
 
