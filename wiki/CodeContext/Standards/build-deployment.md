@@ -102,10 +102,22 @@ The first deploy is therefore **a human at a terminal**, in this order:
 
 1. `cdk deploy` — all eight stacks. **Done 2026-09-30.**
 2. Invoke the `Migration` function once, by hand (`INFRA-003`). Until this runs, RDS has no tables and the other four Lambdas fail against it. **Done 2026-09-30**, returned `{"revision": "f4a1c9d2b6e7"}`.
-3. Read `Fanwire-Auth`'s outputs, then `npm run build` in `frontend/` with the real `VITE_*` values — Vite bakes them in at build time, so the bundle cannot be built before the pool exists ([[wiki/CodeContext/Modules/0x08-frontend|0x08 Frontend]]). **Outstanding.**
-4. `cdk deploy -c deployFrontend=true` — uploads `dist/` and invalidates the distribution (`INFRA-002`). **Outstanding.**
+3. Read `Fanwire-Auth`'s outputs and build `frontend/dist` against them — Vite bakes them in at build time, so the bundle cannot be built before the pool exists ([[wiki/CodeContext/Modules/0x08-frontend|0x08 Frontend]]). **Done 2026-09-30.**
+4. `cdk deploy Fanwire-Cdn --exclusively -c deployFrontend=true` — uploads `dist/` and invalidates the distribution (`INFRA-002`). **Done 2026-09-30**, 98 s.
 
 Between steps 1 and 4 the site serves an S3 `403 AccessDenied` XML document rather than a 404 or an error page. That is the expected state of a correct, empty bucket behind a correct distribution, and it is explained in [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] → "First deploy, 2026-09-29" along with everything else the first deploy established.
+
+### Rebuilding the SPA
+
+Every frontend change reaches production this way. The human runs each line, from the repo root unless stated; the pool and client ids are `Fanwire-Auth`'s outputs and do not change unless that stack is replaced.
+
+1. `Remove-Item -Recurse -Force frontend\dist` — a stale `dist` is worse than none, because the deploy would upload it.
+2. Build **in Docker**, never with a bare `npm run build`: `frontend/.env.local` holds the *dev* pool and Vite reads it in production mode too, so one missing variable would silently ship the dev pool. `.dockerignore` excludes it, and the `build` stage fails on any empty value.
+   `docker build -f docker\frontend.Dockerfile --target export --output frontend --build-arg VITE_API_BASE_URL=/api --build-arg VITE_MEDIA_BASE_URL=https://fanwire.daviddems.com --build-arg VITE_COGNITO_REGION=ca-central-1 --build-arg VITE_COGNITO_USER_POOL_ID=ca-central-1_eSfPUMRq8 --build-arg VITE_COGNITO_CLIENT_ID=1vskugrl60gggpt0lmib4ka85j .`
+   `VITE_MEDIA_BASE_URL` is the **site origin**, not `/media`: public keys already start with `media/` and CloudFront forwards `/media/*` unchanged.
+3. Check the bundle before uploading it: each production id appears in `dist/assets/*.js`, and neither dev id (from `frontend/.env.local`) appears at all. Count each value separately — the bundle is one minified line, so a multi-pattern `Select-String` reports only the first match and looks like a false failure.
+4. From `infra/`: `npx cdk deploy Fanwire-Cdn --exclusively -c deployFrontend=true --profile fanwire-workload`. `--exclusively` skips the seven unchanged stacks (and rebuilding the backend image). A deploy that adds the `BucketDeployment` handler asks to approve its IAM; the set is pinned in `infra/test/iam-policy.test.ts`.
+5. `(Invoke-WebRequest https://fanwire.daviddems.com/ -UseBasicParsing).Content` names the new `index-*.js`.
 
 `docker/cdk-deploy.Dockerfile` pins the CDK CLI/Node version and is what a human should synth or deploy through; nothing in CI invokes it.
 

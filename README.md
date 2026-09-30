@@ -15,13 +15,13 @@ It is also the first project built through an intentional AI development pipelin
 | `wiki/` | Every AI-facing file: per-module decisions, standards, task prompts. Start at `wiki/index.md`. |
 | `TODO/` | **Things only you can do.** Start here. |
 
-No live AWS deploy exists yet.
+Live at `https://fanwire.daviddems.com` since 2026-09-30, deployed by hand; no workflow deploys.
 
 ## What needs you
 
 `TODO/` — and it is nearly empty now. Nothing in it blocks the pipeline any more.
 
-1. **`TODO/02-deployment-requirements.md`** — the dev S3 buckets (~10 minutes), plus a checklist that only becomes actionable after a first deploy.
+1. **`TODO/02-deployment-requirements.md`** — the dev S3 buckets (~10 minutes), plus the post-deploy checklist (§2), actionable now that the stacks exist.
 2. **`TODO/03-open-decisions.md`** — answered product decisions, four of which still need copying into `wiki/GeneralContext/Prompts/phase-4-manager-agent.md`.
 
 The setup checklist that used to be `TODO/01` is gone: every item was completed, and what is durable about it moved to `wiki/GeneralContext/Architecture/github-automation-setup.md`. A finished item does not stay in `TODO/` as a tick — it becomes current-state fact in the wiki.

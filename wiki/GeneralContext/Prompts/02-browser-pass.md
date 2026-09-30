@@ -4,7 +4,16 @@
 browser, for the first time. Every Cognito call sits behind the `AuthService`
 seam and is covered only by an interface double, so the SDK call signatures in
 `CognitoAuthService.ts` are **unverified against a live pool** — a wrong
-argument shape there passes all 371 tests. Do this before any deploy.
+argument shape there passes all 371 tests.
+
+> **Partly overtaken, 2026-09-30.** The production deploy exercised sign-up,
+> email confirmation, sign-in, profile creation and posting against the
+> *production* pool, and they work — so the `CognitoAuthService` signatures are
+> no longer unverified. What this prompt still buys: the same flow against the
+> *dev* pool and `backend-dev` (a local loop that costs nothing per click), the
+> rest of the click-path below, and `MEDIA-002`. Reply is known not to pass a
+> parent post id to `/compose`; that is unfinished frontend work, not a
+> regression to chase here.
 
 **Read:** `00-session-protocol.md`,
 `wiki/GeneralContext/Architecture/dev-auth-setup.md`, `AGENTS.md` "Build / test

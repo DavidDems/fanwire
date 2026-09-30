@@ -1,6 +1,6 @@
 # Incident Runbook
 
-**Status: interim.** Written pre-CDK, when nothing is deployed to `fanwire-workload` except account-level
+**Status: interim, and the revisit below is now due** — all eight stacks were deployed 2026-09-30 (tracked in `TODO/02-deployment-requirements.md` §2). Written pre-CDK, when nothing is deployed to `fanwire-workload` except account-level
 scaffolding. The "lockout" and "asset inventory" sections below are deliberately generic because there are no
 application resources yet to name specifically. **This must be revisited once Phase 6 (CDK stacks) lands and
 `GitHubActionsDeployRole` receives real permissions** — at that point, name the actual roles/Lambdas/buckets
