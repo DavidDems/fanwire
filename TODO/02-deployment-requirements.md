@@ -45,11 +45,11 @@ deploy.
 
 Two PRs came out of the checklist, and both land in `Fanwire-App`:
 
-- **Notifications: email is best-effort.** A failed send no longer fails the
+- **Notifications: email is best-effort** (PR #79). A failed send no longer fails the
   SQS record, so it no longer duplicates the notification on every retry.
   This is the live bug: right now every follow, reply and repost is
   notified up to five times.
-- **The SES domain identity, in CDK**, with its three DKIM records published
+- **The SES domain identity, in CDK** (PR #77), with its three DKIM records published
   into the hosted zone, so it verifies itself.
 
 One deploy ships both. From `infra/`, with `main` checked out and up to date —
