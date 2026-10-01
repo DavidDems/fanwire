@@ -178,6 +178,12 @@ which was not chosen. It is a property of the design, not an oversight.
 > - **The infra tests used to leak ~50 MB per synth into `%TEMP%`** and filled
 >   the disk mid-session (fixed in PR #76). If Docker Desktop hangs with no
 >   output, check free space first.
+> - **`npx cdk` only works from `infra/`.** The CLI is pinned in
+>   `infra/node_modules`; from the repository root npx finds nothing local and
+>   offers to install the unrelated registry package `cdk`, which then fails
+>   with `ETARGET` (2026-10-01). **An install prompt means you are in the wrong
+>   directory — answer no.** `npx cdk --version` should print the version in
+>   `infra/package.json` with no prompt.
 > - **`aws … | Select-String` can die with `'charmap' codec can't encode`**
 >   when the output holds a non-ASCII character. Prefix the line with
 >   `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';`.
