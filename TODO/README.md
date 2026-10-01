@@ -12,7 +12,7 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left after the post-deploy checklist: read the `Fanwire-App` drift, deploy two fixes, turn on SES | §2 fixes a live bug (duplicate notifications) — do it once both PRs are merged |
+| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left after the post-deploy checklist: deploy two fixes, turn on SES | §2 fixes a live bug (duplicate notifications) — do it once both PRs are merged |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
 

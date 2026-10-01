@@ -1,8 +1,8 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-09-30: the post-deploy checklist is worked, and three
-things are left for you** — read why `Fanwire-App` drifted, deploy the two
-fixes that came out of the checklist, and turn on SES. The deploy-role
+**Status as of 2026-09-30: the post-deploy checklist is worked, and two
+things are left for you** — deploy the two fixes that came out of the
+checklist, and turn on SES. The deploy-role
 narrowing has its own session prompt.
 
 Everything that was in this file and is now finished has moved into the wiki,
@@ -26,20 +26,12 @@ where it belongs as current-state fact rather than as a tick:
 
 ---
 
-## 1. Read why `Fanwire-App` drifted
+## 1. ~~Read why `Fanwire-App` drifted~~ — done, benign
 
-Drift detection on 2026-09-30 found seven stacks `IN_SYNC` and `Fanwire-App`
-`DRIFTED`. Drift is something in the live stack that no longer matches its
-template — a hand change, or a property AWS rewrites. It matters before §2,
-because **the next `cdk deploy Fanwire-App` overwrites it** whatever it is.
-
-```powershell
-aws cloudformation describe-stack-resource-drifts --stack-name Fanwire-App --stack-resource-drift-status-filters MODIFIED DELETED --region ca-central-1 --profile fanwire-workload --query "StackResourceDrifts[].{id:LogicalResourceId,type:ResourceType,status:StackResourceDriftStatus,diffs:PropertyDifferences[].{path:PropertyPath,type:DifferenceType,expected:ExpectedValue,actual:ActualValue}}" --output json
-```
-
-Hand the output to an agent session (`05-post-deploy.md`) to read. If it is a
-change you made on purpose, it has to go into CDK first or it is lost on
-deploy.
+One property, `DefaultStage`'s access-log ARN: CDK writes it with a trailing
+`:*` and API Gateway stores it without. Same log group; nothing was changed by
+hand and nothing is lost on deploy. Expect that diff on every future drift
+check. Details: `0x00-architecture.md` → "Post-deploy checks".
 
 ## 2. Deploy the two fixes — after both PRs are merged
 
