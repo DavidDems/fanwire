@@ -198,11 +198,9 @@ exact commands.
 
 ### Then, and only then
 
-`TODO/02-deployment-requirements.md` §2 — GuardDuty Malware Protection on the
-quarantine bucket, the SES identity and production-access request, confirming
-the ACM certificate validated and the aliases resolve, re-running the IAM gate
-against reality, narrowing `cfn-exec-role`, and the `lambda-vpc-eni` design
-review. Each of those silently does nothing until someone does it.
+The post-deploy checklist — worked 2026-09-30. What each check proved is in
+`wiki/CodeContext/Modules/0x00-architecture.md` → "Post-deploy checks,
+2026-09-30"; what it left for a human is `TODO/02-deployment-requirements.md`.
 
 ---
 

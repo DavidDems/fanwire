@@ -12,16 +12,20 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left of deployment: the dev S3 buckets, and a post-deploy checklist | Barely. One ~10-minute item is available; the rest needs a deploy to exist first |
+| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left after the post-deploy checklist: read the `Fanwire-App` drift, deploy two fixes, turn on SES | §2 fixes a live bug (duplicate notifications) — do it once both PRs are merged |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
+| [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
 
-**Status as of 2026-09-24.** `01` is **deleted** — every item in it was
+**Status as of 2026-09-30.** `01` is **deleted** — every item in it was
 completed, and its durable content now lives at
-`wiki/GeneralContext/Architecture/github-automation-setup.md`. `02` is trimmed to
-the dev S3 buckets plus a post-deploy checklist; everything finished moved into
-`wiki/CodeContext/Modules/0x00-architecture.md` ("AWS account state" and "Known
-gaps"). `03` holds the answered product decisions, four of which still have to be
-copied into `phase-4-manager-agent.md` by a human.
+`wiki/GeneralContext/Architecture/github-automation-setup.md`. The site is
+live, and `02` now holds only what the post-deploy checklist left you; what
+each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
+("Post-deploy checks, 2026-09-30"). `03` holds the answered product decisions,
+four of which still have to be copied into `phase-4-manager-agent.md` by a
+human. `04` is the record of the first deploy — finished, kept for its
+"Traps" list, which every later AWS session reads before handing over a
+command.
 
 This folder is doing what it was supposed to: shrinking. A completed item does
 not stay here as a tick — it becomes current-state fact in the wiki and the entry
