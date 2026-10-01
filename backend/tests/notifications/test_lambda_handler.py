@@ -182,3 +182,57 @@ def test_a_record_that_raises_is_reported_as_a_batch_item_failure(session_factor
     result = handler(event, None)
 
     assert result == {"batchItemFailures": [{"itemIdentifier": event["Records"][0]["messageId"]}]}
+
+
+@mock_aws
+def test_user_followed_record_is_not_a_batch_failure_when_ses_rejects_the_email(
+    session_factory, monkeypatch
+):
+    # Production incident 2026-09-30: the SES identity was unverified, so
+    # send_email raised MessageRejected, the record was reported in
+    # batchItemFailures, SQS redelivered it, and each redelivery committed
+    # another Notification row (duplicate follow notifications 2m56s apart).
+    # Identical to the test above except the from-address is never verified,
+    # so moto's SES rejects the send exactly as production did.
+    monkeypatch.setenv("NOTIFICATION_FROM_ADDRESS", "notifications@fanwire.example")
+    get_settings.cache_clear()
+
+    cognito = boto3.client("cognito-idp", region_name="us-east-1")
+    pool_id = cognito.create_user_pool(PoolName="fanwire-test")["UserPool"]["Id"]
+    monkeypatch.setenv("COGNITO_USER_POOL_ID", pool_id)
+    get_settings.cache_clear()
+
+    with session_factory() as session:
+        follower = _make_user(session, username="unverified_follower")
+        followed = _make_user(session, username="unverified_followed")
+
+    followed_sub = "33333333-3333-3333-3333-333333333333"
+    with session_factory() as session:
+        followed_row = session.get(User, followed.id)
+        followed_row.cognito_sub = followed_sub
+        session.commit()
+
+    cognito.admin_create_user(
+        UserPoolId=pool_id,
+        Username=followed_sub,
+        UserAttributes=[{"Name": "email", "Value": "followed@example.com"}],
+    )
+
+    from app.notifications.lambda_handler import handler
+
+    event = _load_fixture("notification_user_followed_sqs_event.json")
+    body = json.loads(event["Records"][0]["body"])
+    body["detail"]["follower_user_id"] = follower.id
+    body["detail"]["followed_user_id"] = followed.id
+    event["Records"][0]["body"] = json.dumps(body)
+
+    result = handler(event, None)
+
+    assert result == {"batchItemFailures": []}
+    with session_factory() as session:
+        rows = session.query(Notification).filter_by(recipient_user_id=followed.id).all()
+        assert len(rows) == 1
+    from moto.ses.models import ses_backends
+
+    account_id = boto3.client("sts", region_name="us-east-1").get_caller_identity()["Account"]
+    assert ses_backends[account_id]["us-east-1"].sent_messages == []
