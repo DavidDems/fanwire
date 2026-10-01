@@ -297,3 +297,41 @@ def test_email_suppressed_when_preference_disabled_but_notification_still_create
         assert result is not None
         fetched = session.scalar(select(Notification).where(Notification.id == result.id))
         assert fetched is not None
+
+
+# --- Email is best-effort ----------------------------------------------------------
+
+
+def test_email_send_failure_does_not_propagate_and_leaves_one_notification(session_factory):
+    # Production incident 2026-09-30: SES rejected the send (unverified
+    # identity), the exception escaped handle_domain_event after the
+    # Notification row was already committed, SQS redelivered the record and
+    # every redelivery committed another row -- duplicate "started following
+    # you" notifications. Email is a best-effort side channel; the committed
+    # in-app row is the durable outcome.
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import EmailSender
+    from app.notifications.models import Notification, NotificationType
+
+    class FailingEmailSender(EmailSender):
+        def send(self, *, recipient_cognito_sub, notification):
+            raise RuntimeError("MessageRejected: Email address not verified")
+
+    with session_factory() as session:
+        followed = _make_user(session, username="email_fails_followed")
+        follower = _make_user(session, username="email_fails_follower")
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed.id},
+            email_sender=FailingEmailSender(),
+        )
+
+        assert result is not None
+        assert result.recipient_user_id == followed.id
+        assert result.type == NotificationType.FOLLOW
+        rows = session.scalars(
+            select(Notification).where(Notification.recipient_user_id == followed.id)
+        ).all()
+        assert len(rows) == 1

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from aws_lambda_powertools import Logger
 from sqlalchemy.orm import Session
 
 from app.notifications.channels import NotificationFactory
@@ -50,6 +51,8 @@ from app.users.models import User
 
 POST_CREATED = "PostCreated"
 USER_FOLLOWED = "UserFollowed"
+
+logger = Logger()
 
 
 def handle_domain_event(
@@ -69,6 +72,12 @@ def handle_domain_event(
     recipient's NotificationPreference.email_notifications_enabled is true
     (or no preference row exists yet -- default enabled), via the email
     channel.
+
+    Email is a best-effort side channel: the committed Notification row is
+    the durable outcome, so any exception from email delivery (e.g. SES
+    MessageRejected) is logged -- notification type and id only, no PII --
+    and swallowed, and the notification is still returned. Failures before
+    the commit (e.g. a nonexistent post) still propagate.
     """
     if event_name == POST_CREATED:
         recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(session, detail)
@@ -104,7 +113,18 @@ def handle_domain_event(
     preference = session.get(NotificationPreference, recipient_id)
     email_enabled = preference is None or preference.email_notifications_enabled
     if email_enabled:
-        factory.create("email").deliver(session, notification, recipient=recipient)
+        try:
+            factory.create("email").deliver(session, notification, recipient=recipient)
+        except Exception:
+            # Broad on purpose: the row is already committed, and failing the
+            # record would make SQS redeliver it and commit a duplicate row.
+            logger.exception(
+                "email notification delivery failed",
+                extra={
+                    "notification_type": notification.type.value,
+                    "notification_id": notification.id,
+                },
+            )
 
     return notification
 
