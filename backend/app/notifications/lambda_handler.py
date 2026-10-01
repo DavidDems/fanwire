@@ -15,7 +15,9 @@ Always constructs a real SesEmailSender: that class itself decides whether
 to actually send (see its own docstring -- a no-op, no PII logged, when
 NOTIFICATION_FROM_ADDRESS is unset). In-app notification creation in
 handle_domain_event happens unconditionally either way, so "email disabled"
-never blocks in-app delivery.
+never blocks in-app delivery. An email send that raises (e.g. SES
+MessageRejected) is swallowed inside handle_domain_event too -- it never
+fails the record, since a redelivery would commit a duplicate row.
 
 Per-record failures are reported via `batchItemFailures` rather than
 raising, so one bad record (batch size 10) doesn't block the rest.
