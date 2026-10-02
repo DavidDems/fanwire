@@ -139,7 +139,7 @@ What is deliberately **not** in place, and why:
 3. **The *first* deploy cannot be fully automated regardless**, because of the three-phase ordering in `TODO/04-first-deploy.md` §4: Vite inlines `VITE_*` at build time, the production Cognito ids do not exist until `Fanwire-Auth` has deployed, so the bundle cannot exist before the first deploy. Steady-state deploys after that have no such constraint and are the automatable case. A single-pass "build then deploy" job would work for every deploy *except* the first.
 4. **The NAT instance's AMI floats.** `Fanwire-Network` resolves the latest AL2023 AMI on every deploy, so an on-merge workflow would silently replace the NAT instance, and briefly cut Lambda egress, whenever AWS publishes a new image. It did so on 2026-10-02 (see 0x00 "Outstanding"). Pin the AMI before automating.
 
-So the order of operations is: first deploy by hand → narrow `cfn-exec-role` against what was actually used (**done 2026-10-02**) → pin the NAT AMI → then write the deploy workflow, reviewed on its own.
+So the order of operations is: first deploy by hand → narrow `cfn-exec-role` against what was actually used (**done 2026-10-02**) → pin the NAT AMI (`wiki/GeneralContext/Prompts/09-nat-ami-pin.md`) → then write the deploy workflow, reviewed on its own (`10-deploy-workflow.md`, which also moves the OIDC trust from `ref:refs/heads/main` to a GitHub environment, so the agent workflows, which also run from `main`, cannot assume the role).
 
 ## Local dev (`docker-compose.yml`)
 `postgres` (real Postgres, matching RDS — not sqlite) and `dynamodb-local` back the `backend-test` and `frontend-test` one-shot services. This compose file is dev/test tooling only; it is never what's deployed.

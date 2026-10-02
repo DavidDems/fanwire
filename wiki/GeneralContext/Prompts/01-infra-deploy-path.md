@@ -1,5 +1,11 @@
 # 01 — The deploy path (`INFRA-002`, `INFRA-003`)
 
+> **Completed.** `INFRA-002` merged as #72 and `INFRA-003` as #73, and both
+> ran in the first deploy (2026-09-30): the SPA is uploaded by the
+> `BucketDeployment`, and the migration function returned a head revision.
+> Do not re-run this prompt. The agent board still shows both as `DRAFT`,
+> because they were built in Director sessions, which do not move it.
+
 **Objective:** land both. They are the only two things blocking a first deploy
 that does anything — nothing uploads `dist/` to the frontend bucket, and nothing
 applies the schema to RDS, so today a deploy serves an empty site over an empty

@@ -1,9 +1,10 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-10-01: one thing is waiting on AWS, not on you** —
-SES production access: auto-denied for missing detail, answered on the support case, under review (§3). The fixes the
-post-deploy checklist produced are deployed and verified (§2). The deploy-role
-narrowing has its own session prompt.
+**Status as of 2026-10-02: one thing is waiting on AWS, not on you** —
+SES production access: auto-denied for missing detail, answered on the support
+case, under review (§1). Everything else in this file is finished and has
+moved into the wiki (below). The next AWS work you do will be inside a session:
+`wiki/GeneralContext/Prompts/09-nat-ami-pin.md`, then `10-deploy-workflow.md`.
 
 Everything that was in this file and is now finished has moved into the wiki,
 where it belongs as current-state fact rather than as a tick:
@@ -17,8 +18,14 @@ where it belongs as current-state fact rather than as a tick:
   `wiki/GeneralContext/Architecture/incident-runbook.md`.
 - **AWS account state** and the IAM waivers: same `0x00` file, "AWS account
   state" and "Infra (CDK) — implementation notes".
+- **The `Fanwire-App` drift** (benign, expect it on every drift check), and
+  **the two fixes deployed 2026-10-01** (#77, #79): `0x00` → "Post-deploy
+  checks", the drift and SES rows.
+- **`cfn-exec-role` scoped 2026-10-02**: `0x00` → "AWS account state". Rolling
+  out a later edit to its policy is yours —
+  `aws iam create-policy-version ... --set-as-default`, in `infra/iam/README.md`.
 
-> **The dev S3 buckets** (the old §1) are done: created 2026-09-25, locked
+> **The dev S3 buckets** (an earlier §1) are done: created 2026-09-25, locked
 > down, CORS and TLS-only policies applied, and the three variables are in
 > `backend/.env`. Locally, an upload still stays `Quarantined`, because there
 > is no GuardDuty to scan it — the dev-only processing script is `MEDIA-002` in
@@ -26,21 +33,7 @@ where it belongs as current-state fact rather than as a tick:
 
 ---
 
-## 1. ~~Read why `Fanwire-App` drifted~~ — done, benign
-
-One property, `DefaultStage`'s access-log ARN: CDK writes it with a trailing
-`:*` and API Gateway stores it without. Same log group; nothing was changed by
-hand and nothing is lost on deploy. Expect that diff on every future drift
-check. Details: `0x00-architecture.md` → "Post-deploy checks".
-
-## 2. ~~Deploy the two fixes~~ — done 2026-10-01
-
-PRs #79 (notifications email is best-effort) and #77 (the SES identity in CDK)
-were deployed with `npx cdk deploy Fanwire-App --exclusively`. Both observables
-passed: the identity reads `verified: true`, DKIM `SUCCESS`, and a follow made
-after the deploy produced exactly one notification.
-
-## 3. SES production access — requested, auto-denied for missing detail, answered
+## 1. SES production access — requested, auto-denied for missing detail, answered
 
 The first request (2026-10-01, `put-account-details` with no use-case text)
 came back `DENIED` within minutes — an automated "needs more information",
@@ -86,15 +79,6 @@ aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "
 `prod: true` closes this item — delete the section. Until then, email to an
 address not verified in SES is rejected and logged by the notifications
 Lambda; the in-app notification is unaffected.
-
-## 4. ~~Narrow `cfn-exec-role`~~ — done 2026-10-02
-
-Both exec roles hold `FanwireCdkCfnExecPolicy` (created by hand, applied with
-`cdk bootstrap --cloudformation-execution-policies`). A later edit to
-`infra/iam/cdk-cfn-exec-role-policy.json` is yours to roll out:
-`aws iam create-policy-version ... --set-as-default` (see `infra/iam/README.md`).
-The session ran
-`wiki/GeneralContext/Prompts/07-deploy-role-scoping.md`; its PR records the evidence.
 
 ---
 

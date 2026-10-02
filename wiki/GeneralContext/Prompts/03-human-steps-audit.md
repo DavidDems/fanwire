@@ -3,8 +3,8 @@
 **Objective:** tell the human exactly what only they can do, hand them the
 commands, then verify. Re-run this prompt whenever they report a step finished.
 
-**Read:** `00-session-protocol.md`, `TODO/02-deployment-requirements.md` (§1
-done, §2 pending), `TODO/04-first-deploy.md` §2 and §4, and
+**Read:** `00-session-protocol.md`, `TODO/02-deployment-requirements.md` (whatever
+is still in it; finished items are deleted), `TODO/04-first-deploy.md` §2 and §4, and
 `wiki/CodeContext/Modules/0x00-architecture.md` "AWS account state".
 
 Audit each item against reality — the repo, and read-only `aws` calls — rather

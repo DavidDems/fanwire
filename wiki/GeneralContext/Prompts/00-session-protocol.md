@@ -58,6 +58,7 @@ behaviour they pin is removed.
 ## Standing limits
 
 - **Never run `cdk deploy` or `npm run deploy`** from any session. It is out of scope for this repo by design — `.ai/docs/handoff.md` §5.7.
+- **CloudFormation's own role is scoped, not admin** (since 2026-10-02, `infra/iam/cdk-cfn-exec-role-policy.json`). A change that makes a stack use an AWS service the policy does not grant fails `infra/test/cfn-exec-policy.test.ts`, and that failure is correct: extend the policy and the test's `TYPE_TO_IAM` in the same PR, say so in the PR body, and tell the human to roll out the new policy version (`infra/iam/README.md`) **before** they deploy.
 - **Never start `.github/workflows/agent-orchestrator.yml`** for these tasks. It bills metered API credits; a subscription does not cover it (`TODO/04-first-deploy.md` §5).
 - **Every command you hand the human is a single-line PowerShell command.** A multi-line or `sh`-flavoured one half-succeeds on their machine and has already cost a broken Route 53 token. When an `aws` command's output is piped (`| Select-String`, `| Select-Object`), prefix it with `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';` — the CLI otherwise encodes to the Windows code page and dies on the first non-ASCII character.
 - Nothing in this repo has merge permission. Keep it that way.
