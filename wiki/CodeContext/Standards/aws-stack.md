@@ -35,7 +35,7 @@ Optimized for near-zero idle cost with room to scale if traffic grows. Every com
 
 ## Frontend
 - **React + TypeScript**, built with **Vite** (faster dev/build than CRA, no reason to use anything heavier for this).
-- Component/design layer: install the UI design skill yourself before using it — `! npx -y skills add omer-metin/skills-for-antigravity --skill ui-design --agent claude-code` — review what that repo actually installs first, since it's an individual's package pulling and running code on your machine.
+- Component/design layer: the `ui-design` skill (`omer-metin/skills-for-antigravity`) is committed at `.claude/skills/ui-design/`. It was reviewed, then installed by copying the files rather than running its `npx` installer, so no third party's code runs on anyone's machine. Look-and-feel decisions and plans live in `wiki/CodeContext/FrontendUI/`, starting with `decisions.md`.
 - Serve the built static bundle from **S3 + CloudFront** (same distribution or a second one in front of the API — see Storage/CDN/DNS below).
 
 ## Storage, CDN, DNS

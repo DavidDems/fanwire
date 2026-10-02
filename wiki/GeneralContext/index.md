@@ -50,26 +50,25 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **AWS Stack** — backend/frontend language choices, AWS services, sports-data ingestion pipeline: `wiki/CodeContext/Standards/aws-stack.md`
 - **Build & Deployment** — package inventory, container strategy, CI/CD wiring: `wiki/CodeContext/Standards/build-deployment.md`
 
+### Frontend UI (look and feel)
+`wiki/CodeContext/FrontendUI/`: the reference for styling units. Today it holds only `decisions.md`: the human's palette (with measured contrast), the lowercase-name rule (`fanwire`, name only), "no wordmark or icon yet", and the `ui-design` skill's provenance. `Prompts/11` builds out the rest (direction, tokens, typography, layout, components, accessibility, verification, implementation plan), and `Prompts/12` writes `branding.md`.
+
 ### Architecture & operations (GeneralContext-only — not handed to code-change subagents)
 - **Business rules**: `wiki/GeneralContext/Architecture/business-rules.md`
 - **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — GuardDuty-finding response, priority-of-suspicion order, and concrete containment commands naming the deployed resources (revisited 2026-09-30).
 - **Dev auth setup**: `wiki/GeneralContext/Architecture/dev-auth-setup.md`: the human-created real Cognito dev user pool that local dev and browser testing use (decided 2026-09-18, no emulator or fake).
+- **Human decisions log**: `wiki/GeneralContext/Architecture/human-decisions.md`: every product or process question agents asked, the human's answer, and the file where each answer now lives as current state. It replaces the decision log the deleted `phase-4-manager-agent.md` held, and keeps the old `TODO/03` section numbers.
 - **GitHub automation setup**: `wiki/GeneralContext/Architecture/github-automation-setup.md`: the repository settings the `.ai/` pipeline depends on and why — secrets (and the repository-vs-environment trap), the ruleset and its aggregate required checks, the solo-repo approval bypass, `action_required` on bot-authored PRs, and how to run/stop a task. The one part of the agent system not under version control, so not diffable and not testable.
 
 ### Task prompts
-`wiki/GeneralContext/Prompts/` — full briefs for agents kicking off a build pass. The first full pass is split across sequential manager-agent handoffs, each self-contained (a fresh agent reads only its own file plus whatever it names) and each meant to minimize any one agent's mandate rather than one agent running the whole pass:
-- `first-pass-manager-agent.md` — Phase 0 (scaffold) + Phase 1 (`events/`, `users/`, `media/`).
-- `phase-2-manager-agent.md` — Phase 2 (`posts/`), plus closing the Phase 1 routes gap it documents.
-- `phase-3-manager-agent.md` — Phase 3 (`notifications/`, `feed/`, `search/`).
-- `phase-4-manager-agent.md` — Phase 4: closed the unbuilt Phase 3 `feed/`/`search/` gap, the `users/me` gap and CDK infra (synth-only). Its Status section holds the human-decision log and the frontend human-input checklist.
-- `phase-5a-frontend-manager-agent.md` — Phase 5a: frontend foundation + typed client, auth (real dev Cognito), profile/follow, compose. **Superseded** — see below.
-- `phase-5b-frontend-manager-agent.md` — Phase 5b: feed, notifications, search UIs, then the whole-build summary and rolled-up process outcomes. **Superseded** — see below.
-- `frontend-build-handoff.md` — **the live one.** The frontend pass as it is actually being run: seven `FRONTEND-00N` task specs in `.ai/tasks/`, `001` merged, `002`–`007` outstanding. Read this rather than 5a/5b.
-- `00`–`10` — **the post-build sessions, and the live ones.** `00-session-protocol.md` is the shared rules every numbered prompt points at. Done, and they say so at their top: `01` (the deploy path), `04` (the first deploy), `05` (the post-deploy checklist), `07` (scope `cfn-exec-role`), `09` (pin the NAT AMI). Partly overtaken but still worth running: `02` (browser pass, `MEDIA-002`). Re-run whenever the human reports a step finished: `03`. Open: `06` (search UI, optional), `08` (post-deploy follow-ups) and `10` (the automated deploy workflow, now unblocked). The deploy path runs `10` next, with a permissions boundary on created roles after that.
+`wiki/GeneralContext/Prompts/` holds full briefs for Director sessions. Each is self-contained: a fresh session reads its own file plus whatever that file names.
 
-**Why 5a and 5b are superseded, and why they are kept.** They describe the same seven units, but under the execution model that predates `.ai/` — a manager agent delegating to subagents, with the unit contract living in prose. That contract is now a validated `task.json` whose `allowed_paths` are enforced in CI, and the acceptance criteria are tests before they are anything else. The two files remain because their *settled facts* (the `/api` prefix strip, the ID-token rule, the DOB privacy rule, the two-mechanism search constraint) are still correct and are cited from the specs. Follow their facts; do not follow their process.
-
-Each brief's "Process outcomes" section feeds the next one and, eventually, the decision on which drafted `rules`-branch item is worth real technical enforcement (see Process note above). That question is now largely answered: the enforcement lives in `.ai/policy.json`, `agentctl guard check` and the CI gates, per the Process note.
+- **Deleted 2026-09-29 (commit `2fc5de9`):** the build-pass manager prompts. These were `first-pass-manager-agent.md`, `phase-2`/`3`/`4-manager-agent.md`, `phase-5a`/`5b-frontend-manager-agent.md` and `frontend-build-handoff.md`. Their settled facts live in the module files, and the human-decision log they held is now `Architecture/human-decisions.md`. Read them from git history if you need their reasoning.
+- **`00`–`12`, the post-build sessions.** `00-session-protocol.md` is the shared rules every numbered prompt points at.
+  - **Done**, and they say so at their top: `01` (the deploy path), `04` (the first deploy), `05` (the post-deploy checklist), `07` (scope `cfn-exec-role`), `09` (pin the NAT AMI).
+  - **Partly overtaken but still worth running:** `02` (browser pass, `MEDIA-002`).
+  - **Re-run whenever the human reports a step finished:** `03`.
+  - **Open:** `06` (search UI, optional), `08` (post-deploy follow-ups), `10` (the automated deploy workflow; the deploy path runs `10` next, with a permissions boundary on created roles after that), `11` (plan the frontend's look and feel into `wiki/CodeContext/FrontendUI/`) and `12` (branding research: colour, mark, and how the human makes the assets). `11` and `12` can run in either order; whichever runs second reconciles with the first.
 
 ### Reports
 `wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. Still unwritten by automation: the agent system records machine output as structured state and telemetry under `.ai/` (`agentctl status`, `agentctl telemetry report`) rather than as prose reports here, so these folders are awaiting a use that genuinely needs prose. `wiki/GeneralContext/` is not writable by any agent worker.
