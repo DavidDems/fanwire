@@ -23,6 +23,37 @@ describe('loadConfig', () => {
       // directory is gitignored and CI synthesizes without a frontend build.
       // A human deploying runs `cdk deploy -c deployFrontend=true`.
       deployFrontend: false,
+      // The AMI the live NAT instance runs as of 2026-10-02, pinned so the
+      // first deploy of the pin is a no-op rather than an instance replacement.
+      natImageId: 'ami-012dfd7ab44bf488a',
+    });
+  });
+
+  describe('natImageId (required; pinned NAT AMI)', () => {
+    test.each([
+      ['non-hex characters', 'ami-XYZ12345'],
+      ['7 hex digits', 'ami-1234567'],
+      ['18 hex digits', 'ami-0123456789abcdef01'],
+      ['uppercase hex', 'ami-0123456789ABCDEF0'],
+      ['no ami- prefix', '0123456789abcdef0'],
+      ['empty', ''],
+      ['whitespace only', '   '],
+      ['absent', undefined],
+    ])('rejects %s (%p)', (_label, natImageId) => {
+      expect(() => configWith({ natImageId })).toThrow(/natImageId/);
+    });
+
+    test.each([
+      ['8 hex digits (legacy)', 'ami-0123abcd'],
+      ['17 hex digits', 'ami-0123456789abcdef0'],
+    ])('accepts %s', (_label, natImageId) => {
+      expect(configWith({ natImageId })).toMatchObject({ natImageId });
+    });
+
+    test('trims surrounding whitespace', () => {
+      expect(configWith({ natImageId: '  ami-0123456789abcdef0 ' })).toMatchObject({
+        natImageId: 'ami-0123456789abcdef0',
+      });
     });
   });
 

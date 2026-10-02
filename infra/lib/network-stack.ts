@@ -3,6 +3,11 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import { FanwireConfig } from './config';
+
+export interface NetworkStackProps extends cdk.StackProps {
+  readonly config: FanwireConfig;
+}
 
 /**
  * VPC for the Lambdas that must reach RDS.
@@ -73,7 +78,7 @@ export class NetworkStack extends cdk.Stack {
     return [`${this.region}a`, `${this.region}b`];
   }
 
-  constructor(scope: Construct, id: string, props: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
     // instanceV2 (not the deprecated v1 provider): configures iptables
@@ -82,7 +87,9 @@ export class NetworkStack extends cdk.Stack {
     natUserData.addCommands(...NAT_BOOTSTRAP);
     const natProvider = ec2.NatProvider.instanceV2({
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.NANO),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023({ cpuType: ec2.AmazonLinuxCpuType.ARM_64 }),
+      // Pinned AMI (config.natImageId): the latest-AL2023 SSM parameter is
+      // re-resolved on every deploy and a new image replaces the instance.
+      machineImage: ec2.MachineImage.genericLinux({ [this.region]: props.config.natImageId }),
       // Ingress is added explicitly below (HTTPS from the Lambda SG only).
       defaultAllowedTraffic: ec2.NatTrafficDirection.NONE,
       associatePublicIpAddress: true,

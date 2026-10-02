@@ -33,6 +33,14 @@ export interface FanwireConfig {
    * first and runs `cdk deploy -c deployFrontend=true`.
    */
   readonly deployFrontend: boolean;
+  /**
+   * AMI of the NAT instance (AL2023, arm64). Pinned rather than resolved from
+   * the latest-AL2023 SSM parameter, which CloudFormation re-reads on every
+   * deploy -- a new image would silently replace the instance. Upgrading it is
+   * a reviewed PR: wiki/CodeContext/Standards/build-deployment.md "Upgrading
+   * the NAT instance's AMI".
+   */
+  readonly natImageId: string;
 }
 
 function readString(node: Node, key: string): string | undefined {
@@ -66,6 +74,7 @@ export function loadConfig(node: Node): FanwireConfig {
   const hostedZoneId = readString(node, 'hostedZoneId');
   const hostedZoneName = readString(node, 'hostedZoneName');
   const deployFrontend = readBoolean(node, 'deployFrontend');
+  const natImageId = readString(node, 'natImageId');
 
   if (!account || !/^\d{12}$/.test(account)) {
     throw new Error(`context "account" must be a 12-digit AWS account id, got ${JSON.stringify(account)}`);
@@ -85,6 +94,9 @@ export function loadConfig(node: Node): FanwireConfig {
   if (domainName && !/^[a-z0-9.-]+$/.test(domainName)) {
     throw new Error(`context "domainName" is not a valid lowercase DNS name: ${domainName}`);
   }
+  if (!natImageId || !/^ami-[0-9a-f]{8,17}$/.test(natImageId)) {
+    throw new Error(`context "natImageId" must be an AMI id (ami- and 8-17 lowercase hex digits), got ${JSON.stringify(natImageId)}`);
+  }
 
-  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName, deployFrontend };
+  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName, deployFrontend, natImageId };
 }
