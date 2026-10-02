@@ -1,8 +1,8 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-09-30: the post-deploy checklist is worked, and two
-things are left for you** — deploy the two fixes that came out of the
-checklist, and turn on SES. The deploy-role
+**Status as of 2026-10-01: one thing is waiting on AWS, not on you** —
+SES production access, requested and under review (§3). The fixes the
+post-deploy checklist produced are deployed and verified (§2). The deploy-role
 narrowing has its own session prompt.
 
 Everything that was in this file and is now finished has moved into the wiki,
@@ -33,60 +33,30 @@ One property, `DefaultStage`'s access-log ARN: CDK writes it with a trailing
 hand and nothing is lost on deploy. Expect that diff on every future drift
 check. Details: `0x00-architecture.md` → "Post-deploy checks".
 
-## 2. Deploy the two fixes — after both PRs are merged
+## 2. ~~Deploy the two fixes~~ — done 2026-10-01
 
-Two PRs came out of the checklist, and both land in `Fanwire-App`:
+PRs #79 (notifications email is best-effort) and #77 (the SES identity in CDK)
+were deployed with `npx cdk deploy Fanwire-App --exclusively`. Both observables
+passed: the identity reads `verified: true`, DKIM `SUCCESS`, and a follow made
+after the deploy produced exactly one notification.
 
-- **Notifications: email is best-effort** (PR #79). A failed send no longer fails the
-  SQS record, so it no longer duplicates the notification on every retry.
-  This is the live bug: right now every follow, reply and repost is
-  notified up to five times.
-- **The SES domain identity, in CDK** (PR #77), with its three DKIM records published
-  into the hosted zone, so it verifies itself.
+## 3. SES production access — requested 2026-10-01, waiting on AWS
 
-One deploy ships both. From `infra/`, with `main` checked out and up to date —
-verify that first, as its own command (`TODO/04-first-deploy.md` §4 "Traps"):
+Filed with `aws sesv2 put-account-details --production-access-enabled …`
+(no output means it was accepted). AWS reviews it by hand, usually within a
+day, and may email follow-up questions — answer honestly: mail goes only to
+users who signed up and verified their address through Cognito, only for
+follows, replies and reposts, each of which they can switch off.
 
-```powershell
-git branch --show-current
-```
-```powershell
-git log --oneline -3
-```
-```powershell
-npx cdk deploy Fanwire-App --exclusively --profile fanwire-workload
-```
-
-It rebuilds the backend image, which is how the notifications fix ships.
-
-**Confirm it worked — two observables:**
-
-1. The identity verifies. DKIM can take up to 72 hours, usually minutes; you
-   want `"verified": true` and `"dkim": "SUCCESS"`:
-   ```powershell
-   aws sesv2 get-email-identity --email-identity fanwire.daviddems.com --region ca-central-1 --profile fanwire-workload --query "{verified:VerifiedForSendingStatus,dkim:DkimAttributes.Status}"
-   ```
-2. No more duplicates. Follow an account from a second account, wait
-   15 minutes, and open the followed account's notifications: **exactly one**.
-
-## 3. Request SES production access — after §2's identity verifies
-
-A new SES account is sandboxed: it sends only to addresses verified in SES,
-so real users get no email. After §2 that is a logged skip, not a bug, but
-email notifications do not reach anyone until this is done. AWS reviews it by
-hand, usually within a day.
+**Confirm it was granted:**
 
 ```powershell
-aws sesv2 put-account-details --production-access-enabled --mail-type TRANSACTIONAL --website-url https://fanwire.daviddems.com --contact-language EN --additional-contact-email-addresses daviddemers92@gmail.com --region ca-central-1 --profile fanwire-workload
+aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "{prod:ProductionAccessEnabled,review:Details.ReviewDetails.Status}"
 ```
 
-AWS may reply by email asking how you collect addresses and handle bounces —
-the honest answer is that mail goes only to users who signed up and verified
-their address through Cognito, and only for follows, replies and reposts, each
-of which they can switch off. The console route is the same form: SES →
-*Account dashboard* → *Request production access*.
-
-**Confirm:** `aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query ProductionAccessEnabled` returns `true`.
+`prod: true` closes this item — delete the section. Until then, email to an
+address not verified in SES is rejected and logged by the notifications
+Lambda; the in-app notification is unaffected.
 
 ## 4. Narrow `cfn-exec-role` — its own session
 

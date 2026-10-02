@@ -6,12 +6,10 @@
 > 2026-09-30". It produced two fix PRs (notifications email is best-effort;
 > the SES identity in CDK) and a context update.
 >
-> **If you are picking this up,** what is left is `TODO/02-deployment-requirements.md`
-> §2–§3, in order (§1, the drift, is read and benign): verify
-> the deploy of the two fixes by their two observables (identity verified; one
-> follow → exactly one notification), then SES production access.
-> `cfn-exec-role` is `07`; the agent follow-ups are `08`. Do not re-run the
-> checks that already passed.
+> **Closed 2026-10-01.** Both fixes are deployed and verified by their
+> observables, and SES production access is requested (`TODO/02` §3 —
+> waiting on AWS, nothing for an agent to do). `cfn-exec-role` is `07`; the
+> follow-ups are `08`. Do not re-run this prompt.
 
 **Objective:** work the post-deploy checklist and the fallout. Each item
 silently does nothing until someone does it, and several were unverifiable
