@@ -1,0 +1,144 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ServicesTheStacksManage",
+      "Effect": "Allow",
+      "Action": [
+        "acm:*",
+        "apigateway:*",
+        "cloudfront:*",
+        "cognito-idp:*",
+        "dynamodb:*",
+        "ec2:*",
+        "events:*",
+        "guardduty:*",
+        "kms:*",
+        "lambda:*",
+        "logs:*",
+        "rds:*",
+        "route53:*",
+        "s3:*",
+        "scheduler:*",
+        "secretsmanager:*",
+        "ses:*",
+        "sqs:*",
+        "wafv2:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PreDeployValidationReads",
+      "Effect": "Allow",
+      "Action": [
+        "servicequotas:GetServiceQuota",
+        "ssm:ListAssociations",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SsmParameterReads",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*:294321867941:parameter/cdk-bootstrap/hnb659fds/version",
+        "arn:aws:ssm:*:294321867941:parameter/cdk/exports/*",
+        "arn:aws:ssm:*::parameter/aws/service/*"
+      ]
+    },
+    {
+      "Sid": "CdkAssetImagesForLambda",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer"
+      ],
+      "Resource": "arn:aws:ecr:*:294321867941:repository/cdk-hnb659fds-container-assets-294321867941-*"
+    },
+    {
+      "Sid": "IamReads",
+      "Effect": "Allow",
+      "Action": [
+        "iam:Get*",
+        "iam:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IamManageFanwireRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription"
+      ],
+      "Resource": "arn:aws:iam::294321867941:role/Fanwire-*"
+    },
+    {
+      "Sid": "IamManageFanwireInstanceProfiles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AddRoleToInstanceProfile",
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:TagInstanceProfile",
+        "iam:UntagInstanceProfile"
+      ],
+      "Resource": "arn:aws:iam::294321867941:instance-profile/Fanwire-*"
+    },
+    {
+      "Sid": "IamAttachOnlyLambdaBasicExecution",
+      "Effect": "Allow",
+      "Action": "iam:AttachRolePolicy",
+      "Resource": "arn:aws:iam::294321867941:role/Fanwire-*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        }
+      }
+    },
+    {
+      "Sid": "IamPassFanwireRolesToTheirServices",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::294321867941:role/Fanwire-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "ec2.amazonaws.com",
+            "lambda.amazonaws.com",
+            "malware-protection-plan.guardduty.amazonaws.com",
+            "scheduler.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "IamServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::294321867941:role/aws-service-role/*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "logger.cloudfront.amazonaws.com",
+            "ops.apigateway.amazonaws.com",
+            "rds.amazonaws.com"
+          ]
+        }
+      }
+    }
+  ]
+}
