@@ -1,0 +1,127 @@
+name: deploy
+
+# Deploys the CDK app to fanwire-workload as GitHubActionsDeployRole.
+# wiki/CodeContext/Standards/build-deployment.md "Automated deploy" is the
+# design; this header is the part a reviewer must not miss.
+#
+# THE BOUNDARY. .ai/docs/handoff.md §5.7: the agent workflows must not be able
+# to reach AWS. The role's trust names the GitHub environment `production`
+# (infra/iam/github-actions-deploy-role-trust-policy.json), not a branch, so
+# only a job that declares that environment can assume it, and only this one
+# does. The environment itself is restricted to `main` and requires an
+# approving reviewer (repo Settings -> Environments), which puts back the
+# branch check the old `ref:refs/heads/main` trust gave. .ai/tests/
+# test_deploy_workflow.py fails if any other workflow requests an OIDC token,
+# declares an environment, or names this file. agent-guard keeps workers out
+# of .github/ entirely.
+#
+# WHAT IT CANNOT DO. The role holds only sts:AssumeRole on the CDK bootstrap
+# roles. CloudFormation acts as cfn-exec-role, whose policy
+# (FanwireCdkCfnExecPolicy) is the human's to roll out; nothing here touches
+# it. A stack change that needs a new AWS service fails here until the human
+# has rolled out a new policy version. Migrations are not run: invoke the
+# Migration function by hand after a deploy that adds an Alembic revision.
+#
+# --require-approval never: CI cannot answer CDK's IAM-change prompt. The
+# review of an IAM change happens at the PR (infra/test/iam-policy.test.ts and
+# the human reviewer) and nowhere else.
+
+on:
+  # Dispatch only, until a few runs are clean. Then a reviewed PR adds
+  # `push: branches: [main]`.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two deploys never overlap; a second one waits rather than cancelling a
+# CloudFormation update halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ca-central-1
+      # Vite inlines these at build time. They are ids, not secrets:
+      # Fanwire-Auth's outputs, held as repository variables.
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_MEDIA_BASE_URL: ${{ vars.VITE_MEDIA_BASE_URL }}
+      VITE_COGNITO_REGION: ${{ vars.VITE_COGNITO_REGION }}
+      VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
+      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Every deploy uploads the bundle (-c deployFrontend=true below). Without
+      # the flag a deploy of Fanwire-Cdn removes the live BucketDeployment.
+      # Built in Docker, which fails on any empty VITE_* value.
+      - name: Build the frontend bundle
+        run: >-
+          docker build -f docker/frontend.Dockerfile --target export --output frontend
+          --build-arg VITE_API_BASE_URL --build-arg VITE_MEDIA_BASE_URL
+          --build-arg VITE_COGNITO_REGION --build-arg VITE_COGNITO_USER_POOL_ID
+          --build-arg VITE_COGNITO_CLIENT_ID .
+
+      - name: Check the bundle carries the production ids
+        run: |
+          set -eu
+          for name in VITE_COGNITO_USER_POOL_ID VITE_COGNITO_CLIENT_ID VITE_MEDIA_BASE_URL; do
+            value="$(printenv "$name")"
+            if ! grep -lqF "$value" frontend/dist/assets/*.js; then
+              echo "::error::$name ($value) is not in frontend/dist/assets/*.js"
+              exit 1
+            fi
+          done
+
+      - name: Build the pinned CDK image
+        run: docker build -q -f docker/cdk-deploy.Dockerfile -t fanwire-cdk:deploy .
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::294321867941:role/GitHubActionsDeployRole
+          role-session-name: fanwire-deploy-${{ github.run_id }}
+          aws-region: ca-central-1
+
+      # The checkout is mounted at /repo so the backend image asset builds from
+      # the real repo root; the anonymous volume keeps the image's pinned
+      # node_modules visible under the mount. The socket lets CDK build and
+      # push that asset with the runner's Docker daemon.
+      - name: Write the CDK runner
+        run: |
+          cat > "$RUNNER_TEMP/cdk" <<'EOF'
+          #!/usr/bin/env bash
+          exec docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" -v /repo/infra/node_modules \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+            -e AWS_REGION -e AWS_DEFAULT_REGION -e CI=true \
+            "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/cdk"
+
+      - name: cdk diff
+        run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy diff -c deployFrontend=true'
+
+      - name: cdk deploy
+        run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy deploy --all -c deployFrontend=true --require-approval never'
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }} at \`${GITHUB_SHA::7}\`"
+            echo
+            echo "Migrations are not run by this workflow. If this commit adds an Alembic"
+            echo "revision, invoke the Migration function by hand now: build-deployment.md"
+            echo "-> \"Automated deploy\"."
+          } >> "$GITHUB_STEP_SUMMARY"
