@@ -5,7 +5,7 @@
 > `wiki/CodeContext/Modules/0x00-architecture.md` → "AWS account state". Two corrections to the text below:
 > CDK roles have no path (they sit at `/`), so `iam:*` is scoped by the `Fanwire-*` **name** CloudFormation
 > generates, not by a path; and a forced no-change deploy runs nothing, so it proves validation and
-> parameter resolution, not the update path. Before the workflow, pin the NAT AMI (0x00 "Outstanding").
+> parameter resolution, not the update path. Next: `09-nat-ami-pin.md`, then `10-deploy-workflow.md`.
 >
 
 **Objective:** replace `cdk-hnb659fds-cfn-exec-role-*`'s `AdministratorAccess`

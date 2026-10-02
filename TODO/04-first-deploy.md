@@ -187,6 +187,31 @@ which was not chosen. It is a property of the design, not an oversight.
 > - **`aws … | Select-String` can die with `'charmap' codec can't encode`**
 >   when the output holds a non-ASCII character. Prefix the line with
 >   `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';`.
+> - **CloudFormation is no longer admin (2026-10-02).** The exec role holds
+>   `FanwireCdkCfnExecPolicy`, which grants the services the stacks use today
+>   and nothing else. A stack change that adds a new AWS service (CloudWatch
+>   alarms, SNS, …) fails with `AccessDenied` mid-deploy. The order is: extend
+>   `infra/iam/cdk-cfn-exec-role-policy.json` in the same PR (CI fails until
+>   you do), roll out the new policy version **before** deploying, then deploy.
+>   If a rollback sticks in `UPDATE_ROLLBACK_FAILED`, the escape hatch is in
+>   `infra/iam/README.md`.
+> - **Deploying one stack deploys its dependencies too**, unless you pass
+>   `--exclusively`. `cdk deploy Fanwire-App` alone also deploys Network, Data,
+>   Storage and the rest it depends on.
+> - **`Fanwire-Network` replaces the NAT instance whenever AWS publishes a new
+>   AL2023 AMI** until `Prompts/09` pins it. Run `cdk diff` first; if the
+>   instance's `ImageId` shows `requires replacement`, do not deploy Network
+>   as a side effect of something else.
+> - **Diff or deploy `Fanwire-Cdn` without `-c deployFrontend=true` and it
+>   removes the `BucketDeployment`** the live stack has. Leave Cdn out, or
+>   rebuild the bundle in Docker and pass the flag.
+> - **`cdk deploy --force` on an unchanged stack runs nothing.** CloudFormation
+>   creates an empty change set and stops. It proves the roles and template
+>   validation, not that an update would succeed.
+> - **`aws cloudtrail lookup-events` throttles** (2 requests/s; `--query`
+>   filters on your machine, so every page is still fetched). Prefix
+>   `$env:AWS_RETRY_MODE='adaptive'; $env:AWS_MAX_ATTEMPTS='20';`, narrow
+>   `--start-time`, and write to a file with `| Out-File -Encoding utf8`.
 
 The three phases, for reference — each is now a recipe rather than a plan:
 

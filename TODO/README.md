@@ -16,10 +16,11 @@ This folder is written for you.
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
 
-**Status as of 2026-09-30.** `01` is **deleted** — every item in it was
+**Status as of 2026-10-02.** `01` is **deleted** — every item in it was
 completed, and its durable content now lives at
 `wiki/GeneralContext/Architecture/github-automation-setup.md`. The site is
-live, and `02` now holds only what the post-deploy checklist left you; what
+live, `cfn-exec-role` is scoped (2026-10-02), and `02` now holds only SES
+production access; what
 each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
 ("Post-deploy checks, 2026-09-30"). `03` holds the answered product decisions,
 four of which still have to be copied into `phase-4-manager-agent.md` by a

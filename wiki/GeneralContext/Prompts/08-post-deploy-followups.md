@@ -2,7 +2,7 @@
 
 **Objective:** three small, independent units that `05` found while checking
 the live site. None blocks anything; each is its own branch and its own PR, in
-any order. Run `07` first if you are choosing — it is the larger risk.
+any order. (`07`, which this used to say to run first, is done.)
 
 **Read:** `00-session-protocol.md`, then
 `wiki/CodeContext/Modules/0x00-architecture.md` → "Post-deploy checks,
@@ -53,6 +53,14 @@ looking. The runbook lists this as a known gap.
 
 - One CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`,
   in `infra/lib/messaging-stack.ts`.
+- **This adds a new AWS service, so the exec policy has to grow first.**
+  `AWS::CloudWatch::Alarm` (and `AWS::SNS::*`, if notifications are built)
+  are not in `infra/iam/cdk-cfn-exec-role-policy.json`, and
+  `infra/test/cfn-exec-policy.test.ts` will fail until they are. That is the
+  test working, not a defect. Add `cloudwatch:*` (and `sns:*`) to the policy and
+  `CloudWatch` (and `SNS`) to the test's `TYPE_TO_IAM`, and tell the human to
+  roll out the new policy version **before** deploying. Otherwise the deploy
+  fails with `AccessDenied` (see `00-session-protocol.md`, Standing limits).
 - **Where it notifies is a human decision** (SNS → email costs nothing at this
   volume, but it is an address and a subscription confirmation). Ask before
   building the notification half; the alarm itself is useful in the console
