@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { Match } from 'aws-cdk-lib/assertions';
-import { STACK_NAMES, resourcesOfType, synthFanwire, CfnResource } from './helpers';
+import { STACK_NAMES, cdkJsonContext, resourcesOfType, synthFanwire, CfnResource } from './helpers';
 
 const synth = () => synthFanwire();
 const tpl = () => synth().template(STACK_NAMES.network);
@@ -110,6 +110,49 @@ describe('Network stack', () => {
       test('a changed script replaces the instance: cloud-init runs user data only on first boot', () => {
         const hash = crypto.createHash('sha256').update(script()).digest('hex').slice(0, 16);
         expect(natInstance()[0]).toMatch(new RegExp(`${hash}$`));
+      });
+    });
+
+    /**
+     * `latestAmazonLinux2023()` synthesizes an SSM-backed image parameter that
+     * CloudFormation re-resolves on every deploy, so the NAT instance was
+     * replaced whenever AWS published a new AMI. The AMI is pinned in cdk.json
+     * (`natImageId`) instead.
+     */
+    describe('pinned AMI', () => {
+      const SSM_IMAGE_PARAM = 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>';
+      const instancesOf = (overrides: Record<string, unknown> = {}) =>
+        Object.entries(resourcesOfType(synthFanwire(overrides).json(STACK_NAMES.network), 'AWS::EC2::Instance'));
+      const imageIdOf = (overrides: Record<string, unknown> = {}) => {
+        const entries = instancesOf(overrides);
+        expect(entries).toHaveLength(1);
+        return entries[0]?.[1].Properties?.ImageId;
+      };
+
+      test('no SSM-resolved image parameter (BootstrapVersion, an SSM String, is still allowed)', () => {
+        const { Parameters = {} } = raw() as { Parameters?: Record<string, { Type?: string }> };
+        const ssmImageParams = Object.entries(Parameters).filter(([, p]) => p.Type === SSM_IMAGE_PARAM);
+        expect(ssmImageParams).toEqual([]);
+      });
+
+      test('ImageId is the literal AMI from cdk.json', () => {
+        const imageId = imageIdOf();
+        expect(imageId).toBe(cdkJsonContext().natImageId);
+        expect(imageId).toBe('ami-012dfd7ab44bf488a');
+      });
+
+      test('ImageId follows the natImageId context key', () => {
+        expect(imageIdOf({ natImageId: 'ami-0123456789abcdef0' })).toBe('ami-0123456789abcdef0');
+      });
+
+      /**
+       * The logical id carries a hash of NAT_BOOTSTRAP's rendered user data
+       * (see 'a changed script replaces the instance' above). If it changes,
+       * CloudFormation replaces the instance regardless of the AMI, and the
+       * pin's first deploy would no longer be a no-op. This is the live stack's id.
+       */
+      test("logical id is the live stack's, so pinning the AMI does not replace the instance", () => {
+        expect(instancesOf().map(([id]) => id)).toEqual(['VpcpublicSubnet1NatInstance6B5DA608e1d9bbdccea4f69b']);
       });
     });
 
