@@ -8,7 +8,9 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { AuthStack } from './auth-stack';
@@ -234,6 +236,9 @@ export class AppStack extends cdk.Stack {
       COGNITO_REGION: auth.region,
       COGNITO_USER_POOL_ID: auth.userPool.userPoolId,
     };
+    if (config.domainName && config.hostedZoneId) {
+      this.sesDomainIdentity(config.domainName, config.hostedZoneId, config.hostedZoneName);
+    }
     if (config.domainName) {
       notificationStatements.push(
         new iam.PolicyStatement({
@@ -341,6 +346,37 @@ export class AppStack extends cdk.Stack {
       keyRef,
       environment,
       statements: [],
+    });
+  }
+
+  /**
+   * The SES identity the notifications grant names, verified with Easy DKIM.
+   * Only with a hosted zone: without one nothing could publish the DKIM
+   * records, and an identity that never verifies sends nothing anyway.
+   *
+   * `Identity.domain`, not `Identity.publicHostedZone`: the latter names the
+   * identity after the zone, and the zone may be an apex above the site
+   * domain. The three CNAMEs are therefore written here, the way CDK's own
+   * zone path writes them -- straight from the GetAtt tokens, which SES
+   * returns fully qualified, so no zone suffix is appended.
+   */
+  private sesDomainIdentity(domainName: string, hostedZoneId: string, hostedZoneName?: string): void {
+    const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId,
+      zoneName: hostedZoneName ?? domainName,
+    });
+    const identity = new ses.EmailIdentity(this, 'SiteDomainIdentity', {
+      identity: ses.Identity.domain(domainName),
+      dkimIdentity: ses.DkimIdentity.easyDkim(),
+    });
+    identity.dkimRecords.forEach((record, i) => {
+      new route53.CfnRecordSet(this, `SiteDomainDkim${i + 1}`, {
+        hostedZoneId: zone.hostedZoneId,
+        name: record.name,
+        type: 'CNAME',
+        resourceRecords: [record.value],
+        ttl: '1800',
+      });
     });
   }
 

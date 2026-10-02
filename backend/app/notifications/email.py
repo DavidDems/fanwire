@@ -85,6 +85,11 @@ class SesEmailSender(EmailSender):
     InAppNotificationChannel) are unaffected -- they're delivered
     independently of this class, see app.notifications.consumer.
 
+    A non-empty `from_address` does not mean the SES identity is verified:
+    a configured domain can still be unverified, in which case `send_email`
+    raises (MessageRejected). This class lets that propagate;
+    app.notifications.consumer logs and swallows it.
+
     Takes already-constructed boto3 clients (Dependency Inversion, same
     "inject the clients" shape as app.eventbus.EventBridgePublisher) --
     app.notifications.lambda_handler owns constructing/caching them.
