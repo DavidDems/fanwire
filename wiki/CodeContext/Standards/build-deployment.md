@@ -119,6 +119,23 @@ Every frontend change reaches production this way. The human runs each line, fro
 4. From `infra/`: `npx cdk deploy Fanwire-Cdn --exclusively -c deployFrontend=true --profile fanwire-workload`. `--exclusively` skips the seven unchanged stacks (and rebuilding the backend image). A deploy that adds the `BucketDeployment` handler asks to approve its IAM; the set is pinned in `infra/test/iam-policy.test.ts`.
 5. `(Invoke-WebRequest https://fanwire.daviddems.com/ -UseBasicParsing).Content` names the new `index-*.js`.
 
+### Upgrading the NAT instance's AMI
+
+The NAT instance's AMI is pinned in `infra/cdk.json` as `natImageId`, and `loadConfig` rejects anything that is not `ami-` followed by 8–17 lowercase hex digits. Nothing changes it except a PR. Every upgrade **replaces the instance**: CloudFormation creates a new one, repoints both app subnets' default routes to it, and deletes the old one. In-VPC Lambdas therefore have no egress for a few minutes while the new instance boots and runs `NAT_BOOTSTRAP`.
+
+**Cadence (human decision 2026-10-02): on advisories only, with no schedule.** Upgrade when an Amazon Linux 2023 security advisory (`https://alas.aws.amazon.com/alas2023.html`) affects something the NAT path runs: the kernel, iptables, or the SSM agent. Otherwise leave it alone.
+
+The human runs each line:
+
+1. Look up the current image: `aws ssm get-parameter --profile fanwire-workload --region ca-central-1 --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64 --query Parameter.Value --output text`
+2. In a PR, change `natImageId` in `infra/cdk.json`. Change the same literal in `infra/test/config.test.ts` ("cdk.json defaults") and `infra/test/network-stack.test.ts`, which pin it so that a change to the AMI is visible in review. Merge it.
+3. From `infra/`, on the merged `main`: `npx cdk diff Fanwire-Network --profile fanwire-workload`. Expect exactly three changes: the instance's `ImageId` (requires replacement) and the two app-subnet routes' `InstanceId`. Anything else means the branch is wrong or something else changed, so stop.
+4. At a quiet moment: `npx cdk deploy Fanwire-Network --exclusively --profile fanwire-workload`. Without `--exclusively`, nothing else would deploy anyway, since Network has no dependencies. Pass it so the habit is the same for every stack.
+5. Confirm the new instance: `aws ec2 describe-instances --profile fanwire-workload --region ca-central-1 --filters Name=tag:aws:cloudformation:stack-name,Values=Fanwire-Network Name=instance-state-name,Values=running --query "Reservations[].Instances[].[InstanceId,ImageId]" --output text`, which shows the new AMI.
+6. Check egress with a logged-in `/api/users/me` on the site. `/api/health` proves nothing here, because it never leaves the VPC. If it fails, read the bootstrap's console log: `aws ec2 get-console-output --profile fanwire-workload --region ca-central-1 --instance-id <id> --latest --output text`.
+
+`cdk-hnb659fds-cfn-exec-role` must allow `iam:PassRole` to `ec2.amazonaws.com` for the new instance's profile. The policy simulator says it does. The first upgrade is the first real call. If it fails with `AccessDenied` and the rollback sticks, the escape hatch is in `infra/iam/README.md`.
+
 `docker/cdk-deploy.Dockerfile` pins the CDK CLI/Node version and is what a human should synth or deploy through; nothing in CI invokes it.
 
 ### Automated deploy — the intended target, not yet wired
@@ -137,9 +154,9 @@ What is deliberately **not** in place, and why:
 1. **No deploy workflow exists.** Writing one is a separate, separately-reviewed piece of work. `.ai/docs/handoff.md` §5.7's prohibition is specifically *"do not wire deployment into the **agent** workflows"* — the pipeline that runs AI agents must not be able to reach AWS. That is not a ban on a standalone, human-reviewed deploy workflow; the OIDC role exists precisely so one has something correct to assume.
 2. ~~**`cdk-hnb659fds-cfn-exec-role-*` holds `AdministratorAccess`**~~ — **resolved 2026-10-02.** It holds `FanwireCdkCfnExecPolicy` (`infra/iam/cdk-cfn-exec-role-policy.json`): service-scoped, with IAM restricted to `Fanwire-*` roles and pinned conditions. What is proven and what is not yet proven is in [[wiki/CodeContext/Modules/0x00-architecture|0x00 Architecture]] "AWS account state". It is still not a full fence: a template can give a role it creates an inline `*:*` policy, until a permissions boundary is added.
 3. **The *first* deploy cannot be fully automated regardless**, because of the three-phase ordering in `TODO/04-first-deploy.md` §4: Vite inlines `VITE_*` at build time, the production Cognito ids do not exist until `Fanwire-Auth` has deployed, so the bundle cannot exist before the first deploy. Steady-state deploys after that have no such constraint and are the automatable case. A single-pass "build then deploy" job would work for every deploy *except* the first.
-4. **The NAT instance's AMI floats.** `Fanwire-Network` resolves the latest AL2023 AMI on every deploy, so an on-merge workflow would silently replace the NAT instance, and briefly cut Lambda egress, whenever AWS publishes a new image. It did so on 2026-10-02 (see 0x00 "Outstanding"). Pin the AMI before automating.
+4. ~~**The NAT instance's AMI floats.**~~ **Resolved:** it is pinned in `infra/cdk.json` (`natImageId`), and the upgrade procedure is above. Before the pin, `Fanwire-Network` resolved the latest AL2023 AMI on every deploy, so an on-merge workflow would have replaced the NAT instance, and briefly cut Lambda egress, whenever AWS published a new image. A `cdk diff` on 2026-10-02 showed exactly that replacement pending.
 
-So the order of operations is: first deploy by hand → narrow `cfn-exec-role` against what was actually used (**done 2026-10-02**) → pin the NAT AMI (`wiki/GeneralContext/Prompts/09-nat-ami-pin.md`) → then write the deploy workflow, reviewed on its own (`10-deploy-workflow.md`, which also moves the OIDC trust from `ref:refs/heads/main` to a GitHub environment, so the agent workflows, which also run from `main`, cannot assume the role).
+So the order of operations is: first deploy by hand → narrow `cfn-exec-role` against what was actually used (**done 2026-10-02**) → pin the NAT AMI (**done**, `wiki/GeneralContext/Prompts/09-nat-ami-pin.md`) → then write the deploy workflow, reviewed on its own (`10-deploy-workflow.md`, which also moves the OIDC trust from `ref:refs/heads/main` to a GitHub environment, so the agent workflows, which also run from `main`, cannot assume the role).
 
 ## Local dev (`docker-compose.yml`)
 `postgres` (real Postgres, matching RDS — not sqlite) and `dynamodb-local` back the `backend-test` and `frontend-test` one-shot services. This compose file is dev/test tooling only; it is never what's deployed.

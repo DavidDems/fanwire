@@ -198,10 +198,10 @@ which was not chosen. It is a property of the design, not an oversight.
 > - **Deploying one stack deploys its dependencies too**, unless you pass
 >   `--exclusively`. `cdk deploy Fanwire-App` alone also deploys Network, Data,
 >   Storage and the rest it depends on.
-> - **`Fanwire-Network` replaces the NAT instance whenever AWS publishes a new
->   AL2023 AMI** until `Prompts/09` pins it. Run `cdk diff` first; if the
->   instance's `ImageId` shows `requires replacement`, do not deploy Network
->   as a side effect of something else.
+> - **The NAT instance's AMI is pinned** (`natImageId` in `infra/cdk.json`,
+>   `Prompts/09`). A `cdk diff` showing the instance's `ImageId` changing means
+>   someone changed the pin, which replaces the instance. Do that only as the
+>   deliberate upgrade in `build-deployment.md`, never as a side effect.
 > - **Diff or deploy `Fanwire-Cdn` without `-c deployFrontend=true` and it
 >   removes the `BucketDeployment`** the live stack has. Leave Cdn out, or
 >   rebuild the bundle in Docker and pass the flag.
