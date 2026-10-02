@@ -310,7 +310,7 @@ Pin a version, or move to a self-hosted runner with it preinstalled. Also costs
 
 ### 5.7 Nothing here deploys, and that is deliberate
 
-The agent system touches no AWS, and no workflow in this repo runs `cdk deploy`.
+The agent system touches no AWS, and no agent workflow runs `cdk deploy`.
 **Do not wire deployment into the agent workflows** — a pipeline that can deploy
 is a different risk class, and the permission model here was not designed for
 it.
@@ -327,14 +327,15 @@ Two corrections to what this section used to say, both fixed 2026-09-29:
   it is what produced the policy above.
 
 **This prohibits deployment from the agent workflows; it is not a ban on
-automated deployment as such.** A standalone, separately-reviewed deploy
-workflow is the intended end state, and the OIDC role exists so one has
-something correct to assume. The remaining blocker is that
-`cdk-hnb659fds-cfn-exec-role-*` still holds `AdministratorAccess` (the bootstrap
-default), so anything able to run `cdk deploy` can reach the whole account
-through CloudFormation — narrow that first. The plan and its ordering live in
-`wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy — the
-intended target, not yet wired".
+automated deployment as such.** A standalone deploy workflow now exists,
+`.github/workflows/deploy.yml`, dispatched by a human (2026-10-02). It is kept
+out of reach of the agent system by construction: `GitHubActionsDeployRole`
+trusts the GitHub environment `production` rather than the `main` branch, only
+the deploy job declares that environment, and `.ai/tests/
+test_deploy_workflow.py` fails if any other workflow requests an OIDC token,
+declares an environment, or names `deploy.yml`. `cfn-exec-role` was narrowed
+from `AdministratorAccess` first. Design and limits:
+`wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy".
 
 ### 5.8 Repository visibility and cost
 
