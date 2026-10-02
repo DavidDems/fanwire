@@ -87,12 +87,14 @@ aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "
 address not verified in SES is rejected and logged by the notifications
 Lambda; the in-app notification is unaffected.
 
-## 4. Narrow `cfn-exec-role` — its own session
+## 4. ~~Narrow `cfn-exec-role`~~ — done 2026-10-02
 
-`cdk-hnb659fds-cfn-exec-role-*` still holds `AdministratorAccess`. Run
-`wiki/GeneralContext/Prompts/07-deploy-role-scoping.md` with an agent; it
-holds the service inventory taken on 2026-09-30, and you run every AWS
-command in it.
+Both exec roles hold `FanwireCdkCfnExecPolicy` (created by hand, applied with
+`cdk bootstrap --cloudformation-execution-policies`). A later edit to
+`infra/iam/cdk-cfn-exec-role-policy.json` is yours to roll out:
+`aws iam create-policy-version ... --set-as-default` (see `infra/iam/README.md`).
+The session ran
+`wiki/GeneralContext/Prompts/07-deploy-role-scoping.md`; its PR records the evidence.
 
 ---
 

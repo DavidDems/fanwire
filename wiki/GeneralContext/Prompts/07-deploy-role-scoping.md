@@ -1,5 +1,13 @@
 # 07 — Scope `cfn-exec-role`, then earn an automated deploy
 
+> **Worked 2026-10-02; the deploy workflow is the next step, not part of this prompt.**
+> `FanwireCdkCfnExecPolicy` is live in both regions. The evidence, and what is not yet proven, is in
+> `wiki/CodeContext/Modules/0x00-architecture.md` → "AWS account state". Two corrections to the text below:
+> CDK roles have no path (they sit at `/`), so `iam:*` is scoped by the `Fanwire-*` **name** CloudFormation
+> generates, not by a path; and a forced no-change deploy runs nothing, so it proves validation and
+> parameter resolution, not the update path. Before the workflow, pin the NAT AMI (0x00 "Outstanding").
+>
+
 **Objective:** replace `cdk-hnb659fds-cfn-exec-role-*`'s `AdministratorAccess`
 with a **deliberately-scoped** policy — the services these eight stacks
 actually touch, with `iam:*` restricted to the path CDK creates roles under —
