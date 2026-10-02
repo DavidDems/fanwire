@@ -1,7 +1,7 @@
 # 02 — Deployment: what is still yours to do
 
 **Status as of 2026-10-01: one thing is waiting on AWS, not on you** —
-SES production access, requested and under review (§3). The fixes the
+SES production access: auto-denied for missing detail, answered on the support case, under review (§3). The fixes the
 post-deploy checklist produced are deployed and verified (§2). The deploy-role
 narrowing has its own session prompt.
 
@@ -40,13 +40,42 @@ were deployed with `npx cdk deploy Fanwire-App --exclusively`. Both observables
 passed: the identity reads `verified: true`, DKIM `SUCCESS`, and a follow made
 after the deploy produced exactly one notification.
 
-## 3. SES production access — requested 2026-10-01, waiting on AWS
+## 3. SES production access — requested, auto-denied for missing detail, answered
 
-Filed with `aws sesv2 put-account-details --production-access-enabled …`
-(no output means it was accepted). AWS reviews it by hand, usually within a
-day, and may email follow-up questions — answer honestly: mail goes only to
-users who signed up and verified their address through Cognito, only for
-follows, replies and reposts, each of which they can switch off.
+The first request (2026-10-01, `put-account-details` with no use-case text)
+came back `DENIED` within minutes — an automated "needs more information",
+case `179090803100437`. It is answered by **replying to the support case** in
+the console (Support Center, signed in to `fanwire-workload`; the Support API
+needs a paid plan), with all six things AWS asks for in one message. The
+reply that was sent is below so a second round does not start from scratch.
+
+**Before replying, make the bounce/complaint answer true** — the account-level
+suppression list for both reasons:
+
+```powershell
+aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query SuppressionAttributes
+```
+```powershell
+aws sesv2 put-account-suppression-attributes --suppressed-reasons BOUNCE COMPLAINT --region ca-central-1 --profile fanwire-workload
+```
+
+**The reply** (subjects and body are copied from `app/notifications/email.py`;
+do not claim SNS bounce handling — it is not built):
+
+> **Website:** https://fanwire.daviddems.com — a social app for sports fans.
+> **Email type:** transactional only — a notification that someone followed the
+> user, replied to or reposted their post. No marketing, no imported lists.
+> Sign-up verification and password resets are sent by Cognito, not this account.
+> **Volume:** under 100/day, under 1,000/month.
+> **Recipient source:** registered users only; Cognito requires confirming the
+> address with a code before the account works. Users can switch email
+> notifications off in the app at any time.
+> **Bounces and complaints:** account-level suppression list on for both;
+> send failures logged to CloudWatch; SES reputation metrics monitored.
+> **Sample:** From notifications@fanwire.daviddems.com — Subject "You have a new
+> follower on fanwire" — Body "You have a new follower on fanwire. Open fanwire
+> to see it."
+> **Identity:** fanwire.daviddems.com, verified in ca-central-1 with Easy DKIM.
 
 **Confirm it was granted:**
 
