@@ -40,6 +40,7 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
 
   const network = new NetworkStack(app, STACK_NAMES.network, {
     env,
+    config,
     description: 'fanwire: VPC, single NAT instance (no NAT Gateway), gateway endpoints, security groups',
   });
 
