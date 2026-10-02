@@ -1,242 +1,106 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-09-24: almost nothing.** Every AWS prerequisite is done —
-the domain, the hosted zone and its delegation, the IAM review, CDK bootstrap in
-both regions, and the deploy-role policy. GuardDuty is confirmed, the budget is
-accepted, and the API-SPORTS key is declined.
+**Status as of 2026-10-01: one thing is waiting on AWS, not on you** —
+SES production access: auto-denied for missing detail, answered on the support case, under review (§3). The fixes the
+post-deploy checklist produced are deployed and verified (§2). The deploy-role
+narrowing has its own session prompt.
 
-**Two items remain, and only one is available now:**
+Everything that was in this file and is now finished has moved into the wiki,
+where it belongs as current-state fact rather than as a tick:
 
-| | Item | Available? |
-|---|---|---|
-| §1 | The dev S3 buckets | **Yes** — ~10 minutes, and it appears not to be done |
-| §2 | The post-deploy checklist | No — needs a deploy to have happened |
+- **What each post-deploy check proved, and how** —
+  `wiki/CodeContext/Modules/0x00-architecture.md` → "Post-deploy checks,
+  2026-09-30": GuardDuty Malware Protection (working end to end), the ACM
+  certificate and aliases, the `lambda-vpc-eni` review, the drift result, and
+  the SES defect.
+- **The incident runbook**, now naming the deployed resources:
+  `wiki/GeneralContext/Architecture/incident-runbook.md`.
+- **AWS account state** and the IAM waivers: same `0x00` file, "AWS account
+  state" and "Infra (CDK) — implementation notes".
 
-Everything that *was* in this file and is now finished has been moved into the
-wiki, where it belongs as current-state fact rather than a checklist:
-
-- **AWS account state** — accounts, SSO, OIDC, the attached deploy-role policy,
-  Route 53 and the delegated subdomain, CDK bootstrap, GuardDuty, CloudTrail,
-  Config, Budgets: `wiki/CodeContext/Modules/0x00-architecture.md` → "AWS
-  account state".
-- **What the first deploy can and cannot serve** — the upload path
-  (`INFRA-002`), the frontend config mechanism (`FRONTEND-001`) and the
-  migration runner (`INFRA-003`) are all now closed; same file → "Known gaps"
-  for what remains, which is that there is still **no frontend-only deploy** and
-  the app itself is a scaffold until the `FRONTEND-*` units land.
-- **The eleven IAM wildcard waivers** and your ACCEPT on each: the allow-list in
-  `infra/test/iam-policy.test.ts`, which is also the gate that fails the build
-  if one stops matching. `INFRA-002` added three (the `BucketDeployment`
-  handler's grants and the CloudFront invalidation), and the gate now walks each
-  domain mode twice — with `deployFrontend` off and on.
-- **Repository/GitHub settings** (not AWS):
-  `wiki/GeneralContext/Architecture/github-automation-setup.md`.
-
-> `TODO/01-ai-workflow-setup.md` is deleted — every item in it was closed, and
-> its durable content is the last link above.
+> **The dev S3 buckets** (the old §1) are done: created 2026-09-25, locked
+> down, CORS and TLS-only policies applied, and the three variables are in
+> `backend/.env`. Locally, an upload still stays `Quarantined`, because there
+> is no GuardDuty to scan it — the dev-only processing script is `MEDIA-002` in
+> `.ai/tasks/`, not a step of yours.
 
 ---
 
-## 1. The dev S3 buckets — yours, ~10 minutes
+## 1. ~~Read why `Fanwire-App` drifted~~ — done, benign
 
-**This looks outstanding.** `backend/.env` currently holds only the three
-`COGNITO_*` variables, with none of the bucket variables §1c adds — so §1c at
-least has not been done. If you did create the buckets and only skipped the
-`.env` step, do §1c and skip to §1d to confirm.
+One property, `DefaultStage`'s access-log ARN: CDK writes it with a trailing
+`:*` and API Gateway stores it without. Same log group; nothing was changed by
+hand and nothing is lost on deploy. Expect that diff on every future drift
+check. Details: `0x00-architecture.md` → "Post-deploy checks".
 
-**Which bucket this is about.** Three separate S3 stories, and only one needs
-you:
+## 2. ~~Deploy the two fixes~~ — done 2026-10-01
 
-| Bucket | Who creates it | Needs you? |
-|---|---|---|
-| **Frontend** (`StorageStack.frontendBucket`) | CDK, on deploy | **No.** `INFRA-002` closed the upload gap (merged 2026-09-29): `cdk deploy -c deployFrontend=true` uploads `frontend/dist` and invalidates the distribution. |
-| **Prod media** (quarantine + public) | CDK, on deploy | No. |
-| **Dev media** (quarantine + public) | **You, by hand** | **Yes** — everything below. |
+PRs #79 (notifications email is best-effort) and #77 (the SES identity in CDK)
+were deployed with `npx cdk deploy Fanwire-App --exclusively`. Both observables
+passed: the identity reads `verified: true`, DKIM `SUCCESS`, and a follow made
+after the deploy produced exactly one notification.
 
-These exist because of the decision in
-[`03-open-decisions.md`](03-open-decisions.md) §1: real S3 rather than an
-emulator, so media upload can be clicked through in a browser before anything is
-deployed. Cost is pennies at dev volume.
+## 3. SES production access — requested, auto-denied for missing detail, answered
 
-The JSON these commands reference is committed at
-[`../infra/dev/`](../infra/dev/) — read it before applying it; the bucket names
-are baked into the policy ARNs.
+The first request (2026-10-01, `put-account-details` with no use-case text)
+came back `DENIED` within minutes — an automated "needs more information",
+case `179090803100437`. It is answered by **replying to the support case** in
+the console (Support Center, signed in to `fanwire-workload`; the Support API
+needs a paid plan), with all six things AWS asks for in one message. The
+reply that was sent is below so a second round does not start from scratch.
 
-### 1a. Create them
-
-Every command is one line. Run them in order, **from the repository root** (the
-`file://` paths in §1b are relative).
+**Before replying, make the bounce/complaint answer true** — the account-level
+suppression list for both reasons:
 
 ```powershell
-aws sso login --profile fanwire-workload
-aws s3api create-bucket --bucket fanwire-dev-quarantine-294321867941 --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1 --profile fanwire-workload
-aws s3api create-bucket --bucket fanwire-dev-public-media-294321867941 --region ca-central-1 --create-bucket-configuration LocationConstraint=ca-central-1 --profile fanwire-workload
+aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query SuppressionAttributes
+```
+```powershell
+aws sesv2 put-account-suppression-attributes --suppressed-reasons BOUNCE COMPLAINT --region ca-central-1 --profile fanwire-workload
 ```
 
-**DONE, here was the outputs:**
-{
-    "Location": "http://fanwire-dev-quarantine-294321867941.s3.amazonaws.com/"
-}
-{
-    "Location": "http://fanwire-dev-public-media-294321867941.s3.amazonaws.com/"
-}
+**The reply** (subjects and body are copied from `app/notifications/email.py`;
+do not claim SNS bounce handling — it is not built):
 
-`--create-bucket-configuration LocationConstraint` is required for every region
-except `us-east-1`. Without it the bucket is silently created in Virginia.
+> **Website:** https://fanwire.daviddems.com — a social app for sports fans.
+> **Email type:** transactional only — a notification that someone followed the
+> user, replied to or reposted their post. No marketing, no imported lists.
+> Sign-up verification and password resets are sent by Cognito, not this account.
+> **Volume:** under 100/day, under 1,000/month.
+> **Recipient source:** registered users only; Cognito requires confirming the
+> address with a code before the account works. Users can switch email
+> notifications off in the app at any time.
+> **Bounces and complaints:** account-level suppression list on for both;
+> send failures logged to CloudWatch; SES reputation metrics monitored.
+> **Sample:** From notifications@fanwire.daviddems.com — Subject "You have a new
+> follower on fanwire" — Body "You have a new follower on fanwire. Open fanwire
+> to see it."
+> **Identity:** fanwire.daviddems.com, verified in ca-central-1 with Easy DKIM.
 
-### 1b. Lock them down before putting anything in them
+**Confirm it was granted:**
 
 ```powershell
-aws s3api put-public-access-block --bucket fanwire-dev-quarantine-294321867941 --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false" --profile fanwire-workload
-aws s3api put-public-access-block --bucket fanwire-dev-public-media-294321867941 --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false" --profile fanwire-workload
-aws s3api put-bucket-encryption --bucket fanwire-dev-quarantine-294321867941 --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}' --profile fanwire-workload
-aws s3api put-bucket-encryption --bucket fanwire-dev-public-media-294321867941 --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}' --profile fanwire-workload
-aws s3api put-bucket-policy --bucket fanwire-dev-quarantine-294321867941 --policy file://infra/dev/dev-quarantine-tls-only-policy.json --profile fanwire-workload
-aws s3api put-bucket-policy --bucket fanwire-dev-public-media-294321867941 --policy file://infra/dev/dev-public-media-tls-only-policy.json --profile fanwire-workload
-aws s3api put-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --cors-configuration file://infra/dev/dev-quarantine-cors.json --profile fanwire-workload
+aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "{prod:ProductionAccessEnabled,review:Details.ReviewDetails.Status}"
 ```
 
-**ALL DONE, NO OUTPUT FROM ANY COMMAND WHICH SUGGESTS EVERYTHING WORKED**
+`prod: true` closes this item — delete the section. Until then, email to an
+address not verified in SES is rejected and logged by the notifications
+Lambda; the in-app notification is unaffected.
 
-Two deliberate choices, so they are not a surprise:
+## 4. Narrow `cfn-exec-role` — its own session
 
-- `BlockPublicPolicy=false` and `RestrictPublicBuckets=false`, because a bucket
-  policy is exactly what you are about to attach. `BlockPublicAcls` and
-  `IgnorePublicAcls` stay **true** — ACLs are the legacy path and nothing here
-  needs them.
-- **SSE-S3 (`AES256`), not the CMK.** Production uses the customer-managed key
-  from `DataStack`, which does not exist yet. Dev data is disposable test
-  images, and a dev bucket waiting on a production key would block the thing it
-  exists to unblock.
-
-### 1c. Tell the backend about them
-
-Add these three lines to `backend/.env` (it exists and holds the dev Cognito
-values; it is gitignored):
-
-```
-MEDIA_QUARANTINE_BUCKET=fanwire-dev-quarantine-294321867941
-MEDIA_PUBLIC_BUCKET=fanwire-dev-public-media-294321867941
-AWS_DEFAULT_REGION=ca-central-1
-```
-
-These map to `media_quarantine_bucket`, `media_public_bucket` and
-`aws_default_region` in `backend/app/settings.py`, whose defaults point at
-bucket names that do not exist. Route tests override the S3 client with `moto`
-and never touch a real bucket, so CI is unaffected either way.
-
-**DONE, all three lines have been appended to the existing cognito values in '/backend/.env'**
-
-### 1d. Confirm it worked
-
-```powershell
-aws s3api get-bucket-location --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
-aws s3api get-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
-aws s3api get-bucket-policy --bucket fanwire-dev-public-media-294321867941 --profile fanwire-workload
-aws s3 ls --profile fanwire-workload | Select-String fanwire-dev
-```
-
-You want `ca-central-1` from the first, the localhost origins from the second,
-the TLS-only deny from the third, and **both** buckets from the fourth.
-
-**DONE, all 4 outputs that were needed were received, the implementation seems to have worked perfectly.**
--1: aws s3api get-bucket-location --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
-{
-    "LocationConstraint": "ca-central-1"
-}
--2: aws s3api get-bucket-cors --bucket fanwire-dev-quarantine-294321867941 --profile fanwire-workload
-{
-    "CORSRules": [
-        {
-            "AllowedHeaders": [
-                "*"
-            ],
-            "AllowedMethods": [
-                "POST",
-                "GET",
-                "HEAD"
-            ],
-            "AllowedOrigins": [
-                "http://localhost:5173",
-                "http://localhost:8001"
-            ],
-            "ExposeHeaders": [
-                "ETag",
-                "Location"
-            ],
-            "MaxAgeSeconds": 3000
-        }
-    ]
-}
--3: aws s3api get-bucket-policy --bucket fanwire-dev-public-media-294321867941 --profile fanwire-workload
-{
-    "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"DenyPlaintextTransport\",\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"s3:*\",\"Resource\":[\"arn:aws:s3:::fanwire-dev-public-media-294321867941\",\"arn:aws:s3:::fanwire-dev-public-media-294321867941/*\"],\"Condition\":{\"Bool\":{\"aws:SecureTransport\":\"false\"}}}]}"
-}
--4:  aws s3 ls --profile fanwire-workload | Select-String fanwire-dev
-
-2026-09-25 11:34:16 fanwire-dev-public-media-294321867941
-2026-09-25 11:34:23 fanwire-dev-quarantine-294321867941
-
-### 1e. What is still missing after this — not your step
-
-The buckets alone do not make media upload work. Locally there is no GuardDuty,
-so nothing issues the scan verdict that moves an object from `Quarantined` to
-`Processed`, and an unprocessed image cannot be attached to a post. The decision
-in [`03`](03-open-decisions.md) §1 included **a dev-only script that runs the
-processing pipeline on demand**, and that script does not exist yet.
-
-It is written up as an agent task — `MEDIA-002` in [`.ai/tasks/`](../.ai/tasks/).
-Until it exists, these buckets accept uploads that then sit in `Quarantined`
-forever, which is correct behaviour and not a bug.
-
----
-
-## 2. After the first deploy — actionable now (deployed 2026-09-30)
-
-The stacks exist as of 2026-09-30 (`TODO/04-first-deploy.md` §4), so every item
-here can be done. It is here because each one silently does nothing until
-someone does it. `wiki/GeneralContext/Prompts/05-post-deploy.md` works it.
-
-- [ ] **GuardDuty Malware Protection for S3** on the quarantine bucket. A
-      separate feature from GuardDuty core, and what `media/` actually depends
-      on: uploads never leave `Quarantined` without a scan verdict, so
-      compose-with-media is broken until it is on.
-- [ ] **Verify the SES identity** for `fanwire.daviddems.com` and request
-      production access — a new SES account is sandboxed and can only send to
-      verified addresses. Until then `NOTIFICATION_FROM_ADDRESS` stays unset and
-      email notification is a deliberate no-op.
-- [x] **Confirm the ACM certificate validated** and the aliases resolve.
-      Evidenced 2026-09-30: `https://fanwire.daviddems.com` serves the SPA over
-      TLS from distribution `E2AXWWXMA8YAE8`, which needs both.
-- [ ] **Revisit the incident runbook.** It was written pre-CDK and names no
-      real resources; `wiki/GeneralContext/Architecture/incident-runbook.md`
-      says what the revisit must add, and the stacks now exist to name.
-- [ ] **Re-run the IAM gate against reality.** `iam-policy.test.ts` reads
-      synthesized templates; a deploy is the first time AWS itself evaluates
-      them. Expect the GuardDuty bucket-policy interaction to differ from the
-      synthesized guess — a documented known gap, not a regression.
-- [ ] **Narrow `cfn-exec-role`.** Bootstrap took the default
-      `AdministratorAccess`, so this is a real open item rather than a
-      hypothetical. Do it once a successful deploy has shown what is actually
-      used.
-- [ ] **Review `lambda-vpc-eni`.** Your ACCEPT on that IAM waiver was
-      conditional: *"an R&D agent must look at this setup to make sure we aren't
-      using a crude implementation."* The question to answer: whether the six
-      inline ENI actions on `Resource "*"` are genuinely AWS's floor for a
-      VPC-attached Lambda, or whether the VPC attachment is avoidable for some
-      of the four functions — a function needing no RDS access needs no ENI
-      permissions at all. That is a design review, and it wants the real
-      deployed topology in front of it.
+`cdk-hnb659fds-cfn-exec-role-*` still holds `AdministratorAccess`. Run
+`wiki/GeneralContext/Prompts/07-deploy-role-scoping.md` with an agent; it
+holds the service inventory taken on 2026-09-30, and you run every AWS
+command in it.
 
 ---
 
 ## Deferred by the project, not waiting on you
 
-- A production migration runner — `alembic` is not in the `lambda` image.
 - Reading DB credentials from Secrets Manager rather than `DATABASE_URL`.
-- Automated security alerting (SNS/EventBridge) — planned, not built.
-- Named resource-level lockout steps in the runbook — blocked on the CDK stacks
-  existing.
-- GuardDuty's real tagging/bucket-policy interaction and the scan-result event
-  shape — **unverifiable until a real deploy**, so expect surprises in the media
-  pipeline on day one.
+- Automated security alerting (SNS/EventBridge), and a DLQ-depth alarm —
+  planned, not built. Both are checked by hand today (the runbook says how).
+- The agent follow-ups the checklist turned up — the `lambda-vpc-eni`
+  self-deny, the two-click upload-then-attach in compose — are in
+  `wiki/GeneralContext/Prompts/08-post-deploy-followups.md`, not here.

@@ -96,7 +96,10 @@ The trade-off: the NAT instance is a single point of failure for all of these. I
 - `kms-key-policy-self`: `Resource: "*"` inside the CMK's key policy, which means "this key".
 - `s3-object-arns`: `<specific bucket ARN>/*` or `/<prefix>/*` for object-level S3 actions.
 - `tls-only-deny`: `s3:*` / `sqs:*` in Deny statements conditioned on `aws:SecureTransport=false`.
-- `lambda-vpc-eni`: the six ENI actions from AWS's `AWSLambdaVPCAccessExecutionRole`, written inline with `Resource "*"` (Describe* has no resource-level support, and Lambda validates the rest against `*`).
+- `lambda-vpc-eni`: the six ENI actions from AWS's `AWSLambdaVPCAccessExecutionRole`, written inline with `Resource "*"` (Describe* has no resource-level support, and Lambda validates the rest against `*`). **Reviewed 2026-09-30 against the deployed topology** (the human's ACCEPT was conditional on it):
+  - *Is the VPC attachment avoidable for any function?* No. All five VPC-attached functions (Api, Ingestion, Media, Notifications, Migration) open a database session, and RDS is only reachable in-VPC. The two functions that touch no database — the origin-verify authorizer and the CDK `BucketDeployment` handler — already run outside the VPC (`VpcConfig` null, confirmed live).
+  - *Is `Resource "*"` the floor?* Yes. AWS's Lambda guide (*Giving Lambda functions access to resources in an Amazon VPC* → *Required IAM permissions*) says a custom policy must add all six "and allow them on all resources (`"Resource": "*"`)". Resource-scoping them is not supported, and getting it wrong fails at `CreateFunction`.
+  - *What the same page recommends instead,* and the one real improvement left: the six actions are also usable by the function's own code. A `Deny` on them conditioned on `lambda:SourceFunctionArn` — a key present only on calls the function code makes — keeps the Lambda service able to manage ENIs while the code cannot. Not implemented; recorded as a follow-up in `TODO/02` §2. An `ArnLike` on `arn:aws:lambda:<region>:<account>:function:Fanwire-App-*` would cover all five without the policy→function dependency cycle a per-function ARN would create.
 - `nat-instance-session-manager`: `ssm:UpdateInstanceInformation` + the four `ssmmessages:` channel actions, `Resource "*"` (AWS's documented Session Manager minimum).
 - `guardduty-managed-eventbridge-rule`: `rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*`, GuardDuty's own managed rule name prefix.
 - `cdk-cross-region-export-parameters`: `parameter/cdk/exports/*` (writer) and `parameter/cdk/exports/Fanwire-Cdn/*` (reader), from `crossRegionReferences`.
@@ -169,6 +172,20 @@ That is correct and expected, and it is worth writing down because it reads like
 
 Every authenticated route then returned 500: `urllib.error.URLError: [Errno 99] Cannot assign requested address` from `app.users.jwks`. Python reports the *last* address it tried, and a VPC Lambda has no IPv6, so Errno 99 means the IPv4 attempt had already failed. The NAT instance's console log showed why: `yum install iptables-services` was `Killed`, and every iptables line after it was `command not found`. Phases 1 and 2 could not see this, since the migration and `/api/health` never leave the VPC. It is the same lesson as the reservation: a synth-only gate cannot see what happens at boot, and the first route that actually needs egress is the one that proves it.
 
+### Post-deploy checks, 2026-09-30
+
+Each item from the post-deploy checklist was checked by the observable that would fail if it were not done, not by a status read alone (`wiki/GeneralContext/Prompts/05-post-deploy.md`).
+
+| Item | Observable | Result |
+|---|---|---|
+| GuardDuty Malware Protection | an image attached to a post through the live site, then rendered in the feed | ✅ Plan `e0d078028fa35d2cdba2` is `ACTIVE` on the quarantine bucket's `uploads/` prefix, and the whole chain ran: upload → scan + tag → default-bus rule → media queue → media Lambda → public bucket → CloudFront. The scan-result event shape matched what `app.media.lambda_handler` reads, and the tag-conditioned bucket-policy deny did not block the pipeline — both had been flagged as unverifiable before a deploy. |
+| ACM certificate and aliases | `https://fanwire.daviddems.com` serving the SPA over TLS | ✅ (Phase 3) |
+| SES | `GetEmailIdentity fanwire.daviddems.com`, then a real follow | ❌ **No identity exists**, and the account is sandboxed (`ProductionAccessEnabled: false`). Worse than a no-op: `NOTIFICATION_FROM_ADDRESS` *is* set whenever a domain is configured, so every send raised, the notifications consumer failed the SQS record after committing the row, and each redelivery committed another. One follow produced two identical notifications 2 min 56 s apart — the queue's 180 s visibility timeout. Fixed in #79 (email failure no longer fails the record) and #77 (the identity, created in CDK with its DKIM records), deployed 2026-10-01: the identity reads `verified: true` / DKIM `SUCCESS`, and a post-deploy follow produced exactly one notification. Production access was requested 2026-10-01 and is with AWS. |
+| Deployed IAM = gated IAM | CloudFormation drift detection on all eight stacks | ✅ Seven stacks `IN_SYNC`. `Fanwire-App` reported `DRIFTED` on exactly one property, and it is benign: `DefaultStage`'s `AccessLogSettings.DestinationArn`. CDK writes the log group's ARN with CloudWatch Logs' trailing `:*`, and API Gateway stores it without, so both name the same group — a normalization, not a hand change, and redeploying does not clear it. No role, policy, bucket policy or key policy drifted. Drift detection compares those with the very template `iam-policy.test.ts` gated, so this is the proof that the gate's verdict describes what runs. Re-run it after each deploy, and expect this one stage diff. |
+| `lambda-vpc-eni` | each function's live `VpcConfig` vs what its code touches | ✅ Reviewed — see the waiver entry above. |
+
+Also observed: composing with media takes two clicks — upload, wait for the scan, then *Attach* — which works but is clumsy. A UX follow-up, not a defect.
+
 ## Security posture (account/project-level)
 Per-entity security requirements live in each module's own file. Project-wide items that don't belong to any one module, per [[wiki/CodeContext/Standards/security|Security]]:
 - CloudFront + AWS WAF (Managed Rule Groups + rate-based rule) is the only public entry point; Shield Standard is automatic, Shield Advanced is explicitly not justified at this scale.
@@ -201,7 +218,7 @@ Per-entity security requirements live in each module's own file. Project-wide it
 
 **CDK bootstrap** — both regions, 2026-09-22, default qualifier `hnb659fds`.
 - `CDKToolkit` in `ca-central-1` and `us-east-1` (the second because CloudFront's cert must live there). Ten `cdk-hnb659fds-*` roles exist.
-- ⚠️ **`cdk-hnb659fds-cfn-exec-role-*` holds `AdministratorAccess`**, the bootstrap default, and this is the real privilege in the deployment design. It is **not** what `infra/test/iam-policy.test.ts` inspects — that walks this app's stacks, not the bootstrap stack. It is defensible (only CloudFormation can use it, CI reaches it only via the deploy role, and the OIDC trust limits that to `main` of this repo) but it is admin, and it was accepted knowingly rather than discovered. Narrowing it once a successful deploy shows what is actually used is recorded as post-deploy work.
+- ⚠️ **`cdk-hnb659fds-cfn-exec-role-*` holds `AdministratorAccess`**, the bootstrap default, and this is the real privilege in the deployment design. It is **not** what `infra/test/iam-policy.test.ts` inspects — that walks this app's stacks, not the bootstrap stack. It is defensible (only CloudFormation can use it, CI reaches it only via the deploy role, and the OIDC trust limits that to `main` of this repo) but it is admin, and it was accepted knowingly rather than discovered. Narrowing it is `wiki/GeneralContext/Prompts/07-deploy-role-scoping.md`, which holds the service inventory taken from the synthesized templates on 2026-09-30.
 
 **CloudTrail**
 - Trail `fanwire-workload-trail` in `fanwire-workload`: multi-region, log file validation on, management events (read + write) only.
@@ -211,7 +228,7 @@ Per-entity security requirements live in each module's own file. Project-wide it
 - Delegated administrator: `fanwire-log-archive` (`801132668027`); Organizations trusted access enabled; auto-enable for new Organizations accounts on.
 - `fanwire-workload` and the management account added as member accounts, by invitation.
 - **Confirmed Enabled 2026-09-22**, checked from inside `fanwire-workload` itself. The delegated-admin account list reads empty from `fanwire-log-archive` because listing Organizations members needs permissions `PowerUserAccess` deliberately excludes — that exclusion is the point of that permission set, not a misconfiguration.
-- Two consequences: membership is **by invitation**, so a future fourth account will not self-enroll; and **Malware Protection for S3 is a separate feature** from GuardDuty core. The latter is what `media/` actually depends on — an upload never leaves `Quarantined` without a scan verdict — and it can only be enabled against a bucket that exists, so it belongs to the first deploy.
+- Two consequences: membership is **by invitation**, so a future fourth account will not self-enroll; and **Malware Protection for S3 is a separate feature** from GuardDuty core. The latter is what `media/` actually depends on — an upload never leaves `Quarantined` without a scan verdict — and it can only be enabled against a bucket that exists, so it belongs to the first deploy. **Done by CDK, not by hand:** `Fanwire-Storage` creates the plan, and it was verified working end to end on 2026-09-30 (plan `e0d078028fa35d2cdba2`, `ACTIVE`; see "Post-deploy checks" above).
 
 **AWS Config** — enabled in `fanwire-workload` only (not `log-archive` or management).
 - Recording strategy: all resource types, no overrides — global IAM resource types included, recorded in `ca-central-1`.
@@ -223,8 +240,8 @@ Per-entity security requirements live in each module's own file. Project-wide it
 **AWS Budgets** — one cost budget on the management account (rolls up the full consolidated org bill once member accounts have spend): $20/month, alerts at 80% and 100% of actual, emailed to `daviddemers92@gmail.com`. No automated actions configured.
 
 **Outstanding**
-- `GitHubActionsDeployRole` has no permissions — blocks any real `cdk deploy`, by design, until Phase 6 stacks exist and get reviewed.
+- `cdk-hnb659fds-cfn-exec-role-*` still holds `AdministratorAccess` (above) — `07-deploy-role-scoping.md`.
 - GuardDuty member-account propagation not yet reverified.
 - No AWS Config Rules defined.
-- Incident runbook written but interim (`wiki/GeneralContext/Architecture/incident-runbook.md`, per [[wiki/CodeContext/Standards/security|Security]] "Detection & response") — deliberately generic pending Phase 6 CDK stacks; revisit then.
+- No alerting: GuardDuty findings and DLQ depth are both checked by hand (`wiki/GeneralContext/Architecture/incident-runbook.md`, revisited 2026-09-30 with the deployed resources named, "Known gaps").
 - Security Hub not enabled (optional at this budget, per [[wiki/CodeContext/Standards/security|Security]]).

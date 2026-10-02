@@ -24,7 +24,7 @@ Current state of that system, including what has actually been proven by running
 ## Project state, architecture, and the full stack
 
 ### Current state
-The backend (`events/`, `users/`, `media/`, `posts/`, `notifications/`, `feed/`, `search/`) the CDK `infra/` app and the frontend are built, and all of it is **live at `https://fanwire.daviddems.com` since 2026-09-30** (deployed by a human; CI only synthesizes). `FRONTEND-007` (search) is the last frontend unit outstanding. The build was briefed in `wiki/GeneralContext/Prompts/` (see below). For the deploy record see `wiki/GeneralContext/Architecture/incident-runbook.md`'s "Outstanding" note and `wiki/CodeContext/Modules/0x00-architecture.md`'s "AWS account state" for exactly what is and isn't live today.
+The backend (`events/`, `users/`, `media/`, `posts/`, `notifications/`, `feed/`, `search/`) the CDK `infra/` app and the frontend are built, and all of it is **live at `https://fanwire.daviddems.com` since 2026-09-30** (deployed by a human; CI only synthesizes). `FRONTEND-007` (search) is the last frontend unit outstanding. The build was briefed in `wiki/GeneralContext/Prompts/` (see below). For the deploy record and what the post-deploy checks proved, see `wiki/CodeContext/Modules/0x00-architecture.md` ("First deploy", "Post-deploy checks, 2026-09-30" and "AWS account state").
 
 ### Business rules
 `wiki/GeneralContext/Architecture/business-rules.md` — the full source requirements (accounts, posts, events, feed, notifications, search, images) and the two standing project-level decisions (media uploads in scope for v1, single sports data provider until proven insufficient).
@@ -52,7 +52,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 ### Architecture & operations (GeneralContext-only — not handed to code-change subagents)
 - **Business rules**: `wiki/GeneralContext/Architecture/business-rules.md`
-- **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — interim, GuardDuty-finding response, priority-of-suspicion order; the stacks are now deployed, so its revisit is due (`TODO/02` §2).
+- **Incident runbook**: `wiki/GeneralContext/Architecture/incident-runbook.md` — GuardDuty-finding response, priority-of-suspicion order, and concrete containment commands naming the deployed resources (revisited 2026-09-30).
 - **Dev auth setup**: `wiki/GeneralContext/Architecture/dev-auth-setup.md`: the human-created real Cognito dev user pool that local dev and browser testing use (decided 2026-09-18, no emulator or fake).
 - **GitHub automation setup**: `wiki/GeneralContext/Architecture/github-automation-setup.md`: the repository settings the `.ai/` pipeline depends on and why — secrets (and the repository-vs-environment trap), the ruleset and its aggregate required checks, the solo-repo approval bypass, `action_required` on bot-authored PRs, and how to run/stop a task. The one part of the agent system not under version control, so not diffable and not testable.
 
@@ -65,6 +65,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - `phase-5a-frontend-manager-agent.md` — Phase 5a: frontend foundation + typed client, auth (real dev Cognito), profile/follow, compose. **Superseded** — see below.
 - `phase-5b-frontend-manager-agent.md` — Phase 5b: feed, notifications, search UIs, then the whole-build summary and rolled-up process outcomes. **Superseded** — see below.
 - `frontend-build-handoff.md` — **the live one.** The frontend pass as it is actually being run: seven `FRONTEND-00N` task specs in `.ai/tasks/`, `001` merged, `002`–`007` outstanding. Read this rather than 5a/5b.
+- `00`–`08` — **the post-build sessions, and the live ones.** `00-session-protocol.md` is the shared rules every numbered prompt points at; `04` (the first deploy) and `05` (the post-deploy checklist) are done and say so at their top; `06` (search UI), `07` (scope `cfn-exec-role`) and `08` (the post-deploy follow-ups) are the open ones.
 
 **Why 5a and 5b are superseded, and why they are kept.** They describe the same seven units, but under the execution model that predates `.ai/` — a manager agent delegating to subagents, with the unit contract living in prose. That contract is now a validated `task.json` whose `allowed_paths` are enforced in CI, and the acceptance criteria are tests before they are anything else. The two files remain because their *settled facts* (the `/api` prefix strip, the ID-token rule, the DOB privacy rule, the two-mechanism search constraint) are still correct and are cited from the specs. Follow their facts; do not follow their process.
 

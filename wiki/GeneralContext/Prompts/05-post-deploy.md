@@ -1,5 +1,16 @@
 # 05 — After the first deploy
 
+> **Worked 2026-09-30; loose ends are in `TODO/02`.** Every checklist item was
+> checked by its observable — the results are
+> `wiki/CodeContext/Modules/0x00-architecture.md` → "Post-deploy checks,
+> 2026-09-30". It produced two fix PRs (notifications email is best-effort;
+> the SES identity in CDK) and a context update.
+>
+> **Closed 2026-10-01.** Both fixes are deployed and verified by their
+> observables, and SES production access is requested (`TODO/02` §3 —
+> waiting on AWS, nothing for an agent to do). `cfn-exec-role` is `07`; the
+> follow-ups are `08`. Do not re-run this prompt.
+
 **Objective:** work the post-deploy checklist and the fallout. Each item
 silently does nothing until someone does it, and several were unverifiable
 before real resources existed.

@@ -36,6 +36,24 @@ is the one that turns a deploy credential into a privilege-escalation path.
    made across all eight stacks. That record did not exist before and is what
    makes this task possible at all. Enumerate the distinct
    `eventSource`/`eventName` pairs for the deploy window.
+
+   **The starting inventory, from the synthesized templates (2026-09-30).**
+   CloudTrail tells you the actions; this tells you the services, and the two
+   must agree. 19 AWS services across the eight stacks: API Gateway v2, ACM,
+   CloudFront, Cognito IdP, DynamoDB, EC2 (VPC, subnets, routes, SGs,
+   endpoints, the NAT instance and its launch template), EventBridge, EventBridge
+   Scheduler, GuardDuty (`MalwareProtectionPlan`), IAM (roles, policies, an
+   instance profile), KMS, Lambda, CloudWatch Logs, RDS, Route 53, S3, SQS,
+   Secrets Manager, WAFv2 — plus, once the SES PR merges, **SES**
+   (`EmailIdentity`). Beyond resource types, CloudFormation also needs:
+   **SSM** (`crossRegionReferences` writes and reads `/cdk/exports/*`
+   parameters through two custom-resource Lambdas, and every deploy reads the
+   bootstrap version parameter); `lambda:InvokeFunction` on those custom-resource
+   providers and on the `BucketDeployment` handler (`-c deployFrontend=true`
+   only); and `iam:PassRole` for every role it hands to a service. ECR pushes
+   go through the separate image-publishing role, not this one. Regenerate the
+   list with `npx cdk synth -q -o <dir>` and a count of `Resources[].Type`
+   rather than trusting this paragraph once the stacks change.
 2. **Commit the policy as a reviewable JSON file**, beside
    `infra/iam/github-actions-deploy-role-policy.json` and in the same spirit —
    it exists so the grant is a diff a human reads, not console state nobody
