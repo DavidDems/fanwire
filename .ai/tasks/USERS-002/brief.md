@@ -3,7 +3,7 @@
 ## Why this exists
 
 The human answered the open question in
-[`TODO/03-open-decisions.md`](../../../TODO/03-open-decisions.md) §4 on
+[`human-decisions.md`](../../../wiki/GeneralContext/Architecture/human-decisions.md) §4 on
 2026-09-22: **date of birth stays at profile creation, age must be a positive
 value, minimum 16 years.** Nothing enforces any of it today.
 

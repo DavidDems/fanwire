@@ -3,7 +3,7 @@
 ## Why this exists
 
 The human chose option (a) for dev media on 2026-09-22
-([`TODO/03-open-decisions.md`](../../../TODO/03-open-decisions.md) §1): real
+([`human-decisions.md`](../../../wiki/GeneralContext/Architecture/human-decisions.md) §1): real
 dev S3 buckets rather than an emulator, consistent with the earlier "real auth,
 not a shortcut" decision. That answer included **"a dev-only script that runs
 the processing pipeline on demand"**, and this is it.

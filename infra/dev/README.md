@@ -4,7 +4,7 @@ Configuration for the **development** S3 buckets, which are created by hand in
 `fanwire-workload` and are not part of the CDK app. The CDK owns the real
 buckets (`StorageStack`); these exist so media upload can be clicked through in
 a browser before anything is deployed — the decision recorded in
-[`../../TODO/03-open-decisions.md`](../../TODO/03-open-decisions.md) §1.
+[`human-decisions.md`](../../wiki/GeneralContext/Architecture/human-decisions.md) §1.
 
 They live here as files, rather than inline in a command, for two reasons: a
 policy you can read in a diff is a policy you can review, and every command in

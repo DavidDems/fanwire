@@ -22,7 +22,7 @@ Live at `https://fanwire.daviddems.com` since 2026-09-30, deployed by hand; no w
 `TODO/` — and it is nearly empty now. Nothing in it blocks the pipeline any more.
 
 1. **`TODO/02-deployment-requirements.md`** — what the post-deploy checklist left you (2026-09-30): SES production access is requested and waiting on AWS; the fixes are deployed.
-2. **`TODO/03-open-decisions.md`** — answered product decisions, four of which still need copying into `wiki/GeneralContext/Prompts/phase-4-manager-agent.md`.
+2. **`TODO/03-open-decisions.md`** — one open question (which browser tool sessions may drive). Answered decisions live in `wiki/GeneralContext/Architecture/human-decisions.md`.
 
 The setup checklist that used to be `TODO/01` is gone: every item was completed, and what is durable about it moved to `wiki/GeneralContext/Architecture/github-automation-setup.md`. A finished item does not stay in `TODO/` as a tick — it becomes current-state fact in the wiki.
 

@@ -2,7 +2,7 @@
 
 **Status: COMPLETED 2026-09-18 (human).** The dev user pool and SPA client were created with the commands below in `fanwire-workload` (`ca-central-1`), and the pool id and client id were recorded. `backend/.env` and `frontend/.env.local` did not previously exist; the human created both, each containing only the three variables listed under "Wire it into local dev". Both files are untracked and local. No further human action is needed for this task.
 
-**Human-facing.** Decided 2026-09-18 (see `wiki/GeneralContext/Prompts/phase-4-manager-agent.md` Decisions #3): local development and browser testing use a **real** Cognito user pool, not an emulator and not an in-house fake. Cognito's free tier covers this (50k MAU; the default Cognito email sender allows ~50 emails/day, plenty for dev). Estimated cost: $0.
+**Human-facing.** Decided 2026-09-18 (see `wiki/GeneralContext/Architecture/human-decisions.md`): local development and browser testing use a **real** Cognito user pool, not an emulator and not an in-house fake. Cognito's free tier covers this (50k MAU; the default Cognito email sender allows ~50 emails/day, plenty for dev). Estimated cost: $0.
 
 This pool is **dev-only** and separate from the production pool the CDK `auth` stack defines (that one only exists once `cdk deploy` happens, after the IAM review). It's created with the AWS CLI commands below rather than console clicks, so the exact configuration lives in a reviewed file. It mirrors the CDK stack's settings: email sign-in, email verification, optional TOTP MFA, and a public SPA client with no secret using SRP.
 
@@ -65,6 +65,11 @@ Then tell the manager session the two ids, or just create the files; the fronten
 - The SPA sends the Cognito **ID token** as `Authorization: Bearer <token>`. The backend's `CognitoTokenVerifier` checks `aud` = app client id and `iss` = `https://cognito-idp.<region>.amazonaws.com/<pool>`, and only ID tokens carry `aud`.
 - After sign-up + email confirmation, the SPA calls `GET /users/me`. A 404 means there's no profile yet, so it routes to profile creation (`POST /users`).
 - Automated tests never touch this pool. `msw` mocks the API, and `amazon-cognito-identity-js` sits behind an injected auth interface. Only manual browser verification uses it.
+
+## Test accounts (human decision, `human-decisions.md` §2)
+- Sign up test users as `+alias`es of the human's own address: `daviddemrs92+fw<n>@gmail.com`. Gmail delivers them all to one inbox, and Cognito treats each as a separate identity.
+- **The human clicks the real confirmation link.** No agent is given `cognito-idp:AdminConfirmSignUp`, because an agent holding it could mint confirmed identities in the very pool that is kept real so its auth path can be trusted.
+- Browser verification is reported as **NOT DONE** unless a browser tool really drove the app (`human-decisions.md` §3).
 
 ## Teardown
 `aws cognito-idp update-user-pool --user-pool-id <POOL_ID> --deletion-protection INACTIVE` then `aws cognito-idp delete-user-pool --user-pool-id <POOL_ID>`.

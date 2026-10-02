@@ -13,7 +13,7 @@ This folder is written for you.
 | File | What it covers | Blocking? |
 |---|---|---|
 | [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left after the post-deploy checklist: SES production access, requested 2026-10-01 and waiting on AWS | No — waiting on AWS's review |
-| [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on | Varies; each item says what it blocks. **The answers in it are staged, not landed** — see the warning at the top of that file |
+| [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on. Today that's one: which browser tool sessions may drive | No. Without an answer, browser verification is reported as not done. Answered decisions are in `wiki/GeneralContext/Architecture/human-decisions.md` |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
 
 **Status as of 2026-10-02.** `01` is **deleted** — every item in it was
@@ -22,9 +22,9 @@ completed, and its durable content now lives at
 live, `cfn-exec-role` is scoped and the NAT AMI is pinned (both 2026-10-02), and `02` now holds only SES
 production access; what
 each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
-("Post-deploy checks, 2026-09-30"). `03` holds the answered product decisions,
-four of which still have to be copied into `phase-4-manager-agent.md` by a
-human. `04` is the record of the first deploy — finished, kept for its
+("Post-deploy checks, 2026-09-30"). `03` holds one open question, which
+browser tool sessions may drive; its answered decisions moved to
+`wiki/GeneralContext/Architecture/human-decisions.md` on 2026-10-02. `04` is the record of the first deploy — finished, kept for its
 "Traps" list, which every later AWS session reads before handing over a
 command.
 
