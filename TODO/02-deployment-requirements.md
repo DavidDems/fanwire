@@ -4,7 +4,8 @@
 SES production access: auto-denied for missing detail, answered on the support
 case, under review (§1). Everything else in this file is finished and has
 moved into the wiki (below). The next AWS work you do will be inside a session:
-`wiki/GeneralContext/Prompts/09-nat-ami-pin.md`, then `10-deploy-workflow.md`.
+`wiki/GeneralContext/Prompts/10-deploy-workflow.md` (`09`, the NAT AMI pin,
+is done).
 
 Everything that was in this file and is now finished has moved into the wiki,
 where it belongs as current-state fact rather than as a tick:

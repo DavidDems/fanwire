@@ -1,5 +1,12 @@
 # 09 — Pin the NAT instance's AMI
 
+> **Done 2026-10-02 (PR #82).** `natImageId` in `infra/cdk.json` pins
+> `ami-012dfd7ab44bf488a`. The Network deploy was a no-op for the instance
+> (still `i-04422259f15d9d42a`), and its evidence for `07` is in `0x00` →
+> "AWS account state". The upgrade procedure and cadence (on advisories
+> only, a human decision) are in `build-deployment.md` → "Upgrading the NAT
+> instance's AMI". Next: `10-deploy-workflow.md`.
+
 **Objective:** stop `Fanwire-Network` from replacing the NAT instance whenever
 AWS publishes a new Amazon Linux 2023 image. Pin the AMI in config, and make
 upgrading it a deliberate, reviewed act. This blocks `10` (the automated

@@ -19,7 +19,7 @@ This folder is written for you.
 **Status as of 2026-10-02.** `01` is **deleted** — every item in it was
 completed, and its durable content now lives at
 `wiki/GeneralContext/Architecture/github-automation-setup.md`. The site is
-live, `cfn-exec-role` is scoped (2026-10-02), and `02` now holds only SES
+live, `cfn-exec-role` is scoped and the NAT AMI is pinned (both 2026-10-02), and `02` now holds only SES
 production access; what
 each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
 ("Post-deploy checks, 2026-09-30"). `03` holds the answered product decisions,

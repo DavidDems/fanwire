@@ -202,6 +202,8 @@ which was not chosen. It is a property of the design, not an oversight.
 >   `Prompts/09`). A `cdk diff` showing the instance's `ImageId` changing means
 >   someone changed the pin, which replaces the instance. Do that only as the
 >   deliberate upgrade in `build-deployment.md`, never as a side effect.
+>   Every Network deploy now prints `WARNING ... Hardcoded AMI ID`
+>   (`W9010`). It is expected, so don't act on it.
 > - **Diff or deploy `Fanwire-Cdn` without `-c deployFrontend=true` and it
 >   removes the `BucketDeployment`** the live stack has. Leave Cdn out, or
 >   rebuild the bundle in Docker and pass the flag.
