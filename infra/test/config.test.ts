@@ -26,6 +26,40 @@ describe('loadConfig', () => {
       // The AMI the live NAT instance runs as of 2026-10-02, pinned so the
       // first deploy of the pin is a no-op rather than an instance replacement.
       natImageId: 'ami-012dfd7ab44bf488a',
+      // In cdk.json, explicitly false: AWS refused SES production access on
+      // 2026-10-03, so email notifications stay off until it is granted.
+      sendEmailNotifications: false,
+    });
+  });
+
+  describe('sendEmailNotifications (durable account fact; off until SES production access)', () => {
+    // Read through `toMatchObject`/indexing rather than the typed property so
+    // these compile before the field exists and fail as assertions.
+    const flag = (overrides: Record<string, unknown>) =>
+      (configWith(overrides) as unknown as Record<string, unknown>).sendEmailNotifications;
+
+    test('absent => false', () => {
+      expect(flag({ sendEmailNotifications: undefined })).toBe(false);
+    });
+
+    test.each([
+      ['boolean true', true],
+      ['string "true" (as `-c sendEmailNotifications=true` delivers it)', 'true'],
+    ])('%s => true', (_label, value) => {
+      expect(flag({ sendEmailNotifications: value })).toBe(true);
+    });
+
+    test.each([
+      ['boolean false', false],
+      ['string "false"', 'false'],
+    ])('%s => false', (_label, value) => {
+      expect(flag({ sendEmailNotifications: value })).toBe(false);
+    });
+
+    test('cdk.json writes it explicitly as false (present, not merely absent)', () => {
+      const context = cdkJsonContext();
+      expect(Object.prototype.hasOwnProperty.call(context, 'sendEmailNotifications')).toBe(true);
+      expect(context.sendEmailNotifications).toBe(false);
     });
   });
 

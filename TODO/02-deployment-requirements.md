@@ -1,11 +1,11 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-10-02: one thing is waiting on AWS, not on you** —
-SES production access: auto-denied for missing detail, answered on the support
-case, under review (§1). Everything else in this file is finished and has
-moved into the wiki (below). The next AWS work you do will be inside a session:
-`wiki/GeneralContext/Prompts/10-deploy-workflow.md` (`09`, the NAT AMI pin,
-is done).
+**Status as of 2026-10-03: nothing is waiting on you.** AWS refused SES
+production access, so email notifications are switched off on purpose
+(`sendEmailNotifications: false` in `infra/cdk.json`) and in-app
+notifications carry on. Reapplying is optional and later (§1). The next AWS
+work you do will be inside a session: `wiki/GeneralContext/Prompts/10-deploy-workflow.md`
+(`09`, the NAT AMI pin, is done).
 
 Everything that was in this file and is now finished has moved into the wiki,
 where it belongs as current-state fact rather than as a tick:
@@ -34,27 +34,45 @@ where it belongs as current-state fact rather than as a tick:
 
 ---
 
-## 1. SES production access — requested, auto-denied for missing detail, answered
+## 1. SES production access — refused 2026-10-03; email is off on purpose
 
-The first request (2026-10-01, `put-account-details` with no use-case text)
-came back `DENIED` within minutes — an automated "needs more information",
-case `179090803100437`. It is answered by **replying to the support case** in
-the console (Support Center, signed in to `fanwire-workload`; the Support API
-needs a paid plan), with all six things AWS asks for in one message. The
-reply that was sent is below so a second round does not start from scratch.
+Case `179090803100437`: auto-denied for missing detail on 2026-10-01,
+answered with the reply below, then **refused** after human review with a
+form letter that gives no reason. A brand-new account with no billing or
+sending history is the commonest refusal, so this is most likely about the
+account's age, not the use case.
 
-**Before replying, make the bounce/complaint answer true** — the account-level
-suppression list for both reasons:
+**What runs today:** `sendEmailNotifications` is `false` in `infra/cdk.json`,
+so the notifications function has no `NOTIFICATION_FROM_ADDRESS` and no
+`ses:SendEmail` grant, and `SesEmailSender` skips without calling AWS. In-app
+notifications are unaffected. The SES identity stays verified (it costs
+nothing), so turning email on later needs no DNS work.
+
+**Optional, later — reapply** once the account has a few weeks to months of
+history. Not before: a fresh request on the same account days later is
+likely to get the same answer.
+
+1. SES console → *Account dashboard* → *Request production access*, pasting
+   the reply below into the use-case box. Check the suppression list first
+   (the first command below); it is what makes the bounce answer true.
+2. When `get-account` shows `prod: true`, turn email on with a PR that sets
+   `"sendEmailNotifications": true` in `infra/cdk.json`, then deploy
+   `Fanwire-App` from `infra/` with the third command below. Proof it
+   worked: a follow sends the email.
 
 ```powershell
 aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query SuppressionAttributes
 ```
 ```powershell
-aws sesv2 put-account-suppression-attributes --suppressed-reasons BOUNCE COMPLAINT --region ca-central-1 --profile fanwire-workload
+aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "{prod:ProductionAccessEnabled,review:Details.ReviewDetails.Status}"
+```
+```powershell
+npx cdk deploy Fanwire-App --exclusively --profile fanwire-workload
 ```
 
-**The reply** (subjects and body are copied from `app/notifications/email.py`;
-do not claim SNS bounce handling — it is not built):
+**The reply that was sent** (subjects and body are copied from
+`app/notifications/email.py`; do not claim SNS bounce handling — it is not
+built):
 
 > **Website:** https://fanwire.daviddems.com — a social app for sports fans.
 > **Email type:** transactional only — a notification that someone followed the
@@ -70,16 +88,6 @@ do not claim SNS bounce handling — it is not built):
 > follower on fanwire" — Body "You have a new follower on fanwire. Open fanwire
 > to see it."
 > **Identity:** fanwire.daviddems.com, verified in ca-central-1 with Easy DKIM.
-
-**Confirm it was granted:**
-
-```powershell
-aws sesv2 get-account --region ca-central-1 --profile fanwire-workload --query "{prod:ProductionAccessEnabled,review:Details.ReviewDetails.Status}"
-```
-
-`prod: true` closes this item — delete the section. Until then, email to an
-address not verified in SES is rejected and logged by the notifications
-Lambda; the in-app notification is unaffected.
 
 ---
 

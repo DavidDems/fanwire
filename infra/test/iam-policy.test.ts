@@ -45,6 +45,16 @@ const GATE_MODES: Record<string, Record<string, unknown>> = {
   ...Object.fromEntries(
     Object.entries(DOMAIN_MODES_DEPLOYING).map(([mode, overrides]) => [`${mode}, deployFrontend`, overrides]),
   ),
+  // cdk.json carries `sendEmailNotifications: false` (SES production access
+  // refused 2026-10-03), so every mode above synthesizes WITHOUT the
+  // notifications role's `ses:SendEmail` grant. These two keep that grant
+  // path under the gate, so turning email back on cannot ship an unreviewed
+  // wildcard. (The no-domain mode is omitted: it never grants SES.)
+  ...Object.fromEntries(
+    Object.entries(DOMAIN_MODES)
+      .filter(([mode]) => mode !== 'no domain')
+      .map(([mode, overrides]) => [`${mode}, sendEmailNotifications`, { ...overrides, sendEmailNotifications: true }]),
+  ),
 };
 
 // `deployFrontend` stages `frontend/dist` as an asset; it is gitignored and

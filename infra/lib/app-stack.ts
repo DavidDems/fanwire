@@ -239,7 +239,8 @@ export class AppStack extends cdk.Stack {
     if (config.domainName && config.hostedZoneId) {
       this.sesDomainIdentity(config.domainName, config.hostedZoneId, config.hostedZoneName);
     }
-    if (config.domainName) {
+    // The SES sandbox rejects unverified recipients: no send grant or from-address until production access.
+    if (config.domainName && config.sendEmailNotifications) {
       notificationStatements.push(
         new iam.PolicyStatement({
           sid: 'SendFromSiteDomain',
