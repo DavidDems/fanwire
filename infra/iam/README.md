@@ -13,8 +13,8 @@ attaches it.
 ## `github-actions-deploy-role-policy.json`
 
 The permissions policy for `GitHubActionsDeployRole`, the OIDC role in
-`fanwire-workload` whose trust policy is pinned to
-`repo:DavidDems/fanwire:ref:refs/heads/main`.
+`fanwire-workload` that `.github/workflows/deploy.yml` assumes. Its trust
+policy is the next file.
 
 It grants exactly one action — `sts:AssumeRole` — on the eight CDK bootstrap
 roles (four per region, `ca-central-1` and `us-east-1`). Nothing else. CI cannot
@@ -26,6 +26,26 @@ Requires `cdk bootstrap` to have been run in both regions with the default
 and the honest accounting of what this does *not* solve are in
 [`../../TODO/02-deployment-requirements.md`](../../TODO/02-deployment-requirements.md)
 §3.
+
+## `github-actions-deploy-role-trust-policy.json`
+
+The trust policy for the same role. It admits one OIDC subject,
+`repo:DavidDems/fanwire:environment:production`, which is a job that declares
+the GitHub environment `production`. It does **not** admit a branch.
+
+It used to name `ref:refs/heads/main`, which admits *every* workflow run from
+`main`, including the agent workflows. An environment subject admits only
+jobs that opt in, and `.ai/tests/test_deploy_workflow.py` fails if any
+workflow except `deploy.yml` does. The branch check moves into the
+environment: deployment branches restricted to `main`, plus a required
+reviewer. Both are repository settings, not files, so a human sets them up
+once (`wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy").
+
+Applied by hand, and gated by that test rather than by an infra test:
+
+```powershell
+aws iam update-assume-role-policy --profile fanwire-workload --role-name GitHubActionsDeployRole --policy-document file://infra/iam/github-actions-deploy-role-trust-policy.json
+```
 
 ## `cdk-cfn-exec-role-policy.json`
 
