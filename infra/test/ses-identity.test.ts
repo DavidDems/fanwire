@@ -81,6 +81,16 @@ describe('SES domain identity (domain with hosted zone)', () => {
   });
 });
 
+test('the identity and its three DKIM CNAMEs do not depend on sendEmailNotifications', () => {
+  // Sending is switched off until SES production access is granted, but the
+  // identity stays verified so turning sending back on is a one-flag change.
+  const t = synthFanwire({ ...HOSTED, sendEmailNotifications: false }).json(STACK_NAMES.app);
+  const identities = Object.values(resourcesOfType(t, SES_IDENTITY));
+  expect(identities).toHaveLength(1);
+  expect(identities[0].Properties?.EmailIdentity).toBe('fanwire.daviddems.com');
+  expect(Object.values(resourcesOfType(t, RECORD_SET)).filter((r) => r.Properties?.Type === 'CNAME')).toHaveLength(3);
+});
+
 describe.each(['domain without hosted zone', 'no domain'])('SES domain identity (%s)', (mode) => {
   test('no identity in any stack: nothing could verify it without a hosted zone', () => {
     const synth = synthFanwire(DOMAIN_MODES[mode]);
