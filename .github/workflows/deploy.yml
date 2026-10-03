@@ -51,7 +51,8 @@ jobs:
     env:
       AWS_REGION: ca-central-1
       # Vite inlines these at build time. They are ids, not secrets:
-      # Fanwire-Auth's outputs, held as repository variables.
+      # Fanwire-Auth's outputs, held as variables (not secrets: `vars.`
+      # never sees secrets) on the `production` environment.
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       VITE_MEDIA_BASE_URL: ${{ vars.VITE_MEDIA_BASE_URL }}
       VITE_COGNITO_REGION: ${{ vars.VITE_COGNITO_REGION }}
