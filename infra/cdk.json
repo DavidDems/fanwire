@@ -12,6 +12,7 @@
     "hostedZoneId": "Z04139742PYZYKIOGHWGR",
     "hostedZoneName": "fanwire.daviddems.com",
     "natImageId": "ami-012dfd7ab44bf488a",
+    "sendEmailNotifications": false,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:defaultCrossStackReferences": "strong",
     "@aws-cdk/core:target-partitions": ["aws"],

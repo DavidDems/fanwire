@@ -399,15 +399,62 @@ describe('App stack: migration runner', () => {
   });
 });
 
-describe.each(Object.entries(DOMAIN_MODES))('App stack SES permission (%s)', (mode, overrides) => {
-  test('notifications may send email only from the site domain identity, and only once a domain exists', () => {
-    const t = synthFanwire(overrides).json(STACK_NAMES.app);
-    const policies = JSON.stringify(resourcesOfType(t, 'AWS::IAM::Policy'));
-    if (mode === 'no domain') {
-      expect(policies).not.toContain('ses:SendEmail');
-    } else {
-      expect(policies).toContain('ses:SendEmail');
-      expect(policies).toContain(':identity/fanwire.daviddems.com');
-    }
+/**
+ * SES email notifications are OFF until AWS grants SES production access
+ * (refused 2026-10-03: the account stays in the sandbox, where every send to
+ * an unverified recipient is rejected). The durable `sendEmailNotifications`
+ * context flag -- `false` in cdk.json -- gates both halves of sending:
+ *
+ *   - the `ses:SendEmail` grant on the site-domain identity, and
+ *   - `NOTIFICATION_FROM_ADDRESS`, without which the backend's SesEmailSender
+ *     skips sending without calling AWS at all.
+ *
+ * Both exist only with a domain AND the flag on. The SES identity and its DKIM
+ * records are independent of the flag (see ses-identity.test.ts).
+ */
+const EMAIL_FLAG_STATES: Array<[string, Record<string, unknown>, boolean]> = [
+  ['sendEmailNotifications on', { sendEmailNotifications: true }, true],
+  ['sendEmailNotifications false', { sendEmailNotifications: false }, false],
+  // `undefined` still wins the spread over cdk.json, so this is genuinely absent.
+  ['sendEmailNotifications absent', { sendEmailNotifications: undefined }, false],
+];
+
+/** The notifications function (by its image command) in an arbitrary synthesized App template. */
+function notificationsFunctionIn(t: { Resources?: Record<string, CfnResource> }): CfnResource {
+  const hit = Object.values(resourcesOfType(t, 'AWS::Lambda::Function')).find(
+    (f) =>
+      JSON.stringify((f.Properties?.ImageConfig as { Command?: string[] })?.Command) ===
+      JSON.stringify([HANDLERS.notifications]),
+  );
+  if (!hit) throw new Error('no notifications function');
+  return hit;
+}
+
+describe.each(Object.entries(DOMAIN_MODES))('App stack SES email sending (%s)', (mode, domainOverrides) => {
+  const hasDomain = mode !== 'no domain';
+
+  describe.each(EMAIL_FLAG_STATES)('%s', (_flagLabel, flagOverrides, flagOn) => {
+    const t = () => synthFanwire({ ...domainOverrides, ...flagOverrides }).json(STACK_NAMES.app);
+    const sends = hasDomain && flagOn;
+
+    test(`ses:SendEmail on the site domain identity ${sends ? 'IS' : 'is NOT'} granted`, () => {
+      const policies = JSON.stringify(resourcesOfType(t(), 'AWS::IAM::Policy'));
+      if (sends) {
+        expect(policies).toContain('ses:SendEmail');
+        expect(policies).toContain(':identity/fanwire.daviddems.com');
+      } else {
+        // no SES action of any kind, on any policy in the App stack
+        expect(policies.match(/"ses:[A-Za-z*]+"/g) ?? []).toEqual([]);
+      }
+    });
+
+    test(`NOTIFICATION_FROM_ADDRESS ${sends ? 'IS' : 'is NOT'} set on the notifications function`, () => {
+      const env = envOf(notificationsFunctionIn(t()));
+      if (sends) {
+        expect(env.NOTIFICATION_FROM_ADDRESS).toBe('notifications@fanwire.daviddems.com');
+      } else {
+        expect(Object.keys(env)).not.toContain('NOTIFICATION_FROM_ADDRESS');
+      }
+    });
   });
 });

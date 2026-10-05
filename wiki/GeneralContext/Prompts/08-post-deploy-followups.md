@@ -1,6 +1,6 @@
 # 08 — What the post-deploy checklist turned up
 
-**Objective:** three small, independent units that `05` found while checking
+**Objective:** four small, independent units that `05` found while checking
 the live site. None blocks anything; each is its own branch and its own PR, in
 any order. (`07`, which this used to say to run first, is done.)
 
@@ -65,5 +65,25 @@ looking. The runbook lists this as a known gap.
   volume, but it is an address and a subscription confirmation). Ask before
   building the notification half; the alarm itself is useful in the console
   without it.
+
+## 4. The email-notifications toggle while email is off
+
+Added 2026-10-03. AWS refused SES production access, so `infra/cdk.json`
+sets `sendEmailNotifications: false` and nothing is emailed
+(`wiki/CodeContext/Modules/0x05-notifications.md` → "Email is off in
+production"). The settings page still offers "Email me about new
+notifications", which now does nothing either way.
+
+- Keep storing the preference — it is real and will matter once email is
+  back on. Change only what the page tells the user: caption the toggle (or
+  disable it with a caption) saying email notifications are not available
+  yet.
+- The SPA cannot read a CDK context flag at runtime, and baking one in at
+  build time is a second place to flip. Prefer the backend telling the
+  frontend — e.g. a field on the existing preference response that is true
+  only when `NOTIFICATION_FROM_ADDRESS` is set — so turning email on stays
+  one change in `cdk.json`.
+- Rebuild and re-upload the bundle afterwards (`build-deployment.md` →
+  "Rebuilding the SPA").
 
 Nothing here has merge permission. One PR per unit. Merge nothing.

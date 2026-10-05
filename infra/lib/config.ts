@@ -41,6 +41,14 @@ export interface FanwireConfig {
    * the NAT instance's AMI".
    */
   readonly natImageId: string;
+  /**
+   * Let the Notifications function send email through SES. A durable account
+   * fact, unlike `deployFrontend`: off until AWS grants this account SES
+   * production access (refused 2026-10-03; in the sandbox an unverified
+   * recipient is rejected). While off, notifications send no email and in-app
+   * notifications are unaffected; the SES domain identity is still created.
+   */
+  readonly sendEmailNotifications: boolean;
 }
 
 function readString(node: Node, key: string): string | undefined {
@@ -75,6 +83,7 @@ export function loadConfig(node: Node): FanwireConfig {
   const hostedZoneName = readString(node, 'hostedZoneName');
   const deployFrontend = readBoolean(node, 'deployFrontend');
   const natImageId = readString(node, 'natImageId');
+  const sendEmailNotifications = readBoolean(node, 'sendEmailNotifications');
 
   if (!account || !/^\d{12}$/.test(account)) {
     throw new Error(`context "account" must be a 12-digit AWS account id, got ${JSON.stringify(account)}`);
@@ -98,5 +107,5 @@ export function loadConfig(node: Node): FanwireConfig {
     throw new Error(`context "natImageId" must be an AMI id (ami- and 8-17 lowercase hex digits), got ${JSON.stringify(natImageId)}`);
   }
 
-  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName, deployFrontend, natImageId };
+  return { account, region, edgeRegion, domainName, hostedZoneId, hostedZoneName, deployFrontend, natImageId, sendEmailNotifications };
 }
