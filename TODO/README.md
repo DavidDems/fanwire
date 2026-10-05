@@ -15,6 +15,7 @@ This folder is written for you.
 | [`02-deployment-requirements.md`](02-deployment-requirements.md) | SES production access (refused 2026-10-03, email turned off by PR #86), and what to watch on the next deploys (§2). The deploy path itself is finished | No |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on. Today that's one: which browser tool sessions may drive | No. Without an answer, browser verification is reported as not done. Answered decisions are in `wiki/GeneralContext/Architecture/human-decisions.md` |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
+| [`05-branding-assets.md`](05-branding-assets.md) | Make the brand assets (added 2026-10-05): generate the wire-`f` symbol in ChatGPT, trace it and typeset the wordmark in Inkscape, export the icon set, hand the files back | No. Until it's done the site has no favicon and the name stays plain text |
 
 **Status as of 2026-10-02.** `01` is **deleted** — every item in it was
 completed, and its durable content now lives at
