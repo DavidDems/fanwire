@@ -122,3 +122,19 @@ script (`branding.md` §9). It is left as written, and the correct figures are:
 | Pale Sky on Jet Black | 10.6:1 | **10.42:1** | none (AAA) |
 | White on Teal | 5.0:1 | **4.98:1** | none (AA, fails AAA) |
 | Teal on Jet Black | 3.1:1 | **2.995:1** | **Worse.** It also fails the 3:1 non-text minimum (WCAG 1.4.11), so teal can't be a focus ring, icon or border on Jet Black either. |
+
+## Brand assets — approved 2026-10-05
+
+- **Symbol:** the wire `f` with a plug at the foot of the stem, generated from
+  `branding.md` §6.1 variant A and traced by the human. Masters and provenance
+  are in `brand/source/` (`PROVENANCE.md`), and the exports in `brand/out/`.
+  The human approved the icons and the colour treatment.
+- **Wordmark font: Outfit SemiBold (600)**, chosen from the Outfit, Sora and
+  Manrope shortlist. The wordmark ships as SVG paths, so it doesn't load the
+  font. `11` chooses the UI typeface separately and may or may not pick Outfit.
+- **Similarity check:** Google Lens and TinEye found no matches. The Canadian
+  Trademarks Database search (design mark and the word `fanwire`) is still
+  open in `TODO/05-branding-assets.md`.
+- "No wordmark and no icon yet" (2026-10-02) stops being true for the **site**
+  only when the placement unit lands the files under `frontend/`. Until then the
+  UI still shows the plain-text name.
