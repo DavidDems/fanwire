@@ -5,6 +5,7 @@ properties that unit tests cannot see because they live in workflow YAML, and
 every one of them is here because it broke a live run.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -476,3 +477,32 @@ class TestTheOpenApiContractCannotDrift:
         fail on every PR and block nothing."""
         needs = self.job(gate, "gate").split("needs:", 1)[1].split("runs-on:", 1)[0]
         assert "- openapi-drift" in needs
+
+
+class TestActionsRunOnNode24:
+    """GitHub deprecated Node 20 for actions in 2025 and forces Node-20 actions
+    onto Node 24 with a warning on every run. Each entry is the first major of
+    that action whose `action.yml` declares `using: node24` (checked
+    2026-10-05). The first majors were chosen over the latest ones so the bump
+    changes the runtime and as little else as possible."""
+
+    MIN_MAJOR = {
+        "actions/checkout": 5,
+        "actions/setup-python": 6,
+        "actions/setup-node": 5,
+        "aws-actions/configure-aws-credentials": 6,
+        "docker/setup-buildx-action": 4,
+        "docker/build-push-action": 7,
+    }
+
+    @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
+    def test_no_action_is_pinned_to_a_node20_major(self, path):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@v(\d+)", line)
+            if not m or line.lstrip().startswith("#"):
+                continue
+            action, major = m.group(1), int(m.group(2))
+            assert action in self.MIN_MAJOR, f"{path.name}: {action} has no Node 24 floor here"
+            assert major >= self.MIN_MAJOR[action], (
+                f"{path.name}: {action}@v{major} is a Node 20 major"
+            )
