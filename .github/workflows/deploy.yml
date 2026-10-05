@@ -1,6 +1,7 @@
 name: deploy
 
-# Deploys the CDK app to fanwire-workload as GitHubActionsDeployRole.
+# Deploys the CDK app to fanwire-workload as GitHubActionsDeployRole, on a
+# merge to main that changes a deployable path, or by hand.
 # wiki/CodeContext/Standards/build-deployment.md "Automated deploy" is the
 # design; this header is the part a reviewer must not miss.
 #
@@ -27,15 +28,41 @@ name: deploy
 # the human reviewer) and nowhere else.
 
 on:
-  # Dispatch only, until a few runs are clean. Then a reviewed PR adds
-  # `push: branches: [main]`.
+  # A re-run by hand, e.g. after rolling out a new cfn-exec policy version.
   workflow_dispatch:
+  # Every merge to main that changes something AWS is built from (human
+  # decision 2026-10-05, after two clean dispatched runs). The environment's
+  # required reviewer still gates each run. wiki/ and .ai/ are absent on
+  # purpose: the agent system runs in GitHub Actions and no stack reads it.
+  # Changes to infra/test/ or infra/iam/ do not trigger it either: tests change
+  # no template, and infra/iam/ is applied by a human, never by CDK.
+  # backend/tests/ stays in: the image asset hashes it (app-stack.ts exclude).
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docker/**"
+      - ".dockerignore"
+      - "infra/bin/**"
+      - "infra/lib/**"
+      - "infra/cdk.json"
+      - "infra/package.json"
+      - "infra/package-lock.json"
+      - ".github/workflows/deploy.yml"
+      # Negations last: each removes only what a pattern above added.
+      - "!**/*.md"
+      - "!frontend/src/**/*.test.ts"
+      - "!frontend/src/**/*.test.tsx"
 
 permissions:
   contents: read
 
 # Two deploys never overlap; a second one waits rather than cancelling a
-# CloudFormation update halfway.
+# CloudFormation update halfway. GitHub keeps one *pending* run per group: a
+# third merge while one runs and one waits replaces the waiting one, which is
+# harmless because it deploys main as of the newer merge.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -59,7 +86,7 @@ jobs:
       VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
       VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
@@ -87,7 +114,7 @@ jobs:
       - name: Build the pinned CDK image
         run: docker build -q -f docker/cdk-deploy.Dockerfile -t fanwire-cdk:deploy .
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::294321867941:role/GitHubActionsDeployRole
           role-session-name: fanwire-deploy-${{ github.run_id }}
