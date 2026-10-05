@@ -5,8 +5,7 @@
 > role trusts GitHub's immutable OIDC subject. The first dispatch was refused
 > at login because of that subject, and the second (run 37256951096) deployed
 > all eight stacks. What it proved, and what it did not: `0x00` → "AWS account
-> state". Left to do, in order: deploy PR #86 through the workflow (the first
-> test of the in-container backend image build); bump the Node-20 actions;
+> state". Left to do, in order: deploy PR #86 through the workflow; bump the Node-20 actions;
 > add `push: branches: [main]` after a few clean runs; then the permissions
 > boundary on created roles. These are tracked in `TODO/02`.
 

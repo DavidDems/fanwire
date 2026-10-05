@@ -108,9 +108,9 @@ Each item is a session with Claude, in this order.
 1. **Deploy PR #86 through the workflow.** After merging it, dispatch
    `deploy.yml` instead of the manual `cdk deploy` in its description. The
    `Fanwire-App` diff should show only the Notifications function losing its
-   SES statement and `NOTIFICATION_FROM_ADDRESS`. It is also the first run that
-   builds and pushes the backend image from inside the CI container, which the
-   first run did not exercise. Confirm: follow someone; the in-app notification
+   SES statement and `NOTIFICATION_FROM_ADDRESS`. #86 changes no `backend/`
+   file, so it does **not** exercise the in-container backend image build; the
+   first PR that touches `backend/` will. Confirm: follow someone; the in-app notification
    arrives, and the Notifications log has no `MessageRejected`.
 2. **Bump the Node-20 actions.** Every run warns that `actions/checkout@v4` and
    `aws-actions/configure-aws-credentials@v4` are forced onto Node 24.
