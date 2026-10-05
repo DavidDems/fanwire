@@ -7,6 +7,7 @@ import { DataStack } from './data-stack';
 import { EdgeStack } from './edge-stack';
 import { MessagingStack } from './messaging-stack';
 import { NetworkStack } from './network-stack';
+import { boundEveryRole } from './role-boundary';
 import { StorageStack } from './storage-stack';
 
 /** Stack names, shared with the tests so they can look each one up in the cloud assembly. */
@@ -92,5 +93,6 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     description: 'fanwire: CloudFront distribution (the only public entry), OAC bucket policies, DNS aliases',
   });
 
+  boundEveryRole(app);
   return config;
 }

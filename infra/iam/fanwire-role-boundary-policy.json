@@ -1,0 +1,112 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LambdaInVpc",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AssignPrivateIpAddresses",
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSubnets",
+        "ec2:UnassignPrivateIpAddresses"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppData",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DeleteItem",
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+        "secretsmanager:GetSecretValue",
+        "cognito-idp:AdminGetUser"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppMessaging",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutEvents",
+        "sqs:ChangeMessageVisibility",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:ReceiveMessage",
+        "sqs:SendMessage",
+        "lambda:InvokeFunction",
+        "ses:SendEmail"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ObjectsAndFrontendDeployment",
+      "Effect": "Allow",
+      "Action": [
+        "s3:Abort*",
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "MalwareProtectionPlan",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutBucketNotification",
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:ListTargetsByRule",
+        "events:PutRule",
+        "events:PutTargets",
+        "events:RemoveTargets"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CrossRegionExports",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:AddTagsToResource",
+        "ssm:DeleteParameters",
+        "ssm:GetParameters",
+        "ssm:ListTagsForResource",
+        "ssm:PutParameter",
+        "ssm:RemoveTagsFromResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NatInstanceSessionManager",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:UpdateInstanceInformation",
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -69,14 +69,28 @@
       "Resource": "*"
     },
     {
-      "Sid": "IamManageFanwireRoles",
+      "Sid": "IamCreateAndWriteBoundedFanwireRoles",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole",
+        "iam:PutRolePermissionsBoundary",
+        "iam:PutRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::294321867941:role/Fanwire-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::294321867941:policy/FanwireRoleBoundary"
+        }
+      }
+    },
+    {
+      "Sid": "IamManageFanwireRoles",
+      "Effect": "Allow",
+      "Action": [
         "iam:DeleteRole",
+        "iam:DeleteRolePermissionsBoundary",
         "iam:DeleteRolePolicy",
         "iam:DetachRolePolicy",
-        "iam:PutRolePolicy",
         "iam:TagRole",
         "iam:UntagRole",
         "iam:UpdateAssumeRolePolicy",
@@ -106,6 +120,9 @@
       "Condition": {
         "ArnEquals": {
           "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        },
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::294321867941:policy/FanwireRoleBoundary"
         }
       }
     },

@@ -18,9 +18,10 @@ name: deploy
 #
 # WHAT IT CANNOT DO. The role holds only sts:AssumeRole on the CDK bootstrap
 # roles. CloudFormation acts as cfn-exec-role, whose policy
-# (FanwireCdkCfnExecPolicy) is the human's to roll out; nothing here touches
-# it. A stack change that needs a new AWS service fails here until the human
-# has rolled out a new policy version. Migrations are not run: invoke the
+# (FanwireCdkCfnExecPolicy) is the human's to roll out, and every role the
+# stacks create carries FanwireRoleBoundary, also the human's. Nothing here
+# writes either; it reads both and refuses to deploy unless the live versions
+# match the repo, so a change that needs a new version waits for the rollout. Migrations are not run: invoke the
 # Migration function by hand after a deploy that adds an Alembic revision.
 #
 # --require-approval never: CI cannot answer CDK's IAM-change prompt. The
@@ -119,6 +120,38 @@ jobs:
           role-to-assume: arn:aws:iam::294321867941:role/GitHubActionsDeployRole
           role-session-name: fanwire-deploy-${{ github.run_id }}
           aws-region: ca-central-1
+
+      # FanwireCdkCfnExecPolicy and FanwireRoleBoundary are applied by hand
+      # (infra/iam/README.md), and a commit that needs a new version of either
+      # must not deploy before the human has rolled it out: too narrow an exec
+      # policy fails mid-deploy, too narrow a boundary deploys cleanly and then
+      # fails at runtime. So both live default versions must equal the
+      # committed files. Read through the CDK lookup role (ReadOnlyAccess);
+      # the deploy role itself holds no IAM permission, and this step's
+      # credentials end with it.
+      - name: Check the live IAM matches the repo
+        run: |
+          set -euo pipefail
+          creds="$(aws sts assume-role --role-arn arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-ca-central-1 --role-session-name "fanwire-iam-check-$GITHUB_RUN_ID" --query Credentials --output json)"
+          AWS_ACCESS_KEY_ID="$(jq -r .AccessKeyId <<<"$creds")"
+          AWS_SECRET_ACCESS_KEY="$(jq -r .SecretAccessKey <<<"$creds")"
+          AWS_SESSION_TOKEN="$(jq -r .SessionToken <<<"$creds")"
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          check() {
+            local arn="$1" file="$2" version
+            if ! version="$(aws iam get-policy --policy-arn "$arn" --query Policy.DefaultVersionId --output text)"; then
+              echo "::error::$arn does not exist. Create it from $file first (infra/iam/README.md)."
+              exit 1
+            fi
+            aws iam get-policy-version --policy-arn "$arn" --version-id "$version" --query PolicyVersion.Document --output json > "$RUNNER_TEMP/live.json"
+            if ! python3 -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])) != json.load(open(sys.argv[2])))' "$RUNNER_TEMP/live.json" "$file"; then
+              echo "::error::$arn (default $version) differs from $file. Roll the committed version out before this deploy (infra/iam/README.md)."
+              exit 1
+            fi
+            echo "$arn: default $version matches $file"
+          }
+          check arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy infra/iam/cdk-cfn-exec-role-policy.json
+          check arn:aws:iam::294321867941:policy/FanwireRoleBoundary infra/iam/fanwire-role-boundary-policy.json
 
       # The checkout is mounted at /repo so the backend image asset builds from
       # the real repo root; the anonymous volume keeps the image's pinned
