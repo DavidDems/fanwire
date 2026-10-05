@@ -239,10 +239,14 @@ class TestTheDeployWorkflowShape:
     @pytest.mark.parametrize(
         "forbidden",
         [
-            "FanwireCdkCfnExecPolicy",
-            "create-policy-version",
-            "set-default-policy-version",
-            "cdk-cfn-exec-role-policy",
+            # It may read the hand-applied IAM (below), never write it.
+            "iam create-",
+            "iam put-",
+            "iam attach-",
+            "iam delete-",
+            "iam update-",
+            "iam set-",
+            "iam tag-",
             "bootstrap",
             "lambda invoke",
             "gh pr merge",
@@ -261,3 +265,39 @@ class TestThePinnedImageCanBuildTheBackendAsset:
         text = CDK_IMAGE.read_text(encoding="utf-8")
         assert "docker-cli" in text
         assert "docker-cli-buildx" in text
+
+
+class TestTheLiveIamMatchesTheRepo:
+    """`FanwireCdkCfnExecPolicy` and `FanwireRoleBoundary` are applied by hand,
+    and a deploy that needs a new version of either must wait until the human
+    has rolled it out: too narrow an exec policy fails the deploy mid-way, too
+    narrow a boundary deploys cleanly and fails at runtime. So before any CDK
+    call the workflow reads both live default versions, through the CDK lookup
+    role (read-only), and stops if either differs from the committed file."""
+
+    LOOKUP_ROLE = (
+        "arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-ca-central-1"
+    )
+    POLICIES = {
+        "arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy": "infra/iam/cdk-cfn-exec-role-policy.json",
+        "arn:aws:iam::294321867941:policy/FanwireRoleBoundary": "infra/iam/fanwire-role-boundary-policy.json",
+    }
+
+    def test_it_reads_through_the_lookup_role(self, deploy):
+        assert any(self.LOOKUP_ROLE in line for line in deploy)
+
+    @pytest.mark.parametrize("arn", sorted(POLICIES))
+    def test_both_policies_are_compared_with_their_files(self, deploy, arn):
+        text = "\n".join(deploy)
+        assert arn in text
+        assert self.POLICIES[arn] in text
+
+    def test_the_check_runs_before_any_cdk_call(self, deploy):
+        check = [i for i, line in enumerate(deploy) if "get-policy-version" in line]
+        cdk = [
+            i
+            for i, line in enumerate(deploy)
+            if re.search(r"fanwire-cdk\S*\s+(diff|deploy)\b", line)
+        ]
+        assert check and cdk
+        assert max(check) < min(cdk)

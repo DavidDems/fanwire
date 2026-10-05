@@ -35,6 +35,16 @@ import {
 const POLICY_PATH = path.resolve(__dirname, '..', 'iam', 'cdk-cfn-exec-role-policy.json');
 const ACCOUNT = '294321867941';
 const LAMBDA_BASIC = 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole';
+const BOUNDARY_ARN = `arn:aws:iam::${ACCOUNT}:policy/FanwireRoleBoundary`;
+
+/**
+ * The IAM writes that can give a role permissions. Each must require the role
+ * to carry FanwireRoleBoundary (`iam:PermissionsBoundary`): for CreateRole and
+ * PutRolePermissionsBoundary that is the boundary being set, for the policy
+ * writes the boundary the role already has. So no template can create an
+ * unbounded role, or add policy to a role that has lost its boundary.
+ */
+const BOUNDARY_GATED = ['iam:CreateRole', 'iam:PutRolePolicy', 'iam:AttachRolePolicy', 'iam:PutRolePermissionsBoundary'];
 
 /** CloudFormation resource-type namespace -> IAM service prefix. */
 const TYPE_TO_IAM: Record<string, string> = {
@@ -78,6 +88,10 @@ const IAM_WRITES_ALLOWED = new Set([
   'iam:TagRole',
   'iam:UntagRole',
   'iam:PassRole',
+  'iam:PutRolePermissionsBoundary',
+  // Removing a boundary cannot escalate (policy writes then fail the
+  // condition), and a rollback of the deploy that set it needs this.
+  'iam:DeleteRolePermissionsBoundary',
   'iam:CreateInstanceProfile',
   'iam:DeleteInstanceProfile',
   'iam:AddRoleToInstanceProfile',
@@ -256,6 +270,21 @@ describe('cfn-exec-role policy: the IAM fence', () => {
       for (const st of doc.Statement) asList(st.Principal?.Service).forEach((x) => trusted.add(x));
     }
     expect([...trusted].filter((t) => !passable.has(t)).sort()).toEqual([]);
+  });
+
+  test('every IAM write that grants permissions requires FanwireRoleBoundary', () => {
+    for (const action of BOUNDARY_GATED) {
+      const granting = iamStatements().filter((s) => asList(s.Action).includes(action));
+      expect(granting.length).toBeGreaterThan(0);
+      for (const s of granting) {
+        expect(asList(s.Condition?.StringEquals?.['iam:PermissionsBoundary'])).toEqual([BOUNDARY_ARN]);
+      }
+    }
+  });
+
+  test('no statement can write a managed policy, so the boundary itself is out of reach', () => {
+    const actions = iamStatements().flatMap((s) => asList(s.Action));
+    for (const a of actions) expect(a).not.toMatch(/^iam:(Create|Delete|SetDefault)Policy(Version)?$/);
   });
 
   test('CreateServiceLinkedRole is conditioned on iam:AWSServiceName', () => {
