@@ -27,7 +27,10 @@ CDK_IMAGE = ROOT / "docker" / "cdk-deploy.Dockerfile"
 
 ROLE_ARN = "arn:aws:iam::294321867941:role/GitHubActionsDeployRole"
 OIDC_PROVIDER = "arn:aws:iam::294321867941:oidc-provider/token.actions.githubusercontent.com"
-ENVIRONMENT_SUB = "repo:DavidDems/fanwire:environment:production"
+# GitHub's immutable subject (repo setting `use_immutable_subject`): owner and
+# repo carry their numeric ids, so a re-created DavidDems/fanwire cannot match.
+# Read from CloudTrail on the first run's rejected login, 2026-10-05.
+ENVIRONMENT_SUB = "repo:DavidDems@71515505/fanwire@1373722771:environment:production"
 
 
 def _code_lines(text: str) -> list[str]:
