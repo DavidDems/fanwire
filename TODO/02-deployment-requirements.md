@@ -101,31 +101,24 @@ built):
   self-deny, the two-click upload-then-attach in compose — are in
   `wiki/GeneralContext/Prompts/08-post-deploy-followups.md`, not here.
 
-## 2. The deploy workflow: what is left (added 2026-10-05)
+## 2. The deploy workflow: what is left (updated 2026-10-05)
 
-Each item is a session with Claude, in this order.
+Done 2026-10-05 and recorded in `0x00` → "AWS account state": PR #86 deployed
+through the workflow; the actions moved to their Node 24 majors; deploy on
+merge is on (PR #88), and its first merge-triggered run was clean.
 
-1. **Deploy PR #86 through the workflow.** After merging it, dispatch
-   `deploy.yml` instead of the manual `cdk deploy` in its description. The
-   `Fanwire-App` diff should show only the Notifications function losing its
-   SES statement and `NOTIFICATION_FROM_ADDRESS`. #86 changes no `backend/`
-   file, so it does **not** exercise the in-container backend image build; the
-   first PR that touches `backend/` will. Confirm: follow someone; the in-app notification
-   arrives, and the Notifications log has no `MessageRejected`.
-2. **Bump the Node-20 actions.** Every run warns that `actions/checkout@v4` and
-   `aws-actions/configure-aws-credentials@v4` are forced onto Node 24.
-   `test-agent.yml` uses `checkout@v4` too. `ubuntu-latest` moves to Ubuntu 26
-   from 2026-10-19. That is probably harmless, since every build step runs in
-   a pinned container.
-3. **Deploy on merge.** After a few clean dispatched runs, a reviewed PR adds
-   `push: branches: [main]` to `deploy.yml`. The environment's required
-   reviewer stays, so every deploy still waits for your approval.
-4. **The permissions boundary** on the roles that templates create
+1. **The permissions boundary** on the roles that templates create
    (`infra/iam/README.md` → "What this does not close"). It is the remaining
-   route from "can get a template deployed", and so from "can get this
-   workflow dispatched and approved", to admin. It changes all twelve live
-   roles, so it is its own reviewed deploy.
+   route from "can get a template deployed" to admin. Now that every merge to
+   `main` can queue a deploy, that also means from "can get a PR merged and its
+   deploy approved". It changes all twelve live roles, so it is its own
+   reviewed deploy. A session with Claude.
+2. **Watch the first deploy that changes `backend/`.** It is the first real
+   build and push of the backend image from inside the CI container. If it
+   fails, paste the failing step's log into a session.
 
-Confirm after any dispatch: `gh run list --workflow deploy.yml --limit 1`
-shows `success`, and on the site, logged in, the app's own `/api/users/me`
-request returns 200 (`build-deployment.md` → "Automated deploy", step 5).
+Each deploy: approve it when it is queued, read its `cdk diff` step, then
+check that `gh run list --workflow deploy.yml --limit 1` shows `success`.
+After a change that touches login or the API, log in on the site and check
+that the app's own `/api/users/me` request returns 200 (`build-deployment.md`
+→ "Automated deploy", step 5).

@@ -1,13 +1,12 @@
 # 10 — The automated deploy workflow
 
-> **Done 2026-10-05 (PRs #85, #87).** `.github/workflows/deploy.yml`, dispatch-only,
+> **Done 2026-10-05 (PRs #85, #87, #88).** `.github/workflows/deploy.yml` runs on
+> every merge to `main` that changes a deployable path, and on dispatch,
 > behind the `production` environment (required reviewer, `main` only). The
-> role trusts GitHub's immutable OIDC subject. The first dispatch was refused
-> at login because of that subject, and the second (run 37256951096) deployed
-> all eight stacks. What it proved, and what it did not: `0x00` → "AWS account
-> state". Left to do, in order: deploy PR #86 through the workflow; bump the Node-20 actions;
-> add `push: branches: [main]` after a few clean runs; then the permissions
-> boundary on created roles. These are tracked in `TODO/02`.
+> role trusts GitHub's immutable OIDC subject, which refused the first
+> dispatch until #87. Four runs so far, the last the first merge-triggered
+> one. What they proved, and what they did not: `0x00` → "AWS account state".
+> Left: the permissions boundary on created roles, tracked in `TODO/02` §2.
 
 **Objective:** a standalone, separately-reviewed GitHub Actions workflow that
 deploys the CDK app with `GitHubActionsDeployRole`. It is the end state that
