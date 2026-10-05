@@ -30,8 +30,15 @@ and the honest accounting of what this does *not* solve are in
 ## `github-actions-deploy-role-trust-policy.json`
 
 The trust policy for the same role. It admits one OIDC subject,
-`repo:DavidDems/fanwire:environment:production`, which is a job that declares
+`repo:DavidDems@71515505/fanwire@1373722771:environment:production`, which is a job that declares
 the GitHub environment `production`. It does **not** admit a branch.
+
+The subject is GitHub's **immutable** form: the repository has
+`use_immutable_subject` on (`gh api repos/DavidDems/fanwire/actions/oidc/customization/sub`),
+so the owner and repo carry their numeric ids, and a deleted and re-created
+`DavidDems/fanwire` would not match. The plain `repo:DavidDems/fanwire:…`
+form was refused on the first run (CloudTrail, 2026-10-05). If that setting
+ever changes, this file has to change with it.
 
 It used to name `ref:refs/heads/main`, which admits *every* workflow run from
 `main`, including the agent workflows. An environment subject admits only
