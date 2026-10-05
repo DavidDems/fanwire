@@ -335,7 +335,9 @@ trusts the GitHub environment `production` rather than the `main` branch, only
 the deploy job declares that environment, and `.ai/tests/
 test_deploy_workflow.py` fails if any other workflow requests an OIDC token,
 declares an environment, or names `deploy.yml`. `cfn-exec-role` was narrowed
-from `AdministratorAccess` first. Design and limits:
+from `AdministratorAccess` first, and every role the stacks create carries the
+permissions boundary `FanwireRoleBoundary` (2026-10-05), so a deployed template
+cannot reach IAM or STS through a role it writes. Design and limits:
 `wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy".
 
 ### 5.8 Repository visibility and cost
