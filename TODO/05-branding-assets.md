@@ -8,69 +8,64 @@ month you already have.
 
 **The full instructions are in `wiki/CodeContext/FrontendUI/branding.md`.**
 Section numbers below (§) point into it. Delete this file once the assets are
-in the repo.
+on `main`.
 
-## Steps, in order
+## Status as of 2026-10-05
 
-1. **Install the tools** (§7). One command per line:
-   ```powershell
-   winget install -e --id Inkscape.Inkscape
-   winget install -e --id ImageMagick.ImageMagick
-   ```
-   **Confirm:** in a new PowerShell window, `magick -version` prints a version.
+The symbol is done: a wire `f` whose stem ends in a plug, traced in Inkscape
+into `brand/source/symbol-f.svg`. From it, the agent built the icon masters and
+exported the icon set into `brand/out/`. They are **not committed yet**: they
+wait for your approval (step 4 below). Review sheets are in `brand/review/`,
+which is deleted before the commit.
 
-2. **Generate the symbol in ChatGPT** (§4.1, §6.1). Select the Thinking model,
-   then paste variants A, B and C into three separate chats. Iterate on the
-   best one, one change at a time. Reject anything on the §6.1 reject list,
-   especially anything that looks like the Facebook `f`.
-   **Confirm:** the PNG still reads as an `f` when shrunk to 16 px.
+## Done
 
-3. **Check it isn't someone else's logo** (§10). Run Google Lens and TinEye on
-   the PNG, then search the Canadian Trademarks Database by Vienna code. While
-   you're there, also search the word `fanwire`.
-   **Confirm:** nothing close. If something is close, go back to step 2.
+- [x] **Install the tools** (§7). Inkscape and ImageMagick are installed.
+- [x] **Generate the symbol in ChatGPT** (§6.1). Variant A, the plug end.
+- [x] **Trace it in Inkscape** (§7.1). `brand/source/symbol-f.svg`.
+- [x] **Build the icon masters and export the icon set** (§7.2, §7.3). The
+  agent did this: `symbol-tile`, `symbol-square`, `symbol-maskable` and
+  `symbol-favicon` in `brand/source/`; `favicon.svg`, `favicon.ico`,
+  `apple-touch-icon.png`, `icon-192.png`, `icon-512.png` and
+  `icon-maskable-512.png` in `brand/out/`.
 
-4. **Trace or redraw it in Inkscape** (§7.1). Redrawing over the trace gives a
-   cleaner stroke and makes the result more clearly your own work (§4.3).
+## Still needs you, in order
 
-5. **Pick the wordmark font and typeset it** (§3.2). Compare `fanwire` in
-   Outfit, Sora and Manrope on fonts.google.com, install the one you choose,
-   type it in Inkscape, then **Path → Object to Path**.
+1. **Put the original ChatGPT PNG back** as `brand/source/symbol-chatgpt.png`.
+   The earlier save under that name was actually the Inkscape SVG, which is now
+   `symbol-f.svg`. Download the image again from **Images** in ChatGPT's
+   sidebar.
 
-6. **Make the five master SVGs** (§7.2): `symbol-tile`, `symbol-maskable`,
-   `wordmark-light`, `wordmark-dark` and `og-image`. Optionally generate an Open
-   Graph background first (§6.2). A plain Jet Black background is fine.
+2. **Paste the prompt you used** into the chat with the agent. It goes in
+   `brand/source/PROVENANCE.md` with the date and model (§4.1, §4.3).
 
-7. **Export the icon set** (§7.3). Run the commands there, one per line, from
-   the folder holding the masters.
-   **Confirm:** the three checks at the end of §7.3 pass (16 px `f`, the
-   maskable.app circle, a 1200×630 `og-image.png`).
+3. **Check the symbol isn't someone else's logo** (§10). Run Google Lens and
+   TinEye on the PNG, then search the Canadian Trademarks Database by Vienna
+   code. While you're there, also search the word `fanwire`.
+   **Confirm:** nothing close. If something is close, the symbol goes back to
+   ChatGPT before anything is committed.
 
-8. **Write `PROVENANCE.md`** next to the masters: the prompt you used, the
-   date, "ChatGPT Images 2.5", and what you redrew by hand.
+4. **Approve the icons.** Open `brand/review/icons.png` (the 180 px Apple icon,
+   the 192 px tile, and the maskable icon with its safe circle in red) and the
+   files in `brand/out/`. The 16 px favicon is a deliberately bolder cut: at
+   normal weight the plug smeared away (§7.2).
 
-## Hand the files back
+5. **Pick the wordmark font.** Open `brand/review/wordmarks.png`: `fanwire` in
+   Outfit, Sora and Manrope, each at weights 500 and 600, beside the symbol.
+   Tell the agent a number (1–6). The agent then builds `wordmark-light.svg`
+   and `wordmark-dark.svg` and records the choice in `decisions.md`.
 
-Either option works.
+6. **Open Graph image** (optional). Once the wordmark exists, the agent can
+   compose the 1200×630 card on plain Jet Black. If you want a background from
+   §6.2, generate one in ChatGPT and save it as `brand/source/og-background.png`
+   first.
 
-**Option A, commit them yourself.** Put the masters, the chosen ChatGPT PNG and
-`PROVENANCE.md` in `brand\source\`, and the exported files in `brand\out\`.
-Then run, one per line, from the repo root:
+## Hand-back
 
-```powershell
-git switch -c brand-assets origin/main
-git add brand
-git commit -m "brand: source masters and exported icon set"
-git push -u origin brand-assets
-```
-
-Then tell the next session the branch name. **Placing the files** into
-`frontend/public/` and `frontend/src/assets/brand/`, and wiring `index.html`
-and the manifest (§8), is an agent's implementation unit, not yours.
-
-**Option B, give an agent the path.** Leave everything in one folder, e.g.
-`C:\Users\david\Pictures\fanwire-brand\`, and give that path to the session
-that does the placement unit. It copies the files in and commits them.
+No git commands are needed from you. The files are already in the repo
+folder. Once steps 1–5 are done, tell the agent, and it commits `brand/` to the
+branding PR (#92). Placing the files into `frontend/` is a later
+implementation unit (§8).
 
 ## When it's done
 

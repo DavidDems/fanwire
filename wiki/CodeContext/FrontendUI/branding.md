@@ -357,7 +357,9 @@ Following the Inkscape Beginners' Guide
 
 | Master | Content |
 |---|---|
-| `symbol-tile.svg` | 512×512 page. A Jet Black `#022b3a` rounded square filling it, with the Pale Sky `#bfdbf7` wire `f` centred at about 70 % of the height. This one file is the favicon and the `any` icons. |
+| `symbol-tile.svg` | 512×512 page. A Jet Black `#022b3a` rounded square filling it, with the Pale Sky `#bfdbf7` wire `f` centred at about 70 % of the height. Used for the `any` icons (192, 512). |
+| `symbol-square.svg` | The same with **no rounded corners** (full-bleed Jet Black). For `apple-touch-icon.png`: iOS rounds the corners itself, and transparent corners would show as black. |
+| `symbol-favicon.svg` | **The small-size cut.** The tile with the `f` at about 80 % of the height and its outline thickened by a 28-unit Pale Sky stroke on the 512 page. At 70 % with no thickening, the stem is under 1 px at 16 px and the plug smears. Much heavier (a 60-unit stroke) reads at 16 px but turns into a Facebook-like `f` at 32 px. Checked by rendering at 16, 32 and 48 px on 2026-10-05. Used for `favicon.svg` and `favicon.ico`. |
 | `symbol-maskable.svg` | 512×512 page with **full-bleed** Jet Black and no rounded corners. The `f` fits inside the central circle of **radius 40 % of the width** (the maskable safe zone, https://web.dev/articles/maskable-icon), so about 60 % of the height. |
 | `wordmark-light.svg` | Typeset `fanwire` (converted to paths) in Jet Black, transparent background. For light surfaces. |
 | `wordmark-dark.svg` | The same in Pale Sky. For dark surfaces. |
@@ -375,8 +377,8 @@ https://imagemagick.org/script/defines.php.
 
 ```powershell
 New-Item -ItemType Directory -Force .\out
-& "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-tile.svg --export-type=png --export-filename=.\out\favicon-256.png -w 256 -h 256
-& "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-tile.svg --export-type=png --export-filename=.\out\apple-touch-icon.png -w 180 -h 180
+& "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-favicon.svg --export-type=png --export-filename=.\out\favicon-256.png -w 256 -h 256
+& "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-square.svg --export-type=png --export-filename=.\out\apple-touch-icon.png -w 180 -h 180
 & "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-tile.svg --export-type=png --export-filename=.\out\icon-192.png -w 192 -h 192
 & "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-tile.svg --export-type=png --export-filename=.\out\icon-512.png -w 512 -h 512
 & "C:\Program Files\Inkscape\bin\inkscape.exe" .\symbol-maskable.svg --export-type=png --export-filename=.\out\icon-maskable-512.png -w 512 -h 512
@@ -384,7 +386,7 @@ New-Item -ItemType Directory -Force .\out
 magick .\out\favicon-256.png -define icon:auto-resize=48,32,16 .\out\favicon.ico
 ```
 
-`favicon.svg` is a copy of the optimized `symbol-tile.svg`.
+`favicon.svg` is a copy of `symbol-favicon.svg`.
 
 **Check before handing back:**
 
@@ -408,9 +410,9 @@ at the site root, and that folder doesn't exist yet. The unit creates it.
 
 | File | Format and size | Destination |
 |---|---|---|
-| `favicon.svg` | SVG, square, the tile | `frontend/public/favicon.svg` |
+| `favicon.svg` | SVG, square, the small-size cut | `frontend/public/favicon.svg` |
 | `favicon.ico` | ICO holding 16, 32 and 48 | `frontend/public/favicon.ico` |
-| `apple-touch-icon.png` | PNG 180×180, opaque (the tile) | `frontend/public/apple-touch-icon.png` |
+| `apple-touch-icon.png` | PNG 180×180, opaque, square corners | `frontend/public/apple-touch-icon.png` |
 | `icon-192.png` | PNG 192×192, manifest `purpose: "any"` | `frontend/public/icon-192.png` |
 | `icon-512.png` | PNG 512×512, `purpose: "any"` | `frontend/public/icon-512.png` |
 | `icon-maskable-512.png` | PNG 512×512, full-bleed, safe zone r = 40 %, `purpose: "maskable"` | `frontend/public/icon-maskable-512.png` |

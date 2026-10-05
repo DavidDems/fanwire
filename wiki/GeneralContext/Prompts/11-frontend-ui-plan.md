@@ -13,8 +13,23 @@ deciding are the work; there is little to type.
 
 **Read first:** `00-session-protocol.md` (you are a Director); then
 `wiki/CodeContext/FrontendUI/decisions.md`, which holds the human's palette, the
-lowercase-name rule and the `ui-design` skill's provenance. That file outranks
-everything you produce.
+lowercase-name rule, the brand mark and the `ui-design` skill's provenance. That
+file outranks everything you produce. Then read `branding.md` in the same folder.
+`12` ran first (2026-10-05), so you are the session that reconciles. What it
+settled:
+
+- **The palette gained a fourth colour,** `--color-accent-on-dark` `#279ab1`,
+  for links and focus rings on Jet Black. Its margin there is 0.001 (4.501:1),
+  so re-measure it on any other dark surface.
+- **The contrast table was corrected.** Teal on Jet Black is **2.995:1**, which
+  fails the 3:1 non-text minimum as well as text. Teal can't be a focus ring,
+  icon or border on a dark surface.
+- **Teal is the Charlotte Hornets' teal** (ΔE 1.4). Keep it to buttons, badges
+  and links, never large surfaces, or the app reads as one team's.
+- **The mark exists:** a Pale Sky wire `f` on a Jet Black tile, plus a typeset
+  lowercase wordmark. The files are under `brand/` at the repo root (masters in
+  `brand/source/`, exports in `brand/out/`) once the human approves them.
+  `branding.md` §8 lists where each one goes.
 
 ## Investigate before deciding
 
@@ -65,26 +80,39 @@ runner-up and why it lost, in a sentence or two. Do not produce a survey.
    such as Radix for dialogs and menus. Judge each against: no runtime cost,
    reviewability in a diff, how a worker unit scoped to one feature folder adds
    styles without editing a shared file, and the `package.json` constraint.
-3. **Tokens.** Colour (the human's palette, plus the neutral ramp, semantic
-   states and dark mode that `decisions.md` says it needs; every text/background
-   pair with its measured contrast ratio), type scale, spacing, radius,
-   elevation, motion, breakpoints and z-index. Write actual values, not
-   categories.
+3. **Tokens.** Colour (the human's four colours, including
+   `--color-accent-on-dark`, plus the neutral ramp, semantic states and dark mode
+   that `decisions.md` says it needs; every text/background pair with its
+   measured contrast ratio), type scale, spacing, radius, elevation, motion,
+   breakpoints and z-index. Write actual values, not categories. **Compute the
+   ratios with a script, and don't round:** 2.995 is a fail. `branding.md` §9
+   has one (`palette_check.py`) that you can extend. Check that no new semantic
+   colour lands close to a team's colour (it compares against the NBA, NFL and
+   MLB).
 4. **Typeface.** Pick the UI typeface, or deliberately keep the system stack.
    Cover licence, self-hosting, weights, file size, and how lowercase `fanwire`
-   looks in it. A wordmark's lettering belongs to `12`; coordinate if `branding.md`
-   already exists.
+   looks in it. The wordmark's lettering is `12`'s, chosen from Outfit, Sora and
+   Manrope (`decisions.md` records which). Using the same family for the UI
+   means one self-hosted font instead of two. Weigh that, but don't let it
+   decide: body-text legibility comes first. The wordmark ships as SVG paths
+   either way, so it never needs the font loaded.
 5. **Layout.** Mobile-first. The app shell (navigation on phone and desktop),
-   the width of the content column, and one page template per route.
+   the width of the content column, and one page template per route. The header
+   shows the symbol and the wordmark (`wordmark-light.svg` or
+   `wordmark-dark.svg` per theme), with `fanwire` as the accessible name.
+   Decide when the symbol appears alone, e.g. a narrow phone header.
 6. **Components.** The primitives to build (button variants, input,
    card/surface, avatar, badge, tabs, toast/inline alert, skeleton, empty state,
    and so on). Map every existing component and view to them.
 7. **Sports-specific UI.** Live score, game state (scheduled, live, final),
    team identity (beware: team names and logos from API-SPORTS may carry
    trademark and licence limits; check before planning to show logos) and event
-   mentions in posts.
+   mentions in posts. Leagues police their marks (`branding.md` §10): no
+   jerseys, crests or team colour pairs as decoration.
 8. **Accessibility.** WCAG 2.2 AA as the floor: focus visibility, target sizes,
    reduced motion, colour never as the only signal, and the teal-on-dark trap.
+   That trap covers non-text too: a teal focus ring on Jet Black fails. Use
+   `--color-accent-on-dark` or Pale Sky there.
 9. **Verification.** What each unit's tests assert, given jsdom. Candidates:
    a token-contrast test over the token file, class and ARIA presence, and
    snapshot policy (decide, don't default). Also which checks need a human in a
@@ -94,8 +122,14 @@ runner-up and why it lost, in a sentence or two. Do not produce a survey.
     and each feature. Give each a one-line objective, acceptance criteria phrased
     so they can fail first, a sketch of its `allowed_paths`, and whether it
     needs a Director PR first (dependencies, `index.html`, font files under
-    `frontend/public/`). **Do not create `.ai/tasks/` specs:** writing them is
-    the next prompt's job, after the human approves this plan.
+    `frontend/public/`). **Include the brand-asset placement unit:** copy the
+    exports from `brand/out/` into `frontend/public/` and the wordmarks into
+    `frontend/src/assets/brand/`, add the `<link rel="icon">`,
+    apple-touch-icon and Open Graph tags to `index.html`, and add a web app
+    manifest (`branding.md` §8). Its acceptance criteria can be file-level (the
+    files exist at the right size; `index.html` references each one), so it can
+    fail first. **Do not create `.ai/tasks/` specs:** writing them is the next
+    prompt's job, after the human approves this plan.
 
 **Checkpoint with the human before writing the wiki.** Present the direction,
 the mechanism, the typeface and the sequencing in a few lines each, and ask
@@ -109,7 +143,7 @@ unit can be handed two or three of them and not the whole folder:
 
 | File | Holds |
 |---|---|
-| `index.md` | What the folder is, which file answers which question, and which files to hand which kind of unit |
+| `index.md` | **Exists, minimal (`12` created it).** Expand it: what the folder is, which file answers which question, and which files to hand which kind of unit. Keep its `branding.md` row |
 | `decisions.md` | **Exists. Human-owned.** Append any decision the human makes at the checkpoint, dated. Never alter an existing one |
 | `direction.md` | Personality, principles, references, and what fanwire is not |
 | `tokens.md` | Every token with its value, light and dark, plus the contrast table |
@@ -119,7 +153,7 @@ unit can be handed two or three of them and not the whole folder:
 | `accessibility.md` | The AA requirements as testable statements |
 | `verification.md` | What tests assert, what a human checks in a browser, and how each is reported |
 | `implementation-plan.md` | The sequenced units from question 10 |
-| `branding.md` | **Owned by `12`.** If it does not exist yet, create a stub that says so, and leave it alone if it does |
+| `branding.md` | **Exists, owned by `12`.** Don't rewrite it. If your plan contradicts it (for example the UI typeface makes its wordmark advice moot), say so in `typography.md` and the PR, and add at most a one-line pointer at its top |
 
 Also update:
 - `wiki/GeneralContext/index.md` (folder map and prompt status);
@@ -132,9 +166,12 @@ Also update:
 
 - Any change under `frontend/`, including a dependency install. A throwaway
   spike to check a claim is fine; do not commit it.
-- Colour and brand research, logo and icon: that is `12`. If `branding.md`
-  already holds accepted decisions, build on them. If not, plan on the current
-  palette and the plain-text name.
+- Colour and brand research, logo and icon: that is `12`, and it has run. Build
+  on its accepted decisions in `decisions.md`. A palette change is still the
+  human's call: propose it at the checkpoint, don't make it. If the brand files
+  aren't on `main` yet (`TODO/05-branding-assets.md` still exists), plan the
+  shell around them anyway, with the plain-text name as the fallback until the
+  placement unit lands.
 - `.ai/tasks/` specs.
 
 One PR, on a human-named branch. Merge nothing.
