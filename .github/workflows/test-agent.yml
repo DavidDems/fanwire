@@ -1,10 +1,9 @@
 name: test-agent
 
 # Runs both test containers on every PR, per
-# wiki/CodeContext/Standards/build-deployment.md CI/CD wiring. Deploy steps
-# (ECR push, cdk deploy) are separate and only run on merge to main - not
-# defined yet, see wiki/CodeContext/Modules/0x00-architecture.md AWS account
-# state ("GitHubActionsDeployRole has no permissions yet").
+# wiki/CodeContext/Standards/build-deployment.md CI/CD wiring. Deploying is a
+# separate, human-dispatched workflow that this one never calls; it holds no
+# AWS credentials and requests no OIDC token.
 #
 # Despite the name, this workflow is not an agent: it is the repository's
 # quality gate, and the agent system treats it as the ONE authoritative test
