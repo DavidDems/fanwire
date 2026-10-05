@@ -328,7 +328,8 @@ Two corrections to what this section used to say, both fixed 2026-09-29:
 
 **This prohibits deployment from the agent workflows; it is not a ban on
 automated deployment as such.** A standalone deploy workflow now exists,
-`.github/workflows/deploy.yml`, dispatched by a human (2026-10-02). It is kept
+`.github/workflows/deploy.yml` (2026-10-02). It runs on merge to `main` and on
+dispatch, and every run waits for a human's approval. It is kept
 out of reach of the agent system by construction: `GitHubActionsDeployRole`
 trusts the GitHub environment `production` rather than the `main` branch, only
 the deploy job declares that environment, and `.ai/tests/
