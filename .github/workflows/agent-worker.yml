@@ -57,19 +57,19 @@ jobs:
       # file when it appears there — run 35556516395 failed with "workflow file
       # issue" and no job at all. A YAML parser cannot see that; only a push can.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: agent/${{ github.event.inputs.task_id }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       # Provider-specific, like invoke_agent.sh itself. A self-hosted runner
       # with the CLI already present can drop this step; on GitHub-hosted
       # runners it is the only way the CLI exists at all.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Install the provider CLI

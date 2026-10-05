@@ -125,15 +125,72 @@ class TestTheTrustPolicy:
         assert "*" not in text
 
 
-class TestTheDeployWorkflowShape:
-    def test_it_is_dispatched_by_hand_only(self, deploy):
+def _push_list(deploy: list[str], key: str) -> list[str]:
+    """The `- item` entries under `on.push.<key>`."""
+    on = _block(deploy, "on")
+    start = on.index("  push:")
+    items, inside = [], False
+    for line in on[start + 1 :]:
+        if line.strip() and not line.startswith("    "):
+            break
+        if line.startswith("    ") and not line.startswith("     "):
+            inside = line.strip() == f"{key}:"
+            continue
+        if inside and line.strip().startswith("- "):
+            items.append(line.strip()[2:].strip().strip("'\""))
+    return items
+
+
+class TestTheDeployWorkflowTriggers:
+    """Deploy on merge to `main` (human decision 2026-10-05, after two clean
+    dispatched runs), but only when the merge changes something that reaches
+    AWS. `wiki/` and `.ai/` never do: the agent system runs in GitHub Actions,
+    and nothing in any stack reads it. The environment's required reviewer
+    still gates every run."""
+
+    # Everything a stack, the backend image asset or the bundle is built from.
+    DEPLOYABLE = (
+        "backend/**",
+        "frontend/**",
+        "docker/**",
+        ".dockerignore",
+        "infra/bin/**",
+        "infra/lib/**",
+        "infra/cdk.json",
+        "infra/package.json",
+        "infra/package-lock.json",
+        ".github/workflows/deploy.yml",
+    )
+
+    def test_it_runs_on_dispatch_and_on_push(self, deploy):
         triggers = {
             line.strip().rstrip(":")
             for line in _block(deploy, "on")
             if re.match(r"^  [a-z_]+:", line)
         }
-        assert triggers == {"workflow_dispatch"}
+        assert triggers == {"workflow_dispatch", "push"}
 
+    def test_push_means_main_only(self, deploy):
+        assert _push_list(deploy, "branches") == ["main"]
+
+    def test_every_deployable_path_triggers_it(self, deploy):
+        paths = _push_list(deploy, "paths")
+        for pattern in self.DEPLOYABLE:
+            assert pattern in paths, pattern
+
+    def test_nothing_else_triggers_it(self, deploy):
+        positive = [p for p in _push_list(deploy, "paths") if not p.startswith("!")]
+        assert set(positive) == set(self.DEPLOYABLE)
+
+    @pytest.mark.parametrize("excluded", ["!**/*.md"])
+    def test_docs_inside_deployable_trees_do_not_trigger_it(self, deploy, excluded):
+        paths = _push_list(deploy, "paths")
+        assert excluded in paths
+        # A negation only removes what an earlier pattern added.
+        assert paths.index(excluded) > max(paths.index(p) for p in self.DEPLOYABLE)
+
+
+class TestTheDeployWorkflowShape:
     def test_two_deploys_never_overlap(self, deploy):
         assert any(line.strip() == "cancel-in-progress: false" for line in deploy)
         assert not any(line.strip() == "cancel-in-progress: true" for line in deploy)

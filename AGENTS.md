@@ -3,7 +3,7 @@
 **Agent-facing.** Entry point for any agent working in this repo.
 
 ## State
-`backend/` (FastAPI: `users`, `posts`, `events`, `media`, `notifications`, `feed`, `search`) and `frontend/` (React + Vite) are real, tested application code, well past Phase 0. `infra/` is a real CDK app (`lib/`, `bin/`, `test/`) — synth-only: `npm test` and `npm run synth` both run in CI, and no session or agent runs `cdk deploy`. Deploying is `.github/workflows/deploy.yml`, which only a human dispatches (`wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy"). See `## Build / test / run` below for the actual commands.
+`backend/` (FastAPI: `users`, `posts`, `events`, `media`, `notifications`, `feed`, `search`) and `frontend/` (React + Vite) are real, tested application code, well past Phase 0. `infra/` is a real CDK app (`lib/`, `bin/`, `test/`) — synth-only: `npm test` and `npm run synth` both run in CI, and no session or agent runs `cdk deploy`. Deploying is `.github/workflows/deploy.yml`, which runs on merge to `main` and waits for a human's approval (`wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy"). See `## Build / test / run` below for the actual commands.
 
 `.ai/` is the agent system that builds this repository — see `## Agent system` below.
 
