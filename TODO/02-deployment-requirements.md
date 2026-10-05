@@ -103,19 +103,28 @@ built):
 
 ## 2. The deploy workflow: what is left (updated 2026-10-05)
 
-Done 2026-10-05 and recorded in `0x00` → "AWS account state": PR #86 deployed
-through the workflow; the actions moved to their Node 24 majors; deploy on
-merge is on (PR #88), and its first merge-triggered run was clean.
+**The deploy path is finished.** Done 2026-10-05 and recorded in `0x00` →
+"AWS account state": PR #86 deployed through the workflow; actions on Node 24;
+deploy on merge (PR #88); the permissions boundary on every created role
+(PR #90), rolled out and verified.
 
-1. **The permissions boundary** on the roles that templates create
-   (`infra/iam/README.md` → "What this does not close"). It is the remaining
-   route from "can get a template deployed" to admin. Now that every merge to
-   `main` can queue a deploy, that also means from "can get a PR merged and its
-   deploy approved". It changes all twelve live roles, so it is its own
-   reviewed deploy. A session with Claude.
-2. **Watch the first deploy that changes `backend/`.** It is the first real
-   build and push of the backend image from inside the CI container. If it
-   fails, paste the failing step's log into a session.
+What remains is watching, not building:
+
+1. **The first deploy that changes `backend/`.** It is the first real build
+   and push of the backend image from inside the CI container. If it fails,
+   paste the failing step's log into a session.
+2. **The first post with an image, follow and ingestion run under the
+   boundary.** Media, Notifications and Ingestion had not run since it was
+   applied. An `AccessDenied` in their logs means a granted action is missing
+   from `infra/iam/fanwire-role-boundary-policy.json` (CI should make that
+   impossible, so report it).
+
+**A PR that changes `infra/iam/cdk-cfn-exec-role-policy.json` or
+`infra/iam/fanwire-role-boundary-policy.json`** needs you to roll the new
+version out (`infra/iam/README.md` has the commands) before its deploy can
+pass. Until you do, the deploy's "Check the live IAM matches the repo" step
+fails it, before any change reaches AWS. After the rollout, re-run the failed
+deploy.
 
 Each deploy: approve it when it is queued, read its `cdk diff` step, then
 check that `gh run list --workflow deploy.yml --limit 1` shows `success`.

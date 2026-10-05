@@ -65,7 +65,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 - **Deleted 2026-09-29 (commit `2fc5de9`):** the build-pass manager prompts. These were `first-pass-manager-agent.md`, `phase-2`/`3`/`4-manager-agent.md`, `phase-5a`/`5b-frontend-manager-agent.md` and `frontend-build-handoff.md`. Their settled facts live in the module files, and the human-decision log they held is now `Architecture/human-decisions.md`. Read them from git history if you need their reasoning.
 - **`00`–`12`, the post-build sessions.** `00-session-protocol.md` is the shared rules every numbered prompt points at.
-  - **Done**, and they say so at their top: `01` (the deploy path), `04` (the first deploy), `05` (the post-deploy checklist), `07` (scope `cfn-exec-role`), `09` (pin the NAT AMI), `10` (the automated deploy workflow, dispatch-only, first successful run 2026-10-05).
+  - **Done**, and they say so at their top: `01` (the deploy path), `04` (the first deploy), `05` (the post-deploy checklist), `07` (scope `cfn-exec-role`), `09` (pin the NAT AMI), `10` (the automated deploy workflow: deploy on merge to `main` behind a required reviewer, plus the permissions boundary on every created role, all live 2026-10-05).
   - **Partly overtaken but still worth running:** `02` (browser pass, `MEDIA-002`).
   - **Re-run whenever the human reports a step finished:** `03`.
   - **Open:** `06` (search UI, optional), `08` (post-deploy follow-ups), `11` (plan the frontend's look and feel into `wiki/CodeContext/FrontendUI/`) and `12` (branding research: colour, mark, and how the human makes the assets). `11` and `12` can run in either order; whichever runs second reconciles with the first.
