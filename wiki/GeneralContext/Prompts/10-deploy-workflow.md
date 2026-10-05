@@ -1,5 +1,15 @@
 # 10 — The automated deploy workflow
 
+> **Done 2026-10-05 (PRs #85, #87).** `.github/workflows/deploy.yml`, dispatch-only,
+> behind the `production` environment (required reviewer, `main` only). The
+> role trusts GitHub's immutable OIDC subject. The first dispatch was refused
+> at login because of that subject, and the second (run 37256951096) deployed
+> all eight stacks. What it proved, and what it did not: `0x00` → "AWS account
+> state". Left to do, in order: deploy PR #86 through the workflow (the first
+> test of the in-container backend image build); bump the Node-20 actions;
+> add `push: branches: [main]` after a few clean runs; then the permissions
+> boundary on created roles. These are tracked in `TODO/02`.
+
 **Objective:** a standalone, separately-reviewed GitHub Actions workflow that
 deploys the CDK app with `GitHubActionsDeployRole`. It is the end state that
 `wiki/CodeContext/Standards/build-deployment.md` → "Automated deploy" names.

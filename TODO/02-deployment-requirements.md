@@ -1,11 +1,12 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-10-03: nothing is waiting on you.** AWS refused SES
+**Status as of 2026-10-05: nothing is waiting on you.** AWS refused SES
 production access, so email notifications are switched off on purpose
 (`sendEmailNotifications: false` in `infra/cdk.json`) and in-app
-notifications carry on. Reapplying is optional and later (§1). The next AWS
-work you do will be inside a session: `wiki/GeneralContext/Prompts/10-deploy-workflow.md`
-(`09`, the NAT AMI pin, is done).
+notifications carry on. Reapplying is optional and later (§1). Deploys go
+through `.github/workflows/deploy.yml` (`Prompts/10`, done): a merge to `main`
+that changes a deployable path queues one, and you approve it and read its
+diff. The deploy-path work still to do is §2.
 
 Everything that was in this file and is now finished has moved into the wiki,
 where it belongs as current-state fact rather than as a tick:
@@ -99,3 +100,32 @@ built):
 - The agent follow-ups the checklist turned up — the `lambda-vpc-eni`
   self-deny, the two-click upload-then-attach in compose — are in
   `wiki/GeneralContext/Prompts/08-post-deploy-followups.md`, not here.
+
+## 2. The deploy workflow: what is left (added 2026-10-05)
+
+Each item is a session with Claude, in this order.
+
+1. **Deploy PR #86 through the workflow.** After merging it, dispatch
+   `deploy.yml` instead of the manual `cdk deploy` in its description. The
+   `Fanwire-App` diff should show only the Notifications function losing its
+   SES statement and `NOTIFICATION_FROM_ADDRESS`. It is also the first run that
+   builds and pushes the backend image from inside the CI container, which the
+   first run did not exercise. Confirm: follow someone; the in-app notification
+   arrives, and the Notifications log has no `MessageRejected`.
+2. **Bump the Node-20 actions.** Every run warns that `actions/checkout@v4` and
+   `aws-actions/configure-aws-credentials@v4` are forced onto Node 24.
+   `test-agent.yml` uses `checkout@v4` too. `ubuntu-latest` moves to Ubuntu 26
+   from 2026-10-19. That is probably harmless, since every build step runs in
+   a pinned container.
+3. **Deploy on merge.** After a few clean dispatched runs, a reviewed PR adds
+   `push: branches: [main]` to `deploy.yml`. The environment's required
+   reviewer stays, so every deploy still waits for your approval.
+4. **The permissions boundary** on the roles that templates create
+   (`infra/iam/README.md` → "What this does not close"). It is the remaining
+   route from "can get a template deployed", and so from "can get this
+   workflow dispatched and approved", to admin. It changes all twelve live
+   roles, so it is its own reviewed deploy.
+
+Confirm after any dispatch: `gh run list --workflow deploy.yml --limit 1`
+shows `success`, and on the site, logged in, the app's own `/api/users/me`
+request returns 200 (`build-deployment.md` → "Automated deploy", step 5).
