@@ -1,11 +1,12 @@
 # 02 — Deployment: what is still yours to do
 
-**Status as of 2026-10-03: nothing is waiting on you.** AWS refused SES
+**Status as of 2026-10-05: nothing is waiting on you.** AWS refused SES
 production access, so email notifications are switched off on purpose
 (`sendEmailNotifications: false` in `infra/cdk.json`) and in-app
-notifications carry on. Reapplying is optional and later (§1). The next AWS
-work you do will be inside a session: `wiki/GeneralContext/Prompts/10-deploy-workflow.md`
-(`09`, the NAT AMI pin, is done).
+notifications carry on. Reapplying is optional and later (§1). Deploys go
+through `.github/workflows/deploy.yml` (`Prompts/10`, done): a merge to `main`
+that changes a deployable path queues one, and you approve it and read its
+diff. The deploy-path work still to do is §2.
 
 Everything that was in this file and is now finished has moved into the wiki,
 where it belongs as current-state fact rather than as a tick:
@@ -99,3 +100,25 @@ built):
 - The agent follow-ups the checklist turned up — the `lambda-vpc-eni`
   self-deny, the two-click upload-then-attach in compose — are in
   `wiki/GeneralContext/Prompts/08-post-deploy-followups.md`, not here.
+
+## 2. The deploy workflow: what is left (updated 2026-10-05)
+
+Done 2026-10-05 and recorded in `0x00` → "AWS account state": PR #86 deployed
+through the workflow; the actions moved to their Node 24 majors; deploy on
+merge is on (PR #88), and its first merge-triggered run was clean.
+
+1. **The permissions boundary** on the roles that templates create
+   (`infra/iam/README.md` → "What this does not close"). It is the remaining
+   route from "can get a template deployed" to admin. Now that every merge to
+   `main` can queue a deploy, that also means from "can get a PR merged and its
+   deploy approved". It changes all twelve live roles, so it is its own
+   reviewed deploy. A session with Claude.
+2. **Watch the first deploy that changes `backend/`.** It is the first real
+   build and push of the backend image from inside the CI container. If it
+   fails, paste the failing step's log into a session.
+
+Each deploy: approve it when it is queued, read its `cdk diff` step, then
+check that `gh run list --workflow deploy.yml --limit 1` shows `success`.
+After a change that touches login or the API, log in on the site and check
+that the app's own `/api/users/me` request returns 200 (`build-deployment.md`
+→ "Automated deploy", step 5).

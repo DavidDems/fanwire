@@ -12,7 +12,7 @@ This folder is written for you.
 
 | File | What it covers | Blocking? |
 |---|---|---|
-| [`02-deployment-requirements.md`](02-deployment-requirements.md) | What is left after the post-deploy checklist: SES production access, requested 2026-10-01 and waiting on AWS | No — waiting on AWS's review |
+| [`02-deployment-requirements.md`](02-deployment-requirements.md) | SES production access (refused 2026-10-03, email turned off by PR #86), and the deploy-workflow work still to do (§2) | No |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on. Today that's one: which browser tool sessions may drive | No. Without an answer, browser verification is reported as not done. Answered decisions are in `wiki/GeneralContext/Architecture/human-decisions.md` |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
 
