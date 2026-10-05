@@ -108,16 +108,14 @@ repository. Creating or updating a container-image Lambda checks that the
 
 ### What this does **not** close
 
-- **Inline role policies.** IAM has no condition key for what an inline policy
-  says, so a template can still create a `Fanwire-*` role with an inline
-  `*:*` policy and run code under it in a Lambda. In practice, anyone who can
-  get a template deployed can still reach admin. What this policy removes is
-  the *direct* routes: changing a role outside `Fanwire-*`, and attaching an
-  AWS managed policy. Closing the inline route needs a **permissions
-  boundary** that every created role must carry
-  (`@aws-cdk/core:permissionsBoundary` plus a matching condition on
-  `iam:CreateRole`). That changes all twelve live roles, so it is separate,
-  follow-up work.
+- ~~**Inline role policies.**~~ **Closed by the permissions boundary**
+  (`fanwire-role-boundary-policy.json`, below). IAM has no condition key for
+  what an inline policy says, so a template could create a `Fanwire-*` role
+  with an inline `*:*` policy and reach admin through any Lambda running as
+  it. Now `CreateRole`, `PutRolePolicy`, `AttachRolePolicy` and
+  `PutRolePermissionsBoundary` all require `iam:PermissionsBoundary` to be
+  `FanwireRoleBoundary`, so every role a template creates or adds policy to
+  is capped by it, whatever the inline policy says.
 - **Resource policies.** A bucket, queue, key or secret policy can grant another
   account access. Every service grant above allows writing them.
 
@@ -134,9 +132,23 @@ aws iam create-policy --profile fanwire-workload --policy-name FanwireCdkCfnExec
 cd infra; npx cdk bootstrap aws://294321867941/ca-central-1 aws://294321867941/us-east-1 --profile fanwire-workload --cloudformation-execution-policies arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy
 ```
 
-A later edit to this file goes out as a new policy **version**
-(`aws iam create-policy-version … --set-as-default`). The ARN does not change,
-so no re-bootstrap is needed. IAM keeps at most five versions.
+A later edit to this file goes out as a new policy **version**. The ARN does
+not change, so no re-bootstrap is needed. **Roll it out before the deploy
+that needs it.** `.github/workflows/deploy.yml` checks that the live default
+version equals this file before any CDK call, and refuses to deploy if not.
+IAM keeps at most five versions, so list them first and delete the oldest
+non-default one if there are five:
+
+```powershell
+aws iam list-policy-versions --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy --query "Versions[].[VersionId,IsDefaultVersion,CreateDate]" --output table
+```
+```powershell
+aws iam create-policy-version --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy --policy-document file://C:/Users/david/source/repos/fanwire/infra/iam/cdk-cfn-exec-role-policy.json --set-as-default
+```
+
+(`aws iam delete-policy-version --profile fanwire-workload --policy-arn <arn> --version-id v1`
+removes an old one.) The full path works from any directory. A relative
+`file://infra/...` works only from the repo root.
 
 **Escape hatch.** If a deploy fails for lack of a permission and its rollback
 fails for the same reason (`UPDATE_ROLLBACK_FAILED`), re-run the bootstrap
@@ -144,3 +156,80 @@ command with `--cloudformation-execution-policies
 arn:aws:iam::aws:policy/AdministratorAccess`. Then run
 `aws cloudformation continue-update-rollback --stack-name <stack>`, add the
 missing action to this file, and switch back.
+
+## `fanwire-role-boundary-policy.json`
+
+`FanwireRoleBoundary`, the **permissions boundary** every role this app
+creates carries. A role's effective permissions are the intersection of its
+own policies and its boundary. So whatever a template writes into a role's
+policies, the role can never do more than this file allows.
+
+### What it allows
+
+**Exactly the actions the twelve roles are granted today**, and nothing
+else. That covers logs, the VPC network-interface actions, the app's data
+and messaging calls, the frontend upload, the GuardDuty plan's S3 and
+EventBridge wiring, the cross-region export parameters and the NAT
+instance's Session Manager channel. It grants **nothing in IAM, STS or
+Organizations**, so no role can create or change a role, assume one, or
+touch this policy.
+
+`infra/test/permissions-boundary.test.ts` keeps it honest in both
+directions:
+- **Coverage.** Every action any role is granted, in every synth mode
+  (including email turned on), must be inside the boundary. Outside it, the
+  grant would deploy cleanly and then fail at runtime with `AccessDenied`.
+  So a PR that grants a new action fails CI until it adds the action here.
+- **Ceiling.** Exact actions only, never `service:*`, and no IAM, STS or
+  Organizations.
+
+It also checks that every role carries it. Most get it from CDK's own
+`@aws-cdk/core:permissionsBoundary` in `infra/cdk.json`. The two
+cross-region export provider roles CDK generates miss that key, so
+`infra/lib/role-boundary.ts` fills them in.
+
+### Who enforces it
+
+- **`FanwireCdkCfnExecPolicy`**: `CreateRole`, `PutRolePermissionsBoundary`,
+  `PutRolePolicy` and `AttachRolePolicy` are conditioned on
+  `iam:PermissionsBoundary` = this policy's ARN. A role without the
+  boundary cannot be created, and cannot be given policy.
+  `DeleteRolePermissionsBoundary` stays allowed, because a rollback of the
+  deploy that set a boundary needs it. It cannot escalate: once a role's
+  boundary is gone, every policy write to that role fails the condition.
+- **Nothing can edit the boundary.** The exec role has no
+  `iam:CreatePolicyVersion`, the deploy role has no IAM permissions at all,
+  and the boundary itself grants no IAM to the roles it caps.
+
+### Applying and changing it
+
+Created by hand, once:
+
+```powershell
+aws iam create-policy --profile fanwire-workload --policy-name FanwireRoleBoundary --policy-document file://C:/Users/david/source/repos/fanwire/infra/iam/fanwire-role-boundary-policy.json
+```
+
+A later edit goes out as a new version. **Do this before the deploy that
+uses it.** The deploy workflow checks this policy's live default version
+against this file and refuses to deploy if they differ:
+
+```powershell
+aws iam create-policy-version --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireRoleBoundary --policy-document file://C:/Users/david/source/repos/fanwire/infra/iam/fanwire-role-boundary-policy.json --set-as-default
+```
+
+Confirm every role carries it (expect 12 names):
+
+```powershell
+aws iam list-entities-for-policy --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireRoleBoundary --entity-filter Role --policy-usage-filter PermissionsBoundary --query "PolicyRoles[].RoleName" --output text
+```
+
+### What it does not close
+
+- **Resource policies**, as above. A bucket or key policy is not a role, so
+  no boundary applies to it.
+- **Actions inside the boundary**, on any resource. A role given
+  `s3:DeleteObject*` on `*` can delete objects in every bucket. The
+  boundary caps *which* actions any role can ever have, and each role's
+  own policy, reviewed in the PR and gated by `iam-policy.test.ts`, decides
+  *where*.
+
