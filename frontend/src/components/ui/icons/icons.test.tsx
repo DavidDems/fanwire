@@ -104,7 +104,8 @@ describe("icons/LICENSE", () => {
 
     expect(text).toContain("ISC License");
     expect(text).toContain("Copyright (c)");
-    expect(text).toContain("Lucide Contributors");
+    // "Lucide Contributors" before Lucide's 2026-03-20 licence update, "Lucide Icons and Contributors" since.
+    expect(text).toMatch(/Lucide (Icons and )?Contributors/);
     expect(text).toContain(
       "Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.",
     );
