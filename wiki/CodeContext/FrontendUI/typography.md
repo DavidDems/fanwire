@@ -84,7 +84,7 @@ The rule is applied everywhere the UI writes the name:
 
 | Where | How |
 |---|---|
-| Header | The wordmark SVG (`wordmark-light.svg` / `wordmark-dark.svg`), name in the accessible text (`layout.md` §2). Until `UI-002` lands, the plain text `fanwire` in `--font-sans` 600 |
+| Header | The wordmark SVG (`wordmark-light.svg` / `wordmark-dark.svg`), name in the accessible text (`layout.md` §2). `UI-003` bundles them from `src/assets/brand/` |
 | `<title>` | `fanwire` alone on every page today (it's already that in `index.html`). Per-route titles aren't in scope |
 | Manifest | `"name": "fanwire"`, `"short_name": "fanwire"` |
 | Alt text and accessible names | `fanwire`, never `Fanwire` or `FanWire`, including at the start of a sentence |

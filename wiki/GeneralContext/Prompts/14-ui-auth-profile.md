@@ -36,6 +36,32 @@ first: these units don't touch `src/routes/**`.
   `:disabled`. Don't add classes to every input.
 - `src/auth/accessibility.test.tsx` and `no-secret-leak.test.tsx` must pass
   unchanged.
+- **Read `FrontendUI/components.md` §2 "As built"** for the exact props of
+  every `src/components/ui/` export. `InlineAlert` and `StatusLine` take no
+  `id` or `className`: if a field needs one for `aria-describedby`, stop and
+  report it, because `src/components/ui/**` is forbidden to these units.
+- **A class assertion alone proves nothing on Vitest 4.** `styles.anything`
+  returns a hashed name even for a class that doesn't exist
+  (`verification.md` §1). Pair `toHaveClass(styles.x)` with a static read of
+  the `.module.css` file, and reuse `moduleCssViolations` and the readers in
+  `src/test/module-css.ts` for the no-raw-values check rather than writing a
+  new scanner.
+- **Never write the forbidden text of a tree scan literally in a test**: the
+  keyframes at-rule, the env read, the Cognito package name. Those scans read
+  test files too. Build the needle from fragments.
+- **`getByRole("banner")` finds every `<header>`**, including the shell's and
+  any in a card. Scope with `within(...)`.
+- `src/test/app-route.tsx`'s `renderAppAt(path, visitor)` renders the real
+  route table inside the shell, for anonymous, member and newcomer visitors.
+- `npx prettier --check src` already fails on about 100 untouched files on
+  `main`. It isn't a gate; check only the files the unit writes.
+- **`UI-004` and `UI-008` are siblings.** If both are open at once, merge them
+  into a throwaway worktree and run the frontend container on the combination
+  before handing over (`00-session-protocol.md`).
+- `/sign-up`, `/confirm` and `/forgot-password` have their own "sign in" links,
+  and since `UI-003` the header adds a "Sign in" link for anonymous visitors
+  (not on `/sign-in` itself). A whole-page `getByRole("link", { name: /sign in/i })`
+  finds two, so scope it to the card or `main`.
 
 ## Verify
 

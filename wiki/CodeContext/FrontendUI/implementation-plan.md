@@ -9,7 +9,7 @@ orchestrator (`decisions.md`, 2026-10-06):
 
 | Prompt (`wiki/GeneralContext/Prompts/`) | Units |
 |---|---|
-| `13-ui-foundation.md` | `D1`, `UI-001`, `UI-002`, `UI-003` |
+| `13-ui-foundation.md` | `D1`, `UI-001`, `UI-002`, `UI-003`. **Status (2026-10-06):** D1 `#97`, UI-001 `#98` and UI-002 `#99` are merged and deployed; UI-003 is in review |
 | `14-ui-auth-profile.md` | `UI-004`, `UI-008` |
 | `15-ui-feed-compose-notifications.md` | `UI-005`, `UI-006`, `UI-007` |
 | `16-ui-search.md` | `FRONTEND-007` |

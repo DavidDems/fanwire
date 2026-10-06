@@ -11,7 +11,7 @@ file, `tokens.md`, and the section of `layout.md` for its route.
 |---|---|---|
 | Tokens | `src/styles/tokens.css` | `UI-001` only. Later changes go through the human (`decisions.md`) |
 | Element defaults (reset, body, headings, links, native form controls, focus, `.visually-hidden`) | `src/styles/base.css` | `UI-001` |
-| Shared components | `src/components/ui/<Name>.tsx` + `<Name>.module.css` | `UI-003`; later units may **add** one, never restyle another unit's |
+| Shared components | `src/components/ui/<Name>.tsx` + `<Name>.module.css` | `UI-002`; later units may **add** one, never restyle another unit's |
 | Feature styles | next to the component: `src/features/feed/PostNode.module.css` etc. | the feature's unit |
 
 **Native controls are styled by `base.css`, keyed on attributes that already
@@ -28,7 +28,7 @@ feature-level CSS.
 `<span>`. A unit that wants to split one changes the test first, in its own
 red commit.
 
-## 2. Shared components (`UI-003`, `src/components/ui/`)
+## 2. Shared components (`UI-002`, `src/components/ui/`)
 
 | Component | Renders | Variants | States |
 |---|---|---|---|
@@ -45,6 +45,29 @@ red commit.
 | `Icon` | one inline SVG, `aria-hidden="true"`, `currentColor`, 20 px (16 in `sm` buttons) | see §3 | — |
 | `GameScore` | the score block (§4) | `compact` (one line, for the feed ticker), `row` (for search results) | — |
 | `VisuallyHidden` | text for screen readers only (the `.visually-hidden` class from `base.css`) | — | — |
+
+### As built (`UI-002`, merged 2026-10-06)
+
+The props the tests pin. Each is a named export from `src/components/ui/<Name>.tsx`.
+
+| Export | Props |
+|---|---|
+| `Button` | `variant: "primary" \| "secondary" \| "ghost"` and `size: "md" \| "sm"`, both required; every other `<button>` prop is passed through, and `className` is appended |
+| `buttonClass(variant, size)` | returns the same class string as `Button`, for a `Link` |
+| `Card` | `as?: "article" \| "section" \| "div"` (default `div`), plus any HTML attribute; `className` appended |
+| `InlineAlert` | `children` only (danger is the only variant). **No `id` or `className` passthrough** |
+| `StatusLine` | `variant?: "neutral" \| "success"` (default neutral) and `children`. No `id` or `className` |
+| `EmptyState` | `children` (the muted line) and `action?: ReactNode` |
+| `Skeleton` | `variant: "post" \| "line"` |
+| `Avatar` | `username: string` and `size: "sm" \| "lg"` |
+| `Badge` | `variant: "neutral" \| "live" \| "outline"` and `children` |
+| `GameScore` | `variant: "compact" \| "row"`, `homeScore`, `awayScore` and `status` (`LiveScoreView` in camelCase) |
+| `VisuallyHidden` | `children` |
+| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `HeartIcon`, `MessageCircleIcon`, `Repeat2Icon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon` and `CircleCheckIcon`, each taking `size?: number` (default 20) and `className?` |
+
+A feature unit that needs something not listed here (for example an `id` on
+`InlineAlert` for `aria-describedby`) can't edit `src/components/ui/**`. It
+stops and reports, and the change is its own small unit.
 
 **Deliberately not built** (no screen needs them; build when one does):
 
@@ -163,7 +186,7 @@ style is reserved for it now, so nobody invents another.
 | `components/FormField` `Field` | `field.module.css`: label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with icon | Markup and ids unchanged |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |
-| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. **Expanded with zero replies currently renders nothing**: `UI-006` adds "No replies yet." (`EmptyState`, test-first) |
+| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. **Expanded with zero replies currently renders nothing**: `UI-005` adds "No replies yet." (`EmptyState`, test-first) |
 | `features/feed/LiveScoreTickerDecorator` | `GameScore compact`, `Badge live` / `neutral` | §4 |
 | `features/feed/LikeButton` | `Button ghost sm` + `heart` icon, `data-active` when liked | "N likes" stays one text node. Failure: `InlineAlert` |
 | `features/feed/PostMedia` | `img`: `max-width: 100%`, `--radius-md`, `aspect-ratio` unknown so `height: auto`, max-height 28rem with `object-fit: cover` | Failure state is "nothing", unchanged |

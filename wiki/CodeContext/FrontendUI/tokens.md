@@ -125,7 +125,14 @@ Every pair the components in `components.md` use. All pass.
 ## 6. Banned pairs
 
 These are measured so the ban has a number beside it. `UI-001`'s contrast test
-asserts that none of them is ever declared as a pair.
+(`src/styles/tokens.test.ts`) asserts that none of them is ever declared as a pair.
+
+**Scope of each ban.** Teal on Jet Black is banned for **every** use, text and
+non-text, because it fails 3:1 too. The other five are banned **as text** (a
+4.5 pair) only. The same values may still meet as a 3:1 non-text pair where §5
+lists one: light Teal on `#e6eef2` is the §5 *focus → surface-muted* ring
+(4.235 ≥ 3.0) and is allowed, while a Teal *link* on `#e6eef2` is not. The test
+implements exactly this split.
 
 | Pair | Ratio | Why it's banned |
 |---|---|---|

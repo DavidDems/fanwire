@@ -18,7 +18,7 @@ Link names are pinned by tests (`routes.test.tsx`, `nav-link.test.tsx`), so a
 styling unit keeps every existing link and button's **accessible name**
 exactly. An icon may be added beside the text, but the text isn't replaced.
 
-## 2. The shell (`src/routes/AppLayout.tsx`, `UI-004`)
+## 2. The shell (`src/routes/AppLayout.tsx`, `UI-003`)
 
 ```
 phone (< 640 px)                          ≥ 640 px
@@ -53,9 +53,10 @@ phone (< 640 px)                          ≥ 640 px
   - **Below 360 px, the symbol alone.** The wordmark's `<picture>` gets a
     visually-hidden treatment (not `display: none`, which would also remove
     the name), so the link is still named `fanwire`.
-  - **Until `UI-002` lands the files,** the brand link is the plain text
-    `fanwire`, weight 600, `--color-text`. `UI-004` must not import a file that
-    doesn't exist yet, which is why `UI-002` comes first (`implementation-plan.md`).
+  - **The files are bundled, not served:** `UI-003` copies `brand/out/`'s two
+    wordmarks and `favicon.svg` (as `symbol.svg`) into `src/assets/brand/`, so
+    Vite fingerprints them. `brand/` itself never reaches the bundle or the test
+    container.
   - **Right: "Sign in"** (a link styled as a secondary button) **for an
     anonymous visitor only**. A signed-in visitor has nothing here on phones,
     because everything is in the bottom bar.
@@ -116,6 +117,9 @@ nesting comes for free from the markup and the CSS only adds indentation:
   `--z-dropdown`. Nothing else is positioned.
 - `scroll-padding-top` equals the header height, so focusing an element or
   following a skip link never hides it under the sticky header (WCAG 2.2 SC
-  2.4.11 "Focus not obscured").
+  2.4.11 "Focus not obscured"). On phones, `scroll-padding-bottom` clears the
+  bottom bar. Both are set by the shell in `AppLayout.module.css` through
+  `:global(html)`, because they are sized from the header and bar, which the
+  shell owns. That is the one global rule outside `base.css`; don't add more.
 - No horizontal scroll at 320 px wide. Long words and URLs wrap
   (`typography.md` §2), and media is `max-width: 100%`.
