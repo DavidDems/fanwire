@@ -7,12 +7,18 @@ is injected, per wiki/CodeContext/Modules/0x01-users.md's Dependency
 Inversion tie-in and wiki/CodeContext/Standards/design-principles.md).
 """
 
+import base64
+import hashlib
+import hmac
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from jose import jwk, jwt
+from jwt.algorithms import RSAAlgorithm
 
 from app.users.auth import (
     CognitoTokenVerifier,
@@ -38,14 +44,16 @@ def rsa_keys():
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode()
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
+    public_der = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    )
 
-    jwk_dict = jwk.construct(public_pem, "RS256").to_dict()
+    jwk_dict = RSAAlgorithm.to_jwk(public_key, as_dict=True)
     jwk_dict["kid"] = KID
-    return {"private_pem": private_pem, "jwks": {"keys": [jwk_dict]}}
+    jwk_dict["alg"] = "RS256"
+    jwk_dict["use"] = "sig"
+    return {"private_pem": private_pem, "public_der": public_der, "jwks": {"keys": [jwk_dict]}}
 
 
 def _make_token(rsa_keys, **claim_overrides):
@@ -71,14 +79,11 @@ def _make_token(rsa_keys, **claim_overrides):
 def _make_access_token(rsa_keys, **claim_overrides):
     """Builds a claim set shaped like a real Cognito **access** token:
     `token_use: "access"` and `client_id`, but deliberately no `aud` claim
-    at all — that's the whole bug. python-jose 3.5.0's own
-    `jose.jwt._validate_aud` returns immediately, with no error, when
-    `"aud" not in claims` (confirmed by reading the installed 3.5.0
-    source), so passing `audience=` to `jwt.decode` does not reject an
-    audience-less token. Without an explicit token_use/aud check in
-    CognitoTokenVerifier, this access token would sail through
-    verification even though it was never issued as an app-facing ID
-    token."""
+    at all — that's the whole bug. python-jose 3.5.0 (the library this
+    module used until 2026-10-06) skipped its audience check when `aud`
+    was absent, so `audience=` alone did not reject an audience-less
+    token. CognitoTokenVerifier must reject it whichever library decodes,
+    which is what this shape pins."""
     now = datetime.now(UTC)
     claims = {
         "sub": "cognito-sub-123",
@@ -219,3 +224,89 @@ def test_fake_verifier_raises_when_constructed_with_none():
 
     with pytest.raises(InvalidTokenError):
         verifier.verify("any-token-value")
+
+
+# --- Hardening pinned when python-jose was replaced by PyJWT (2026-10-06) ---
+
+
+def _unsigned_parts(header, claims):
+    def b64(obj):
+        raw = json.dumps(obj, separators=(",", ":"), default=str).encode()
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    return f"{b64(header)}.{b64(claims)}"
+
+
+def _id_claims():
+    now = datetime.now(UTC)
+    return {
+        "sub": "cognito-sub-123",
+        "token_use": "id",
+        "aud": AUDIENCE,
+        "iss": ISSUER,
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+        "iat": int(now.timestamp()),
+    }
+
+
+def test_verify_rejects_hs256_token_keyed_with_the_public_key(rsa_keys):
+    """CVE-2026-85394's attack shape: an HS256 token whose HMAC secret is the
+    service's own DER-encoded public key. Only `algorithms=["RS256"]` stands
+    between this and a forged identity, so it is pinned explicitly."""
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    signing_input = _unsigned_parts({"alg": "HS256", "typ": "JWT", "kid": KID}, _id_claims())
+    signature = hmac.new(rsa_keys["public_der"], signing_input.encode(), hashlib.sha256).digest()
+    forged = f"{signing_input}.{base64.urlsafe_b64encode(signature).rstrip(b'=').decode()}"
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(forged)
+
+
+def test_verify_rejects_unsigned_alg_none_token(rsa_keys):
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    forged = _unsigned_parts({"alg": "none", "typ": "JWT", "kid": KID}, _id_claims()) + "."
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(forged)
+
+
+@pytest.mark.parametrize("missing", ["exp", "iat", "sub", "iss", "aud"])
+def test_verify_rejects_id_token_missing_a_required_claim(rsa_keys, missing):
+    """Every Cognito ID token carries all five. A validly signed token that
+    lacks one is not a Cognito ID token — and without `exp` it would never
+    expire. python-jose accepted a token with no `exp` at all."""
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    claims = _id_claims()
+    del claims[missing]
+    token = jwt.encode(claims, rsa_keys["private_pem"], algorithm="RS256", headers={"kid": KID})
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(token)
+
+
+def test_verify_rejects_token_with_unknown_kid(rsa_keys):
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    token = jwt.encode(
+        _id_claims(), rsa_keys["private_pem"], algorithm="RS256", headers={"kid": "nope"}
+    )
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(token)
+
+
+def test_verify_rejects_malformed_token(rsa_keys):
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify("not-a-jwt")
+
+
+def test_auth_module_no_longer_depends_on_python_jose():
+    """python-jose has an unfixed critical CVE (CVE-2026-85394) and is no
+    longer a dependency; the verifier must not import it."""
+    source = (Path(__file__).resolve().parents[2] / "app" / "users" / "auth.py").read_text(
+        encoding="utf8"
+    )
+    imports = [line for line in source.splitlines() if line.startswith(("import ", "from "))]
+
+    assert not any("jose" in line for line in imports)
