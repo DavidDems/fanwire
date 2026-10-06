@@ -66,6 +66,12 @@ checks). After one sibling merges, the human must click "Update branch" on the
 next one and wait for `gate` and `guard-gate` to pass again. Tell them so with
 the merge order.
 
+**Browser rows.** Playwright MCP is installed for hand-run sessions
+(`FrontendUI/verification.md` §3a). Use it to fill in the browser checklist
+for what the unit touched: build, `vite preview` from the worktree, then light
+and dark at 360 and 1280 wide. A row it really drove is done. Anything it
+can't do (axe, signed-in states without a dev test account) stays NOT DONE.
+
 ## Take objections seriously, and confirm them
 
 Every implementation agent so far that said "this committed test is wrong" was

@@ -114,6 +114,26 @@ button {
   cursor: pointer;
 }
 
+/*
+ * A native button not yet on <Button> gets the secondary look (components.md
+ * §2) instead of the browser's button face, which in dark mode put Pale Sky on
+ * grey. :where() keeps these at zero specificity, so every module class
+ * (Button's variants included) wins regardless of bundle order.
+ */
+:where(button),
+:where(input[type="file"])::file-selector-button {
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+:where(button:hover:not(:disabled)),
+:where(input[type="file"]:hover:not(:disabled))::file-selector-button {
+  background-color: var(--color-surface-muted);
+}
+
 input:not([type="checkbox"], [type="radio"], [type="file"]),
 select,
 textarea {
