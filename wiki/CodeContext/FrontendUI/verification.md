@@ -141,6 +141,44 @@ good" on the strength of passing tests.
 "Build / test / run"), or the live site after the deploy. Seed data:
 `docker compose exec backend-dev python scripts/seed_dev.py`.
 
+### 3a. Agent-driven checks: Playwright MCP
+
+Installed by the human on 2026-10-06 as a local Claude Code MCP server
+(`claude mcp add playwright -- npx @playwright/mcp@latest`). It isn't a repo
+dependency and isn't in CI. It is available to a hand-run Director session
+(prompts `13`+). Dispatched workers don't have it. A row it really checked counts as
+done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured.
+
+- **What it can drive:** viewport size (`browser_resize`: 360 and 1280 wide),
+  light and dark mode, forced colours and reduced motion
+  (`browser_emulate_media`), screenshots, the accessibility tree
+  (`browser_snapshot`), and computed styles through `browser_evaluate`. With
+  those, an agent can measure a contrast ratio from the computed `color` and
+  `background-color`, and check `scrollWidth == clientWidth` for horizontal
+  overflow. That is how the native-button contrast defect was found
+  (2026-10-06).
+- **What to point it at:** a local `npm run build` then
+  `npx vite preview --port <n> --strictPort` from the unit's worktree. That's the
+  production bundle, which needs `frontend/.env.local` copied into the worktree;
+  never commit it. The live site is fine for read-only looks after a deploy.
+  Stop the preview server afterwards. On Windows, find it by its command line
+  (`Get-CimInstance Win32_Process`) and `Stop-Process` it, because `pkill`
+  doesn't work there, and a leftover server locks `esbuild.exe` so its worktree
+  can't be removed.
+- **Files:** screenshots and snapshots may only be written under the repo root
+  (the server's allowed roots), so use `.playwright-mcp/`, which is gitignored.
+  Read a screenshot back to look at it.
+- **The browser profile persists between sessions and is visible on screen.**
+  Whatever the human types into that window, a sign-in included, can still be
+  there next time. An agent never submits credentials it was not given, and
+  never acts on the live site as a signed-in user.
+- **Not covered:** axe, because there is no axe dependency and loading it from a
+  CDN would put a third-party script into the check. The axe row stays NOT DONE
+  until the human runs the axe browser extension. Signed-in states need a test
+  account in the **dev** Cognito pool (`wiki/GeneralContext/Architecture/dev-auth-setup.md`),
+  whose credentials the human keeps outside the repo. Until one exists,
+  signed-in rows are NOT DONE.
+
 **The per-unit checklist.** Every styling unit's PR body carries this table for
 the routes it touched, filled in or marked NOT DONE:
 

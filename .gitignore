@@ -40,3 +40,6 @@ Thumbs.db
 
 # Claude Code worktrees (each is its own linked git worktree already)
 .claude/worktrees/
+
+# Playwright MCP output (screenshots, snapshots): FrontendUI/verification.md §3a
+.playwright-mcp/

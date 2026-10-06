@@ -20,7 +20,11 @@ exist.** Every form in the app uses plain `input`, `select`, `textarea` and
 `aria-describedby`. So the error border is `[aria-invalid="true"]`, the disabled
 look is `:disabled`, and the focus ring is `:focus-visible`, with no class on
 any control. That's why most auth and settings forms need almost no
-feature-level CSS.
+feature-level CSS. A native `<button>` (and a file input's
+`::file-selector-button`) defaults to the **secondary** look, inside
+`:where()` so any module class wins. Until each feature moves its buttons onto
+`Button`, they are readable instead of the browser's grey button face, which
+in dark mode put Pale Sky on `#6b6b6b` (`src/styles/native-buttons.test.ts`).
 
 **Text that tests read stays one text node.** `"3 likes"`, `"12 followers"` and
 `"8 following"` are matched exactly by `getByText` (`FeedPage.test.tsx`,
