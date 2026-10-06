@@ -43,9 +43,14 @@ def rsa_keys():
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode()
 
+    public_der = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
     jwk_dict = jwk.construct(public_pem, "RS256").to_dict()
     jwk_dict["kid"] = KID
-    return {"private_pem": private_pem, "jwks": {"keys": [jwk_dict]}}
+    return {"private_pem": private_pem, "public_der": public_der, "jwks": {"keys": [jwk_dict]}}
 
 
 def _make_token(rsa_keys, **claim_overrides):
@@ -134,6 +139,54 @@ def test_verify_rejects_tampered_signature(rsa_keys):
 
     with pytest.raises(InvalidTokenError):
         verifier.verify(token=tampered)
+
+
+def test_verify_rejects_hs256_token_forged_with_the_public_key(rsa_keys):
+    """CVE-2026-85394 (python-jose <= 3.5.0, no fixed release): jose doesn't
+    recognise a DER-encoded public key as asymmetric, so anyone holding
+    Cognito's *public* key (it's published in the JWKS) can sign an HS256
+    token with it as the HMAC secret. That token verifies whenever decode()
+    isn't pinned to an algorithm. pip-audit ignores the CVE in CI because
+    this verifier is not exposed; this test is the proof."""
+    now = datetime.now(UTC)
+    forged = jwt.encode(
+        {
+            "sub": "attacker",
+            "token_use": "id",
+            "aud": AUDIENCE,
+            "iss": ISSUER,
+            "exp": now + timedelta(minutes=5),
+            "iat": now,
+        },
+        rsa_keys["public_der"],
+        algorithm="HS256",
+        headers={"kid": KID},
+    )
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(token=forged)
+
+
+def test_verify_pins_decode_to_rs256(rsa_keys, monkeypatch):
+    """The CVE-2026-85394 pip-audit ignore rests on decode() being pinned to
+    RS256. The forged-token test above would still pass without the pin,
+    because jose also refuses an RSA JWK as an HMAC key, so this test pins
+    the pin itself: removing it must fail CI, not just weaken the defence."""
+    import app.users.auth as auth_module
+
+    seen = {}
+    real_decode = auth_module.jwt.decode
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(auth_module.jwt, "decode", spy)
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    verifier.verify(token=_make_token(rsa_keys))
+
+    assert seen.get("algorithms") == ["RS256"]
 
 
 def test_verify_rejects_wrong_issuer(rsa_keys):
