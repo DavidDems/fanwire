@@ -29,7 +29,8 @@ import { server } from "./test/server";
 function readBlob(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("the blob could not be read"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("the blob could not be read"));
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.readAsArrayBuffer(blob);
   });
@@ -55,8 +56,13 @@ function blobStream(blob: Blob): ReadableStream<Uint8Array<ArrayBuffer>> {
   });
 }
 
-if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "function") {
-  Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+if (
+  typeof Blob !== "undefined" &&
+  typeof Blob.prototype.arrayBuffer !== "function"
+) {
+  Blob.prototype.arrayBuffer = function arrayBuffer(
+    this: Blob,
+  ): Promise<ArrayBuffer> {
     return readBlob(this);
   };
 
@@ -88,6 +94,70 @@ if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "functi
 // static `import { apiClient }` is intercepted. `src/test/harness.test.ts`
 // pins it.
 server.listen({ onUnhandledRequest: "error" });
+
+/**
+ * Keep a file's name when a jsdom `FormData` is sent.
+ *
+ * Vitest 4.1+ (and 5) wraps the global `Request` in its jsdom environment and
+ * rebuilds any jsdom `FormData` body as Node's `FormData`, re-appending each
+ * file as a bare Blob with no filename (`makeCompatFormData` in vitest's
+ * jsdom chunk). Node then names every file `"blob"`, so a multipart upload
+ * arrives with `filename="blob"` instead of `"photo.jpg"`. A real browser
+ * keeps the name, so this is purely a test-environment defect, not one in the
+ * app.
+ *
+ * The fix is to hand the runtime a body that is already Node's `FormData`,
+ * with each name passed explicitly. Vitest's converter only touches jsdom
+ * objects, so it leaves this one alone. It's done in `fetch`, not `Request`,
+ * because reading the bytes is asynchronous. It wraps msw's patched `fetch`
+ * (installed by `listen` above), so it has to stay at module scope for the
+ * same reason `listen` does: `apiClient` captures `globalThis.fetch` at
+ * module load.
+ *
+ * Installed only when a probe shows the name is actually lost, so once Vitest
+ * fixes it this stops running by itself, like the Blob readers above.
+ * `src/test/harness.test.ts` ("round-trips a FormData carrying a file through
+ * msw") pins the behaviour.
+ */
+async function nodeFormDataConstructor(): Promise<typeof FormData> {
+  // The jsdom environment replaced the global `FormData`; a `Response` (still
+  // Node's) parses into Node's own, which is the only public way back to it.
+  const parsed = await new Response(new URLSearchParams()).formData();
+  return parsed.constructor as typeof FormData;
+}
+
+async function sendingFormDataLosesFilenames(): Promise<boolean> {
+  const probe = new FormData();
+  probe.append("file", new File(["x"], "probe.txt", { type: "text/plain" }));
+  const received = await new Request("http://probe.invalid/", {
+    method: "POST",
+    body: probe,
+  }).formData();
+  return (received.get("file") as File | null)?.name !== "probe.txt";
+}
+
+if (await sendingFormDataLosesFilenames()) {
+  const NodeFormData = await nodeFormDataConstructor();
+  const { Blob: NodeBlob } = await import("node:buffer");
+  const mswFetch = globalThis.fetch;
+
+  globalThis.fetch = async function fetchKeepingFilenames(input, init) {
+    if (!(init?.body instanceof FormData)) return mswFetch(input, init);
+
+    const body = new NodeFormData();
+    for (const [key, value] of init.body.entries()) {
+      if (typeof value === "string") {
+        body.append(key, value);
+      } else {
+        const bytes = new NodeBlob([await value.arrayBuffer()], {
+          type: value.type,
+        });
+        body.append(key, bytes as unknown as Blob, value.name);
+      }
+    }
+    return mswFetch(input, { ...init, body });
+  };
+}
 
 afterEach(() => {
   // `globals: false`, so Testing Library registers no auto-cleanup of its own.
