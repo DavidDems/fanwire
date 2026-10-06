@@ -1,5 +1,7 @@
 # FrontendUI — branding
 
+> The UI typeface is the system font stack (`typography.md`, decided 2026-10-06), so §3.2's "prefer the UI font" advice is moot; the wordmark stays Outfit 600 as SVG paths.
+
 **Agent-facing.** fanwire's brand: the colour verdict, the mark, how the human
 makes the assets for free, and where each finished file goes. Written by
 `wiki/GeneralContext/Prompts/12-branding-research.md` on 2026-10-05.

@@ -1,5 +1,10 @@
 # 11 — Plan the frontend's look and feel
 
+> **Done 2026-10-06.** `wiki/CodeContext/FrontendUI/` holds the plan, starting at `index.md`.
+> At the checkpoint the human chose CSS Modules, the system font stack (over the recommended
+> Atkinson Hyperlegible Next), a raspberry Live accent, no team logos, and the sequencing in
+> `implementation-plan.md` (`decisions.md`, 2026-10-06). Next: write the `.ai/tasks/` specs.
+
 **Objective:** the SPA works but has no styling at all: there is no CSS file and
 no `className` anywhere in `frontend/src`. **This prompt does not style it.** It
 investigates the app and the stack, picks one direction for how fanwire should

@@ -10,7 +10,7 @@
 ## Wiki structure — read this before touching `wiki/`
 `wiki/` has two folders, split by audience (not by technical access control — see Process note below):
 - **`wiki/GeneralContext/`** — manager/thinking-tier context. Full project dictionary, start at `wiki/GeneralContext/index.md`.
-- **`wiki/CodeContext/`** — the module/standards content a code-change agent needs for its unit of work.
+- **`wiki/CodeContext/`** — the module/standards content a code-change agent needs for its unit of work: `Modules/` (one file per backend module, plus `0x08-frontend.md`), `Standards/` (design principles, security, GoF patterns, AWS stack, build and deployment) and `FrontendUI/` (look and feel: the human's brand decisions, tokens, layout, components, accessibility, verification and the styling-unit plan; start at `FrontendUI/index.md`).
 
 ## Agent system
 `.ai/` is the Git-backed, CI-driven workflow that runs agents against this repo: task specs, an explicit state machine, enforced per-role path permissions, telemetry, and the GitHub Actions workflows that orchestrate them. Start at `.ai/README.md`. The reasoning behind it — and the protocol for reviewing or improving it — is `.ai/docs/philosophy.md`. Where it actually stands today, and what is still unproven, is `.ai/docs/handoff.md`.

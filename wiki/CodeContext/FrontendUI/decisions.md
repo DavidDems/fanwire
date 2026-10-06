@@ -148,3 +148,26 @@ every check in `branding.md` §10 is done, so `TODO/05-branding-assets.md` is
 deleted. The record is in `brand/source/PROVENANCE.md`. This is a clearance
 search, not legal advice: a registration filing would still go through a
 trademark agent.
+
+## Look and feel — decided 2026-10-06
+
+Chosen at `11-frontend-ui-plan.md`'s checkpoint. The detail is in the pages
+named on each line.
+
+- **Direction: "scoreboard-crisp, calm, dense."** Neutral surfaces tinted
+  toward Jet Black; Teal only for actions and links; colour otherwise reserved
+  for state and for Live. Not a team-coloured fan site, not a neon esports look
+  (`direction.md`).
+- **Styling mechanism: CSS Modules plus one global token stylesheet**, with no
+  new dependency (`implementation-plan.md`, `verification.md`).
+- **UI typeface: the system font stack.** Chosen over the recommended Atkinson
+  Hyperlegible Next. No font file is shipped. The wordmark is still Outfit
+  SemiBold (600) as SVG paths, so it doesn't depend on this (`typography.md`).
+- **Live is a raspberry accent, not red** (`#c0176f` light, `#f58cc8` dark), so
+  it stays out of the team reds and doesn't share a colour with errors
+  (`tokens.md`).
+- **No team logos in v1.** Teams are shown by name and abbreviation as text
+  (`components.md`).
+- **Sequencing as proposed:** one Director PR first for `index.html`, then nine
+  worker units; `FRONTEND-007` (search) lands after the shared-component unit
+  and uses it (`implementation-plan.md`).
