@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "task_id": "UI-002",
+  "objective": "Build the shared UI components and the thirteen copied Lucide icons in frontend/src/components/ui/, as wiki/CodeContext/FrontendUI/components.md sections 2 and 3 specify, without using them in any feature yet.",
+  "acceptance_criteria": [
+    "Button renders a native <button>, passes every prop through, and maps variant (primary, secondary, ghost) and size (md, sm) to the classes exported by its CSS module; buttonClass(variant, size) returns the same classes for use on a Link.",
+    "Button size md sets its minimum height with var(--target-min) (static check of the module CSS).",
+    "Card renders the element named by its as prop (article, section or div) with the card class.",
+    "InlineAlert renders a <p role=\"alert\"> and StatusLine a <p role=\"status\"> whose text is the children; StatusLine accepts variant neutral or success; each leading icon is aria-hidden.",
+    "Badge variant live renders the visible word it is given plus an aria-hidden dot; variants neutral and outline render no dot.",
+    "GameScore renders the home score, an en dash and the away score in that order with the labels Home and Away; the game-state mapping in components.md section 4 holds for every listed code, and an unknown code is shown as given with no Live badge.",
+    "Avatar renders the first character of the username exactly as typed (not uppercased) and is aria-hidden.",
+    "EmptyState and Skeleton exist; Skeleton is aria-hidden and uses no animation.",
+    "Each of the thirteen icons in components.md section 3 renders an <svg aria-hidden=\"true\"> drawn with currentColor, and src/components/ui/icons/LICENSE contains Lucide's ISC licence text.",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/ui/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/styles/**",
+    "frontend/src/components/FormField.tsx",
+    "frontend/src/features/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

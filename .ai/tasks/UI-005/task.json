@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "task_id": "UI-005",
+  "objective": "Style the feed's stream template, the PostNode card and thread, the LiveScoreTickerDecorator score block and the like control, as wiki/CodeContext/FrontendUI/layout.md sections 3-4 and components.md section 4 specify.",
+  "acceptance_criteria": [
+    "A top-level PostNode renders as Card with as=\"article\"; a nested reply is an <article> without the card class.",
+    "LiveScoreTickerDecorator still renders its children first and unchanged, keeps role=\"status\" named Live score, and renders one GameScore per live_scores entry, with a Live badge for status Q1, Q2, Q3, Q4, OT, BT or HT and no Live badge for an unknown status.",
+    "While the feed loads, a StatusLine with the existing text and three aria-hidden skeletons render; a failed load renders InlineAlert; an empty feed renders EmptyState with the existing text.",
+    "An expanded post whose thread has zero replies shows the text No replies yet.",
+    "The like button carries data-active when the post is liked and not otherwise; the text N likes remains a single text node.",
+    "Show replies contains an aria-hidden chevron icon and its aria-expanded behaviour is unchanged.",
+    "Load more renders through Button with variant secondary, keeps its name, and is still absent once the feed has no further page.",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "feed-isolation.test.ts and every existing feed test pass unchanged.",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/notifications/**",
+    "frontend/src/features/profile/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/direction.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

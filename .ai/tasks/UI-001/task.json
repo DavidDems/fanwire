@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "task_id": "UI-001",
+  "objective": "Create frontend/src/styles/tokens.css and base.css exactly as wiki/CodeContext/FrontendUI/tokens.md specifies, imported once from main.tsx, guarded by a static token-contrast test.",
+  "acceptance_criteria": [
+    "src/styles/tokens.css declares every token in tokens.md sections 2, 4 and 8 on :root, and redeclares every semantic colour token (section 4) inside @media (prefers-color-scheme: dark).",
+    "A static test parses tokens.css, resolves var() references, computes WCAG 2.1 contrast without rounding, and asserts every pair in tokens.md section 5 meets its minimum in both themes; changing the dark --color-link to #1f7a8c makes it fail.",
+    "No banned pair from tokens.md section 6 is declared as a token pair, and no dark-theme token has the value #1f7a8c.",
+    "base.css gives :focus-visible a 2px solid var(--color-focus) outline with a 2px offset, and contains no outline: none or outline: 0 outside a rule that also sets a :focus-visible replacement.",
+    "base.css declares color-scheme: light dark, styles [aria-invalid=\"true\"] form controls with var(--color-danger), styles :disabled controls with var(--opacity-disabled), and defines a .visually-hidden class.",
+    "Under @media (prefers-reduced-motion: reduce), --duration-fast and --duration-base are 0ms, and no @keyframes rule exists anywhere under frontend/src.",
+    "main.tsx imports ./styles/tokens.css before ./styles/base.css.",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/styles/**",
+    "frontend/src/main.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/features/**",
+    "frontend/src/auth/**",
+    "frontend/src/components/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/decisions.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

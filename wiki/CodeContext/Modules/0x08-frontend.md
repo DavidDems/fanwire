@@ -32,6 +32,16 @@ Search is `FRONTEND-007`, sequenced in `TODO/04-first-deploy.md`. Each unit
 lifts its view out of `views.tsx` — they were in one file so that units did not
 contend over the route table, and only `SearchView` is left.
 
+## Look and feel
+
+**Unstyled today, and planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)**
+(2026-10-06): CSS Modules plus one global token stylesheet, the system font
+stack, and a Director PR (`D1`, `index.html` and the brand files) followed by
+eight styling units (`FrontendUI/implementation-plan.md`). This file stays the
+record of what the frontend *does*; how it looks is recorded there, not here. A
+styling unit that changes behaviour (for example "No replies yet.") records
+that here as usual.
+
 ## Auth (`FRONTEND-002`)
 
 `AuthService` is an interface; `CognitoAuthService` is one implementation of it
@@ -532,5 +542,7 @@ is recorded so the second copy is a known state rather than a discovery.
 ## Open decisions
 
 - Whether the frontend wiki grows past this file into per-feature sections, or
-  stays one file, is the call of whoever finishes `FRONTEND-007`. It is now the
-  only unit left, and this file is long.
+  stays one file, is the call of whoever finishes `FRONTEND-007`. **Half
+  settled 2026-10-06:** look and feel already lives in its own folder,
+  `wiki/CodeContext/FrontendUI/`, so this file never takes styling. Splitting
+  the *behaviour* sections per feature is still open.

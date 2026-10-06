@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "task_id": "UI-003",
+  "objective": "Style AppLayout as wiki/CodeContext/FrontendUI/layout.md section 2 specifies: skip link, sticky header with the symbol and wordmark as one link named fanwire, and one primary nav that sits at the bottom on phones and in the header from 40em.",
+  "acceptance_criteria": [
+    "frontend/src/assets/brand/ contains wordmark-light.svg, wordmark-dark.svg and symbol.svg (copies of brand/out/wordmark-light.svg, wordmark-dark.svg and favicon.svg); the test asserts each exists and is an <svg> document.",
+    "Every route renders exactly one main (id=\"main\"), one banner and one navigation named Primary.",
+    "A Skip to content link is the first focusable element on the page, and activating it moves focus to main.",
+    "The brand link points to / and its accessible name is exactly fanwire; it contains the symbol <img alt=\"\"> and a <picture> whose <source> has media=\"(prefers-color-scheme: dark)\" and whose <img> has alt=\"fanwire\".",
+    "The nav link for the current route has aria-current=\"page\" and no other nav link does.",
+    "Every nav link keeps its current accessible name and contains an aria-hidden icon from src/components/ui/icons.",
+    "An anonymous visitor sees a Sign in link to /sign-in in the header; a signed-in visitor with a profile does not.",
+    "The shell's CSS module positions the nav fixed to the bottom by default and inside the header under @media (min-width: 40em), and uses no max-width media query (static).",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/**",
+    "frontend/src/assets/brand/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/typography.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
