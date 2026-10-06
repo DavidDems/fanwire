@@ -232,6 +232,18 @@ anybody has to remember:
   The workaround it existed to remove is gone: `MediaWidget` builds an ordinary
   `FormData` and `src/test/compose.ts` reads it back with `request.formData()`.
   An upload is written the plain way here.
+- **`setupTests.ts` also keeps filenames through vitest's jsdom `FormData`
+  shim** (added 2026-10-06 with vitest 4.1.11 and vite 7, which cleared the
+  `npm audit` critical gate). From vitest 4.1, the jsdom environment wraps the
+  global `Request` and rebuilds a jsdom `FormData` body as Node's, re-appending
+  every file **without its name** (`makeCompatFormData`), so uploads reached
+  msw as `filename="blob"`. Browsers keep the name, so the app is not affected.
+  The setup file wraps msw's `fetch` and rebuilds the body as Node's `FormData`
+  itself, with names passed explicitly. It's installed only when a startup
+  probe sees the name lost, so it retires itself once vitest is fixed.
+  `harness.test.ts`'s round-trip test pins it. The same upgrade added `"node"`
+  to `tsconfig.app.json`'s `types`: vitest 3's globals had pulled Node's types
+  in implicitly, and tests use `process` and `node:fs`.
 
 ## Settled contracts
 
