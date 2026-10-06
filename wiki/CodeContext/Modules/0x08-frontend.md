@@ -35,8 +35,10 @@ contend over the route table, and only `SearchView` is left.
 
 ## Look and feel
 
-**Unstyled today, and planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)**
-(2026-10-06): CSS Modules plus one global token stylesheet, the system font
+**Planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)** (2026-10-06).
+`src/styles/tokens.css` and `base.css` (`UI-001`) are imported once from
+`main.tsx`; `src/styles/tokens.test.ts` recomputes every contrast pair from the
+file, unrounded. The rest: CSS Modules plus one global token stylesheet, the system font
 stack, and a Director PR (`D1`, `index.html` and the brand files) followed by
 eight styling units (`FrontendUI/implementation-plan.md`). This file stays the
 record of what the frontend *does*; how it looks is recorded there, not here. A
