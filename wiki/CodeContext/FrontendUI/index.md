@@ -32,10 +32,10 @@ listed in `implementation-plan.md`:
 
 | Unit | Hand it |
 |---|---|
-| Tokens and base (`UI-01`) | `tokens.md`, `accessibility.md`, `verification.md` |
-| Shared components (`UI-02`) | `components.md`, `tokens.md` §8, `accessibility.md`, `verification.md` |
-| Shell (`UI-03`) | `layout.md`, `components.md` §1–3, `accessibility.md`, `verification.md` |
-| A feature unit (`UI-04` … `UI-08`, and `FRONTEND-007`) | its `layout.md` §3 row, `components.md`, `verification.md` |
+| Tokens and base (`UI-001`) | `tokens.md`, `accessibility.md`, `verification.md` |
+| Shared components (`UI-002`) | `components.md`, `tokens.md` §8, `accessibility.md`, `verification.md` |
+| Shell (`UI-003`) | `layout.md`, `components.md` §1–3, `accessibility.md`, `verification.md` |
+| A feature unit (`UI-004` … `UI-008`, and `FRONTEND-007`) | its `layout.md` §3 row, `components.md`, `verification.md` |
 | Brand placement (Director PR `D1`) | `implementation-plan.md` D1, `branding.md` §8 |
 | Anyone proposing a palette or token change | `decisions.md`, `tokens.md`, `tokens-check.md` |
-| The session writing the task specs | `implementation-plan.md`, then the files above per unit |
+| A session running prompts `13`–`16` | `implementation-plan.md`, the unit's `.ai/tasks/<ID>/`, then the files above per unit |

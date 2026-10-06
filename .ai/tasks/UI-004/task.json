@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "task_id": "UI-004",
+  "objective": "Style the five auth pages and FormField's Field in the narrow form-card template of wiki/CodeContext/FrontendUI/layout.md section 3, using the shared components.",
+  "acceptance_criteria": [
+    "Each of SignInPage, SignUpPage, ConfirmPage, ForgotPasswordPage and ProfileSetupPage renders its form inside a Card (asserted through Card's module class).",
+    "Every request failure on those pages renders through InlineAlert with unchanged text and role=\"alert\".",
+    "ConfirmPage's resend notice renders through StatusLine with unchanged text and role=\"status\".",
+    "Every submit button renders through Button with variant primary; Resend code uses variant secondary.",
+    "Field still renders label, then control, then hint, then error, with the same ids; its error message has an aria-hidden icon and unchanged text.",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "src/auth/accessibility.test.tsx, src/auth/no-secret-leak.test.tsx and every page test pass unchanged.",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/auth/**",
+    "frontend/src/components/FormField.tsx",
+    "frontend/src/components/FormField.module.css",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/auth/AuthService.ts",
+    "frontend/src/auth/CognitoAuthService.ts",
+    "frontend/src/auth/AuthContext.tsx",
+    "frontend/src/auth/tokenProvider.ts",
+    "frontend/src/components/ui/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

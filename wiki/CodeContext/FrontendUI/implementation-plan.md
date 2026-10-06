@@ -1,10 +1,18 @@
 # FrontendUI — implementation plan
 
-**Agent-facing, for the session that writes the task specs** (the prompt after
-`11`) and for each unit's Director. One Director PR, then eight worker units,
-each the size of a `FRONTEND-00N` task. **No `.ai/tasks/` spec exists for any of
-them yet.** Writing those is the next prompt's job, after the human approves this
-plan.
+**Agent-facing, for each unit's Director.** One Director PR, then eight worker
+units, each the size of a `FRONTEND-00N` task. **Their specs are written:**
+`.ai/tasks/UI-001` … `UI-008` (the units below), plus the
+amended `FRONTEND-007`. **The spec is the contract;** this page is the
+reasoning behind it. They are run by hand from Claude Code sessions, not by the
+orchestrator (`decisions.md`, 2026-10-06):
+
+| Prompt (`wiki/GeneralContext/Prompts/`) | Units |
+|---|---|
+| `13-ui-foundation.md` | `D1`, `UI-001`, `UI-002`, `UI-003` |
+| `14-ui-auth-profile.md` | `UI-004`, `UI-008` |
+| `15-ui-feed-compose-notifications.md` | `UI-005`, `UI-006`, `UI-007` |
+| `16-ui-search.md` | `FRONTEND-007` |
 
 Each unit lists: objective; acceptance criteria phrased to fail first (the kind
 of test each needs is in `verification.md`); an `allowed_paths` sketch; the
@@ -15,22 +23,22 @@ loading"); and whether a Director PR must land first.
 
 ```
 D1 (Director: index.html + public/ brand files)
-UI-01 tokens + base ──▶ UI-02 shared components ──▶ UI-03 shell
+UI-001 tokens + base ──▶ UI-002 shared components ──▶ UI-003 shell
                                          │
-                                         ├──▶ UI-04 auth        ┐
-                                         ├──▶ UI-05 feed        │ any order, one at a time
-                                         ├──▶ UI-06 compose     │ or in parallel: disjoint
-                                         ├──▶ UI-07 notifications│ folders
-                                         ├──▶ UI-08 profile     ┘
-                                         └──▶ FRONTEND-007 search (uses UI-02)
+                                         ├──▶ UI-004 auth        ┐
+                                         ├──▶ UI-005 feed        │ any order, one at a time
+                                         ├──▶ UI-006 compose     │ or in parallel: disjoint
+                                         ├──▶ UI-007 notifications│ folders
+                                         ├──▶ UI-008 profile     ┘
+                                         └──▶ FRONTEND-007 search (uses UI-002)
 ```
 
-- **D1 can land any time**, independently of UI-01; it has no CSS.
-- **UI-03 and `FRONTEND-007` both write `frontend/src/routes/**`.** Never run
+- **D1 can land any time**, independently of UI-001; it has no CSS.
+- **UI-003 and `FRONTEND-007` both write `frontend/src/routes/**`.** Never run
   them concurrently: whichever lands second rebases. `FRONTEND-007`'s spec
-  should be amended to require `src/components/ui/` and `GameScore` for its
-  results. That goes in its own Director PR, merged before the task runs,
-  because `agent-guard` reads the spec from the merge ref.
+  was amended (2026-10-06, in this plan's PR) to require `src/components/ui/`
+  and `GameScore` for its results; `agent-guard` reads the spec from the merge
+  ref, so the amendment is in force once this PR is on `main`.
 - **What needs a Director PR, and what doesn't.** Workers may write
   `frontend/src/**` and `frontend/public/**`, but never `frontend/index.html`,
   `frontend/package.json`, `vite.config.ts` or `tsconfig*.json` (code-agent
@@ -67,7 +75,7 @@ not a copy of the 512 tile.
 `index.html` head, in addition to what is there:
 
 ```html
-<meta name="description" content="Talk about the game while it's on.">
+<meta name="description" content="Sports talk, wired live.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#022b3a" media="(prefers-color-scheme: dark)">
@@ -78,7 +86,7 @@ not a copy of the 512 tile.
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="fanwire">
 <meta property="og:title" content="fanwire">
-<meta property="og:description" content="Talk about the game while it's on.">
+<meta property="og:description" content="Sports talk, wired live.">
 <meta property="og:url" content="https://fanwire.daviddems.com/">
 <meta property="og:image" content="https://fanwire.daviddems.com/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -87,7 +95,7 @@ not a copy of the 512 tile.
 <meta name="twitter:card" content="summary_large_image">
 ```
 
-The description line is a placeholder for the human to word. `og:title` and
+The tagline is the human's (`decisions.md`, 2026-10-06). `og:title` and
 `og:site_name` are lowercase (`decisions.md`). The manifest:
 
 ```json
@@ -120,7 +128,7 @@ DONE.
 
 ---
 
-## UI-01 — Tokens and base styles
+## UI-001 — Tokens and base styles
 
 **Objective:** `tokens.css` and `base.css` exactly as `tokens.md` specifies,
 imported once in `main.tsx`, with the token-contrast test guarding them.
@@ -140,7 +148,7 @@ imported once in `main.tsx`, with the token-contrast test guarding them.
 
 ---
 
-## UI-02 — Shared components
+## UI-002 — Shared components
 
 **Objective:** the components in `components.md` §2 and the thirteen icons in
 §3, in `src/components/ui/`, with no feature using them yet.
@@ -156,13 +164,13 @@ imported once in `main.tsx`, with the token-contrast test guarding them.
 8. `Button size="md"` uses `--target-min` for its minimum height (static).
 
 **allowed_paths:** `frontend/src/components/**`, `frontend/src/test/**`.
-**Forbidden:** `frontend/src/styles/**` (UI-01's), every `features/**`.
+**Forbidden:** `frontend/src/styles/**` (UI-001's), every `features/**`.
 **Hand it:** `components.md`, `tokens.md` §8, `accessibility.md`, `verification.md`.
 **Director PR first:** none.
 
 ---
 
-## UI-03 — App shell and brand in the header
+## UI-003 — App shell and brand in the header
 
 **Objective:** `AppLayout` as `layout.md` §2 describes it, with the symbol and
 wordmarks bundled from `src/assets/brand/`.
@@ -188,7 +196,7 @@ cut, which is what reads at 28 px.
 
 ---
 
-## UI-04 — Auth pages
+## UI-004 — Auth pages
 
 **Objective:** the five auth pages and `FormField` in the narrow-card template.
 
@@ -207,7 +215,7 @@ cut, which is what reads at 28 px.
 
 ---
 
-## UI-05 — Feed, posts and the live score
+## UI-005 — Feed, posts and the live score
 
 **Objective:** the stream template, the `PostNode` card and thread, the
 `GameScore` ticker in the decorator, and the like control.
@@ -228,7 +236,7 @@ cut, which is what reads at 28 px.
 
 ---
 
-## UI-06 — Composer
+## UI-006 — Composer
 
 **Objective:** the single-form-card template, the mention panel and the media
 widget's states.
@@ -247,7 +255,7 @@ widget's states.
 
 ---
 
-## UI-07 — Notifications
+## UI-007 — Notifications
 
 **Objective:** the settings strip plus the divided list.
 
@@ -264,7 +272,7 @@ widget's states.
 
 ---
 
-## UI-08 — Profile
+## UI-008 — Profile
 
 **Objective:** the identity header plus body, for both variants and the
 settings card.

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "task_id": "UI-006",
+  "objective": "Style the composer in the single-form-card template, including the mention suggestions panel and every MediaWidget state, as wiki/CodeContext/FrontendUI/layout.md section 3 and components.md section 5 specify.",
+  "acceptance_criteria": [
+    "The compose form renders inside a Card; Post uses Button variant primary, Undo mention variant ghost, and each quick-post template variant secondary.",
+    "The mention suggestions section keeps its accessible name (Game suggestions or Team suggestions) and its suggestion buttons keep their labels.",
+    "MediaWidget renders its preparing and ready messages through StatusLine, and the wrong-type, too-large and rejected messages through InlineAlert, each with unchanged text.",
+    "After a failed POST /posts the failure renders through InlineAlert and the draft text is still in the text box.",
+    "The suggestions panel's CSS uses var(--z-dropdown) (static).",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "component-isolation.test.ts and every existing compose test pass unchanged.",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/compose/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/notifications/**",
+    "frontend/src/features/profile/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

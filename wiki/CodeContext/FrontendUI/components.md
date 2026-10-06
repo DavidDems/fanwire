@@ -9,9 +9,9 @@ file, `tokens.md`, and the section of `layout.md` for its route.
 
 | What | Where | Who writes it |
 |---|---|---|
-| Tokens | `src/styles/tokens.css` | `UI-01` only. Later changes go through the human (`decisions.md`) |
-| Element defaults (reset, body, headings, links, native form controls, focus, `.visually-hidden`) | `src/styles/base.css` | `UI-01` |
-| Shared components | `src/components/ui/<Name>.tsx` + `<Name>.module.css` | `UI-03`; later units may **add** one, never restyle another unit's |
+| Tokens | `src/styles/tokens.css` | `UI-001` only. Later changes go through the human (`decisions.md`) |
+| Element defaults (reset, body, headings, links, native form controls, focus, `.visually-hidden`) | `src/styles/base.css` | `UI-001` |
+| Shared components | `src/components/ui/<Name>.tsx` + `<Name>.module.css` | `UI-003`; later units may **add** one, never restyle another unit's |
 | Feature styles | next to the component: `src/features/feed/PostNode.module.css` etc. | the feature's unit |
 
 **Native controls are styled by `base.css`, keyed on attributes that already
@@ -28,7 +28,7 @@ feature-level CSS.
 `<span>`. A unit that wants to split one changes the test first, in its own
 red commit.
 
-## 2. Shared components (`UI-03`, `src/components/ui/`)
+## 2. Shared components (`UI-003`, `src/components/ui/`)
 
 | Component | Renders | Variants | States |
 |---|---|---|---|
@@ -163,7 +163,7 @@ style is reserved for it now, so nobody invents another.
 | `components/FormField` `Field` | `field.module.css`: label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with icon | Markup and ids unchanged |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |
-| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. **Expanded with zero replies currently renders nothing**: `UI-06` adds "No replies yet." (`EmptyState`, test-first) |
+| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. **Expanded with zero replies currently renders nothing**: `UI-006` adds "No replies yet." (`EmptyState`, test-first) |
 | `features/feed/LiveScoreTickerDecorator` | `GameScore compact`, `Badge live` / `neutral` | §4 |
 | `features/feed/LikeButton` | `Button ghost sm` + `heart` icon, `data-active` when liked | "N likes" stays one text node. Failure: `InlineAlert` |
 | `features/feed/PostMedia` | `img`: `max-width: 100%`, `--radius-md`, `aspect-ratio` unknown so `height: auto`, max-height 28rem with `object-fit: cover` | Failure state is "nothing", unchanged |

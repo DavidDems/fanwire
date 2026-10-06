@@ -171,3 +171,15 @@ named on each line.
 - **Sequencing as proposed:** one Director PR first for `index.html`, then nine
   worker units; `FRONTEND-007` (search) lands after the shared-component unit
   and uses it (`implementation-plan.md`).
+
+## Before merging the plan — decided 2026-10-06
+
+- **Brand placement is part of the Director PR `D1`**, not a worker unit, so
+  `index.html` and the files it links land together: `D1` plus eight worker
+  units (`implementation-plan.md`).
+- **Tagline: "Sports talk, wired live."** Used for `<meta name="description">`
+  and `og:description`. Sentence case; the name stays lowercase.
+- **The first styling pass is run by hand from Claude Code sessions**, not by
+  the API-driven orchestrator: specs `UI-001`–`UI-008` (and the amended
+  `FRONTEND-007`) are worked through by prompts `13`–`16` in
+  `wiki/GeneralContext/Prompts/`, one PR per unit.

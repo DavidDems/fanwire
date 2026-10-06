@@ -1,7 +1,10 @@
 # FRONTEND-007 — search, as two separate things
 
 Depends on `FRONTEND-005` being on `main` (post results render through its
-Composite components).
+Composite components), and, since 2026-10-06, on `UI-002` (the shared
+components in `src/components/ui/`) and `UI-003` (the shell; both write
+`src/routes/**`, so never concurrently). It is styled from the start, per
+`wiki/CodeContext/FrontendUI/`: consume the shared components, never edit them.
 
 ## Two mechanisms, and they are not variants of one
 

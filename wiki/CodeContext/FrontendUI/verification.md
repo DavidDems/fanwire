@@ -32,7 +32,7 @@ and `features/feed/feed-isolation.test.ts` already do (locate `src` from
 `process.cwd()`, which works in both the repo and the container). They are
 the strongest checks available, because they test the CSS itself.
 
-- **Token contrast (`UI-01`, `src/styles/tokens.test.ts`).** Parse
+- **Token contrast (`UI-001`, `src/styles/tokens.test.ts`).** Parse
   `src/styles/tokens.css` (custom properties on `:root`, and again inside the
   `prefers-color-scheme: dark` block; a small regex parser, no dependency).
   Resolve `var()` references. Compute WCAG 2.1 contrast in TypeScript, the same
@@ -44,10 +44,10 @@ the strongest checks available, because they test the CSS itself.
   unit's folder: no `#hex`, `rgb(`, `hsl(` or named colour; no `px` font sizes;
   no `outline: none` / `outline: 0` without a `:focus-visible` rule in the same
   file (A2, A3, A9).
-- **Reduced motion (`UI-01`).** `base.css` contains a `prefers-reduced-motion`
+- **Reduced motion (`UI-001`).** `base.css` contains a `prefers-reduced-motion`
   block setting both duration tokens to `0ms`, and no `@keyframes` exists
   anywhere in `src/` (A8).
-- **Brand files (`UI-02`).** Files exist under `frontend/public/` and
+- **Brand files (`UI-002`).** Files exist under `frontend/public/` and
   `frontend/src/assets/brand/`. Each PNG's IHDR width and height (bytes 16–23)
   match `branding.md` §8. `manifest.webmanifest` parses as JSON with
   `name: "fanwire"` and the three icons with their `purpose`. **The container

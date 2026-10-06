@@ -3,7 +3,8 @@
 > **Done 2026-10-06.** `wiki/CodeContext/FrontendUI/` holds the plan, starting at `index.md`.
 > At the checkpoint the human chose CSS Modules, the system font stack (over the recommended
 > Atkinson Hyperlegible Next), a raspberry Live accent, no team logos, and the sequencing in
-> `implementation-plan.md` (`decisions.md`, 2026-10-06). Next: write the `.ai/tasks/` specs.
+> `implementation-plan.md` (`decisions.md`, 2026-10-06). The specs (`UI-001`–`UI-008`) and the
+> session prompts that run them by hand (`13`–`16`) were added in the same PR.
 
 **Objective:** the SPA works but has no styling at all: there is no CSS file and
 no `className` anywhere in `frontend/src`. **This prompt does not style it.** It

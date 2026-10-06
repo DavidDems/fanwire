@@ -1,7 +1,7 @@
 # FrontendUI — tokens
 
 **Agent-facing.** Every design token with its value, in light and dark, and the
-measured contrast of every pair the UI uses. `UI-01` writes these into
+measured contrast of every pair the UI uses. `UI-001` writes these into
 `frontend/src/styles/tokens.css` verbatim. Every other stylesheet refers to them
 by name and never by value: a hex code or a raw `px` spacing value in a
 `*.module.css` file is a defect (`verification.md` checks it).
@@ -124,7 +124,7 @@ Every pair the components in `components.md` use. All pass.
 
 ## 6. Banned pairs
 
-These are measured so the ban has a number beside it. `UI-01`'s contrast test
+These are measured so the ban has a number beside it. `UI-001`'s contrast test
 asserts that none of them is ever declared as a pair.
 
 | Pair | Ratio | Why it's banned |

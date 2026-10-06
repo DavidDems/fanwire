@@ -18,7 +18,7 @@ Link names are pinned by tests (`routes.test.tsx`, `nav-link.test.tsx`), so a
 styling unit keeps every existing link and button's **accessible name**
 exactly. An icon may be added beside the text, but the text isn't replaced.
 
-## 2. The shell (`src/routes/AppLayout.tsx`, `UI-04`)
+## 2. The shell (`src/routes/AppLayout.tsx`, `UI-004`)
 
 ```
 phone (< 640 px)                          ≥ 640 px
@@ -53,9 +53,9 @@ phone (< 640 px)                          ≥ 640 px
   - **Below 360 px, the symbol alone.** The wordmark's `<picture>` gets a
     visually-hidden treatment (not `display: none`, which would also remove
     the name), so the link is still named `fanwire`.
-  - **Until `UI-02` lands the files,** the brand link is the plain text
-    `fanwire`, weight 600, `--color-text`. `UI-04` must not import a file that
-    doesn't exist yet, which is why `UI-02` comes first (`implementation-plan.md`).
+  - **Until `UI-002` lands the files,** the brand link is the plain text
+    `fanwire`, weight 600, `--color-text`. `UI-004` must not import a file that
+    doesn't exist yet, which is why `UI-002` comes first (`implementation-plan.md`).
   - **Right: "Sign in"** (a link styled as a secondary button) **for an
     anonymous visitor only**. A signed-in visitor has nothing here on phones,
     because everything is in the bottom bar.

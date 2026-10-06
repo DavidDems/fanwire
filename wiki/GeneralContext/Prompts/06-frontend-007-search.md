@@ -1,5 +1,8 @@
 # 06 — `FRONTEND-007`, search (optional, off the deploy path)
 
+> **Superseded 2026-10-06 by `16-ui-search.md`**, which runs the same task styled on the shared
+> components, after `13`. Don't run this one.
+
 **Objective:** the last frontend unit. **Not needed for the first deploy** —
 `/search` already renders a placeholder and the site ships without it. Run it
 whenever you like; afterwards, rebuild and re-upload the bundle with

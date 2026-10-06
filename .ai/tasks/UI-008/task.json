@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "task_id": "UI-008",
+  "objective": "Style both profile variants and the settings card in the identity-header-plus-body template of wiki/CodeContext/FrontendUI/layout.md section 3.",
+  "acceptance_criteria": [
+    "ProfileSummary renders an Avatar and the username as the h1 inside a header Card; N followers and N following remain single text nodes.",
+    "Follow renders through Button variant primary; Unfollow renders variant secondary with data-active.",
+    "ProfileSettings renders inside a Card with its h2; the saved note renders through StatusLine variant success with unchanged text.",
+    "Date of birth still renders only on the own profile.",
+    "Every *.module.css file this unit adds contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "profile-cache.test.tsx, nav-link.test.tsx and every existing profile test pass unchanged.",
+    "Every existing test in the suite passes unchanged; no existing test file is edited."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/profile/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "backend/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/notifications/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
