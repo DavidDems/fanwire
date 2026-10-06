@@ -1,0 +1,31 @@
+/* Static by design: no animation, in either motion setting (accessibility.md A8). */
+.post {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.avatar {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-muted);
+}
+
+.lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.bar {
+  height: 1em;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+}
+
+.short {
+  width: 60%;
+}

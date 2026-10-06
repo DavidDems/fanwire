@@ -1,0 +1,37 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+  white-space: nowrap;
+}
+
+.neutral {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.live {
+  background-color: var(--color-live);
+  border-color: var(--color-live);
+  color: var(--color-on-live);
+}
+
+.outline {
+  background-color: transparent;
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/* Drawn in the label colour so it shows on the live fill. */
+.dot {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}
