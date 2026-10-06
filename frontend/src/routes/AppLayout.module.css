@@ -1,0 +1,227 @@
+/*
+ * The app shell (wiki/CodeContext/FrontendUI/layout.md §2, §5). Mobile-first:
+ * every rule outside a media query is the phone layout, and only min-width
+ * queries widen it. Values come from tokens.css by name only.
+ *
+ * The header is target-min tall plus space-2 above and below; the bottom bar
+ * is under space-8 tall plus the safe area. scroll-padding and main's bottom
+ * padding are sized from those so nothing focused or last in the list is
+ * hidden under either bar (accessibility.md A5).
+ */
+
+:global(html) {
+  scroll-padding-top: calc(var(--target-min) + 3 * var(--space-2));
+  scroll-padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+}
+
+/* Skip link: visually hidden until focused, then above everything. */
+.skipLink {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skipLink:focus {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip-link);
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  overflow: visible;
+  clip: auto;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Header: sticky, surface, a shadow in light and a border edge in dark. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+/* Brand: the symbol, plus the wordmark from 22.5em (360 px). */
+.brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.brand img {
+  display: block;
+}
+
+/* Hidden visually, never removed: its alt is what names the brand link. */
+.wordmark {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (min-width: 22.5em) {
+  .wordmark {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+  }
+}
+
+/* Sign in sits at the right edge of the header. */
+.signIn {
+  margin-left: auto;
+}
+
+/* Primary nav, phone: a bar fixed to the bottom of the viewport. */
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-sticky);
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.list {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One cell: the icon above a small label. */
+.link {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+  text-align: center;
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  color: var(--color-text);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+/* Current page: weight and colour, plus a bar (a border, so forced colors keep it). */
+.link[aria-current="page"] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--space-3);
+  right: var(--space-3);
+  border-top: 3px solid var(--color-action);
+}
+
+/* main: the content column, clear of the bottom bar on phones. */
+.main {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-4)
+    calc(var(--space-5) + var(--space-8) + env(safe-area-inset-bottom));
+}
+
+/* From 40em (640 px): the nav sits inline in the header, labels only. */
+@media (min-width: 40em) {
+  :global(html) {
+    scroll-padding-bottom: 0;
+  }
+
+  .nav {
+    position: static;
+    padding-bottom: 0;
+    background-color: transparent;
+    border-top: 0;
+  }
+
+  .list {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .link {
+    flex-direction: row;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .icon {
+    display: none;
+  }
+
+  .link[aria-current="page"]::after {
+    top: auto;
+    bottom: 0;
+  }
+
+  .main {
+    padding-bottom: var(--space-5);
+  }
+}
+
+@media (min-width: 60em) {
+  .header {
+    padding-inline: var(--space-5);
+  }
+
+  .main {
+    padding-inline: var(--space-5);
+  }
+}
