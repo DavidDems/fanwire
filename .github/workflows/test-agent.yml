@@ -209,7 +209,18 @@ jobs:
         # Cognito JWT verification only uses RS256 (RSA), never the ECDSA
         # signing path this advisory concerns. Re-check this ignore next time
         # dependencies are bumped.
-        run: pip-audit --ignore-vuln PYSEC-2026-1325
+        #
+        # CVE-2026-85394 (python-jose <= 3.5.0, no fixed release, published
+        # 2026-10-05): an HS256 token signed with the DER-encoded public key
+        # verifies when decode() is not pinned to an algorithm. Not reachable
+        # here, for two independent reasons: CognitoTokenVerifier pins
+        # algorithms=["RS256"], and it hands jose a JWK dict, which jose refuses
+        # as an HMAC key. Pinned by test_verify_pins_decode_to_rs256 and
+        # test_verify_rejects_hs256_token_forged_with_the_public_key in
+        # backend/tests/users/test_auth.py. Accepted risk - see
+        # wiki/CodeContext/Modules/0x01-users.md. Drop this ignore when
+        # python-jose ships a fix or the backend moves off it.
+        run: pip-audit --ignore-vuln PYSEC-2026-1325 --ignore-vuln CVE-2026-85394
 
   # `backend/openapi.json` is the committed frontend/backend contract, and
   # `frontend/src/api/schema.d.ts` is the TypeScript generated from it. Either
