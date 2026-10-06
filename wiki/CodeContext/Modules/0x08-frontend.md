@@ -242,6 +242,22 @@ anybody has to remember:
   The workaround it existed to remove is gone: `MediaWidget` builds an ordinary
   `FormData` and `src/test/compose.ts` reads it back with `request.formData()`.
   An upload is written the plain way here.
+- **`src/test/form-data-file-names.ts` keeps a file's name across Vitest 4's
+  jsdom/Node bridge** (2026-10-06, the Vitest 3 → 4 upgrade that cleared the
+  critical `tinypool` advisory). Under Vitest 4, `FormData`, `File` and `Blob`
+  are jsdom's while `Request` and `fetch` are Node's, and Vitest converts a
+  jsdom `FormData` into a Node one by appending each file as a bare `Blob`, so
+  every upload reached msw named `blob`. The module wraps the global `Request`
+  and does the conversion itself, names included; `setupTests.ts` imports it
+  **before** msw, which builds its `Request` from the global. It reads the
+  bytes the way Vitest's own bridge does (jsdom's `impl` buffer), because a
+  request body is built synchronously. `harness.test.ts` and
+  `MediaWidget.test.tsx` are what caught it, and they pin it. Vitest 5 has the
+  same bridge, so this stays until upstream keeps file names.
+- **`tsconfig.app.json` lists `vite/client` and `node` in `types` explicitly.**
+  Vitest 3's `vitest/globals` pulled both in transitively and Vitest 4's does
+  not, so the disk-reading tests (`node:fs`, `process.cwd()`) and CSS/SVG
+  imports stopped type-checking.
 
 ## Settled contracts
 

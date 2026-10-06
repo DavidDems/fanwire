@@ -1,4 +1,6 @@
 import "@testing-library/jest-dom/vitest";
+// First, before msw: see the file for why the order matters.
+import "./test/form-data-file-names";
 
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach } from "vitest";
@@ -29,7 +31,8 @@ import { server } from "./test/server";
 function readBlob(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("the blob could not be read"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("the blob could not be read"));
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.readAsArrayBuffer(blob);
   });
@@ -55,8 +58,13 @@ function blobStream(blob: Blob): ReadableStream<Uint8Array<ArrayBuffer>> {
   });
 }
 
-if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "function") {
-  Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+if (
+  typeof Blob !== "undefined" &&
+  typeof Blob.prototype.arrayBuffer !== "function"
+) {
+  Blob.prototype.arrayBuffer = function arrayBuffer(
+    this: Blob,
+  ): Promise<ArrayBuffer> {
     return readBlob(this);
   };
 
