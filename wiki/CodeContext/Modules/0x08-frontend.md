@@ -27,6 +27,7 @@ What is real:
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the live-score decorator, the optimistic like and the media |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts` and `feed.ts` (the per-unit network fixtures) |
+| `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
 Search is `FRONTEND-007`, sequenced in `TODO/04-first-deploy.md`. Each unit
 lifts its view out of `views.tsx` — they were in one file so that units did not
@@ -34,8 +35,10 @@ contend over the route table, and only `SearchView` is left.
 
 ## Look and feel
 
-**Unstyled today, and planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)**
-(2026-10-06): CSS Modules plus one global token stylesheet, the system font
+**Planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)** (2026-10-06).
+`src/styles/tokens.css` and `base.css` (`UI-001`) are imported once from
+`main.tsx`; `src/styles/tokens.test.ts` recomputes every contrast pair from the
+file, unrounded. The rest: CSS Modules plus one global token stylesheet, the system font
 stack, and a Director PR (`D1`, `index.html` and the brand files) followed by
 eight styling units (`FrontendUI/implementation-plan.md`). This file stays the
 record of what the frontend *does*; how it looks is recorded there, not here. A
