@@ -51,7 +51,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **Build & Deployment** — package inventory, container strategy, CI/CD wiring: `wiki/CodeContext/Standards/build-deployment.md`
 
 ### Frontend UI (look and feel)
-`wiki/CodeContext/FrontendUI/`: the reference for styling units. Today it holds only `decisions.md`: the human's palette (with measured contrast), the lowercase-name rule (`fanwire`, name only), "no wordmark or icon yet", and the `ui-design` skill's provenance. `Prompts/11` builds out the rest (direction, tokens, typography, layout, components, accessibility, verification, implementation plan), and `Prompts/12` writes `branding.md`.
+`wiki/CodeContext/FrontendUI/`: the reference for styling units. It holds `index.md`, `decisions.md` (the human's palette, plus `--color-accent-on-dark` `#279ab1` added and the contrast table corrected on 2026-10-05; the lowercase-name rule; the brand mark direction; and the `ui-design` skill's provenance) and `branding.md` (written by `Prompts/12` on 2026-10-05: Teal is ΔE 1.4 from the Charlotte Hornets' teal, so the mark is a Pale Sky wire `f` on Jet Black with a typeset wordmark; plus the ChatGPT, Inkscape and ImageMagick how-to, rights in Canada, and the asset checklist with repo destinations). The human makes the assets (`TODO/05-branding-assets.md`), and placing them is a later implementation unit. `Prompts/11` builds out the rest (direction, tokens, typography, layout, components, accessibility, verification, implementation plan) and reconciles with `branding.md`.
 
 ### Architecture & operations (GeneralContext-only — not handed to code-change subagents)
 - **Business rules**: `wiki/GeneralContext/Architecture/business-rules.md`
@@ -68,7 +68,8 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
   - **Done**, and they say so at their top: `01` (the deploy path), `04` (the first deploy), `05` (the post-deploy checklist), `07` (scope `cfn-exec-role`), `09` (pin the NAT AMI), `10` (the automated deploy workflow: deploy on merge to `main` behind a required reviewer, plus the permissions boundary on every created role, all live 2026-10-05).
   - **Partly overtaken but still worth running:** `02` (browser pass, `MEDIA-002`).
   - **Re-run whenever the human reports a step finished:** `03`.
-  - **Open:** `06` (search UI, optional), `08` (post-deploy follow-ups), `11` (plan the frontend's look and feel into `wiki/CodeContext/FrontendUI/`) and `12` (branding research: colour, mark, and how the human makes the assets). `11` and `12` can run in either order; whichever runs second reconciles with the first.
+  - **Open:** `06` (search UI, optional), `08` (post-deploy follow-ups) and `11` (plan the frontend's look and feel into `wiki/CodeContext/FrontendUI/`; it runs after `12`, so it reconciles with `branding.md`).
+  - **Done 2026-10-05:** `12` (branding research). It wrote `FrontendUI/branding.md` and `index.md`, appended to `decisions.md`, and created `TODO/05-branding-assets.md`.
 
 ### Reports
 `wiki/GeneralContext/Reports/` — agent-generated output only, never hand-written: `test-runs/`, `context-audit/`, `maintenance/`. Still unwritten by automation: the agent system records machine output as structured state and telemetry under `.ai/` (`agentctl status`, `agentctl telemetry report`) rather than as prose reports here, so these folders are awaiting a use that genuinely needs prose. `wiki/GeneralContext/` is not writable by any agent worker.

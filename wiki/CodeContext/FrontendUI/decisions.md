@@ -76,3 +76,65 @@ executable content.
   request conflicts with it. That does not hold here: the human's decisions on
   this page, and `wiki/CodeContext/Standards/design-principles.md`, win over the
   skill on any conflict.
+
+## Brand mark — decided 2026-10-05
+
+Chosen at `12-branding-research.md`'s checkpoint. The detail is in `branding.md`.
+
+- **Symbol plus wordmark.** The symbol is a lowercase `f` drawn as **one
+  continuous wire line**, alone as the favicon and app icon. The wordmark is
+  lowercase `fanwire` **typeset in a free OFL font** (shortlist Outfit, Sora,
+  Manrope), never AI-generated.
+- **The mark is Jet Black and Pale Sky, not teal**: a Pale Sky wire `f` on a
+  Jet Black tile.
+- **The human produces the assets** with ChatGPT (symbol concept only),
+  Inkscape and ImageMagick, following `branding.md` and `TODO/05-branding-assets.md`.
+  Until the files land in the repo, "No wordmark and no icon yet" above still holds.
+- **Jurisdiction for rights questions: Canada.**
+
+## Brand palette — extended 2026-10-05
+
+The three colours above are **kept** (the human declined shifting Teal to sea
+green `#077e6a`), and one is **added**:
+
+| Token | Hex | Name |
+|---|---|---|
+| `--color-accent-on-dark` | `#279ab1` | Teal, lightened for dark surfaces |
+
+It is the darkest shade of Teal's hue that reaches AA on Jet Black: **4.501:1**.
+Use it for links and focus rings on Jet Black, never on light surfaces (3.31:1
+on white). Its margin is 0.001. If it ever sits on a surface other than exactly
+`#022b3a`, re-measure. `branding.md` §2.1 names `#289eb5` (4.72:1) as the
+drop-in, which needs the human's sign-off like any palette change.
+
+Reason: Teal is ΔE 1.4 from the Charlotte Hornets' teal `#00788C` (CIEDE2000;
+under about 2 reads as the same colour), so it must not dominate the brand.
+The palette as a set is not any team's (`branding.md` §2.2).
+
+## Contrast table — corrected 2026-10-05
+
+The table in "Brand palette — decided 2026-09-22" above was re-measured with a
+script (`branding.md` §9). It is left as written, and the correct figures are:
+
+| Pairing | Recorded | Measured | Verdict change |
+|---|---|---|---|
+| Jet Black on white | 15.2:1 | **14.90:1** | none (AAA) |
+| Pale Sky on Jet Black | 10.6:1 | **10.42:1** | none (AAA) |
+| White on Teal | 5.0:1 | **4.98:1** | none (AA, fails AAA) |
+| Teal on Jet Black | 3.1:1 | **2.995:1** | **Worse.** It also fails the 3:1 non-text minimum (WCAG 1.4.11), so teal can't be a focus ring, icon or border on Jet Black either. |
+
+## Brand assets — approved 2026-10-05
+
+- **Symbol:** the wire `f` with a plug at the foot of the stem, generated from
+  `branding.md` §6.1 variant A and traced by the human. Masters and provenance
+  are in `brand/source/` (`PROVENANCE.md`), and the exports in `brand/out/`.
+  The human approved the icons and the colour treatment.
+- **Wordmark font: Outfit SemiBold (600)**, chosen from the Outfit, Sora and
+  Manrope shortlist. The wordmark ships as SVG paths, so it doesn't load the
+  font. `11` chooses the UI typeface separately and may or may not pick Outfit.
+- **Similarity check:** Google Lens and TinEye found no matches. The Canadian
+  Trademarks Database search (design mark and the word `fanwire`) is still
+  open in `TODO/05-branding-assets.md`.
+- "No wordmark and no icon yet" (2026-10-02) stops being true for the **site**
+  only when the placement unit lands the files under `frontend/`. Until then the
+  UI still shows the plain-text name.

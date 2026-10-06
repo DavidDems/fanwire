@@ -1,5 +1,10 @@
 # 12 — Branding research: colour, mark and how to make them
 
+> **Done 2026-10-05.** `wiki/CodeContext/FrontendUI/branding.md` holds the research and how-to.
+> The human chose a wire-`f` symbol plus a typeset wordmark, and kept the palette with
+> `--color-accent-on-dark` `#279ab1` added (`decisions.md`, 2026-10-05). The assets are
+> `TODO/05-branding-assets.md`. Re-run only to revisit the direction.
+
 **Objective:** research and recommend fanwire's branding (colour and visual
 identity), then tell the human exactly how to produce the assets, free of
 charge. **Scope is strictly colour and branding**: the palette, a wordmark, a
