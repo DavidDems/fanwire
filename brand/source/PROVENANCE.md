@@ -13,7 +13,7 @@ and AI contributions matters.
 | Prompt | Variant A from `branding.md` §6.1, verbatim (below) |
 | Raw output | `symbol-chatgpt.png`, 1254×1254 PNG, unedited |
 | Vectorised | By the repository owner in Inkscape 1.4.4: Trace Bitmap, single scan, brightness cutoff. The result is `symbol-f.svg` |
-| Similarity check | 2026-10-05, by the repository owner: Google Lens and TinEye returned no matches. Not yet done: a design-mark search in the Canadian Trademarks Database (`TODO/05-branding-assets.md`) |
+| Similarity check | By the repository owner. **2026-10-05:** Google Lens and TinEye returned no matches. **By 2026-10-06:** the Canadian Trademarks Database (https://ised-isde.canada.ca/cipo/trademark-search/srch) returned nothing for the word `fanwire`. A review of the design marks built on an `f` found none using a plug, and nothing similar to the symbol |
 
 The prompt:
 

@@ -66,5 +66,12 @@ and a self-declared DOB is not age verification.
 - **Name styling (2026-10-02):** `fanwire` is always lowercase. That applies to
   the name only: other copy uses sentence case. There is no wordmark or icon yet.
 
-All three are recorded, with the measured contrast table, in
+- **Brand (2026-10-05, `Prompts/12`):** a wire-`f` symbol plus a typeset
+  wordmark in Outfit SemiBold (600). The palette is kept, with
+  `--color-accent-on-dark` `#279ab1` added (the sea-green alternative was
+  declined). The jurisdiction for rights questions is Canada. The assets are on
+  `main` under `brand/`, and the trademark-database check found nothing similar
+  (2026-10-06).
+
+All of these are recorded, with the measured contrast table, in
 `wiki/CodeContext/FrontendUI/decisions.md`.

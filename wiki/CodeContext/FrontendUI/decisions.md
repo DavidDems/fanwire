@@ -138,3 +138,13 @@ script (`branding.md` §9). It is left as written, and the correct figures are:
 - "No wordmark and no icon yet" (2026-10-02) stops being true for the **site**
   only when the placement unit lands the files under `frontend/`. Until then the
   UI still shows the plain-text name.
+
+## Similarity check — closed 2026-10-06
+
+The human searched the Canadian Trademarks Database. The word `fanwire` returned
+nothing, and among the design marks built on an `f`, none uses a plug and none is
+similar to the symbol. With the Google Lens and TinEye results of 2026-10-05,
+every check in `branding.md` §10 is done, so `TODO/05-branding-assets.md` is
+deleted. The record is in `brand/source/PROVENANCE.md`. This is a clearance
+search, not legal advice: a registration filing would still go through a
+trademark agent.

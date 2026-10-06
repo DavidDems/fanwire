@@ -15,13 +15,11 @@ This folder is written for you.
 | [`02-deployment-requirements.md`](02-deployment-requirements.md) | SES production access (refused 2026-10-03, email turned off by PR #86), and what to watch on the next deploys (§2). The deploy path itself is finished | No |
 | [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on. Today that's one: which browser tool sessions may drive | No. Without an answer, browser verification is reported as not done. Answered decisions are in `wiki/GeneralContext/Architecture/human-decisions.md` |
 | [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
-| [`05-branding-assets.md`](05-branding-assets.md) | Brand assets (added 2026-10-05). Made and approved, in PR #92. One check left: search the Canadian Trademarks Database for the name and the symbol | No, but do it before PR #92 merges |
 
-**Status as of 2026-10-02.** `01` is **deleted** — every item in it was
+**Status as of 2026-10-06.** `05` (brand assets, added 2026-10-05) is **deleted**: the assets are on `main` under `brand/`, and the last check, a Canadian Trademarks Database search, found nothing similar (`brand/source/PROVENANCE.md`). `01` is **deleted** — every item in it was
 completed, and its durable content now lives at
 `wiki/GeneralContext/Architecture/github-automation-setup.md`. The site is
-live, `cfn-exec-role` is scoped and the NAT AMI is pinned (both 2026-10-02), and `02` now holds only SES
-production access; what
+live, `cfn-exec-role` is scoped and the NAT AMI is pinned (both 2026-10-02), and `02` holds SES production access (refused; email is off on purpose) and what to watch on the next deploys; what
 each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
 ("Post-deploy checks, 2026-09-30"). `03` holds one open question, which
 browser tool sessions may drive; its answered decisions moved to

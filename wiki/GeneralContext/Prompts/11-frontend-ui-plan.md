@@ -27,9 +27,10 @@ settled:
 - **Teal is the Charlotte Hornets' teal** (ΔE 1.4). Keep it to buttons, badges
   and links, never large surfaces, or the app reads as one team's.
 - **The mark exists:** a Pale Sky wire `f` on a Jet Black tile, plus a typeset
-  lowercase wordmark. The files are under `brand/` at the repo root (masters in
-  `brand/source/`, exports in `brand/out/`) once the human approves them.
-  `branding.md` §8 lists where each one goes.
+  lowercase wordmark in **Outfit SemiBold (600)**. The files are on `main`
+  under `brand/` at the repo root: masters and `PROVENANCE.md` in
+  `brand/source/`, exports in `brand/out/` (approved 2026-10-05). `branding.md`
+  §8 lists where each one goes. Nothing is under `frontend/` yet.
 
 ## Investigate before deciding
 
@@ -91,8 +92,8 @@ runner-up and why it lost, in a sentence or two. Do not produce a survey.
    MLB).
 4. **Typeface.** Pick the UI typeface, or deliberately keep the system stack.
    Cover licence, self-hosting, weights, file size, and how lowercase `fanwire`
-   looks in it. The wordmark's lettering is `12`'s, chosen from Outfit, Sora and
-   Manrope (`decisions.md` records which). Using the same family for the UI
+   looks in it. The wordmark's lettering is `12`'s: Outfit SemiBold (600)
+   (`decisions.md`, 2026-10-05). Using the same family for the UI
    means one self-hosted font instead of two. Weigh that, but don't let it
    decide: body-text legibility comes first. The wordmark ships as SVG paths
    either way, so it never needs the font loaded.
@@ -126,7 +127,11 @@ runner-up and why it lost, in a sentence or two. Do not produce a survey.
     exports from `brand/out/` into `frontend/public/` and the wordmarks into
     `frontend/src/assets/brand/`, add the `<link rel="icon">`,
     apple-touch-icon and Open Graph tags to `index.html`, and add a web app
-    manifest (`branding.md` §8). Its acceptance criteria can be file-level (the
+    manifest (`branding.md` §8). `og:image` must be an **absolute** URL
+    (`https://fanwire.daviddems.com/og-image.png`), because crawlers don't
+    resolve relative ones. Use the favicon files as they are: `favicon.svg`
+    and `.ico` are a deliberately bolder small-size cut (`branding.md` §7.2),
+    not a copy of the 512 tile. Its acceptance criteria can be file-level (the
     files exist at the right size; `index.html` references each one), so it can
     fail first. **Do not create `.ai/tasks/` specs:** writing them is the next
     prompt's job, after the human approves this plan.
@@ -166,12 +171,12 @@ Also update:
 
 - Any change under `frontend/`, including a dependency install. A throwaway
   spike to check a claim is fine; do not commit it.
-- Colour and brand research, logo and icon: that is `12`, and it has run. Build
-  on its accepted decisions in `decisions.md`. A palette change is still the
-  human's call: propose it at the checkpoint, don't make it. If the brand files
-  aren't on `main` yet (`TODO/05-branding-assets.md` still exists), plan the
-  shell around them anyway, with the plain-text name as the fallback until the
-  placement unit lands.
+- Colour and brand research, logo and icon: that is `12`, and it is finished.
+  The assets are made. Build on its accepted decisions in `decisions.md`. A
+  palette change is still the human's call: propose it at the checkpoint, don't
+  make it. Until the placement unit lands, the running UI still shows the
+  plain-text name, so plan the shell for the symbol and wordmark, with the
+  plain-text name only as the interim.
 - `.ai/tasks/` specs.
 
 One PR, on a human-named branch. Merge nothing.

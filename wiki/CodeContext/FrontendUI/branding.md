@@ -118,7 +118,7 @@ The alternative considered was shifting the accent to sea green `#077e6a`
 
 ### 3.2 Wordmark lettering
 
-The shortlist is **Outfit, Sora or Manrope**. Each is in `google/fonts` under
+**Chosen 2026-10-05: Outfit SemiBold (600)** (`decisions.md`). The shortlist was **Outfit, Sora or Manrope**. Each is in `google/fonts` under
 `ofl/` with an OFL licence file (checked 2026-10-05, e.g.
 https://raw.githubusercontent.com/google/fonts/main/ofl/outfit/OFL.txt). Type
 `fanwire` into each one's preview on https://fonts.google.com and pick the one
@@ -559,8 +559,8 @@ against pure green gives ΔE2000 86.6, matching published reference values.
      marks by **Vienna code**. Codes for the letter "f" and for wires or cables
      narrow it to figurative marks
      (https://ised-isde.canada.ca/site/canadian-intellectual-property-office/en/trademarks/additional-search-options).
-     Search the word **`fanwire`** too. Clearing the name was out of this
-     session's scope and hasn't been done.
+     Search the word **`fanwire`** too. Done for fanwire's own mark by
+     2026-10-06, with nothing similar found (`brand/source/PROVENANCE.md`).
   3. Compare by eye with the obvious single-letter marks: Facebook, Flipboard,
      Tumblr.
   4. If anything is close, iterate (§6.1) rather than tweak. A small tweak to a
