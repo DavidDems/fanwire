@@ -1,0 +1,87 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0.125rem;
+}
+
+.button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+/* Liked / followed: the icon is filled; the label already says Unlike. */
+.button[data-active] svg {
+  fill: currentColor;
+}
+
+.primary {
+  background-color: var(--color-action);
+  border-color: var(--color-action);
+  color: var(--color-on-action);
+}
+
+.primary:hover:not(:disabled),
+.primary:active:not(:disabled) {
+  background-color: var(--color-action-hover);
+  border-color: var(--color-action-hover);
+}
+
+.secondary {
+  background-color: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.ghost {
+  background-color: transparent;
+  color: var(--color-text-muted);
+}
+
+.secondary:hover:not(:disabled),
+.secondary:active:not(:disabled),
+.ghost:hover:not(:disabled),
+.ghost:active:not(:disabled) {
+  background-color: var(--color-surface-muted);
+}
+
+.ghost:hover:not(:disabled),
+.ghost:active:not(:disabled) {
+  color: var(--color-text);
+}
+
+.md {
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-md);
+}
+
+/* 32 px tall and at least as wide, so the hit area clears 24 × 24 (WCAG 2.5.8). */
+.sm {
+  min-height: 2rem;
+  min-width: 2rem;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+/* Icons are 16 px in small buttons (components.md §2). */
+.sm svg {
+  width: 1rem;
+  height: 1rem;
+}
