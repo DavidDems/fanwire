@@ -16,6 +16,14 @@ through this repo's own Vitest 3.2 config:
 | Do media queries, layout, focus rings or hover apply? | **No.** jsdom has no layout engine |
 | Do CSS and SVG imports typecheck? | **Yes.** `tsc -b` passes with no `vite-env.d.ts`; `vitest/globals` pulls in Vite's client types |
 
+**Re-measured on Vitest 4 (2026-10-06, after `#96` upgraded it).** A CSS
+Module import is now a proxy: `styles.primary` is `_primary_<hash>`, but so is
+`styles.doesNotExist`, which returns `_doesNotExist_<hash>` for a class no
+rule defines. So `toHaveClass(styles.x)` proves the component *applies* the
+name `x`. It doesn't prove `.x` exists in the CSS. Pair every class assertion
+with a static read of the `.module.css` file that the rule is there
+(`src/test/module-css.ts` has the readers).
+
 `vite.config.ts` is forbidden to workers, so `test.css` stays off. Don't try to
 make jsdom compute styles: it can't do layout even if CSS were processed.
 
@@ -40,15 +48,23 @@ the strongest checks available, because they test the CSS itself.
   minimum, **unrounded**, in both themes (A1). Assert no banned pair from §6
   (A4). Assert every semantic token has a dark value (A18). Mutation check: set
   `--color-link` dark to `#1f7a8c`, and the test must fail.
-- **No raw values in modules (every unit).** For every `*.module.css` under the
-  unit's folder: no `#hex`, `rgb(`, `hsl(` or named colour; no `px` font sizes;
+- **Tree scans see test files too.** `src/styles/base.test.ts` (no
+  `@keyframes` anywhere), `test/env-usage.test.ts` and
+  `auth/sdk-isolation.test.ts` read **every** file under `src/`, test files
+  included. A test that writes the forbidden text literally, even in a regex,
+  a comment or a test name, fails the scan. Assemble needles from fragments
+  (`["@", "key", "frames"].join("")`), as those three files do. This broke
+  `UI-002`'s PR once `UI-001` merged.
+- **No raw values in modules (every unit).** Reuse `moduleCssViolations` from
+  `src/test/module-css.ts` (`UI-003`) instead of writing another scanner. For
+  every `*.module.css` under the unit's folder: no `#hex`, `rgb(`, `hsl(` or named colour; no `px` font sizes;
   no `outline: none` / `outline: 0` without a `:focus-visible` rule in the same
   file (A2, A3, A9).
 - **Reduced motion (`UI-001`).** `base.css` contains a `prefers-reduced-motion`
   block setting both duration tokens to `0ms`, and no `@keyframes` exists
   anywhere in `src/` (A8).
-- **Brand files (`UI-002`).** Files exist under `frontend/public/` and
-  `frontend/src/assets/brand/`. Each PNG's IHDR width and height (bytes 16–23)
+- **Brand files (`D1`, `UI-003`).** Files exist under `frontend/public/` (`D1`) and
+  `frontend/src/assets/brand/` (`UI-003`). Each PNG's IHDR width and height (bytes 16–23)
   match `branding.md` §8. `manifest.webmanifest` parses as JSON with
   `name: "fanwire"` and the three icons with their `purpose`. **The container
   has no `brand/` folder** (`docker/frontend.Dockerfile` copies `frontend/`
@@ -66,7 +82,11 @@ the strongest checks available, because they test the CSS itself.
 The existing kind of test, now also covering what styling adds to the DOM:
 
 - roles, landmarks and names: one `main`, one `banner`, one `navigation`
-  "Primary"; the brand link named `fanwire`; the skip link first in the tab
+  "Primary". **Testing Library gives every `<header>` the banner role**,
+  including the ones inside `ProfileSummary` and `PostNode`, so
+  `getByRole("banner")` throws on a profile or feed page. Count only headers
+  outside `main`/`article`/`section`, as `routes/AppLayout.test.tsx` does, or
+  scope with `within(...)`; the brand link named `fanwire`; the skip link first in the tab
   order and moving focus to `main` (A11–A13);
 - attributes that carry state: `aria-current="page"` on the current nav link,
   `aria-expanded` on Show replies, `data-active` on Unlike/Unfollow,
@@ -80,7 +100,8 @@ The existing kind of test, now also covering what styling adds to the DOM:
 
 Assert a class only through the module's own export, never a literal:
 `expect(button).toHaveClass(buttonStyles.primary)`. Use it for a mapping that
-is itself the contract (`variant="primary"` → the primary class). **Don't use
+is itself the contract (`variant="primary"` → the primary class), and pair it
+with the static check §1 requires. **Don't use
 it as a proxy for "it looks right"**: a test that a card has `styles.card`
 passes on an empty `.card {}` rule.
 

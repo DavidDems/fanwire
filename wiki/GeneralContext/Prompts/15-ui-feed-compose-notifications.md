@@ -39,6 +39,34 @@ for each other to merge.
 - **"3 likes" stays one text node** (`FeedPage.test.tsx` matches it exactly).
 - `feed-isolation.test.ts` bans a branch on who the reader is. Styling must not
   introduce a guest/member visual branch.
+- **Read `FrontendUI/components.md` §2 "As built"** for the exact props of
+  every `src/components/ui/` export. `InlineAlert` and `StatusLine` take no
+  `id` or `className`: if a field needs one for `aria-describedby`, stop and
+  report it, because `src/components/ui/**` is forbidden to these units.
+- **A class assertion alone proves nothing on Vitest 4.** `styles.anything`
+  returns a hashed name even for a class that doesn't exist
+  (`verification.md` §1). Pair `toHaveClass(styles.x)` with a static read of
+  the `.module.css` file, and reuse `moduleCssViolations` and the readers in
+  `src/test/module-css.ts` for the no-raw-values check rather than writing a
+  new scanner.
+- **Never write the forbidden text of a tree scan literally in a test**: the
+  keyframes at-rule, the env read, the Cognito package name. Those scans read
+  test files too. Build the needle from fragments.
+- **`getByRole("banner")` finds every `<header>`**, including the shell's and
+  any in a card. Scope with `within(...)`.
+- `src/test/app-route.tsx`'s `renderAppAt(path, visitor)` renders the real
+  route table inside the shell, for anonymous, member and newcomer visitors.
+- `npx prettier --check src` already fails on about 100 untouched files on
+  `main`. It isn't a gate; check only the files the unit writes.
+- **Three siblings.** `UI-005`, `UI-006` and `UI-007` are cut from the same
+  `origin/main`. Before handing them over, merge all open ones into a throwaway
+  worktree and run the frontend container on the combination
+  (`00-session-protocol.md`). That is exactly the check that would have caught
+  `UI-002`'s failure against `UI-001`. Give the human a merge order, and tell
+  them each later PR needs "Update branch" and fresh checks.
+- `UI-005`: `GameScore` already implements the `components.md` §4 mapping and
+  is tested in `components/ui/GameScore.test.tsx`. Feed tests assert the
+  decorator's use of it, and don't repeat the table.
 
 ## Verify
 

@@ -4,7 +4,7 @@
 the shared components. It replaces `06-frontend-007-search.md`, which predates
 the styling plan.
 
-**Preconditions: `UI-002` and `UI-003` are on `main`**, and `FRONTEND-005`
+**Preconditions: `UI-002` and `UI-003` are on `main`** (`#99` merged 2026-10-06; `UI-003` is `#100`), and `FRONTEND-005`
 (feed) is too, which it already is. Check with `git fetch` and
 `git log origin/main --oneline`, and stop if either is missing. `UI-003` and
 this unit both write `src/routes/**`, so they never run concurrently.
@@ -39,6 +39,31 @@ fresh.
 - The free-text bar appears on both `/` and `/search` (a criterion), so
   coordinate with the feed page through `routes/`, not by editing
   `features/feed/**`.
+- **`routes/AppLayout.tsx` is the shell since `UI-003`:** skip link, brand
+  header, one Primary nav moved by CSS, and Sign in for anonymous visitors.
+  `routes/AppLayout.test.tsx` and `routes/shell-css.test.ts` pin it. If the bar
+  on `/` belongs in the shell, it must not add a second `nav`, `main` or
+  `banner` (A12), and every `*.module.css` under `src/routes/` stays under the
+  no-raw-values scan.
+- **Read `FrontendUI/components.md` §2 "As built"** for the exact props of
+  every `src/components/ui/` export. `InlineAlert` and `StatusLine` take no
+  `id` or `className`: if a field needs one for `aria-describedby`, stop and
+  report it, because `src/components/ui/**` is forbidden to these units.
+- **A class assertion alone proves nothing on Vitest 4.** `styles.anything`
+  returns a hashed name even for a class that doesn't exist
+  (`verification.md` §1). Pair `toHaveClass(styles.x)` with a static read of
+  the `.module.css` file, and reuse `moduleCssViolations` and the readers in
+  `src/test/module-css.ts` for the no-raw-values check rather than writing a
+  new scanner.
+- **Never write the forbidden text of a tree scan literally in a test**: the
+  keyframes at-rule, the env read, the Cognito package name. Those scans read
+  test files too. Build the needle from fragments.
+- **`getByRole("banner")` finds every `<header>`**, including the shell's and
+  any in a card. Scope with `within(...)`.
+- `src/test/app-route.tsx`'s `renderAppAt(path, visitor)` renders the real
+  route table inside the shell, for anonymous, member and newcomer visitors.
+- `npx prettier --check src` already fails on about 100 untouched files on
+  `main`. It isn't a gate; check only the files the unit writes.
 
 ## Verify
 

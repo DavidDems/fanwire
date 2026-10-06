@@ -1,5 +1,12 @@
 # 13 — Styling pass, part 1: brand files, tokens, components, shell
 
+> **Done (2026-10-06).** D1 `#97`, UI-001 `#98` and UI-002 `#99` are merged
+> and deployed, and UI-003 is `#100`. Lessons from the run are now in
+> `00-session-protocol.md` (guard per role from the worktree; test sibling PRs
+> together; "Update branch") and `FrontendUI/verification.md` (the Vitest 4
+> CSS Module proxy; tree scans read test files; the banner role on every
+> `<header>`). Kept as the record of what was asked.
+
 **Objective:** lay the foundation of the frontend styling pass planned in
 `wiki/CodeContext/FrontendUI/`. Four PRs, in this order: the Director PR `D1`,
 then the worker tasks `UI-001`, `UI-002` and `UI-003`. Parts 2–4

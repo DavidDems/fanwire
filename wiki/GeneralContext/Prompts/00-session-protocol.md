@@ -45,7 +45,26 @@ reuses a tagged image, so rebuild explicitly when the branch changed:
 
 Run the guard over your real diff before pushing — `.ai/docs/permissions.md` and
 `agentlib.guard.check_diff(paths, role, spec, policy)`. It has caught a live
-defect that CI would not have.
+defect that CI would not have. From the unit's worktree, per commit and role:
+`python .ai/bin/agentctl.py guard check <TASK> --role test_agent --base origin/main --head <test commit>`,
+then `--role code_agent` over the implementation commit and
+`--role context_maintainer` over a wiki commit. **Run the worktree's own
+`agentctl.py`:** the main checkout's copy diffs the main checkout's HEAD,
+whatever branch that is, and reports another branch's files as violations.
+
+**Sibling PRs: test the combination, not only each one.** When two or more
+units are cut from the same `origin/main` and open at once, merge them into a
+throwaway worktree (`git worktree add --detach … origin/main`, then
+`git merge` each branch) and run the frontend container there before handing
+them over. Building isn't enough. Several tests scan the whole `src/` tree from
+disk (`styles/base.test.ts`, `test/env-usage.test.ts`,
+`auth/sdk-isolation.test.ts`), so one PR's test file can fail another PR's
+scan. That happened to `UI-002` once `UI-001` merged (`13`).
+
+**`main` requires branches to be up to date** (the ruleset's strict status
+checks). After one sibling merges, the human must click "Update branch" on the
+next one and wait for `gate` and `guard-gate` to pass again. Tell them so with
+the merge order.
 
 ## Take objections seriously, and confirm them
 
