@@ -27,6 +27,7 @@ What is real:
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the live-score decorator, the optimistic like and the media |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts` and `feed.ts` (the per-unit network fixtures) |
+| `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
 Search is `FRONTEND-007`, sequenced in `TODO/04-first-deploy.md`. Each unit
 lifts its view out of `views.tsx` — they were in one file so that units did not
