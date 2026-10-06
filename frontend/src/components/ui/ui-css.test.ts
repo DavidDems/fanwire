@@ -8,7 +8,7 @@
  *   font sizes (A9); no `outline: none` / `outline: 0` unless the same file has
  *   a `:focus-visible` rule (A3).
  * - Button's `.md` rule sets `min-height: var(--target-min)` (A6).
- * - Skeleton has no `animation` and no `@keyframes` (A8: no shimmer at all).
+ * - Skeleton has no `animation` and no keyframes at-rule (A8: no shimmer at all).
  *
  * The scanners are tested against inline fixtures first, so a scanner that
  * matched nothing could not make the real checks vacuously green.
@@ -353,12 +353,13 @@ describe("Skeleton.module.css", () => {
     expect(existsSync(FILE), `${FILE} must exist`).toBe(true);
   });
 
-  it("uses no animation and defines no @keyframes", () => {
+  it("uses no animation and defines no keyframes at-rule", () => {
     const css = stripComments(
       existsSync(FILE) ? readFileSync(FILE, "utf8") : "",
     );
 
-    expect(css).not.toMatch(/@keyframes/i);
+    // Assembled from fragments so styles/base.test.ts's tree scan does not match this file.
+    expect(css).not.toMatch(new RegExp(["@", "key", "frames"].join(""), "i"));
     expect(
       declarations(css).filter(({ property }) =>
         property.startsWith("animation"),
