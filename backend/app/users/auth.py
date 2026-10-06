@@ -6,10 +6,10 @@ Cognito. See wiki/CodeContext/Modules/0x01-users.md Security section:
 "All writes ... require a Cognito token verified server-side on every
 request ... never trusted based on client claims alone."
 
-Cognito issues RS256 (RSA)-signed JWTs; this module never exercises the
-ECDSA signing/verification path (see wiki/CodeContext/Modules/0x01-users.md
-Security section on the `PYSEC-2026-1325`/`ecdsa` pip-audit ignore — that
-reasoning holds as long as nothing here uses EC keys).
+Cognito issues RS256 (RSA)-signed JWTs, verified with PyJWT. python-jose
+was replaced on 2026-10-06: CVE-2026-85394 (an HS256 token forged with the
+public key as its HMAC secret) has no fixed release. `algorithms=["RS256"]`
+is what closes that attack class, and tests/users/test_auth.py pins it.
 """
 
 from __future__ import annotations
@@ -18,8 +18,7 @@ import abc
 from dataclasses import dataclass
 from typing import Any
 
-from jose import jwt
-from jose.exceptions import JOSEError
+import jwt
 
 from app.users.jwks import JWKSProvider
 
@@ -71,35 +70,39 @@ class CognitoTokenVerifier(TokenVerifier):
             claims = jwt.decode(
                 token,
                 key,
+                # Never widen this list: an HS* entry here is exactly the
+                # CVE-2026-85394 forgery (the public key used as an HMAC secret).
                 algorithms=["RS256"],
                 audience=self._audience,
                 issuer=self._issuer,
+                # Every Cognito ID token carries all five. Without `require`,
+                # a validly signed token with no `exp` would never expire.
+                options={"require": ["exp", "iat", "sub", "iss", "aud"]},
             )
-        except JOSEError as exc:
+        except jwt.PyJWTError as exc:
             raise InvalidTokenError(str(exc)) from exc
 
-        # jose's own audience check (jose.jwt._validate_aud, installed
-        # python-jose 3.5.0) returns immediately, with no error, when
-        # "aud" is absent from the claims — so `audience=` above never
-        # rejects an audience-less token. Cognito *access* tokens carry
-        # `client_id`, not `aud`, so without this explicit check an access
-        # token for this pool would otherwise pass verification. The SPA
-        # only ever sends ID tokens (wiki/GeneralContext/Architecture/
-        # dev-auth-setup.md "Contract notes"), which always carry both
-        # `token_use: "id"` and `aud`.
+        # Cognito *access* tokens carry `client_id`, not `aud`, and are signed
+        # by the same pool. `require` above already rejects a token with no
+        # `aud`, but this check states the rule itself, independent of the
+        # library — which is how python-jose's silent skip of a missing `aud`
+        # was caught. The SPA only ever sends ID tokens (wiki/GeneralContext/
+        # Architecture/dev-auth-setup.md "Contract notes"), which always carry
+        # both `token_use: "id"` and `aud`.
         if claims.get("token_use") != "id" or "aud" not in claims:
             raise InvalidTokenError("token is not a Cognito ID token")
 
         return VerifiedIdentity(sub=claims["sub"], email=claims.get("email"))
 
-    def _matching_key(self, token: str) -> dict[str, Any]:
-        # jwt.get_unverified_header itself raises JOSEError on a malformed
-        # token — let that propagate to the except clause in verify().
+    def _matching_key(self, token: str) -> Any:
+        # jwt.get_unverified_header (a malformed token) and PyJWK (a JWK it
+        # can't use) both raise PyJWTError subclasses — let them propagate to
+        # the except clause in verify().
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
         for key in self._jwks.get("keys", []):
             if key.get("kid") == kid:
-                return key
+                return jwt.PyJWK(key, algorithm="RS256").key
         raise InvalidTokenError(f"no matching JWK for kid={kid!r}")
 
 
@@ -126,7 +129,7 @@ class FakeTokenVerifier(TokenVerifier):
     """Test double for later phases/route tests. Constructed with a preset
     VerifiedIdentity (returned regardless of the token argument) or with
     None, in which case every verify() call raises InvalidTokenError —
-    never exercises jose or any real key material."""
+    never exercises PyJWT or any real key material."""
 
     def __init__(self, identity: VerifiedIdentity | None) -> None:
         self._identity = identity

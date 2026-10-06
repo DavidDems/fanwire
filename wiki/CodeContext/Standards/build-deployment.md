@@ -24,7 +24,7 @@ Runtime (ships in the Lambda image):
 | `mangum` | wraps FastAPI to run on Lambda unmodified |
 | `boto3` | S3, DynamoDB, EventBridge, Secrets Manager, SES, SNS clients |
 | `aws-lambda-powertools` | structured JSON logging to stdout (observability requirement in [[wiki/CodeContext/Standards/design-principles|Design principles]]), plus its **Idempotency** utility — this *is* the DynamoDB idempotency-key mechanism [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] specifies for the ingestion pipeline, not a hand-rolled table check |
-| `python-jose[cryptography]` | verifies Cognito-issued JWTs server-side on every request — [[wiki/CodeContext/Standards/security|Security]] requires this never be trusted from client claims alone |
+| `PyJWT[crypto]` | verifies Cognito-issued JWTs server-side on every request (replaced `python-jose` on 2026-10-06: CVE-2026-85394, no fixed release) — [[wiki/CodeContext/Standards/security|Security]] requires this never be trusted from client claims alone |
 | `pillow` | media pipeline: real file-type verification, EXIF strip, thumbnail generation |
 | `python-multipart` | FastAPI multipart/form-data parsing for uploads |
 | `email-validator` | backs Pydantic's `EmailStr` for registration |

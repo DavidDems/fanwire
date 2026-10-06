@@ -203,13 +203,10 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Audit for known CVEs (blocks on any unignored finding)
         working-directory: backend
-        # PYSEC-2026-1325 (ecdsa, pulled in transitively by python-jose): a
-        # pure-Python timing side-channel with no fix version available
-        # upstream. Accepted risk - see wiki/CodeContext/Modules/0x01-users.md
-        # Cognito JWT verification only uses RS256 (RSA), never the ECDSA
-        # signing path this advisory concerns. Re-check this ignore next time
-        # dependencies are bumped.
-        run: pip-audit --ignore-vuln PYSEC-2026-1325
+        # No ignores. The one there was (PYSEC-2026-1325, ecdsa) went with
+        # python-jose, which pulled ecdsa in; JWT verification is PyJWT since
+        # 2026-10-06 (wiki/CodeContext/Modules/0x01-users.md).
+        run: pip-audit
 
   # `backend/openapi.json` is the committed frontend/backend contract, and
   # `frontend/src/api/schema.d.ts` is the TypeScript generated from it. Either
