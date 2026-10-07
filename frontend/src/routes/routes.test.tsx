@@ -32,9 +32,16 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
-import { FakeAuthService, profileFound, profileMissing, teamsAre, testSession } from "../test/auth";
+import {
+  FakeAuthService,
+  profileFound,
+  profileMissing,
+  teamsAre,
+  testSession,
+} from "../test/auth";
 import { emptyFeed } from "../test/feed";
 import { notificationsAre, preferenceIs } from "../test/notifications";
+import { gameFiltersAre } from "../test/search";
 import { server } from "../test/server";
 import { publicProfilesById, usernameForId } from "../test/users";
 import { routes } from "./routes";
@@ -60,7 +67,11 @@ const VIEWS: View[] = [
   { path: "/search", heading: /^search$/i, as: "anonymous" },
   // FRONTEND-003 replaced the placeholder with the real page, whose heading is
   // the viewed user's username. The route stays public and stays anonymous here.
-  { path: "/profile/42", heading: new RegExp(`^${usernameForId(42)}$`, "i"), as: "anonymous" },
+  {
+    path: "/profile/42",
+    heading: new RegExp(`^${usernameForId(42)}$`, "i"),
+    as: "anonymous",
+  },
   { path: "/sign-in", heading: /^sign\s*-?\s*in$/i, as: "anonymous" },
   { path: "/sign-up", heading: /^sign\s*-?\s*up$/i, as: "anonymous" },
   { path: "/confirm", heading: /^confirm/i, as: "anonymous" },
@@ -97,6 +108,10 @@ function arrange(as: Visitor): AuthService {
   // the same reason. Nothing here asserts on either: an empty list and a
   // default preference are the quietest responses that let the heading render.
   server.use(notificationsAre([]), preferenceIs(true));
+  // `/search` is FRONTEND-007's page, and its sports-data filter reads its
+  // seasons and positions on mount (its teams are `teamsAre()` above). Same
+  // reason again: answered for every visitor, asserted on nowhere here.
+  server.use(gameFiltersAre());
   if (as === "anonymous") return new FakeAuthService();
 
   server.use(as === "member" ? profileFound() : profileMissing());
@@ -132,7 +147,9 @@ describe("the route table", () => {
   it.each(VIEWS)("renders a view at $path for a $as visitor", async (view) => {
     renderView(view);
 
-    expect(await screen.findByRole("heading", { name: view.heading })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: view.heading }),
+    ).toBeInTheDocument();
   });
 
   it("fetches the user id in the /profile/:userId segment, not a fixed one", async () => {
@@ -143,7 +160,9 @@ describe("the route table", () => {
       renderAt(`/profile/${userId}`, arrange("anonymous"));
 
       expect(
-        await screen.findByRole("heading", { name: new RegExp(`^${usernameForId(userId)}$`, "i") }),
+        await screen.findByRole("heading", {
+          name: new RegExp(`^${usernameForId(userId)}$`, "i"),
+        }),
         `/profile/${userId} must show the profile of user ${userId}`,
       ).toBeInTheDocument();
       cleanup();
@@ -202,14 +221,20 @@ describe("the guards are wired into the table, not just written", () => {
   it("sends a visitor who already has a profile away from profile creation", async () => {
     renderAt("/create-profile", arrange("member"));
 
-    expect(await screen.findByRole("heading", { name: /^feed$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /^create your profile$/i })).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: /^feed$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /^create your profile$/i }),
+    ).toBeNull();
   });
 
   it("leaves the public routes public", async () => {
     // The guest feed and public profiles are read paths by decision
     // ([[0x01-users]] Security). A guard on either of these is a regression.
-    const publicViews = VIEWS.filter((view) => view.as === "anonymous" && view.path !== "/sign-in");
+    const publicViews = VIEWS.filter(
+      (view) => view.as === "anonymous" && view.path !== "/sign-in",
+    );
 
     for (const view of publicViews) {
       renderAt(view.path, arrange("anonymous"));
