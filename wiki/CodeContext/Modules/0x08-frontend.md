@@ -8,8 +8,8 @@ what the frontend does with them, and nothing that belongs to a backend module.
 ## State
 
 **Foundation, authentication, the profile page, the composer, the notifications
-view and the feed** (`FRONTEND-001` … `FRONTEND-006`). Search is the last
-placeholder.
+view, the feed and search** (`FRONTEND-001` … `FRONTEND-007`). No placeholder
+view is left.
 
 What is real:
 
@@ -20,18 +20,19 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `views.tsx` (the one remaining placeholder, plus the catch-all) |
+| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
+| `src/features/search/` | `/search` — the free-text bar, the Accounts and Posts sections paged apart, and the dropdown-only game filter |
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the live-score decorator, the optimistic like and the media |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts` and `feed.ts` (the per-unit network fixtures) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts` and `search.ts` (the per-unit network fixtures) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
-Search is `FRONTEND-007`, sequenced in `TODO/04-first-deploy.md`. Each unit
-lifts its view out of `views.tsx` — they were in one file so that units did not
-contend over the route table, and only `SearchView` is left.
+Each unit lifted its view out of `views.tsx` — they were in one file so that
+units did not contend over the route table. `FRONTEND-007` lifted the last one,
+`SearchView`; only the catch-all `NotFoundView` remains there.
 
 ## Look and feel
 
@@ -599,10 +600,71 @@ would have produced a "shared" module with one caller while the duplicate stayed
 **Whoever next has both trees in scope should extract it**; it is small, and it
 is recorded so the second copy is a known state rather than a discovery.
 
+## Search (`FRONTEND-007`)
+
+`src/features/search/`, wired at `/search`, and its bar on `/` too. **Public**,
+like the feed: every search route is a read path ([[0x07-search]]).
+
+- **Two mechanisms, two UIs, nothing shared.** [[0x07-search]] keeps
+  free-text search (accounts, posts) and sports-data filtering (games) apart
+  by business rule, so `SearchBar`/`SearchPage` and `GameFilter` share no
+  component and no state.
+- **There is no text input in the game filter, of any kind.** Season, team
+  and position are native `<select>`s. A type-ahead box over the team list
+  *is* a text input, so `GameFilter.test.tsx` asserts no `textbox` or
+  `searchbox` role, that every `combobox` is a `SELECT`, and no `input`,
+  `textarea` or `contenteditable` in the region. Don't add "a small filter
+  box" to the team list.
+- **The address is the seam between the two entry points.** The bar on `/`
+  and on `/search` both submit to `/search?q=<trimmed text>`; `SearchPage`
+  reads `q` from there, so both reach the same results view and a search is a
+  link. An empty or whitespace-only submit goes nowhere (the route 422s on an
+  empty `q`). The bar's input is `maxLength` 100, the route's own cap.
+- **The home page is a route-level composition.** `routes/HomeView.tsx`
+  renders `SearchBar` above `FeedPage`: `features/feed/**` was forbidden to
+  this unit, and neither feature imports the other. The feed's `h1` stays the
+  page's only one.
+- **Accounts and posts page apart.** Two `useInfiniteQuery`s, each fed its own
+  `next_offset` straight through; loading more of one never refetches the
+  other (pinned with result sets of different lengths). Accounts render above
+  posts.
+- **Post results are `PostNode`s, and are cached under the feed's key root**
+  (`["feed", "search", q]`). `LikeButton` patches a like optimistically into
+  every entry under `FEED_KEY_ROOT` that holds the post, and `PostsPage`'s
+  `{ items }` page shape is one `cacheHolds`/`mapCachedPosts` already walk.
+  Keyed anywhere else, a like on a search result would not move until the
+  server answered. The flip side: anything that later invalidates the whole
+  `["feed"]` prefix also refetches open search results. `features/search`
+  imports `PostNode` and `feed/api` only, enforced from disk by
+  `search-isolation.test.ts`.
+- **Game rows are `GameScore` `row`s with status `FT`.** `GameOut` has no
+  status column and search reads historical games, so every row is Final.
+  Both teams are named by abbreviation, from the same `GET /events/teams` the
+  team dropdown loads, in `outline` badges; "Team {id}" stands in while the
+  team list is loading or has failed. No logo, no team colour.
+- **No game request until a filter is set**, and the filters are the query
+  key, so changing one asks the server again rather than narrowing the last
+  answer on the client. "Any" is never sent: the route 422s on a position
+  that isn't on its allow-list, and `""` isn't.
+- **Every empty result names what was searched**: the query for Accounts and
+  Posts, the chosen season, team and position for Games.
+- **Teams are fetched locally again.** `features/search/api.ts` reuses the
+  `["events", "teams"]` key `features/profile` uses, so the two share one cache
+  entry, but the fetch function is now in four places (profile,
+  `ProfileSetupPage`, `MentionAutocomplete`, search). The connection rule
+  stops a sideways import; **moving it into `api/` is the fix**, for a unit
+  with all four in scope.
+- **The bar and the three selects are stacked at every width.** Putting
+  `Field`s in a row needs a rule on `Field`'s wrapper, which "Field owns its
+  own layout" (`FrontendUI/components.md` §5) rules out. A row layout needs a
+  `Field` layout option first.
+
 ## Open decisions
 
 - Whether the frontend wiki grows past this file into per-feature sections, or
   stays one file, is the call of whoever finishes `FRONTEND-007`. **Half
   settled 2026-10-06:** look and feel already lives in its own folder,
   `wiki/CodeContext/FrontendUI/`, so this file never takes styling. Splitting
-  the *behaviour* sections per feature is still open.
+  the *behaviour* sections per feature is still open. `FRONTEND-007` left it
+  one file: each feature already has its own section here, and the file is
+  read by section, not whole.
