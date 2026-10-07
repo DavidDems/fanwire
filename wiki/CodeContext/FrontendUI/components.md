@@ -187,7 +187,7 @@ style is reserved for it now, so nobody invents another.
 | `routes/AppLayout` | header, nav, `buttonClass` (Sign in), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current` |
 | `routes/guards` `Resolving` / `Unavailable` | `StatusLine` / `InlineAlert` | Same text |
 | `routes/views` `SearchView`, `NotFoundView` | page template, `EmptyState`, `buttonClass` | Search is replaced by `FRONTEND-007` |
-| `components/FormField` `Field` | `field.module.css`: label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with icon | Markup and ids unchanged |
+| `components/FormField` `Field` | `FormField.module.css` (`UI-004`): label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with an `aria-hidden` icon; label over control, and the space between consecutive fields | Markup and ids unchanged. **Field owns its own layout**: a feature's module CSS sets control widths and the space above its submit button, never the label or the gap between fields (`UI-008` nearly doubled it) |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |
 | `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. **Expanded with zero replies currently renders nothing**: `UI-005` adds "No replies yet." (`EmptyState`, test-first) |
@@ -202,7 +202,7 @@ style is reserved for it now, so nobody invents another.
 | `features/notifications/NotificationRow` | actor link 600, sentence, `<time>` muted, `Button ghost sm` (Clear) with `x` icon | "Someone" placeholder is plain text |
 | `features/notifications/EmailPreference` | one-row `Card`, native checkbox (base, `accent-color: var(--color-action)`, 20 px, label is the hit area) | Loading/error lines |
 | `features/profile/ProfilePage` | `StatusLine` / `InlineAlert` | |
-| `features/profile/ProfileSummary` | header `Card`, `Avatar lg`, `h1`, counts muted tabular | Counts stay single text nodes |
+| `features/profile/ProfileSummary` | header `Card`, `Avatar lg`, `h1`, counts muted tabular; an optional `action` slot (Follow/Unfollow) on the right from 40em, under the name on phones (`UI-008`) | Counts stay single text nodes. Still three scalars plus a control slot, never a user object |
 | `features/profile/OwnProfile` | description `<p>`, `<dl>` row (DOB with its privacy note), `ProfileSettings` | |
 | `features/profile/PublicProfile` | `FollowButton` | |
 | `features/profile/FollowButton` | `Button primary` (Follow) / `secondary` + `data-active` (Unfollow) | Failure: `InlineAlert` |

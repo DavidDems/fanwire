@@ -298,6 +298,9 @@ settings card.
   a username character rule (`typography.md` §1); team abbreviations on
   `LiveScoreView` (`components.md` §4); the game page that would make
   `#GameId<n>` a link.
+- **"1 followers"** (found 2026-10-07, `UI-008`'s browser pass). The counts
+  are pinned exactly by tests (`components.md` §1), so singular/plural is a
+  behaviour change with its own red test, in `features/profile/`.
 - **No sign-out control exists anywhere in the UI** (found 2026-10-07).
   `useAuth().signOut` exists and works, but nothing calls it, and no spec in
   this plan adds one. It needs its own small unit: a "Sign out" button in the

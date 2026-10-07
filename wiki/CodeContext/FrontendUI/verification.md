@@ -184,6 +184,15 @@ done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured
   never the live site, and sign out at the end, because the browser profile
   persists. Two accounts make "someone else's profile" and following
   checkable.
+- **What the checks have taught (`UI-004`, `UI-008`, 2026-10-07).** A newcomer
+  signed in on a fresh stack lands on the feed, not `/create-profile` (the
+  feed is public): go to `/create-profile` yourself, and expect no "Your
+  profile" nav link until the profile exists. `browser_run_code_unsafe` runs
+  in a sandbox with no `import`, so it can't read files: read the account file
+  with the Read tool and pass the values in. A date input takes three Tab
+  stops in Chromium (day, month, year), so a script that reads the outline per
+  stop can report a false "no ring"; look at it before calling it a defect.
+  The keyboard script's own header links are not "under the header".
 
 **The per-unit checklist.** Every styling unit's PR body carries this table for
 the routes it touched, filled in or marked NOT DONE:
