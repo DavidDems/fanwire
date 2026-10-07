@@ -3,7 +3,11 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Field, describeField } from "../components/FormField";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { InlineAlert } from "../components/ui/InlineAlert";
 import { useAuth } from "./AuthContext";
+import styles from "./AuthPage.module.css";
 import { asAuthError, splitFailure, type FieldFailures } from "./errors";
 
 /**
@@ -33,7 +37,10 @@ const REQUEST_FAILURES: FieldFailures<ResetField> = {
 
 /** Step two: the code and the new password are. */
 const RESET_FAILURES: FieldFailures<ResetField> = {
-  CodeMismatchException: { field: "code", message: "That code is not the one we sent." },
+  CodeMismatchException: {
+    field: "code",
+    message: "That code is not the one we sent.",
+  },
   ExpiredCodeException: {
     field: "code",
     message: "That code has expired. Ask for a new one and try again.",
@@ -56,7 +63,9 @@ export function ForgotPasswordPage() {
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function handleRequest(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleRequest(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setErrors({});
     setFailure(null);
@@ -66,7 +75,10 @@ export function ForgotPasswordPage() {
       await authService.forgotPassword(email);
       setCodeSent(true);
     } catch (cause) {
-      const { fields, alert } = splitFailure(asAuthError(cause), REQUEST_FAILURES);
+      const { fields, alert } = splitFailure(
+        asAuthError(cause),
+        REQUEST_FAILURES,
+      );
       setErrors(fields);
       setFailure(alert);
     } finally {
@@ -84,7 +96,10 @@ export function ForgotPasswordPage() {
       await authService.confirmForgotPassword({ email, code, newPassword });
       navigate("/sign-in", { state: { email } });
     } catch (cause) {
-      const { fields, alert } = splitFailure(asAuthError(cause), RESET_FAILURES);
+      const { fields, alert } = splitFailure(
+        asAuthError(cause),
+        RESET_FAILURES,
+      );
       setErrors(fields);
       setFailure(alert);
     } finally {
@@ -93,70 +108,96 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <section>
-      <h1>Forgot password</h1>
+    <div className={styles.page}>
+      <Card as="section" className={styles.card}>
+        <h1>Forgot password</h1>
 
-      {failure === null ? null : <p role="alert">{failure}</p>}
+        {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 
-      {codeSent ? (
-        <form onSubmit={handleReset} noValidate>
-          <p>We have sent a code to {email}.</p>
+        {codeSent ? (
+          <form onSubmit={handleReset} noValidate>
+            <p className={styles.lead}>We have sent a code to {email}.</p>
 
-          <Field id="reset-code" label="Confirmation code" error={errors.code}>
-            <input
-              {...describeField("reset-code", { error: errors.code })}
-              type="text"
-              name="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={(event) => {
-                setCode(event.target.value);
-              }}
-            />
-          </Field>
+            <Field
+              id="reset-code"
+              label="Confirmation code"
+              error={errors.code}
+            >
+              <input
+                {...describeField("reset-code", { error: errors.code })}
+                type="text"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value);
+                }}
+              />
+            </Field>
 
-          <Field id="reset-new-password" label="New password" error={errors.newPassword}>
-            <input
-              {...describeField("reset-new-password", { error: errors.newPassword })}
-              type="password"
-              name="new-password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => {
-                setNewPassword(event.target.value);
-              }}
-            />
-          </Field>
+            <Field
+              id="reset-new-password"
+              label="New password"
+              error={errors.newPassword}
+            >
+              <input
+                {...describeField("reset-new-password", {
+                  error: errors.newPassword,
+                })}
+                type="password"
+                name="new-password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(event) => {
+                  setNewPassword(event.target.value);
+                }}
+              />
+            </Field>
 
-          <button type="submit" disabled={busy}>
-            Reset password
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleRequest} noValidate>
-          <Field id="reset-email" label="Email" error={errors.email}>
-            <input
-              {...describeField("reset-email", { error: errors.email })}
-              type="email"
-              name="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-              }}
-            />
-          </Field>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              className={styles.submit}
+              disabled={busy}
+            >
+              Reset password
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleRequest} noValidate>
+            <Field id="reset-email" label="Email" error={errors.email}>
+              <input
+                {...describeField("reset-email", { error: errors.email })}
+                type="email"
+                name="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                }}
+              />
+            </Field>
 
-          <button type="submit" disabled={busy}>
-            Send code
-          </button>
-        </form>
-      )}
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              className={styles.submit}
+              disabled={busy}
+            >
+              Send code
+            </Button>
+          </form>
+        )}
+      </Card>
 
-      <p>
-        <Link to="/sign-in">Back to sign in</Link>
-      </p>
-    </section>
+      <div className={styles.links}>
+        <p>
+          <Link to="/sign-in">Back to sign in</Link>
+        </p>
+      </div>
+    </div>
   );
 }

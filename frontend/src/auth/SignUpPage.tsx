@@ -3,7 +3,11 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Field, describeField } from "../components/FormField";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { InlineAlert } from "../components/ui/InlineAlert";
 import { useAuth } from "./AuthContext";
+import styles from "./AuthPage.module.css";
 import { asAuthError, splitFailure, type FieldFailures } from "./errors";
 
 /**
@@ -42,11 +46,15 @@ export function SignUpPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<Partial<Record<SignUpField, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<SignUpField, string>>>(
+    {},
+  );
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setErrors({});
     setFailure(null);
@@ -64,7 +72,10 @@ export function SignUpPage() {
         navigate("/confirm", { state: { email } });
       }
     } catch (cause) {
-      const { fields, alert } = splitFailure(asAuthError(cause), FIELD_FAILURES);
+      const { fields, alert } = splitFailure(
+        asAuthError(cause),
+        FIELD_FAILURES,
+      );
       setErrors(fields);
       setFailure(alert);
     } finally {
@@ -73,46 +84,56 @@ export function SignUpPage() {
   }
 
   return (
-    <section>
-      <h1>Sign up</h1>
+    <div className={styles.page}>
+      <Card as="section" className={styles.card}>
+        <h1>Sign up</h1>
 
-      {failure === null ? null : <p role="alert">{failure}</p>}
+        {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <Field id="sign-up-email" label="Email" error={errors.email}>
-          <input
-            {...describeField("sign-up-email", { error: errors.email })}
-            type="email"
-            name="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => {
-              setEmail(event.target.value);
-            }}
-          />
-        </Field>
+        <form onSubmit={handleSubmit} noValidate>
+          <Field id="sign-up-email" label="Email" error={errors.email}>
+            <input
+              {...describeField("sign-up-email", { error: errors.email })}
+              type="email"
+              name="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+              }}
+            />
+          </Field>
 
-        <Field id="sign-up-password" label="Password" error={errors.password}>
-          <input
-            {...describeField("sign-up-password", { error: errors.password })}
-            type="password"
-            name="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-            }}
-          />
-        </Field>
+          <Field id="sign-up-password" label="Password" error={errors.password}>
+            <input
+              {...describeField("sign-up-password", { error: errors.password })}
+              type="password"
+              name="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+              }}
+            />
+          </Field>
 
-        <button type="submit" disabled={submitting}>
-          Sign up
-        </button>
-      </form>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            className={styles.submit}
+            disabled={submitting}
+          >
+            Sign up
+          </Button>
+        </form>
+      </Card>
 
-      <p>
-        <Link to="/sign-in">Already have an account?</Link>
-      </p>
-    </section>
+      <div className={styles.links}>
+        <p>
+          <Link to="/sign-in">Already have an account?</Link>
+        </p>
+      </div>
+    </div>
   );
 }

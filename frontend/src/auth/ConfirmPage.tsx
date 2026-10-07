@@ -3,7 +3,12 @@ import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Field, describeField } from "../components/FormField";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { InlineAlert } from "../components/ui/InlineAlert";
+import { StatusLine } from "../components/ui/StatusLine";
 import { useAuth } from "./AuthContext";
+import styles from "./AuthPage.module.css";
 import { asAuthError, splitFailure, type FieldFailures } from "./errors";
 
 /**
@@ -21,7 +26,10 @@ import { asAuthError, splitFailure, type FieldFailures } from "./errors";
 type ConfirmField = "email" | "code";
 
 const FIELD_FAILURES: FieldFailures<ConfirmField> = {
-  CodeMismatchException: { field: "code", message: "That code is not the one we sent." },
+  CodeMismatchException: {
+    field: "code",
+    message: "That code is not the one we sent.",
+  },
   ExpiredCodeException: {
     field: "code",
     message: "That code has expired. Send yourself a new one.",
@@ -43,9 +51,13 @@ export function ConfirmPage() {
 
   const handedOver = (location.state as { email?: string } | null)?.email;
 
-  const [email, setEmail] = useState(typeof handedOver === "string" ? handedOver : "");
+  const [email, setEmail] = useState(
+    typeof handedOver === "string" ? handedOver : "",
+  );
   const [code, setCode] = useState("");
-  const [errors, setErrors] = useState<Partial<Record<ConfirmField, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<ConfirmField, string>>>(
+    {},
+  );
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,7 +68,9 @@ export function ConfirmPage() {
     setNotice(null);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     reset();
     setBusy(true);
@@ -65,7 +79,10 @@ export function ConfirmPage() {
       await authService.confirmSignUp({ email, code });
       navigate("/sign-in", { state: { email } });
     } catch (cause) {
-      const { fields, alert } = splitFailure(asAuthError(cause), FIELD_FAILURES);
+      const { fields, alert } = splitFailure(
+        asAuthError(cause),
+        FIELD_FAILURES,
+      );
       setErrors(fields);
       setFailure(alert);
     } finally {
@@ -91,57 +108,74 @@ export function ConfirmPage() {
   }
 
   return (
-    <section>
-      <h1>Confirm your account</h1>
+    <div className={styles.page}>
+      <Card as="section" className={styles.card}>
+        <h1>Confirm your account</h1>
 
-      {failure === null ? null : <p role="alert">{failure}</p>}
-      {notice === null ? null : <p role="status">{notice}</p>}
+        {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
+        {notice === null ? null : <StatusLine>{notice}</StatusLine>}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <Field id="confirm-email" label="Email" error={errors.email}>
-          <input
-            {...describeField("confirm-email", { error: errors.email })}
-            type="email"
-            name="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => {
-              setEmail(event.target.value);
+        <form onSubmit={handleSubmit} noValidate>
+          <Field id="confirm-email" label="Email" error={errors.email}>
+            <input
+              {...describeField("confirm-email", { error: errors.email })}
+              type="email"
+              name="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+              }}
+            />
+          </Field>
+
+          <Field
+            id="confirm-code"
+            label="Confirmation code"
+            error={errors.code}
+          >
+            <input
+              {...describeField("confirm-code", { error: errors.code })}
+              type="text"
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value);
+              }}
+            />
+          </Field>
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            className={styles.submit}
+            disabled={busy}
+          >
+            Confirm
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className={styles.secondaryAction}
+            disabled={busy}
+            onClick={() => {
+              void handleResend();
             }}
-          />
-        </Field>
+          >
+            Resend code
+          </Button>
+        </form>
+      </Card>
 
-        <Field id="confirm-code" label="Confirmation code" error={errors.code}>
-          <input
-            {...describeField("confirm-code", { error: errors.code })}
-            type="text"
-            name="code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            onChange={(event) => {
-              setCode(event.target.value);
-            }}
-          />
-        </Field>
-
-        <button type="submit" disabled={busy}>
-          Confirm
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void handleResend();
-          }}
-        >
-          Resend code
-        </button>
-      </form>
-
-      <p>
-        <Link to="/sign-in">Back to sign in</Link>
-      </p>
-    </section>
+      <div className={styles.links}>
+        <p>
+          <Link to="/sign-in">Back to sign in</Link>
+        </p>
+      </div>
+    </div>
   );
 }
