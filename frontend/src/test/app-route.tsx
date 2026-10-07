@@ -15,6 +15,7 @@ import {
 } from "./auth";
 import { emptyFeed } from "./feed";
 import { notificationsAre, preferenceIs } from "./notifications";
+import { gameFiltersAre } from "./search";
 import { server } from "./server";
 import { followingStub, publicProfilesById } from "./users";
 
@@ -41,12 +42,14 @@ export const OWN_USER_ID = testProfile().id;
  *
  * Every read any route makes on mount is answered for every visitor (msw runs
  * with `onUnhandledRequest: "error"`): the feed, public profiles, teams, and
- * the notification list and preference, and (signed in) the follow set.
+ * the notification list and preference, the search page's game filters (its
+ * teams are the same `GET /events/teams`), and (signed in) the follow set.
  * Nothing the shell's tests assert depends on them.
  */
 export function arrangeVisitor(as: Visitor): AuthService {
   server.use(publicProfilesById(), teamsAre(), emptyFeed());
   server.use(notificationsAre([]), preferenceIs(true));
+  server.use(gameFiltersAre());
   if (as === "anonymous") return new FakeAuthService();
 
   server.use(as === "member" ? profileFound() : profileMissing());

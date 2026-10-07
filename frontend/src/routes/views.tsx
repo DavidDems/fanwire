@@ -1,36 +1,27 @@
 import type { ReactNode } from "react";
 
 /**
- * Placeholder views — one per route in the shell that no unit has filled in yet.
+ * The shell's own views — now only the not-found page.
  *
- * Every route exists from day one so the remaining units can land independently:
- * each one replaces the body of its own view without touching the route table,
- * the navigation, or anybody else's page. A placeholder still has to be the
- * *right* placeholder — the heading is the view's identity, in tests and to a
- * screen reader.
- *
- * `FRONTEND-002` lifted the four auth views out of here into real pages under
- * `src/auth/`, which is the shape every later unit follows: the route table
- * points at the unit's own page and the placeholder goes away with it.
- *
- * Nothing here talks to the API. The unit that owns each page brings its own
- * queries with it.
+ * This file began as one placeholder per route, so that every route existed
+ * from day one and each unit could land independently. Each unit then pointed
+ * the route table at its own page and its placeholder went away with it;
+ * `FRONTEND-007`'s `SearchView` was the last. What is left belongs to no
+ * feature, and talks to no API.
  */
 
-function Page({ heading, children }: { heading: string; children?: ReactNode }) {
+function Page({
+  heading,
+  children,
+}: {
+  heading: string;
+  children?: ReactNode;
+}) {
   return (
     <section>
       <h1>{heading}</h1>
       {children}
     </section>
-  );
-}
-
-export function SearchView() {
-  return (
-    <Page heading="Search">
-      <p>Finding people, posts and games lands here.</p>
-    </Page>
   );
 }
 

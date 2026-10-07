@@ -1,0 +1,11 @@
+/*
+ * The home page (wiki/CodeContext/FrontendUI/layout.md §3): the search bar's
+ * card, then the feed's stream, with a section's space between them. Values
+ * come from tokens.css by name only.
+ */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
