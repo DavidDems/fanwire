@@ -103,7 +103,11 @@ a second route would be a second place to decide who is allowed to see it.
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
   `PublicUserOut` (which does not). The one thing they share, `ProfileSummary`,
   takes a username and two numbers — **not a user object** — so it cannot render
-  a field it was never handed. The alternative, one header taking a whole user
+  a field it was never handed. Since `UI-008` it also takes one optional
+  `action` slot, which `PublicProfile` fills with `FollowButton` so the control
+  sits in the header card: a slot for a control, never user data, so the
+  guarantee stands. The own profile's date of birth row now says "Only you can
+  see this" on screen, not only in a comment. The alternative, one header taking a whole user
   and showing what it finds, is precisely how the backend leaked this field
   before `PublicUserOut` was split off `MeOut` ([[0x01-users]]), and asserting
   "we do not render it" would have left that shape in place.
