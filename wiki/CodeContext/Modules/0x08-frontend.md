@@ -401,6 +401,20 @@ each owns one piece:
   happened, since an emptied draft and a never-filled one are the same value, so
   the widget watches a reset counter on the mediator. A stale thumbnail over an
   empty composer is the failure that guards against.
+- **The media widget's field error is an `InlineAlert` inside an element that
+  carries the id** (`UI-006`). The file input's `aria-describedby` points at
+  `compose-media-error`, and `InlineAlert` takes no `id` (`FrontendUI/components.md`
+  §2), so the id sits on a wrapper that holds nothing but the alert. The
+  description is still the message alone, because the alert's icon is
+  `aria-hidden`; `compose-style.test.tsx` pins it with
+  `toHaveAccessibleDescription`. If `InlineAlert` ever grows an `id` prop, the
+  wrapper can go.
+- **Mention suggestions sit in the form's flow, not over it** (`UI-006`). An
+  overlay needs a positioned ancestor that the suggestions control doesn't own,
+  and would cover the image field on a phone. The panel is still relatively
+  positioned on `--z-dropdown`, so its shadow paints over what follows. Each of
+  the three colleagues has its own module CSS and imports no other, which
+  `component-isolation.test.ts` reads from disk.
 
 ## Notifications (`FRONTEND-006`)
 
