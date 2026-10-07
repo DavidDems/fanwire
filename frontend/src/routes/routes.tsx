@@ -6,12 +6,13 @@ import { ProfileSetupPage } from "../auth/ProfileSetupPage";
 import { SignInPage } from "../auth/SignInPage";
 import { SignUpPage } from "../auth/SignUpPage";
 import { ComposePage } from "../features/compose/ComposePage";
-import { FeedPage } from "../features/feed/FeedPage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
+import { SearchPage } from "../features/search/SearchPage";
 import { AppLayout } from "./AppLayout";
 import { RequireAuth, RequireNewProfile } from "./guards";
-import { NotFoundView, SearchView } from "./views";
+import { HomeView } from "./HomeView";
+import { NotFoundView } from "./views";
 
 /**
  * The route table, as data rather than JSX elements, so it can be handed to
@@ -31,9 +32,10 @@ export const routes: RouteObject[] = [
     path: "/",
     element: <AppLayout />,
     children: [
-      // FRONTEND-005's page. Public, and the app's index: the guest feed is a
-      // read path by decision ([[0x06-feed]] Security).
-      { index: true, element: <FeedPage /> },
+      // FRONTEND-005's feed under FRONTEND-007's search bar. Public, and the
+      // app's index: the guest feed is a read path by decision ([[0x06-feed]]
+      // Security).
+      { index: true, element: <HomeView /> },
       {
         path: "compose",
         element: (
@@ -50,7 +52,8 @@ export const routes: RouteObject[] = [
           </RequireAuth>
         ),
       },
-      { path: "search", element: <SearchView /> },
+      // FRONTEND-007's page. Public: search is a read path ([[0x07-search]]).
+      { path: "search", element: <SearchPage /> },
       // FRONTEND-003's page. Still public, and still one route: the id in the
       // path is what selects the own-profile variant from the public one.
       { path: "profile/:userId", element: <ProfilePage /> },

@@ -1,0 +1,110 @@
+/*
+ * The search view (wiki/CodeContext/FrontendUI/layout.md §3, "search bar plus
+ * result sections"): the bar's card, then Accounts and Posts, each its own list
+ * with its own Load more, then the Games filter panel. Mobile-first and one
+ * column throughout, with no media query: every block is already readable at
+ * 360 px and only grows wider. Values come from tokens.css by name only.
+ */
+
+/* The page: heading, bar, then each section, stacked. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* One section: its h2, its state line, its list, its Load more. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/*
+ * The bar: the labelled box over a full-width Search button, at every width.
+ * Field owns its own layout (components.md §5), so the box and button are not
+ * put in a row: that would need a rule on Field's wrapper. Only the box's
+ * width and the space above the button are set here.
+ */
+.bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bar input {
+  width: 100%;
+}
+
+/* The filter panel: the three selects stacked, each as wide as the card. */
+.filters select {
+  width: 100%;
+}
+
+/* A list inside one card: no bullets or indent; the card's padding frames it. */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One account or game: the leading avatar (if any) and the text beside it. */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+
+.row:first-child {
+  padding-top: 0;
+}
+
+.row:last-child {
+  padding-bottom: 0;
+}
+
+/* The divider: drawn between rows, so the card's edge is never doubled. */
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.username {
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Home and away abbreviations, one line, wrapping only if it must. */
+.teams {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Post results: the feed's stack of cards, tight between cards. */
+.stream {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.more {
+  width: 100%;
+}
