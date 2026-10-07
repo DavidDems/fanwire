@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { components } from "../../api/schema";
+import { Button } from "../../components/ui/Button";
+import { XIcon } from "../../components/ui/icons";
+import styles from "./Notifications.module.css";
 import { ACTOR_STALE_TIME_MS, actorKey, fetchActor } from "./api";
 
 /**
@@ -25,6 +28,12 @@ import { ACTOR_STALE_TIME_MS, actorKey, fetchActor } from "./api";
  * outlives the contract it was built against, and a list that throws on one row
  * takes down the rows it *does* understand, while one that renders nothing is
  * indistinguishable from a broken fetch.
+ *
+ * **Styled as one divided row of the page's list card** (`components.md` §5):
+ * the actor link is the strongest thing in it, the time is muted and tabular,
+ * and Clear is a ghost button that never wraps away from the text it clears.
+ * The row is never a `Card` of its own — the dividers between rows are the
+ * page module's `.row + .row` rule.
  */
 
 type NotificationOut = components["schemas"]["NotificationOut"];
@@ -38,8 +47,15 @@ export interface NotificationRowProps {
   onClear: (notificationId: number) => void;
 }
 
-export function NotificationRow({ notification, onClear }: NotificationRowProps) {
-  const { actor_user_id: actorId, reference_id: referenceId, type } = notification;
+export function NotificationRow({
+  notification,
+  onClear,
+}: NotificationRowProps) {
+  const {
+    actor_user_id: actorId,
+    reference_id: referenceId,
+    type,
+  } = notification;
 
   const actor = useQuery({
     queryKey: actorKey(actorId),
@@ -48,27 +64,41 @@ export function NotificationRow({ notification, onClear }: NotificationRowProps)
   });
 
   const name = actor.data?.username ?? UNRESOLVED_ACTOR;
-  const actorLink = <Link to={`/profile/${actorId}`}>{name}</Link>;
+  // "Someone" is linked and weighted like a resolved name: it is a placeholder
+  // for the same thing, not a different kind of text.
+  const actorLink = (
+    <Link to={`/profile/${actorId}`} className={styles.actor}>
+      {name}
+    </Link>
+  );
 
   return (
-    <li>
-      <p>{describe(type, actorLink, referenceId)}</p>
-      <time dateTime={notification.created_at}>{formatWhen(notification.created_at)}</time>
+    <li className={styles.row}>
+      <div className={styles.body}>
+        <p>{describe(type, actorLink, referenceId)}</p>
+        <time dateTime={notification.created_at} className={styles.when}>
+          {formatWhen(notification.created_at)}
+        </time>
+      </div>
       {/*
         The visible label is one word so a list of them stays readable, and the
         accessible name says which entry it belongs to — "Clear" repeated down a
         page tells a screen-reader user nothing about what they are about to act
-        on.
+        on. The icon is aria-hidden, so it adds nothing to either.
       */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
+        className={styles.clear}
         aria-label={`Clear this notification from ${name}`}
         onClick={() => {
           onClear(notification.id);
         }}
       >
+        <XIcon />
         Clear
-      </button>
+      </Button>
     </li>
   );
 }
@@ -85,15 +115,27 @@ function describe(
   referenceId: number | null,
 ): ReactNode {
   const post =
-    referenceId === null ? "your post" : <Link to={`/posts/${referenceId}`}>your post</Link>;
+    referenceId === null ? (
+      "your post"
+    ) : (
+      <Link to={`/posts/${referenceId}`}>your post</Link>
+    );
 
   switch (type) {
     case "follow":
       return <>{actorLink} started following you.</>;
     case "reply":
-      return <>{actorLink} replied to {post}.</>;
+      return (
+        <>
+          {actorLink} replied to {post}.
+        </>
+      );
     case "repost":
-      return <>{actorLink} reposted {post}.</>;
+      return (
+        <>
+          {actorLink} reposted {post}.
+        </>
+      );
     default:
       // Deliberately reachable: see the file header.
       return <>{actorLink} sent you a notification.</>;
