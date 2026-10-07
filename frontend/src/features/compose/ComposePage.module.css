@@ -1,0 +1,65 @@
+/*
+ * The composer (wiki/CodeContext/FrontendUI/layout.md §3, "single form card").
+ * Mobile-first: there is no media query, because the footer row and the quick
+ * posts wrap on their own. Values come from tokens.css by name only. Each of
+ * the three controls inside the form styles itself in its own module; this
+ * file only spaces them.
+ */
+
+/* The page: h1, the form card, then Quick posts, stacked. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/*
+ * Text box, suggestions, image field, footer. The gap is the space between
+ * them: none of them is a FormField sibling of another (MediaWidget wraps its
+ * Field), so Field's own `.field + .field` spacing never applies here.
+ */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The post failure, then the button row, clear of the image field above. */
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* Undo mention on the left, Post on the right; they wrap if they must. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Pushed right whether or not Undo mention is there. */
+.post {
+  margin-inline-start: auto;
+}
+
+/* Quick posts: a second, quieter section under the card. */
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.quick h2 {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+/* The template buttons: one row that wraps. */
+.templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
