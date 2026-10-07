@@ -474,6 +474,14 @@ preference is its own component. Clearing is a soft delete on the backend
   second answer free to disagree with the first, and its "not signed in" branch
   would be unreachable. `ProfilePage` gates because *its* route is public — this
   one is not.
+- **The preference card is there from the first render** (`UI-007`):
+  `EmailPreference` renders its loading and failure lines inside the same
+  one-row `Card` as the checkbox, so the list below doesn't jump when the read
+  lands. To put the checkbox before its label, the page's module CSS turns
+  `Field`'s root into a row from inside `.preference` (`.preference > div`).
+  That reaches into `Field`'s markup, which `Field` otherwise owns; it is
+  scoped to this one card, and a `Field` that grows a checkbox layout of its
+  own should replace it.
 
 ## Feed and threads (`FRONTEND-005`)
 
