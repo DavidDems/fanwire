@@ -3,9 +3,21 @@ import { format, parseISO } from "date-fns";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { Avatar } from "../../components/ui/Avatar";
+import { Button, buttonClass } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { StatusLine } from "../../components/ui/StatusLine";
+import {
+  ChevronDownIcon,
+  MessageCircleIcon,
+  Repeat2Icon,
+} from "../../components/ui/icons";
 import { LikeButton } from "./LikeButton";
 import { LiveScoreTickerDecorator } from "./LiveScoreTickerDecorator";
 import { PostMedia } from "./PostMedia";
+import styles from "./PostNode.module.css";
 import { fetchThread, threadKey, type PostView } from "./api";
 
 /**
@@ -33,13 +45,20 @@ import { fetchThread, threadKey, type PostView } from "./api";
  * own copy of the root would show a post from a different cache entry than the
  * one its parent is rendering from, and the two would disagree for as long as
  * one of them was stale.
+ *
+ * **Only the top level is a card** (`layout.md` §4). A reply is the same node
+ * with `nested` set, which changes nothing but the box: it renders as a plain
+ * `<article>` on its parent card's surface, so a thread reads as one card with
+ * a line down its side rather than as cards inside cards.
  */
 
 export interface PostNodeProps {
   post: PostView;
+  /** Set by the recursion on every reply: a reply sits inside its parent's card. */
+  nested?: boolean;
 }
 
-export function PostNode({ post }: PostNodeProps) {
+export function PostNode({ post, nested = false }: PostNodeProps) {
   const [expanded, setExpanded] = useState(false);
 
   // Nothing is fetched to render a post nobody has expanded — mounting a feed of
@@ -49,6 +68,7 @@ export function PostNode({ post }: PostNodeProps) {
     queryFn: () => fetchThread(post.id),
     enabled: expanded,
   });
+  const replies = thread.data?.replies;
 
   /**
    * The post itself: who wrote it, when, what it says and what it carries. This
@@ -57,66 +77,109 @@ export function PostNode({ post }: PostNodeProps) {
    */
   const view = (
     <>
-      <header>
-        <Link to={`/profile/${post.author.id}`}>{post.author.username}</Link>{" "}
-        <time dateTime={post.created_at}>{postedOn(post.created_at)}</time>
+      <header className={styles.header}>
+        <Avatar username={post.author.username} size="sm" />
+        <Link className={styles.author} to={`/profile/${post.author.id}`}>
+          {post.author.username}
+        </Link>
+        <time className={styles.time} dateTime={post.created_at}>
+          {postedOn(post.created_at)}
+        </time>
       </header>
-      {post.text === null ? null : <p>{post.text}</p>}
+      {post.text === null ? null : <p className={styles.text}>{post.text}</p>}
       {post.media.map((item) => (
         <PostMedia key={item.id} item={item} author={post.author.username} />
       ))}
     </>
   );
 
-  return (
-    // `article` is the role for a self-contained composition, which is the one
-    // thing a post can honestly claim — and it nests, which a thread needs.
-    <article>
+  const body = (
+    <>
       {post.live_scores.length === 0 ? (
         view
       ) : (
         <LiveScoreTickerDecorator post={post}>{view}</LiveScoreTickerDecorator>
       )}
 
-      <footer>
+      <footer className={styles.footer}>
         <LikeButton post={post} />
         {/*
          * Reply and repost are an address, never an import. `/compose` reads
          * both parameters and seeds its own draft from them; a route is the one
          * seam a feature folder can offer another without being imported by it
          * ([[0x00-architecture]] Connection rule), and this unit reimplements no
-         * part of composing.
+         * part of composing. They look like ghost buttons and stay links: what
+         * they do is go somewhere.
          */}
-        <Link to={`/compose?reply_to=${post.id}`}>Reply</Link>{" "}
-        <Link to={`/compose?repost_of=${post.id}`}>Repost</Link>{" "}
+        <Link
+          className={buttonClass("ghost", "sm")}
+          to={`/compose?reply_to=${post.id}`}
+        >
+          <MessageCircleIcon />
+          Reply
+        </Link>
+        <Link
+          className={buttonClass("ghost", "sm")}
+          to={`/compose?repost_of=${post.id}`}
+        >
+          <Repeat2Icon />
+          Repost
+        </Link>
         {/*
          * A disclosure button: the label stays put and `aria-expanded` is what
          * carries the state, so the control a reader learned once does not
-         * rename itself under them every time they use it.
+         * rename itself under them every time they use it. The chevron turning
+         * over is that same attribute, read by CSS.
          */}
-        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={styles.toggle}
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
           Show replies
-        </button>
+          <ChevronDownIcon className={styles.chevron} />
+        </Button>
       </footer>
 
       {!expanded ? null : (
-        <div>
-          {thread.isPending ? <p role="status">Loading replies…</p> : null}
+        <div className={styles.thread}>
+          {thread.isPending ? <StatusLine>Loading replies…</StatusLine> : null}
           {thread.isError ? (
-            <p role="alert">We could not load these replies just now. Please try again.</p>
+            <InlineAlert>
+              We could not load these replies just now. Please try again.
+            </InlineAlert>
           ) : null}
-          {thread.data === undefined || thread.data.replies.length === 0 ? null : (
-            <ol>
-              {thread.data.replies.map((reply) => (
+          {/*
+           * An answered thread with no replies says so: an expanded post that
+           * showed nothing would read as a control that did nothing.
+           */}
+          {replies === undefined ? null : replies.length === 0 ? (
+            <EmptyState>No replies yet.</EmptyState>
+          ) : (
+            <ol className={styles.replies}>
+              {replies.map((reply) => (
                 <li key={reply.id}>
-                  <PostNode post={reply} />
+                  <PostNode post={reply} nested />
                 </li>
               ))}
             </ol>
           )}
         </div>
       )}
-    </article>
+    </>
+  );
+
+  // `article` is the role for a self-contained composition, which is the one
+  // thing a post can honestly claim — and it nests, which a thread needs.
+  return nested ? (
+    <article className={styles.post}>{body}</article>
+  ) : (
+    <Card as="article" className={styles.post}>
+      {body}
+    </Card>
   );
 }
 
@@ -128,5 +191,7 @@ export function PostNode({ post }: PostNodeProps) {
  */
 function postedOn(value: string): string {
   const parsed = parseISO(value);
-  return Number.isNaN(parsed.getTime()) ? value : format(parsed, "d MMM yyyy, HH:mm");
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : format(parsed, "d MMM yyyy, HH:mm");
 }

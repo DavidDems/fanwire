@@ -1,8 +1,16 @@
-import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
+import { Button } from "../../components/ui/Button";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { HeartIcon } from "../../components/ui/icons";
+import styles from "./LikeButton.module.css";
 import {
   FEED_KEY_ROOT,
   cacheHolds,
@@ -76,10 +84,12 @@ export function LikeButton({ post }: LikeButtonProps) {
         .getQueriesData<FeedCacheValue>({ queryKey: FEED_KEY_ROOT })
         .filter(([, value]) => cacheHolds(value, post.id));
 
-      queryClient.setQueriesData<FeedCacheValue>({ queryKey: FEED_KEY_ROOT }, (value) =>
-        mapCachedPosts(value, (candidate) =>
-          candidate.id === post.id ? withLike(candidate, next) : candidate,
-        ),
+      queryClient.setQueriesData<FeedCacheValue>(
+        { queryKey: FEED_KEY_ROOT },
+        (value) =>
+          mapCachedPosts(value, (candidate) =>
+            candidate.id === post.id ? withLike(candidate, next) : candidate,
+          ),
       );
 
       return { patched };
@@ -117,17 +127,34 @@ export function LikeButton({ post }: LikeButtonProps) {
 
   return (
     <>
-      <button type="button" onClick={handleClick} disabled={toggle.isPending}>
+      {/*
+       * `data-active` is for CSS only (it fills the heart): the label carries
+       * the state, so no `aria-pressed` (`components.md` §2).
+       */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        data-active={post.liked_by_viewer ? "" : undefined}
+        onClick={handleClick}
+        disabled={toggle.isPending}
+      >
+        <HeartIcon />
         {post.liked_by_viewer ? "Unlike" : "Like"}
-      </button>
+      </Button>
       {/*
        * The count is its own text beside the control rather than part of its
        * label: a button named "Like (4)" changes its accessible name every time
        * anybody anywhere likes the post, which a screen reader announces as a
-       * different button appearing.
+       * different button appearing. One template string, so it is one text
+       * node a reader (and a test) sees whole.
        */}
-      <span>{post.like_count} likes</span>
-      {failure === null ? null : <p role="alert">{failure}</p>}
+      <span className={styles.count}>{`${post.like_count} likes`}</span>
+      {failure === null ? null : (
+        <div className={styles.failure}>
+          <InlineAlert>{failure}</InlineAlert>
+        </div>
+      )}
     </>
   );
 }
