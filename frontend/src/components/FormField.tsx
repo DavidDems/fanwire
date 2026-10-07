@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import styles from "./FormField.module.css";
+import { CircleAlertIcon } from "./ui/icons";
+
 /**
  * A labelled control and, when the last attempt failed, the message about *that
  * control* — shared by all five auth pages.
@@ -29,8 +32,14 @@ export interface FieldState {
 }
 
 /** The attributes for the control inside a `<Field>` with the same `id` and state. */
-export function describeField(id: string, { error, hint }: FieldState = {}): FieldDescription {
-  const describedBy = [hint === true ? `${id}-hint` : null, error === undefined ? null : `${id}-error`]
+export function describeField(
+  id: string,
+  { error, hint }: FieldState = {},
+): FieldDescription {
+  const describedBy = [
+    hint === true ? `${id}-hint` : null,
+    error === undefined ? null : `${id}-error`,
+  ]
     .filter((token): token is string => token !== null)
     .join(" ");
 
@@ -56,16 +65,27 @@ export interface FieldProps {
 
 export function Field({ id, label, error, hintText, children }: FieldProps) {
   return (
-    <div>
-      <label htmlFor={id}>{label}</label>
+    <div className={styles.field}>
+      <label htmlFor={id} className={styles.label}>
+        {label}
+      </label>
       {children}
-      {hintText === undefined ? null : <p id={`${id}-hint`}>{hintText}</p>}
+      {hintText === undefined ? null : (
+        <p id={`${id}-hint`} className={styles.hint}>
+          {hintText}
+        </p>
+      )}
       {/*
         Not `role="alert"`: a field message is announced through the control's
         own description. The alert role is kept for failures that are about the
         request rather than about something the user typed.
       */}
-      {error === undefined ? null : <p id={`${id}-error`}>{error}</p>}
+      {error === undefined ? null : (
+        <p id={`${id}-error`} className={styles.error}>
+          <CircleAlertIcon className={styles.icon} />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
