@@ -68,6 +68,16 @@ first: these units don't touch `src/routes/**`.
 The gates in `00-session-protocol.md`, the container included, and the guard
 over the real diff. Browser checklist (`verification.md` §3) for `/sign-in`,
 `/sign-up`, `/confirm`, `/forgot-password`, `/create-profile` and
-`/profile/:id` (own and someone else's), or NOT DONE.
+`/profile/:id` (own and someone else's), or NOT DONE. `fwtest1` viewing
+`fwtest2` is "someone else's".
+
+**Signed-in rows:** use the dev-pool test accounts as `verification.md` §3a
+and `wiki/GeneralContext/Architecture/dev-auth-setup.md` "Test accounts"
+describe. Start the stack with the health wait. After a fresh stack, the
+profiles are recreated on `/create-profile` with the usernames from
+`frontend/.env.test-accounts.local`. Sign out by clearing `localStorage` at
+the end. Never use the live site, and never put a password in a PR. A missing
+sign-out button is a known gap with its own future unit. It isn't part of
+this prompt, so don't add one.
 
 Two PRs. Merge nothing.

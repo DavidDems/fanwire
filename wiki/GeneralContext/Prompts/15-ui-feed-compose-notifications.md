@@ -75,5 +75,16 @@ over the real diff. Browser checklist (`verification.md` §3) for `/`,
 `/compose` and `/notifications`, light and dark, or NOT DONE. For `/`, seed
 data (`scripts/seed_dev.py`) gives posts. A post with a live score needs a game
 inside the four-hour window, so say whether that state was actually seen.
+`/compose` and `/notifications` are signed-in routes. A notification needs
+another account's action, for example `fwtest2` following or liking `fwtest1`.
+
+**Signed-in rows:** use the dev-pool test accounts as `verification.md` §3a
+and `wiki/GeneralContext/Architecture/dev-auth-setup.md` "Test accounts"
+describe. Start the stack with the health wait. After a fresh stack, the
+profiles are recreated on `/create-profile` with the usernames from
+`frontend/.env.test-accounts.local`. Sign out by clearing `localStorage` at
+the end. Never use the live site, and never put a password in a PR. A missing
+sign-out button is a known gap with its own future unit. It isn't part of
+this prompt, so don't add one.
 
 Three PRs. Merge nothing.
