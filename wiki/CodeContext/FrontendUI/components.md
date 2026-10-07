@@ -156,7 +156,7 @@ doesn't know:
 | anything else | `neutral` | the code as given |
 
 Search results (`GameOut`, `FRONTEND-007`) are historical games, so they are
-**Final** with no badge needed. They have `home_team_id` and `away_team_id`, and
+**Final**: `GameFilter` passes status `FT` to `GameScore`. They have `home_team_id` and `away_team_id`, and
 the filter control already loads `GET /events/teams`, so a search row can name
 both teams by abbreviation.
 
@@ -189,7 +189,11 @@ style is reserved for it now, so nobody invents another.
 |---|---|---|
 | `routes/AppLayout` | header, nav, `buttonClass` (Sign in), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current` |
 | `routes/guards` `Resolving` / `Unavailable` | `StatusLine` / `InlineAlert` | Same text |
-| `routes/views` `SearchView`, `NotFoundView` | page template, `EmptyState`, `buttonClass` | Search is replaced by `FRONTEND-007` |
+| `routes/views` `NotFoundView` | page template, `EmptyState`, `buttonClass` | The only view left in `views.tsx` |
+| `routes/HomeView` | `SearchBar` above `FeedPage` | `/`: composed in `routes/` because neither feature imports the other |
+| `features/search/SearchBar` | `Card`, `Field` + `input type="search"` (base), `Button primary` (Search) | `form role="search"`; box and button stacked at every width (`layout.md` §3) |
+| `features/search/SearchPage` | `StatusLine`, `InlineAlert`, `EmptyState` per section; accounts as one list `Card` with dividers, `Avatar sm`, username link 600, description muted; posts as `PostNode` cards; `Button secondary` full width (Load more accounts / posts) | Every empty state names the query |
+| `features/search/GameFilter` | filter `Card` with three `Field` + native `select` (base), stacked; results as one list `Card` with dividers: two `Badge outline` abbreviations, a muted `<time>`, `GameScore row` (status `FT`, so "Final"); `Button secondary` (Load more games) | **No text input of any kind** (`0x08-frontend.md` → Search). "Team {id}" while teams load. No logo, no team colour |
 | `components/FormField` `Field` | `FormField.module.css` (`UI-004`): label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with an `aria-hidden` icon; label over control, and the space between consecutive fields | Markup and ids unchanged. **Field owns its own layout**: a feature's module CSS sets control widths and the space above its submit button, never the label or the gap between fields (`UI-008` nearly doubled it) |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |

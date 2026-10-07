@@ -290,7 +290,8 @@ inconvenient:
 - **Configuration is read in exactly one module** (`src/config.ts`), which
   validates at load and throws on a missing value. Vite inlines `VITE_*` at build
   time, so the production bundle is only correct for the environment it was built
-  against — see `TODO/04-first-deploy.md` for why that forces a two-phase deploy.
+  against: the production Cognito ids don't exist until `Fanwire-Auth` deploys
+  ([[wiki/CodeContext/Standards/build-deployment|Build & Deployment]] → "Rebuilding the SPA").
 
 ## Compose (`FRONTEND-004`)
 
