@@ -64,6 +64,11 @@ fresh.
   route table inside the shell, for anonymous, member and newcomer visitors.
 - `npx prettier --check src` already fails on about 100 untouched files on
   `main`. It isn't a gate; check only the files the unit writes.
+- **Field owns its own layout** (`components.md` §5). `FormField.module.css`
+  stacks label over control and spaces consecutive fields. A feature's
+  module CSS sets control widths and the gap above its submit button, never
+  `label` or `form > div` rules. `UI-008`'s first draft did, and the gap
+  between fields would have doubled beside `UI-004`'s rules.
 
 ## Verify
 
