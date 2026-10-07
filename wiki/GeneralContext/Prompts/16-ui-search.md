@@ -46,9 +46,13 @@ fresh.
   `banner` (A12), and every `*.module.css` under `src/routes/` stays under the
   no-raw-values scan.
 - **Read `FrontendUI/components.md` §2 "As built"** for the exact props of
-  every `src/components/ui/` export. `InlineAlert` and `StatusLine` take no
-  `id` or `className`: if a field needs one for `aria-describedby`, stop and
-  report it, because `src/components/ui/**` is forbidden to these units.
+  every `src/components/ui/` export. **`InlineAlert` takes an `id`** (since
+  `#112`, `decisions.md` 2026-10-07): when a field's error is the alert, pass
+  the id the control's `aria-describedby` names. Nothing takes a
+  `className`, and `StatusLine` takes no `id`. If a field needs one of those,
+  stop and report it, because `src/components/ui/**` is forbidden to these
+  units. **Never wrap a shared component in an element just to carry a
+  missing prop**: that is the workaround `#112` replaced.
 - **A class assertion alone proves nothing on Vitest 4.** `styles.anything`
   returns a hashed name even for a class that doesn't exist
   (`verification.md` §1). Pair `toHaveClass(styles.x)` with a static read of
@@ -69,6 +73,13 @@ fresh.
   module CSS sets control widths and the gap above its submit button, never
   `label` or `form > div` rules. `UI-008`'s first draft did, and the gap
   between fields would have doubled beside `UI-004`'s rules.
+  `EmailPreference`'s `.preference > div` is the one recorded exception
+  (`components.md` §5); don't copy it.
+- **`prettier --write` on named files only**, never a glob: a glob also
+  matches the committed tests (`00-session-protocol.md` step 4).
+- **Post results need posts on `backend-dev`.** The seed has teams and games
+  but no posts: create a few through `/compose` as a test account first
+  (`verification.md` §3a).
 
 ## Verify
 

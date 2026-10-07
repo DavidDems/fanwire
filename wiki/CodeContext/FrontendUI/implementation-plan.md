@@ -307,3 +307,21 @@ settings card.
   shell header for signed-in visitors. It writes `src/routes/**`, so it never
   runs concurrently with `FRONTEND-007`. Until then, sign out by clearing
   `localStorage` (`dev-auth-setup.md`).
+- **Found in `UI-005`–`UI-007`'s browser pass (2026-10-07):**
+  - **`Badge neutral` is invisible on the score band.** Both use
+    `--color-surface-muted`, so "Final" and an unknown status lose their pill
+    and read as plain bold text. A `components/ui` change (Badge or
+    `GameScore`), so its own unit.
+  - **"1 likes"**, the same singular/plural case as "1 followers": pinned by
+    `FeedPage.test.tsx`, so a behaviour change with its own red test, in
+    `features/feed/`.
+  - **"Your profile" clips in the bottom bar** at 360 px when the browser
+    shows a classic scrollbar (345 px of content). Shell, `src/routes/**`.
+  - **`Field` has no checkbox layout.** `EmailPreference` reaches into its
+    markup to put the box before the label (`components.md` §5). Give
+    `Field` the layout, then delete that rule.
+  - **The local stack never creates notifications.** Without
+    `POST_EVENT_BUS_NAME`, domain events go to `InMemoryEventPublisher` and
+    nothing consumes them, so a follow or reply on `backend-dev` leaves the
+    list empty. Backend dev tooling, not a styling unit; until then,
+    `verification.md` §3a says how to get rows.

@@ -193,6 +193,31 @@ done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured
   stops in Chromium (day, month, year), so a script that reads the outline per
   stop can report a false "no ring"; look at it before calling it a defect.
   The keyboard script's own header links are not "under the header".
+- **What `UI-005`–`UI-007` taught (2026-10-07).**
+  - **No live score on `backend-dev`.** The seed games are dated 2025 and live
+    scores come from the vendor proxy. To see the block, intercept the feed
+    with `page.route('**/api/feed**', …)`, `route.fetch()` the real response,
+    add `live_scores` to an item and `route.fulfill` it. Say so in the PR:
+    the rendering is real, the data isn't.
+  - **No notifications from real actions** (`implementation-plan.md` "After
+    the units"). Insert rows into the dev Postgres with `docker compose exec
+    -T postgres psql -U $POSTGRES_USER -d $POSTGRES_DB` (read inside the
+    container) and an `insert into notifications (recipient_user_id, type,
+    actor_user_id, reference_id)`. The enum values are upper case (`FOLLOW`,
+    `REPLY`, `REPOST`). The database has no volume, so the rows go with the
+    stack.
+  - **A new account's signed-in feed is empty** until it follows someone
+    (the backend ranks by follows and preferred team). Reach the other
+    account by `/profile/<id>`.
+  - **A screenshot taken right after switching the colour scheme can catch
+    a transition half-way**, and enabled buttons look disabled. Wait a
+    moment, or read `disabled` and the computed colours before calling it a
+    defect.
+  - **A full-page screenshot draws the sticky header and fixed bar in the
+    middle of the image.** That's the capture, not the layout.
+  - **Media states past "wrong type" need an upload that reaches the bucket**,
+    which `backend-dev` doesn't give you. Report preparing, ready, rejected
+    and too large as covered by tests only.
 
 **The per-unit checklist.** Every styling unit's PR body carries this table for
 the routes it touched, filled in or marked NOT DONE:

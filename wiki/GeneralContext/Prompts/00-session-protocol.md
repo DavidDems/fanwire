@@ -20,7 +20,7 @@ says, and `agent-guard` will hold it to the task spec.
 1. **Cut the branch from `origin/main` explicitly**: `git switch -c agent/<TASK> origin/main`. `git switch -c` alone branches from whatever HEAD is.
 2. **Delegate the tests to a subagent.** Give it the acceptance criteria, the exact list of files it may write, and the traps. Tests only, no implementation, no placeholder module to make an import resolve, no skips, **and it must never run `git`** — you commit.
 3. **Review it yourself, verify the red is red for the right reason**, commit the tests alone. Distinguish "red because the thing under test does not exist" from "red because the test file is broken".
-4. **Delegate the implementation to a second subagent.** Its contract is the committed tests. `allow_test_edits_during_impl` is false on every remaining spec: a diff touching a test file is discarded wholesale.
+4. **Delegate the implementation to a second subagent.** Its contract is the committed tests. `allow_test_edits_during_impl` is false on every remaining spec: a diff touching a test file is discarded wholesale. Tell it to run `prettier --write` on **named files only**: a glob such as `src/features/feed/*.tsx` also matches the committed tests (`UI-005`'s agent reformatted three that way, and they had to be restored before commit).
 5. **Review, run every gate yourself, commit the implementation separately.**
 6. **Update the relevant `wiki/CodeContext/Modules/0x0N-*.md`** if the unit changed a documented decision. A subagent handed no wiki path cannot do this — it is yours.
 7. **Push, open the PR, hand to the human. Merge nothing.**
