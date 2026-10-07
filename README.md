@@ -19,12 +19,12 @@ Live at `https://fanwire.daviddems.com` since 2026-09-30, deployed by hand; no w
 
 ## What needs you
 
-`TODO/` — and it is nearly empty now. Nothing in it blocks the pipeline any more.
+`TODO/`, rewritten 2026-10-07 when the frontend's last unit merged:
 
-1. **`TODO/02-deployment-requirements.md`** — what the post-deploy checklist left you (2026-09-30): SES production access is requested and waiting on AWS; the fixes are deployed.
-2. **`TODO/03-open-decisions.md`** — one open question (which browser tool sessions may drive). Answered decisions live in `wiki/GeneralContext/Architecture/human-decisions.md`.
+1. **`TODO/01-for-you.md`**: what only you can do. The `jev` key as a repository secret (after the workflow review), the API credit balance, watching the live site, axe on every route, and SES reapplication (optional, later).
+2. **`TODO/02-backlog.md`**: what is left to build, as small units for the automated workflow.
 
-The setup checklist that used to be `TODO/01` is gone: every item was completed, and what is durable about it moved to `wiki/GeneralContext/Architecture/github-automation-setup.md`. A finished item does not stay in `TODO/` as a tick — it becomes current-state fact in the wiki.
+The project's focus is back on that workflow: `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` is the next session to run. A finished item does not stay in `TODO/` as a tick; it becomes current-state fact in the wiki.
 
 ## Where things are documented
 

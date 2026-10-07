@@ -30,10 +30,12 @@ undetectable, because CloudTrail records no S3 data events (Known gaps, below).
 
 ## Priority order of suspicion
 
-1. **Your own SSO session** (`AdministratorAccess` permission set in `fanwire-workload`). Since the first
-   deploy this is the credential that actually deploys: a human runs `cdk deploy` with it, and through it
-   reaches `cdk-hnb659fds-cfn-exec-role-*`, which still holds `AdministratorAccess` (narrowing it is
-   `wiki/GeneralContext/Prompts/07-deploy-role-scoping.md`). Anything it can do, an attacker holding it can.
+1. **Your own SSO session** (`AdministratorAccess` permission set in `fanwire-workload`). Routine deploys
+   no longer use it: since 2026-10-05 they run through `.github/workflows/deploy.yml` as
+   `GitHubActionsDeployRole`, which can only assume the CDK bootstrap roles. But it is still the
+   credential a human uses for anything by hand, and it is admin. Anything it can do, an attacker
+   holding it can. (`cdk-hnb659fds-cfn-exec-role-*` is no longer admin: it holds the scoped
+   `FanwireCdkCfnExecPolicy` since 2026-10-02.)
 2. **`cdk-hnb659fds-cfn-exec-role-*`** (both regions). Only CloudFormation can assume it, so a finding on it
    means a stack operation did something unexpected — find which stack, and who started the operation.
 3. **The application roles in `Fanwire-App`** — one per function: `ApiRole`, `IngestionRole`, `MediaRole`,
