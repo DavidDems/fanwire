@@ -41,13 +41,17 @@ with the human clicking the real confirmation link. **No agent gets
 identities at will, and the dev pool is real precisely so that its auth path can
 be trusted. Recorded for operators in `dev-auth-setup.md` → "Test accounts".
 
-## §3. Browser automation — not confirmed, so reported as not done
+## §3. Browser automation — Playwright MCP, for hand-run sessions (2026-10-06)
 
-The frontend briefs ask for a real click-through, which needs a browser tool
-allowed on `http://localhost:5173`. **No answer has been given, so the default
-holds: browser verification is reported as NOT DONE** rather than assumed. A
-brief that claims a click-through that did not happen is worse than one that
-says it was skipped. Open in `TODO/03` until the human confirms a tool.
+**Answer:** the human installed Playwright MCP as a local Claude Code MCP
+server on 2026-10-06 (`claude mcp add playwright -- npx @playwright/mcp@latest`).
+A hand-run Director session may drive it against `npm run dev` or `vite
+preview` on localhost, signed in only with the two dev-pool test accounts; a
+row it really checked counts as done. It is not a repo dependency and not in
+CI, so **dispatched workers have no browser**, and anything a tool did not
+really drive is still reported as **NOT DONE**. axe stays NOT DONE until the
+human runs the browser extension. How it is used:
+`wiki/CodeContext/FrontendUI/verification.md` §3a.
 
 ## §4. When date of birth is collected — at profile creation, minimum 16 (2026-09-21)
 
@@ -75,3 +79,19 @@ and a self-declared DOB is not age verification.
 
 All of these are recorded, with the measured contrast table, in
 `wiki/CodeContext/FrontendUI/decisions.md`.
+
+## §6. After the frontend: back to the automated workflow, with `jev` (2026-10-07)
+
+- **Focus.** With every planned frontend unit merged (`FRONTEND-007`, #114),
+  the project's focus moves back to the automated agent workflow: agents
+  dispatched through the API once a task branch and spec exist, rather than
+  units run by hand from Claude Code. Before any task runs, the workflow is
+  reviewed for safety, performance and cost, and the human decides the
+  changes (`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`). The
+  remaining build work is `TODO/02-backlog.md`.
+- **`jev`.** The "System One" typed-decision layer (TypeSafe's `jev`) is to
+  be incorporated. The human has a **direct TypeSafe key** (route
+  `api.typesafe.ai`, model `jev-latest`), not the Vercel AI Gateway route the
+  parked `jev-decision-layer` branch points at. It is not yet a repository
+  secret; storing it waits for the review (`TODO/01-for-you.md` §1).
+

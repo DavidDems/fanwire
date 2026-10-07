@@ -1,7 +1,20 @@
-# 00 — Session protocol
+# Director sessions — how a hand-run unit is done
 
-**Not a session prompt.** The shared rules every numbered prompt in this folder
-points at, so none of them has to repeat it. Read this first, then your prompt.
+**Reference, not a prompt.** How an interactive, human-supervised session (a
+*Director*) runs a unit of work by hand: the loop, the gates, the guard, the
+browser rows and the standing limits. It was `Prompts/00-session-protocol.md`,
+the shared rules for the hand-run prompts `01`–`16`; those prompts are done
+and deleted (2026-10-07), and this file kept their lessons.
+
+**Where this fits now.** From 2026-09-23 to 2026-10-07 every unit
+(`INFRA-002`/`003`, `FRONTEND-001`…`007`, `UI-001`…`008`) was run this way,
+from Claude Code, rather than by the `.ai/` orchestrator: a subscription
+session costs nothing per call, while the orchestrator bills metered API
+credits (see "Who pays", below). The project's focus has now moved back to
+the automated workflow (`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`).
+A Director still uses this file for Director-only work (anything under `.ai/`,
+`.github/`, `wiki/GeneralContext/`, `AGENTS.md`), and for any unit a human
+chooses to run by hand.
 
 ## Which tier you are
 
@@ -84,6 +97,21 @@ behaviour they pin is removed.
 
 - **Never run `cdk deploy` or `npm run deploy`** from any session. It is out of scope for this repo by design — `.ai/docs/handoff.md` §5.7.
 - **CloudFormation's own role is scoped, not admin** (since 2026-10-02, `infra/iam/cdk-cfn-exec-role-policy.json`). A change that makes a stack use an AWS service the policy does not grant fails `infra/test/cfn-exec-policy.test.ts`, and that failure is correct: extend the policy and the test's `TYPE_TO_IAM` in the same PR, say so in the PR body, and tell the human to roll out the new policy version (`infra/iam/README.md`) **before** they deploy.
-- **Never start `.github/workflows/agent-orchestrator.yml`** for these tasks. It bills metered API credits; a subscription does not cover it (`TODO/04-first-deploy.md` §5).
+- **Never start `.github/workflows/agent-orchestrator.yml`** from a hand-run session. It bills metered API credits; a subscription does not cover it ("Who pays", below). Starting it is the human's call.
 - **Every command you hand the human is a single-line PowerShell command.** A multi-line or `sh`-flavoured one half-succeeds on their machine and has already cost a broken Route 53 token. When an `aws` command's output is piped (`| Select-String`, `| Select-Object`), prefix it with `$env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1';` — the CLI otherwise encodes to the Windows code page and dies on the first non-ASCII character.
 - Nothing in this repo has merge permission. Keep it that way.
+
+## Who pays
+
+`.github/workflows/agent-worker.yml` invokes the provider CLI with
+`ANTHROPIC_API_KEY` from repository secrets. **That bills metered API
+credits.** A Claude Pro or Max subscription does not cover it, and nothing in
+the pipeline reads a subscription. Every figure in `.ai/telemetry/` (DEMO-001
+at $0.27, USERS-002 at $0.38) is credit spend.
+
+A spec is a contract, not a dispatch mechanism: an interactive session can read
+`brief.md`, delegate to subagents and produce the same branch and PR without
+the orchestrator. The difference is who pays and who supervises. The
+orchestrator dispatches one worker per role, each one CLI invocation against
+the API; there is no manager agent calling sub-agents inside it.
+

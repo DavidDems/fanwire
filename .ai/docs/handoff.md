@@ -6,6 +6,30 @@ what to be careful of. It is a snapshot, not a design document — for the
 design read [architecture.md](architecture.md), and for the reasoning and the
 review protocol read [philosophy.md](philosophy.md).
 
+> **Status, 2026-10-07 — read this first; the rest of the file is as of
+> 2026-09-23.**
+>
+> - **No task has run through the orchestrator since USERS-002.** Every unit
+>   after it (`INFRA-002`/`003`, `FRONTEND-001`…`007`, `UI-001`…`008`) was
+>   run by hand from Claude Code on a hand-cut `agent/<ID>` branch, to avoid
+>   metered API cost. `agent-guard` still held each diff to its spec, but no
+>   state file was written, so `agentctl status` shows them `DRAFT`, and the
+>   orchestrator correctly no-ops on their CI. How those sessions worked, and
+>   what they learned: `wiki/GeneralContext/Architecture/director-sessions.md`.
+> - **The app is built and live**, so the focus is back on this system. The
+>   next session is `wiki/GeneralContext/Prompts/01-agent-workflow-review.md`:
+>   a safety, performance and cost review, discussed with the human before
+>   anything changes. It starts with §9.1's flow enumeration, which was never
+>   run. §9.2's five items are still open.
+> - **`jev`**: the typed-decision seam is still parked on
+>   `jev-decision-layer` (now 270 commits behind `main`, pointing at the
+>   Vercel gateway). The human now has a **direct TypeSafe key**, not yet a
+>   repository secret.
+> - **Counts have moved:** the `.ai` suite is 352 tests (1 skipped). The
+>   repository is public.
+> - `TODO/02` and `TODO/04`, cited below, were deleted 2026-10-07: what is
+>   left is `TODO/01-for-you.md` and `TODO/02-backlog.md`.
+
 **If you were sent here to fix the open defects, go straight to §9.** It is a
 brief written for you, and its first instruction is not to start fixing.
 
@@ -369,7 +393,7 @@ is proven; everything here is ordinary work.
 
 2. ~~**The first deploy**~~ — **done 2026-09-30**; the site is live and the
    outcome is in `TODO/04-first-deploy.md` §4. It had its own sequencing document:
-   [`TODO/04-first-deploy.md`](../../TODO/04-first-deploy.md). It names every
+   `TODO/04-first-deploy.md` (deleted 2026-10-07; its traps are now `wiki/GeneralContext/Architecture/deploy-traps.md`). It names every
    remaining change, splits them by who is permitted to make it (Director /
    agent / human-at-AWS), and orders them. The nine agent specs it sequences —
    `FRONTEND-001`…`007`, `INFRA-002`, `INFRA-003` — are written and validated.

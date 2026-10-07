@@ -35,13 +35,13 @@ correct, not a failure: it listens on `workflow_run` for *every* `test-agent`
 completion, including on `main`, then skips anything that is not an `agent/*`
 branch. A skipped job costs nothing.
 
-## 2. Secrets — all three are *repository* secrets
+## 2. Secrets — all are *repository* secrets
 
 | Secret | For |
 |---|---|
 | `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
-| `AI_GATEWAY_API_KEY` | Added 2026-09-23 with the `jev` model work. |
+| `AI_GATEWAY_API_KEY` | Added 2026-09-23 for the `jev` decision layer's Vercel AI Gateway route, which never returned a 200 (the branch `jev-decision-layer` is parked). Read by nothing on `main`. The human now has a direct TypeSafe key instead (`TYPESAFE_API_KEY`, not yet set; `TODO/01-for-you.md` §1); if that route replaces the gateway, delete this one. |
 
 ### ⚠️ Repository secret, not an environment secret
 
