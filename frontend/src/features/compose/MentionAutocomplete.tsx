@@ -4,8 +4,16 @@ import { useSyncExternalStore } from "react";
 
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
+import { Button } from "../../components/ui/Button";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { StatusLine } from "../../components/ui/StatusLine";
 import type { ComposeMediator } from "./ComposeMediator";
-import { activeMentionQuery, gameMentionToken, teamMentionToken } from "./mentions";
+import styles from "./MentionAutocomplete.module.css";
+import {
+  activeMentionQuery,
+  gameMentionToken,
+  teamMentionToken,
+} from "./mentions";
 
 /**
  * The mention dropdown.
@@ -22,7 +30,9 @@ import { activeMentionQuery, gameMentionToken, teamMentionToken } from "./mentio
  * The suggestions are ordinary buttons rather than an ARIA combobox. A button is
  * keyboard-reachable with no `aria-activedescendant` bookkeeping, and a
  * half-implemented combobox is worse for a screen reader than a list of plainly
- * labelled buttons.
+ * labelled buttons. They are styled as ghost `Button`s, full width, in a panel
+ * under the text box; the panel stays in the flow of the form rather than
+ * floating over it (`MentionAutocomplete.module.css` says why).
  */
 
 type GameOut = components["schemas"]["GameOut"];
@@ -113,33 +123,49 @@ export function MentionAutocomplete({ mediator }: MentionAutocompleteProps) {
   const source = offeringGames ? games : teams;
 
   if (source.isError) {
-    return <p role="alert">We could not load suggestions just now. You can keep typing.</p>;
+    return (
+      <InlineAlert>
+        We could not load suggestions just now. You can keep typing.
+      </InlineAlert>
+    );
   }
 
   const suggestions = offeringGames
     ? gameSuggestions(games.data ?? [], active.query)
     : teamSuggestions(teams.data ?? [], active.query);
 
+  // The list is left out rather than rendered empty, so a query with no match
+  // leaves the panel empty and its CSS can drop the box instead of drawing it.
   return (
-    <section aria-label={offeringGames ? "Game suggestions" : "Team suggestions"}>
-      {source.isFetching && suggestions.length === 0 ? <p role="status">Looking…</p> : null}
-      <ul>
-        {suggestions.map((suggestion) => (
-          <li key={suggestion.key}>
-            <button
-              type="button"
-              onClick={() => {
-                mediator.send("mentions", {
-                  kind: "mention-inserted",
-                  token: suggestion.token,
-                });
-              }}
-            >
-              {suggestion.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <section
+      className={styles.panel}
+      aria-label={offeringGames ? "Game suggestions" : "Team suggestions"}
+    >
+      {source.isFetching && suggestions.length === 0 ? (
+        <StatusLine>Looking…</StatusLine>
+      ) : null}
+      {suggestions.length === 0 ? null : (
+        <ul className={styles.list}>
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.key}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                className={styles.suggestion}
+                onClick={() => {
+                  mediator.send("mentions", {
+                    kind: "mention-inserted",
+                    token: suggestion.token,
+                  });
+                }}
+              >
+                {suggestion.label}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

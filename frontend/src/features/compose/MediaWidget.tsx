@@ -5,8 +5,13 @@ import type { ChangeEvent } from "react";
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
 import { Field, describeField } from "../../components/FormField";
+import { Button } from "../../components/ui/Button";
+import { ImageIcon } from "../../components/ui/icons";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { StatusLine } from "../../components/ui/StatusLine";
 import { config } from "../../config";
 import type { ComposeMediator } from "./ComposeMediator";
+import styles from "./MediaWidget.module.css";
 
 /**
  * The media widget: choose a file, get it to the bucket, wait for the pipeline,
@@ -36,7 +41,11 @@ type MediaStatus = components["schemas"]["MediaStatus"];
  * whatever this file believes. It is still worth getting right, because it is the
  * only one of the three that can explain itself.
  */
-const ALLOWED_MIME_TYPES: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_MIME_TYPES: readonly string[] = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
 
 /**
  * How often the pipeline is asked whether it has finished.
@@ -61,7 +70,9 @@ class UploadTooLarge extends Error {
 }
 
 /** The ticket. This one *does* go through `apiClient`, so it carries the token. */
-async function requestUploadTicket(mimeType: string): Promise<CreateUploadResponse> {
+async function requestUploadTicket(
+  mimeType: string,
+): Promise<CreateUploadResponse> {
   const { data, response } = await apiClient.POST("/media/uploads", {
     body: { mime_type: mimeType },
   });
@@ -85,9 +96,13 @@ async function requestUploadTicket(mimeType: string): Promise<CreateUploadRespon
  * whole of it; `MediaWidget.test.tsx` asserts the order that reaches the bucket
  * rather than trusting this comment.
  */
-async function uploadToBucket(ticket: CreateUploadResponse, file: File): Promise<void> {
+async function uploadToBucket(
+  ticket: CreateUploadResponse,
+  file: File,
+): Promise<void> {
   const body = new FormData();
-  for (const [name, value] of Object.entries(ticket.fields)) body.append(name, value);
+  for (const [name, value] of Object.entries(ticket.fields))
+    body.append(name, value);
   body.append("file", file);
 
   const response = await fetch(ticket.upload_url, { method: "POST", body });
@@ -131,7 +146,10 @@ export interface MediaWidgetProps {
 
 export function MediaWidget({ mediator }: MediaWidgetProps) {
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
-  const resetCount = useSyncExternalStore(mediator.subscribe, mediator.getResetCount);
+  const resetCount = useSyncExternalStore(
+    mediator.subscribe,
+    mediator.getResetCount,
+  );
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [mediaId, setMediaId] = useState<number | null>(null);
@@ -152,7 +170,8 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
       const ticket = await requestUploadTicket(file.type);
       // `max_bytes` only exists in the ticket, so this check necessarily comes
       // after it — and necessarily before a single byte goes to the bucket.
-      if (file.size > ticket.max_bytes) throw new UploadTooLarge(ticket.max_bytes);
+      if (file.size > ticket.max_bytes)
+        throw new UploadTooLarge(ticket.max_bytes);
       await uploadToBucket(ticket, file);
       return ticket.media_id;
     },
@@ -172,11 +191,13 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
   const media = useQuery({
     queryKey: ["media", mediaId],
     queryFn: async () => {
-      if (mediaId === null) throw new Error("The media poll ran with no media id.");
+      if (mediaId === null)
+        throw new Error("The media poll ran with no media id.");
       return fetchMedia(mediaId);
     },
     enabled: mediaId !== null,
-    refetchInterval: (query) => (isSettled(query.state.data?.status) ? false : POLL_INTERVAL_MS),
+    refetchInterval: (query) =>
+      isSettled(query.state.data?.status) ? false : POLL_INTERVAL_MS,
   });
 
   const status = media.data?.status;
@@ -190,7 +211,8 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
     if (file === undefined) return;
 
     // A second choice replaces the first, draft included.
-    if (mediaId !== null) mediator.send("media", { kind: "media-detached", mediaId });
+    if (mediaId !== null)
+      mediator.send("media", { kind: "media-detached", mediaId });
     setFailure(null);
     setMediaId(null);
     setFileName(file.name);
@@ -198,7 +220,9 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       // Refused here, so a type we already know is wrong never reaches the API.
       setFileName(null);
-      setFailure("That file is not an image we can post. Choose a JPEG, PNG or WebP.");
+      setFailure(
+        "That file is not an image we can post. Choose a JPEG, PNG or WebP.",
+      );
       return;
     }
 
@@ -216,7 +240,7 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
   }
 
   return (
-    <div>
+    <div className={styles.widget}>
       <Field id={FILE_FIELD_ID} label="Image">
         {/*
           Deliberately no `accept`: the browser's own filter drops a file the
@@ -225,6 +249,7 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
         */}
         <input
           {...describeField(FILE_FIELD_ID, { error: failure ?? undefined })}
+          className={styles.file}
           type="file"
           name="image"
           onChange={handleFileChosen}
@@ -235,44 +260,66 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
         The field's own message *is* the alert, rather than a second copy of it:
         `describeField` above points the input's `aria-describedby` at this id, so
         the message is both announced when focus reaches the control and
-        announced immediately as a request failure.
+        announced immediately as a request failure. `InlineAlert` takes no `id`,
+        so the id sits on a wrapper that holds nothing but the alert; the
+        description is the wrapper's text, which is the message alone (the
+        alert's icon is `aria-hidden`).
       */}
       {failure === null ? null : (
-        <p id={`${FILE_FIELD_ID}-error`} role="alert">
-          {failure}
-        </p>
+        <div id={`${FILE_FIELD_ID}-error`}>
+          <InlineAlert>{failure}</InlineAlert>
+        </div>
       )}
 
       {fileName === null ? null : (
-        <div>
+        <div className={styles.chosen}>
           {processed && thumbnail !== null ? (
-            <img src={thumbnailUrl(thumbnail)} alt={`Preview of ${fileName}`} />
+            <img
+              className={styles.preview}
+              src={thumbnailUrl(thumbnail)}
+              alt={`Preview of ${fileName}`}
+            />
           ) : (
-            <p>{fileName}</p>
+            <p className={styles.fileName}>
+              <ImageIcon className={styles.icon} />
+              {fileName}
+            </p>
           )}
 
           {rejected ? (
-            <p role="alert">
-              That image did not pass our checks, so it cannot be posted. Choose another one.
-            </p>
+            <InlineAlert>
+              That image did not pass our checks, so it cannot be posted. Choose
+              another one.
+            </InlineAlert>
           ) : (
             <>
-              <p role="status">
+              <StatusLine>
                 {processed
                   ? "This image is ready to attach."
                   : // Locally there is no GuardDuty, so this is where an upload
                     // against the real dev buckets stays. Correct behaviour, not
                     // a hang — see the wiki entry and MEDIA-002.
                     "Preparing this image. It can be attached once it has been checked."}
-              </p>
+              </StatusLine>
               {attached ? (
-                <button type="button" onClick={detach}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={detach}
+                >
                   Remove file
-                </button>
+                </Button>
               ) : (
-                <button type="button" disabled={!processed} onClick={attach}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!processed}
+                  onClick={attach}
+                >
                   Attach
-                </button>
+                </Button>
               )}
             </>
           )}
