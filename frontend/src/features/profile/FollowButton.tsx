@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import type { components } from "../../api/schema";
 import { useAuth } from "../../auth/AuthContext";
+import { Button } from "../../components/ui/Button";
+import { InlineAlert } from "../../components/ui/InlineAlert";
 import { FOLLOWING_QUERY_KEY, setFollowing, viewedUserKey } from "./api";
 
 /**
@@ -64,20 +66,31 @@ export function FollowButton({ userId, isFollowing }: FollowButtonProps) {
     onMutate: async (next: boolean): Promise<FollowSnapshot> => {
       // An in-flight read that lands after the patch would overwrite it with the
       // pre-follow answer it was already carrying.
-      await queryClient.cancelQueries({ queryKey: viewedUserKey(userId), exact: true });
-      await queryClient.cancelQueries({ queryKey: FOLLOWING_QUERY_KEY, exact: true });
+      await queryClient.cancelQueries({
+        queryKey: viewedUserKey(userId),
+        exact: true,
+      });
+      await queryClient.cancelQueries({
+        queryKey: FOLLOWING_QUERY_KEY,
+        exact: true,
+      });
 
       const snapshot: FollowSnapshot = {
         profile: queryClient.getQueryData<PublicUserOut>(viewedUserKey(userId)),
         following: queryClient.getQueryData<number[]>(FOLLOWING_QUERY_KEY),
       };
 
-      queryClient.setQueryData<PublicUserOut>(viewedUserKey(userId), (current) =>
-        current === undefined
-          ? current
-          : // Following *them* changes how many followers they have, and nothing
-            // about how many people they follow.
-            { ...current, follower_count: current.follower_count + (next ? 1 : -1) },
+      queryClient.setQueryData<PublicUserOut>(
+        viewedUserKey(userId),
+        (current) =>
+          current === undefined
+            ? current
+            : // Following *them* changes how many followers they have, and nothing
+              // about how many people they follow.
+              {
+                ...current,
+                follower_count: current.follower_count + (next ? 1 : -1),
+              },
       );
       queryClient.setQueryData<number[]>(FOLLOWING_QUERY_KEY, (current) => {
         const ids = current ?? [];
@@ -105,8 +118,14 @@ export function FollowButton({ userId, isFollowing }: FollowButtonProps) {
     onSettled: () => {
       // The server decides the counts, not the optimistic guess: somebody else
       // may have followed them while this request was in flight.
-      void queryClient.invalidateQueries({ queryKey: viewedUserKey(userId), exact: true });
-      void queryClient.invalidateQueries({ queryKey: FOLLOWING_QUERY_KEY, exact: true });
+      void queryClient.invalidateQueries({
+        queryKey: viewedUserKey(userId),
+        exact: true,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: FOLLOWING_QUERY_KEY,
+        exact: true,
+      });
     },
   });
 
@@ -122,10 +141,18 @@ export function FollowButton({ userId, isFollowing }: FollowButtonProps) {
 
   return (
     <>
-      <button type="button" onClick={handleClick} disabled={toggle.isPending}>
+      {/* `data-active` is for CSS only: the label carries the state, so no `aria-pressed`. */}
+      <Button
+        type="button"
+        variant={isFollowing ? "secondary" : "primary"}
+        size="md"
+        data-active={isFollowing ? "" : undefined}
+        onClick={handleClick}
+        disabled={toggle.isPending}
+      >
         {isFollowing ? "Unfollow" : "Follow"}
-      </button>
-      {failure === null ? null : <p role="alert">{failure}</p>}
+      </Button>
+      {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
     </>
   );
 }

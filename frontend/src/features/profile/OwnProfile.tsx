@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 
 import type { components } from "../../api/schema";
+import styles from "./Profile.module.css";
 import { ProfileSettings } from "./ProfileSettings";
 import { ProfileSummary } from "./ProfileSummary";
 
@@ -34,7 +35,7 @@ export interface OwnProfileProps {
 
 export function OwnProfile({ profile }: OwnProfileProps) {
   return (
-    <section>
+    <section className={styles.page}>
       <ProfileSummary
         username={profile.username}
         followerCount={profile.follower_count}
@@ -43,10 +44,11 @@ export function OwnProfile({ profile }: OwnProfileProps) {
 
       {profile.description === null ? null : <p>{profile.description}</p>}
 
-      <dl>
-        <dt>Date of birth</dt>
-        {/* Only you can see this — it is never rendered on a public profile. */}
+      {/* Never rendered on a public profile: `PublicProfile` has no such field. */}
+      <dl className={styles.private}>
+        <dt className={styles.privateLabel}>Date of birth</dt>
         <dd>{formatDateOfBirth(profile.date_of_birth)}</dd>
+        <dd className={styles.muted}>Only you can see this</dd>
       </dl>
 
       <ProfileSettings profile={profile} />

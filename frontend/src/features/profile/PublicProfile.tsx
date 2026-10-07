@@ -1,5 +1,6 @@
 import type { components } from "../../api/schema";
 import { FollowButton } from "./FollowButton";
+import styles from "./Profile.module.css";
 import { ProfileSummary } from "./ProfileSummary";
 
 /**
@@ -9,6 +10,8 @@ import { ProfileSummary } from "./ProfileSummary";
  * reads nothing from the caller's own `MeOut` even when that is sitting in the
  * cache. There is no branch here that could show a private field: there is no
  * private field in scope.
+ *
+ * Follow/Unfollow goes in the header card's action slot, on its right edge.
  */
 
 type PublicUserOut = components["schemas"]["PublicUserOut"];
@@ -21,16 +24,15 @@ export interface PublicProfileProps {
 
 export function PublicProfile({ profile, isFollowing }: PublicProfileProps) {
   return (
-    <section>
+    <section className={styles.page}>
       <ProfileSummary
         username={profile.username}
         followerCount={profile.follower_count}
         followingCount={profile.following_count}
+        action={<FollowButton userId={profile.id} isFollowing={isFollowing} />}
       />
 
       {profile.description === null ? null : <p>{profile.description}</p>}
-
-      <FollowButton userId={profile.id} isFollowing={isFollowing} />
     </section>
   );
 }
