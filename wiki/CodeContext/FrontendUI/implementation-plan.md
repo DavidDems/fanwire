@@ -298,3 +298,9 @@ settings card.
   a username character rule (`typography.md` §1); team abbreviations on
   `LiveScoreView` (`components.md` §4); the game page that would make
   `#GameId<n>` a link.
+- **No sign-out control exists anywhere in the UI** (found 2026-10-07).
+  `useAuth().signOut` exists and works, but nothing calls it, and no spec in
+  this plan adds one. It needs its own small unit: a "Sign out" button in the
+  shell header for signed-in visitors. It writes `src/routes/**`, so it never
+  runs concurrently with `FRONTEND-007`. Until then, sign out by clearing
+  `localStorage` (`dev-auth-setup.md`).

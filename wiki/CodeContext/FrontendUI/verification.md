@@ -174,10 +174,16 @@ done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured
   never acts on the live site as a signed-in user.
 - **Not covered:** axe, because there is no axe dependency and loading it from a
   CDN would put a third-party script into the check. The axe row stays NOT DONE
-  until the human runs the axe browser extension. Signed-in states need a test
-  account in the **dev** Cognito pool (`wiki/GeneralContext/Architecture/dev-auth-setup.md`),
-  whose credentials the human keeps outside the repo. Until one exists,
-  signed-in rows are NOT DONE.
+  until the human runs the axe browser extension. 
+- **Signed-in states** use the two dev-pool test accounts (`fwtest1` and
+  `fwtest2`), whose credentials are in the untracked
+  `frontend/.env.test-accounts.local`. How to start the stack, recreate their
+  profiles after a `docker compose down`, and sign out (there is no sign-out
+  button yet) is in `wiki/GeneralContext/Architecture/dev-auth-setup.md`
+  "Test accounts". Use them against `npm run dev` with `backend-dev` only,
+  never the live site, and sign out at the end, because the browser profile
+  persists. Two accounts make "someone else's profile" and following
+  checkable.
 
 **The per-unit checklist.** Every styling unit's PR body carries this table for
 the routes it touched, filled in or marked NOT DONE:

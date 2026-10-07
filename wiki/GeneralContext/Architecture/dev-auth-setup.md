@@ -71,5 +71,12 @@ Then tell the manager session the two ids, or just create the files; the fronten
 - **The human clicks the real confirmation link.** No agent is given `cognito-idp:AdminConfirmSignUp`, because an agent holding it could mint confirmed identities in the very pool that is kept real so its auth path can be trusted.
 - Browser verification is reported as **NOT DONE** unless a browser tool really drove the app (`human-decisions.md` §3).
 
+### The two that exist (created by the human, 2026-10-07)
+- `daviddemrs92+fw1@gmail.com` (username `fwtest1`) and `daviddemrs92+fw2@gmail.com` (username `fwtest2`), confirmed in the dev pool. The confirmation is a **code** emailed by Cognito and entered on `/confirm`, not a link.
+- **Credentials:** `frontend/.env.test-accounts.local`, which is untracked (`.gitignore`: `.env.*.local`) and outside Docker build contexts (`.dockerignore`: `**/.env.*`). The keys are `FANWIRE_TEST_<n>_EMAIL`, `_PASSWORD` and `_USERNAME` for n = 1 and 2. Read it only for a signed-in browser check, never print a password into a PR or the wiki, and never use these accounts on the live site: they don't exist in the production pool, and the Playwright browser profile persists between sessions.
+- **The Cognito identities persist. The fanwire profiles don't.** Postgres in `docker-compose.yml` has no volume, so `docker compose down` deletes every `users` row. After a fresh stack, signing in lands on `/create-profile`: recreate the profile with the `_USERNAME` from the file. That is also a free check of profile creation.
+- **Signing out:** there is no sign-out control in the UI yet (`FrontendUI/implementation-plan.md`, "After the units"). Remove the `CognitoIdentityServiceProvider.*` keys from `localStorage` for the origin, then reload. In Playwright, do it with `browser_evaluate`, and do it at the end of every signed-in check.
+- **Starting the stack:** `docker compose up -d --build backend-dev`, then wait for `http://localhost:8001/health` before `scripts/seed_dev.py` (the container migrates on start), then `npm run dev` in `frontend/`. The dev server renders since `#103`. The Cognito ids reach `backend-dev` only from `backend/.env` since `#104`.
+
 ## Teardown
 `aws cognito-idp update-user-pool --user-pool-id <POOL_ID> --deletion-protection INACTIVE` then `aws cognito-idp delete-user-pool --user-pool-id <POOL_ID>`.
