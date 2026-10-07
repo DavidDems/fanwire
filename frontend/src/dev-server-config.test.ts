@@ -1,7 +1,7 @@
 /**
  * `npm run dev` must render, not just `npm run build`.
  *
- * `amazon-cognito-identity-js` bundles the `buffer` polyfill, which reads
+ * The Cognito SDK bundles the `buffer` polyfill, which reads
  * Node's `global` at module load. In a production build Rollup's CommonJS
  * handling copes with it. In the dev server Vite pre-bundles dependencies with
  * esbuild, which leaves `global` alone, so the browser throws
