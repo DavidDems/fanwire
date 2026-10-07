@@ -260,15 +260,12 @@ export function MediaWidget({ mediator }: MediaWidgetProps) {
         The field's own message *is* the alert, rather than a second copy of it:
         `describeField` above points the input's `aria-describedby` at this id, so
         the message is both announced when focus reaches the control and
-        announced immediately as a request failure. `InlineAlert` takes no `id`,
-        so the id sits on a wrapper that holds nothing but the alert; the
-        description is the wrapper's text, which is the message alone (the
-        alert's icon is `aria-hidden`).
+        announced immediately as a request failure. The id is on the alert
+        itself, and the description is the message alone, because the alert's
+        icon is `aria-hidden`.
       */}
       {failure === null ? null : (
-        <div id={`${FILE_FIELD_ID}-error`}>
-          <InlineAlert>{failure}</InlineAlert>
-        </div>
+        <InlineAlert id={`${FILE_FIELD_ID}-error`}>{failure}</InlineAlert>
       )}
 
       {fileName === null ? null : (
