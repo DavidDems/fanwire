@@ -6,6 +6,10 @@ import { useNavigate } from "react-router-dom";
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
 import { Field, describeField } from "../components/FormField";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { InlineAlert } from "../components/ui/InlineAlert";
+import styles from "./AuthPage.module.css";
 import { PROFILE_QUERY_KEY } from "./profile";
 
 /**
@@ -28,7 +32,8 @@ type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 type TeamOut = components["schemas"]["TeamOut"];
 type ValidationError = components["schemas"]["ValidationError"];
 
-type ProfileField = "username" | "dateOfBirth" | "description" | "preferredTeam";
+type ProfileField =
+  "username" | "dateOfBirth" | "description" | "preferredTeam";
 
 /** `detail[].loc` names the request field; these are this form's controls. */
 const CONTROL_FOR_FIELD: Readonly<Record<string, ProfileField>> = {
@@ -61,13 +66,16 @@ interface CreateProfileResult {
  * page the user can do nothing about by retyping, so telling them what the rule
  * actually is matters more than house style.
  */
-function rejectionsFrom(detail: ValidationError[] | undefined): CreateProfileResult {
+function rejectionsFrom(
+  detail: ValidationError[] | undefined,
+): CreateProfileResult {
   const rejected: Partial<Record<ProfileField, string>> = {};
   let unattributed: string | null = null;
 
   for (const problem of detail ?? []) {
     const named = problem.loc[problem.loc.length - 1];
-    const control = typeof named === "string" ? CONTROL_FOR_FIELD[named] : undefined;
+    const control =
+      typeof named === "string" ? CONTROL_FOR_FIELD[named] : undefined;
     if (control === undefined) {
       unattributed ??= problem.msg;
       continue;
@@ -79,20 +87,31 @@ function rejectionsFrom(detail: ValidationError[] | undefined): CreateProfileRes
   if (Object.keys(rejected).length === 0 && unattributed === null) {
     unattributed = "We could not create your profile from those details.";
   }
-  return { rejected, alert: Object.keys(rejected).length === 0 ? unattributed : null };
+  return {
+    rejected,
+    alert: Object.keys(rejected).length === 0 ? unattributed : null,
+  };
 }
 
-async function createProfile(body: CreateUserRequest): Promise<CreateProfileResult> {
+async function createProfile(
+  body: CreateUserRequest,
+): Promise<CreateProfileResult> {
   const { data, error, response } = await apiClient.POST("/users", { body });
 
   if (response.status === 422) return rejectionsFrom(error?.detail);
   if (response.status === 409) {
     // One 409 covers a duplicate username, a duplicate identity and an unknown
     // team ([[0x01-users]]), so it cannot honestly be pinned to one control.
-    return { rejected: {}, alert: "That username is already taken, or that team no longer exists." };
+    return {
+      rejected: {},
+      alert: "That username is already taken, or that team no longer exists.",
+    };
   }
   if (!response.ok || data === undefined) {
-    return { rejected: {}, alert: "We could not create your profile. Please try again." };
+    return {
+      rejected: {},
+      alert: "We could not create your profile. Please try again.",
+    };
   }
   return { rejected: {}, alert: null };
 }
@@ -105,17 +124,23 @@ export function ProfileSetupPage() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [description, setDescription] = useState("");
   const [preferredTeamId, setPreferredTeamId] = useState("");
-  const [errors, setErrors] = useState<Partial<Record<ProfileField, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<ProfileField, string>>>(
+    {},
+  );
   const [failure, setFailure] = useState<string | null>(null);
 
-  const teams = useQuery({ queryKey: ["events", "teams"], queryFn: fetchTeams });
+  const teams = useQuery({
+    queryKey: ["events", "teams"],
+    queryFn: fetchTeams,
+  });
 
   const create = useMutation({
     mutationFn: createProfile,
     onSuccess: async (result) => {
       setErrors(result.rejected);
       setFailure(result.alert);
-      if (result.alert !== null || Object.keys(result.rejected).length > 0) return;
+      if (result.alert !== null || Object.keys(result.rejected).length > 0)
+        return;
 
       // The guards share one cache entry for `GET /users/me`, and the app's
       // `staleTime` is 30s. Without this the 404 that sent the user here is
@@ -143,81 +168,106 @@ export function ProfileSetupPage() {
       username: username.trim(),
       date_of_birth: dateOfBirth,
       ...(trimmed === "" ? {} : { description: trimmed }),
-      ...(preferredTeamId === "" ? {} : { preferred_team_id: Number(preferredTeamId) }),
+      ...(preferredTeamId === ""
+        ? {}
+        : { preferred_team_id: Number(preferredTeamId) }),
     });
   }
 
   return (
-    <section>
-      <h1>Create your profile</h1>
+    <div className={styles.page}>
+      <Card as="section" className={styles.card}>
+        <h1>Create your profile</h1>
 
-      {failure === null ? null : <p role="alert">{failure}</p>}
+        {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <Field id="profile-username" label="Username" error={errors.username}>
-          <input
-            {...describeField("profile-username", { error: errors.username })}
-            type="text"
-            name="username"
-            autoComplete="username"
-            value={username}
-            onChange={(event) => {
-              setUsername(event.target.value);
-            }}
-          />
-        </Field>
+        <form onSubmit={handleSubmit} noValidate>
+          <Field id="profile-username" label="Username" error={errors.username}>
+            <input
+              {...describeField("profile-username", { error: errors.username })}
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => {
+                setUsername(event.target.value);
+              }}
+            />
+          </Field>
 
-        <Field
-          id="profile-date-of-birth"
-          label="Date of birth"
-          error={errors.dateOfBirth}
-          hintText="Only you can see this. It is never shown on your profile."
-        >
-          <input
-            {...describeField("profile-date-of-birth", { error: errors.dateOfBirth, hint: true })}
-            type="date"
-            name="date-of-birth"
-            value={dateOfBirth}
-            onChange={(event) => {
-              setDateOfBirth(event.target.value);
-            }}
-          />
-        </Field>
-
-        <Field id="profile-description" label="Description" error={errors.description}>
-          <textarea
-            {...describeField("profile-description", { error: errors.description })}
-            name="description"
-            rows={3}
-            value={description}
-            onChange={(event) => {
-              setDescription(event.target.value);
-            }}
-          />
-        </Field>
-
-        <Field id="profile-team" label="Preferred team" error={errors.preferredTeam}>
-          <select
-            {...describeField("profile-team", { error: errors.preferredTeam })}
-            name="preferred-team"
-            value={preferredTeamId}
-            onChange={(event) => {
-              setPreferredTeamId(event.target.value);
-            }}
+          <Field
+            id="profile-date-of-birth"
+            label="Date of birth"
+            error={errors.dateOfBirth}
+            hintText="Only you can see this. It is never shown on your profile."
           >
-            <option value="">No preference</option>
-            {(teams.data ?? []).map((team) => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+            <input
+              {...describeField("profile-date-of-birth", {
+                error: errors.dateOfBirth,
+                hint: true,
+              })}
+              type="date"
+              name="date-of-birth"
+              value={dateOfBirth}
+              onChange={(event) => {
+                setDateOfBirth(event.target.value);
+              }}
+            />
+          </Field>
 
-        <button type="submit" disabled={create.isPending}>
-          Create profile
-        </button>
-      </form>
-    </section>
+          <Field
+            id="profile-description"
+            label="Description"
+            error={errors.description}
+          >
+            <textarea
+              {...describeField("profile-description", {
+                error: errors.description,
+              })}
+              name="description"
+              rows={3}
+              value={description}
+              onChange={(event) => {
+                setDescription(event.target.value);
+              }}
+            />
+          </Field>
+
+          <Field
+            id="profile-team"
+            label="Preferred team"
+            error={errors.preferredTeam}
+          >
+            <select
+              {...describeField("profile-team", {
+                error: errors.preferredTeam,
+              })}
+              name="preferred-team"
+              value={preferredTeamId}
+              onChange={(event) => {
+                setPreferredTeamId(event.target.value);
+              }}
+            >
+              <option value="">No preference</option>
+              {(teams.data ?? []).map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            className={styles.submit}
+            disabled={create.isPending}
+          >
+            Create profile
+          </Button>
+        </form>
+      </Card>
+    </div>
   );
 }

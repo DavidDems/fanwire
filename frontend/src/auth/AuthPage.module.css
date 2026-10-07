@@ -1,0 +1,55 @@
+/*
+ * The narrow form card shared by the five auth pages
+ * (wiki/CodeContext/FrontendUI/layout.md §3): one card, 25rem wide at most,
+ * centred in the column, with the h1, the request alert and the form inside
+ * it and the secondary links as plain links below it. Values come from
+ * tokens.css by name only; form controls are styled by base.css.
+ */
+
+/* The column: the card and the links under it share its width. */
+.page {
+  max-width: 25rem;
+  margin-inline: auto;
+}
+
+/* h1, then the request alert, then the form. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Forgot password, step two: says where the code went. Not a live region. */
+.lead {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* The primary action: full width, clear of the last field. */
+.submit {
+  width: 100%;
+  margin-top: var(--space-5);
+}
+
+/* A second action under the primary one (Resend code). */
+.secondaryAction {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* Plain links below the card. */
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+/* Standalone links, not inline in a sentence: at least 24px tall (WCAG 2.5.8). */
+.links a {
+  display: inline-block;
+  padding-block: var(--space-1);
+}
