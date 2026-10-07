@@ -10,6 +10,17 @@ import { defineConfig } from "vite";
 // none should be added — to this file or to `backend-dev`.
 export default defineConfig({
   plugins: [react()],
+  // `amazon-cognito-identity-js` bundles the `buffer` polyfill, which reads
+  // Node's `global`. The production build copes with that, but the dev
+  // server's esbuild pre-bundle does not, and `npm run dev` rendered an empty
+  // page (`ReferenceError: global is not defined`). Scoped to the dev
+  // pre-bundle, so application code and the production bundle are untouched.
+  // Pinned by src/dev-server-config.test.ts.
+  optimizeDeps: {
+    esbuildOptions: {
+      define: { global: "globalThis" },
+    },
+  },
   server: {
     proxy: {
       "/api": {
