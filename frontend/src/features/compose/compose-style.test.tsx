@@ -270,6 +270,22 @@ describe("the file input is still described by its error (criterion 3, guard)", 
     expect(fileInput()).toHaveAccessibleDescription(WRONG_TYPE);
   });
 
+  it("points the description at the alert itself, not a wrapper", async () => {
+    const user = renderWidget();
+
+    await user.upload(
+      fileInput(),
+      testFile({ name: "notes.pdf", type: "application/pdf" }),
+    );
+
+    await screen.findByText(WRONG_TYPE);
+    const describedBy = fileInput().getAttribute("aria-describedby") ?? "";
+    expect(describedBy).not.toBe("");
+    expect(document.getElementById(describedBy)).toBe(
+      messageHolding(WRONG_TYPE, "alert"),
+    );
+  });
+
   it("describes the input with the too-large message", async () => {
     server.use(
       uploadTicket({ response: testUpload({ max_bytes: 64 }) }),
