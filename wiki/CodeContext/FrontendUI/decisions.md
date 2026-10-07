@@ -183,3 +183,17 @@ named on each line.
   the API-driven orchestrator: specs `UI-001`–`UI-008` (and the amended
   `FRONTEND-007`) are worked through by prompts `13`–`16` in
   `wiki/GeneralContext/Prompts/`, one PR per unit.
+
+## `InlineAlert` takes an `id` — decided 2026-10-07
+
+- **A prop, not a wrapper.** When a field's error *is* an `InlineAlert` (the
+  composer's image field), the control's `aria-describedby` names the alert
+  itself through `InlineAlert`'s `id` prop. `UI-006` first put the id on a
+  `<div>` wrapping the alert, because `src/components/ui/**` was outside its
+  paths. The human preferred the prop as the better practice: the element that
+  describes the control is the alert, with no extra node whose text has to
+  stay identical to it.
+- **Only `id`.** No `className` or general attribute passthrough; the role,
+  classes and icon are what make it this component.
+- **Performance:** none expected (one optional attribute, and one element fewer
+  than the wrapper). If that ever proves wrong, revisit it here.
