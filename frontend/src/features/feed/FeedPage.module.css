@@ -1,0 +1,32 @@
+/*
+ * The feed's stream template (wiki/CodeContext/FrontendUI/layout.md §3):
+ * the h1, then the posts as a stack of cards, then a full-width Load more.
+ * Values come from tokens.css by name only.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The loading line and the three post skeletons under it. */
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Each item is a PostNode card: no markers, tight between cards. */
+.stream {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.more {
+  width: 100%;
+}

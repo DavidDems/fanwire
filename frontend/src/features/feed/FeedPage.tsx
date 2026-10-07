@@ -1,7 +1,16 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
+import { Button } from "../../components/ui/Button";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { StatusLine } from "../../components/ui/StatusLine";
+import styles from "./FeedPage.module.css";
 import { PostNode } from "./PostNode";
 import { FEED_PAGES_KEY, fetchFeedPage } from "./api";
+
+/** Three post-shaped placeholders: enough to read as a feed arriving, not a count. */
+const SKELETONS = [0, 1, 2] as const;
 
 /**
  * `/` — the feed.
@@ -43,22 +52,39 @@ export function FeedPage() {
   const items = (feed.data?.pages ?? []).flatMap((page) => page.items);
 
   return (
-    <section>
+    <section className={styles.page}>
       <h1>Feed</h1>
 
-      {feed.isPending ? <p role="status">Loading the feed…</p> : null}
-      {feed.isError ? (
-        <p role="alert">We could not load the feed just now. Please try again.</p>
+      {feed.isPending ? (
+        <div className={styles.loading}>
+          <StatusLine>Loading the feed…</StatusLine>
+          {SKELETONS.map((index) => (
+            <Skeleton key={index} variant="post" />
+          ))}
+        </div>
       ) : null}
-      {feed.isSuccess && items.length === 0 ? <p>There is nothing here yet.</p> : null}
+      {feed.isError ? (
+        <InlineAlert>
+          We could not load the feed just now. Please try again.
+        </InlineAlert>
+      ) : null}
+      {feed.isSuccess && items.length === 0 ? (
+        <EmptyState>There is nothing here yet.</EmptyState>
+      ) : null}
 
-      <ol>
-        {items.map((post) => (
-          <li key={post.id}>
-            <PostNode post={post} />
-          </li>
-        ))}
-      </ol>
+      {/*
+       * Not rendered while there is nothing in it: an empty list is announced
+       * as "list, 0 items", which says less than the status line above it.
+       */}
+      {items.length === 0 ? null : (
+        <ol className={styles.stream}>
+          {items.map((post) => (
+            <li key={post.id}>
+              <PostNode post={post} />
+            </li>
+          ))}
+        </ol>
+      )}
 
       {/*
        * Absent rather than disabled once the feed has ended: a permanently
@@ -66,13 +92,16 @@ export function FeedPage() {
        * further page for it to ever become enabled for.
        */}
       {!feed.hasNextPage ? null : (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="md"
+          className={styles.more}
           onClick={() => void feed.fetchNextPage()}
           disabled={feed.isFetchingNextPage}
         >
           Load more
-        </button>
+        </Button>
       )}
     </section>
   );
