@@ -3,9 +3,16 @@ import { useParams } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
 import { useProfile } from "../../auth/profile";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { StatusLine } from "../../components/ui/StatusLine";
 import { OwnProfile } from "./OwnProfile";
 import { PublicProfile } from "./PublicProfile";
-import { FOLLOWING_QUERY_KEY, fetchFollowing, fetchPublicProfile, viewedUserKey } from "./api";
+import {
+  FOLLOWING_QUERY_KEY,
+  fetchFollowing,
+  fetchPublicProfile,
+  viewedUserKey,
+} from "./api";
 
 /**
  * `/profile/:userId` — one public route, two variants.
@@ -36,12 +43,14 @@ export function ProfilePage() {
   const own = useProfile(status === "authenticated");
   const ownProfile = status === "authenticated" ? (own.data ?? null) : null;
 
-  const resolvingOwn = status === "loading" || (status === "authenticated" && own.isPending);
+  const resolvingOwn =
+    status === "loading" || (status === "authenticated" && own.isPending);
   const isOwnProfile = ownProfile !== null && ownProfile.id === userId;
 
   // Held until "is this me?" has an answer, so the own-profile variant never
   // issues a public read it is about to throw away.
-  const readsPublicProfile = Number.isInteger(userId) && !resolvingOwn && !isOwnProfile;
+  const readsPublicProfile =
+    Number.isInteger(userId) && !resolvingOwn && !isOwnProfile;
 
   const viewed = useQuery({
     queryKey: viewedUserKey(userId),
@@ -63,16 +72,24 @@ export function ProfilePage() {
   });
 
   if (!Number.isInteger(userId)) {
-    return <p role="alert">There is no profile at this address.</p>;
+    return <InlineAlert>There is no profile at this address.</InlineAlert>;
   }
   if (ownProfile !== null && ownProfile.id === userId) {
     return <OwnProfile profile={ownProfile} />;
   }
-  if (resolvingOwn || viewed.isPending || (readsFollowSet && followSet.isPending)) {
-    return <p role="status">Loading this profile…</p>;
+  if (
+    resolvingOwn ||
+    viewed.isPending ||
+    (readsFollowSet && followSet.isPending)
+  ) {
+    return <StatusLine>Loading this profile…</StatusLine>;
   }
   if (viewed.isError || viewed.data === undefined) {
-    return <p role="alert">We could not load this profile just now. Please try again.</p>;
+    return (
+      <InlineAlert>
+        We could not load this profile just now. Please try again.
+      </InlineAlert>
+    );
   }
   return (
     <PublicProfile
