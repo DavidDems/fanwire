@@ -95,12 +95,12 @@ services:
       # Cognito ids are not secrets (wiki/GeneralContext/Architecture/
       # dev-auth-setup.md: "pool id and public client id ship in the
       # browser bundle anyway") but are per-developer (each points at
-      # their own dev pool). Bare names here forward the value from
-      # whatever shell runs `docker compose up`, if set, and otherwise
-      # fall through to backend/.env below — never hardcoded.
-      - COGNITO_REGION
-      - COGNITO_USER_POOL_ID
-      - COGNITO_APP_CLIENT_ID
+      # their own dev pool), so they come from backend/.env below, never
+      # hardcoded. Never list them here as bare names: Docker Compose
+      # (v5.5.1, 2026-10-07) unsets a bare name the host shell lacks, and
+      # `environment` outranks `env_file`, so backend/.env's values were
+      # dropped and every signed-in request 500'd
+      # (.ai/tests/test_dev_compose.py).
     # `required: false` lets this start with backend/.env absent entirely —
     # get_token_verifier just won't resolve a real pool until the Cognito
     # vars are set one way or the other (host env or this file).
