@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import styles from "./PostMedia.module.css";
 import { mediaUrl, type MediaItemView } from "./api";
 
 /**
@@ -40,6 +41,7 @@ export function PostMedia({ item, author }: PostMediaProps) {
 
   return (
     <img
+      className={styles.media}
       src={mediaUrl(item.s3_key_public)}
       alt={`Image posted by ${author}`}
       onError={() => setFailed(true)}

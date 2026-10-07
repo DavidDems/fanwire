@@ -1,0 +1,89 @@
+/*
+ * One post and its thread (wiki/CodeContext/FrontendUI/layout.md §4,
+ * components.md §5). A top-level post is a Card; a reply is the same `.post`
+ * box without one, sitting on its parent card's surface. Values come from
+ * tokens.css by name only.
+ */
+
+/* Tight inside a post: header, text, media, ticker, footer, thread. */
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Avatar, author and time on one line; wrapping only when 320 px forces it. */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  min-width: 0;
+}
+
+.author {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The line breaks the author typed, and long words or URLs wrap (typography.md §2). */
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Like, count, Reply, Repost, Show replies: one row that wraps on a phone. */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The chevron turns over when the replies are open. base.css zeroes the duration for reduced motion. */
+.chevron {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * Each nested level: indented --space-4 behind a 2 px rule, so the thread line
+ * shows without a card-in-card box.
+ */
+.replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0 0 0 var(--space-4);
+  border-left: 2px solid var(--color-border);
+  list-style: none;
+}
+
+/*
+ * From the fourth level the indent stops growing (layout.md §4): the list is
+ * pulled back by one step, so its rule lies over its parent's and its posts
+ * line up with the third level. The structure still nests; only the indent is
+ * capped, which keeps room for text on a 320 px phone.
+ */
+.replies .replies .replies .replies {
+  margin-left: calc(-1 * (var(--space-4) + 2px));
+}

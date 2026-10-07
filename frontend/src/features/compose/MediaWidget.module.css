@@ -1,0 +1,53 @@
+/*
+ * The media widget (wiki/CodeContext/FrontendUI/components.md §5). FormField's
+ * Field owns the label and its spacing, and base.css already gives the file
+ * input's ::file-selector-button the secondary look, so neither is restyled
+ * here. Values come from tokens.css by name only.
+ */
+
+/* The field, its alert, then the chosen file, stacked. */
+.widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* A long file name never pushes the page sideways at 320 px. */
+.file {
+  max-width: 100%;
+}
+
+/* Preview or file name, the status or alert, then Attach / Remove file. */
+.chosen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* 96 px, cropped rather than squashed. */
+.preview {
+  width: 6rem;
+  height: 6rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/* The file name while there is no preview yet, with the image icon beside it. */
+.fileName {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Sits on the first line of the name, at the text's size. */
+.icon {
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+  margin-top: 0.125em;
+  color: var(--color-text-muted);
+}

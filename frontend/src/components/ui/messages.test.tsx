@@ -28,6 +28,20 @@ describe("InlineAlert", () => {
       expect(icon).toHaveAttribute("aria-hidden", "true");
     }
   });
+
+  // A field's error is often this alert, and the control's `aria-describedby`
+  // has to be able to name it directly (`components.md` §2 "As built").
+  it("puts an id on the alert itself when given one", () => {
+    render(<InlineAlert id="photo-error">That file is too large.</InlineAlert>);
+
+    expect(screen.getByRole("alert")).toHaveAttribute("id", "photo-error");
+  });
+
+  it("renders no id when not given one", () => {
+    render(<InlineAlert>Could not load the feed.</InlineAlert>);
+
+    expect(screen.getByRole("alert")).not.toHaveAttribute("id");
+  });
 });
 
 describe("StatusLine", () => {

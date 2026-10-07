@@ -3,7 +3,15 @@ import { useState } from "react";
 
 import type { components } from "../../api/schema";
 import { Field, describeField } from "../../components/FormField";
-import { PREFERENCE_QUERY_KEY, fetchEmailPreference, setEmailPreference } from "./api";
+import { Card } from "../../components/ui/Card";
+import { InlineAlert } from "../../components/ui/InlineAlert";
+import { StatusLine } from "../../components/ui/StatusLine";
+import styles from "./Notifications.module.css";
+import {
+  PREFERENCE_QUERY_KEY,
+  fetchEmailPreference,
+  setEmailPreference,
+} from "./api";
 
 /**
  * The email-notification preference.
@@ -29,9 +37,14 @@ import { PREFERENCE_QUERY_KEY, fetchEmailPreference, setEmailPreference } from "
  * with the space bar and readable by assistive technology without a line of code,
  * and every one of those is something a div has to re-implement and usually only
  * half does.
+ *
+ * **One card, whatever the state.** The loading and error lines render inside
+ * the same one-row card the checkbox does (`layout.md` §3), so the strip does
+ * not appear from nothing and push the list down once the read lands.
  */
 
-type NotificationPreferenceOut = components["schemas"]["NotificationPreferenceOut"];
+type NotificationPreferenceOut =
+  components["schemas"]["NotificationPreferenceOut"];
 
 const EMAIL_FIELD_ID = "email-notifications";
 
@@ -49,18 +62,32 @@ export function EmailPreference() {
     queryFn: fetchEmailPreference,
   });
 
-  const update = useMutation<NotificationPreferenceOut, Error, boolean, PreferenceSnapshot>({
+  const update = useMutation<
+    NotificationPreferenceOut,
+    Error,
+    boolean,
+    PreferenceSnapshot
+  >({
     mutationFn: setEmailPreference,
 
     onMutate: async (next: boolean): Promise<PreferenceSnapshot> => {
       // A read that lands after the patch would overwrite it with the answer it
       // was already carrying, from before the user touched the control.
-      await queryClient.cancelQueries({ queryKey: PREFERENCE_QUERY_KEY, exact: true });
-
-      const previous = queryClient.getQueryData<NotificationPreferenceOut>(PREFERENCE_QUERY_KEY);
-      queryClient.setQueryData<NotificationPreferenceOut>(PREFERENCE_QUERY_KEY, {
-        email_notifications_enabled: next,
+      await queryClient.cancelQueries({
+        queryKey: PREFERENCE_QUERY_KEY,
+        exact: true,
       });
+
+      const previous =
+        queryClient.getQueryData<NotificationPreferenceOut>(
+          PREFERENCE_QUERY_KEY,
+        );
+      queryClient.setQueryData<NotificationPreferenceOut>(
+        PREFERENCE_QUERY_KEY,
+        {
+          email_notifications_enabled: next,
+        },
+      );
 
       return { previous };
     },
@@ -77,19 +104,32 @@ export function EmailPreference() {
     onSettled: () => {
       // Exact, the way `features/profile` does it: `["notifications"]` would be a
       // prefix match and would drag the list into a write about one checkbox.
-      void queryClient.invalidateQueries({ queryKey: PREFERENCE_QUERY_KEY, exact: true });
+      void queryClient.invalidateQueries({
+        queryKey: PREFERENCE_QUERY_KEY,
+        exact: true,
+      });
     },
   });
 
   if (preference.isPending) {
-    return <p role="status">Loading your email preference…</p>;
+    return (
+      <Card className={styles.preference}>
+        <StatusLine>Loading your email preference…</StatusLine>
+      </Card>
+    );
   }
   if (preference.isError || preference.data === undefined) {
-    return <p role="alert">We could not load your email preference. Please try again.</p>;
+    return (
+      <Card className={styles.preference}>
+        <InlineAlert>
+          We could not load your email preference. Please try again.
+        </InlineAlert>
+      </Card>
+    );
   }
 
   return (
-    <div>
+    <Card className={styles.preference}>
       <Field id={EMAIL_FIELD_ID} label="Email me about new notifications">
         <input
           {...describeField(EMAIL_FIELD_ID)}
@@ -106,7 +146,7 @@ export function EmailPreference() {
         request, not about anything the user typed — the split `FormField`
         documents.
       */}
-      {failure === null ? null : <p role="alert">{failure}</p>}
-    </div>
+      {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
+    </Card>
   );
 }

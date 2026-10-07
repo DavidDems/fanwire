@@ -59,7 +59,7 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `Button` | `variant: "primary" \| "secondary" \| "ghost"` and `size: "md" \| "sm"`, both required; every other `<button>` prop is passed through, and `className` is appended |
 | `buttonClass(variant, size)` | returns the same class string as `Button`, for a `Link` |
 | `Card` | `as?: "article" \| "section" \| "div"` (default `div`), plus any HTML attribute; `className` appended |
-| `InlineAlert` | `children` only (danger is the only variant). **No `id` or `className` passthrough** |
+| `InlineAlert` | `children` and `id?: string` (danger is the only variant). The `id` lands on the `<p role="alert">` itself, for a field whose error is this alert and whose control names it in `aria-describedby` (since 2026-10-07, `decisions.md`). **No `className` or other passthrough** |
 | `StatusLine` | `variant?: "neutral" \| "success"` (default neutral) and `children`. No `id` or `className` |
 | `EmptyState` | `children` (the muted line) and `action?: ReactNode` |
 | `Skeleton` | `variant: "post" \| "line"` |
@@ -69,9 +69,12 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `VisuallyHidden` | `children` |
 | `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `HeartIcon`, `MessageCircleIcon`, `Repeat2Icon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon` and `CircleCheckIcon`, each taking `size?: number` (default 20) and `className?` |
 
-A feature unit that needs something not listed here (for example an `id` on
-`InlineAlert` for `aria-describedby`) can't edit `src/components/ui/**`. It
-stops and reports, and the change is its own small unit.
+A feature unit that needs something not listed here (for example a
+`className` on `InlineAlert`, or an `id` on `StatusLine`) can't edit
+`src/components/ui/**`. It stops and reports, and the change is its own small
+unit. Don't work around a missing prop with a wrapper element: that is how
+`UI-006` first gave the media error its id, and it was replaced by
+`InlineAlert`'s `id` prop.
 
 **Deliberately not built** (no screen needs them; build when one does):
 
