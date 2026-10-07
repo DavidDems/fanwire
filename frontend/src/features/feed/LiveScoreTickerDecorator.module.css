@@ -1,0 +1,33 @@
+/*
+ * The score block the decorator adds below a post (components.md §4). Only
+ * the block is styled here: the decorated view is rendered as given, outside
+ * it. Values come from tokens.css by name only.
+ */
+
+.ticker {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+}
+
+/* One GameScore per mentioned game. */
+.games {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}

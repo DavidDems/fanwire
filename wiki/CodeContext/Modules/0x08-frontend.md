@@ -567,6 +567,22 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
   one seam a feature folder can offer another ([[0x00-architecture]] Connection
   rule) — enforced from disk, along with a ban on importing any sibling feature.
+- **An expanded post with no replies says "No replies yet."** (`UI-005`, the
+  one behaviour change in the styling pass). Before it, an answered thread with
+  zero replies rendered nothing, which reads as a control that did nothing. It
+  is an `EmptyState`, shown only once the thread read has answered; loading and
+  failure keep their own lines.
+- **A reply is told it is nested.** `PostNode` takes `nested`, which the
+  recursion passes to every reply: a top-level post is a `Card as="article"`,
+  a reply a plain `<article>` on its parent card's surface. Still one
+  component; the prop changes the box, never what is rendered inside it.
+- **The score block names no teams.** `LiveScoreView` carries `game_id`, two
+  scores and `status` only, so the decorator renders `GameScore` (Home and
+  Away as words, the game-state mapping that never calls an unknown code Live)
+  under a "Game {id}" label. Naming teams needs the backend to add home and
+  away abbreviations to `LiveScoreView` ([[0x06-feed]]): a follow-up, and not a
+  teams fetch from here. The decorator still renders its children first and
+  bare, as a fragment, and adds its block after them.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
