@@ -1,0 +1,13 @@
+/*
+ * A post's picture (components.md §5). Its aspect ratio is unknown, so the
+ * height follows the width, and a tall picture is held to 28rem.
+ */
+
+.media {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 28rem;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}

@@ -401,6 +401,19 @@ each owns one piece:
   happened, since an emptied draft and a never-filled one are the same value, so
   the widget watches a reset counter on the mediator. A stale thumbnail over an
   empty composer is the failure that guards against.
+- **The media widget's field error is the `InlineAlert` itself, named by id.**
+  The file input's `aria-describedby` points at `compose-media-error`, which is
+  `InlineAlert`'s `id` prop on the `<p role="alert">` (2026-10-07,
+  `FrontendUI/decisions.md`). `UI-006` first put the id on a wrapper `<div>`,
+  because `components/ui` was outside its paths; the prop replaced it. The
+  description is the message alone, because the alert's icon is `aria-hidden`;
+  `compose-style.test.tsx` pins both that and that the target is the alert.
+- **Mention suggestions sit in the form's flow, not over it** (`UI-006`). An
+  overlay needs a positioned ancestor that the suggestions control doesn't own,
+  and would cover the image field on a phone. The panel is still relatively
+  positioned on `--z-dropdown`, so its shadow paints over what follows. Each of
+  the three colleagues has its own module CSS and imports no other, which
+  `component-isolation.test.ts` reads from disk.
 
 ## Notifications (`FRONTEND-006`)
 
@@ -561,6 +574,22 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
   one seam a feature folder can offer another ([[0x00-architecture]] Connection
   rule) — enforced from disk, along with a ban on importing any sibling feature.
+- **An expanded post with no replies says "No replies yet."** (`UI-005`, the
+  one behaviour change in the styling pass). Before it, an answered thread with
+  zero replies rendered nothing, which reads as a control that did nothing. It
+  is an `EmptyState`, shown only once the thread read has answered; loading and
+  failure keep their own lines.
+- **A reply is told it is nested.** `PostNode` takes `nested`, which the
+  recursion passes to every reply: a top-level post is a `Card as="article"`,
+  a reply a plain `<article>` on its parent card's surface. Still one
+  component; the prop changes the box, never what is rendered inside it.
+- **The score block names no teams.** `LiveScoreView` carries `game_id`, two
+  scores and `status` only, so the decorator renders `GameScore` (Home and
+  Away as words, the game-state mapping that never calls an unknown code Live)
+  under a "Game {id}" label. Naming teams needs the backend to add home and
+  away abbreviations to `LiveScoreView` ([[0x06-feed]]): a follow-up, and not a
+  teams fetch from here. The decorator still renders its children first and
+  bare, as a fragment, and adds its block after them.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and

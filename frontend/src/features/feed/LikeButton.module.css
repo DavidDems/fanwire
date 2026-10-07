@@ -1,0 +1,17 @@
+/*
+ * The like control's count and failure line. The button itself is a shared
+ * ghost Button; its filled heart when liked is Button.module.css's
+ * `[data-active] svg` rule. Values come from tokens.css by name only.
+ */
+
+.count {
+  margin-right: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The footer is a wrapping row (PostNode.module.css): the alert takes a row of its own. */
+.failure {
+  flex-basis: 100%;
+}

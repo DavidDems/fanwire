@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 import { Field, describeField } from "../../components/FormField";
 import type { ComposeMediator } from "./ComposeMediator";
+import styles from "./ComposeTextBox.module.css";
 
 /**
  * The text box.
@@ -29,11 +30,15 @@ export function ComposeTextBox({ mediator }: ComposeTextBoxProps) {
     >
       <textarea
         {...describeField(TEXT_BOX_ID, { hint: true })}
+        className={styles.text}
         name="post-text"
         rows={4}
         value={draft.text}
         onChange={(event) => {
-          mediator.send("text", { kind: "text-changed", text: event.target.value });
+          mediator.send("text", {
+            kind: "text-changed",
+            text: event.target.value,
+          });
         }}
       />
     </Field>

@@ -1,0 +1,48 @@
+/*
+ * The mention suggestions (wiki/CodeContext/FrontendUI/components.md §5): a
+ * --shadow-2 panel under the text box, on the --z-dropdown layer (layout.md
+ * §5). Values come from tokens.css by name only.
+ *
+ * The panel stays in the flow of the form instead of floating over it. An
+ * overlay would need a positioned ancestor that this control does not own
+ * (the text box is a separate colleague, and the composer page holds both),
+ * it would cover the image field at 360 px, and a long list would need its
+ * own anchoring and clipping rules. In the flow it pushes the image field
+ * down instead, never covers the textarea, and works at any width. It is
+ * still positioned, relatively, so the z-index takes effect and its shadow
+ * paints over the field below.
+ */
+.panel {
+  position: relative;
+  z-index: var(--z-dropdown);
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-2);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+/* No match and nothing loading: no box to draw. */
+.panel:empty {
+  display: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Each suggestion is a full-width ghost Button, at least --target-min tall (the
+ * md size), its label starting at the left and wrapping. Two classes, so this
+ * wins over Button's own centring whatever the bundle order.
+ */
+.list .suggestion {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+}

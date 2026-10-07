@@ -5,12 +5,16 @@ import { useSearchParams } from "react-router-dom";
 
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
+import { Button } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { InlineAlert } from "../../components/ui/InlineAlert";
 import { ComposeMediator } from "./ComposeMediator";
 import { ComposeTextBox } from "./ComposeTextBox";
 import { MediaWidget } from "./MediaWidget";
 import { MentionAutocomplete } from "./MentionAutocomplete";
 import { PostBuilder } from "./PostBuilder";
 import { QUICK_POST_TEMPLATES } from "./PostTemplate";
+import styles from "./ComposePage.module.css";
 
 /**
  * The composer.
@@ -35,6 +39,11 @@ import { QUICK_POST_TEMPLATES } from "./PostTemplate";
  * without importing it, which is what the connection rule asks for and what lets
  * `features/feed/` offer a reply control while reimplementing no part of
  * composing. `src/features/compose/ComposeRoute.test.tsx` pins it.
+ *
+ * **Laid out as one form card** (`wiki/CodeContext/FrontendUI/layout.md` §3):
+ * the three controls stacked inside a `Card`, then a footer row with Undo
+ * mention on the left and Post on the right. The failure sits in that footer,
+ * just above Post, so the message is beside the button that produced it.
  */
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
@@ -93,7 +102,9 @@ export function ComposePage() {
       mediator.reset();
     },
     onError: () => {
-      setFailure("We could not post that. Your draft is still here — please try again.");
+      setFailure(
+        "We could not post that. Your draft is still here — please try again.",
+      );
     },
   });
 
@@ -105,47 +116,65 @@ export function ComposePage() {
   }
 
   return (
-    <section>
+    <section className={styles.page}>
       <h1>Compose</h1>
 
-      {failure === null ? null : <p role="alert">{failure}</p>}
+      <Card>
+        <form className={styles.form} onSubmit={handleSubmit} noValidate>
+          <ComposeTextBox mediator={mediator} />
+          <MentionAutocomplete mediator={mediator} />
+          <MediaWidget mediator={mediator} />
 
-      <form onSubmit={handleSubmit} noValidate>
-        <ComposeTextBox mediator={mediator} />
-        <MentionAutocomplete mediator={mediator} />
-        <MediaWidget mediator={mediator} />
+          <div className={styles.footer}>
+            {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 
-        {mediator.canUndo() ? (
-          <button
-            type="button"
-            onClick={() => {
-              mediator.undo();
-            }}
-          >
-            Undo mention
-          </button>
-        ) : null}
+            <div className={styles.actions}>
+              {mediator.canUndo() ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={() => {
+                    mediator.undo();
+                  }}
+                >
+                  Undo mention
+                </Button>
+              ) : null}
 
-        <button type="submit" disabled={!canPost || submit.isPending}>
-          Post
-        </button>
-      </form>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                className={styles.post}
+                disabled={!canPost || submit.isPending}
+              >
+                Post
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Card>
 
-      <section>
+      <section className={styles.quick}>
         <h2>Quick posts</h2>
-        {QUICK_POST_TEMPLATES.map((template) => (
-          <button
-            key={template.name}
-            type="button"
-            onClick={() => {
-              // A clone, never the template: editing the draft must leave the
-              // stored template exactly as it was for the next use.
-              mediator.loadDraft(template.clone());
-            }}
-          >
-            {template.name}
-          </button>
-        ))}
+        <div className={styles.templates}>
+          {QUICK_POST_TEMPLATES.map((template) => (
+            <Button
+              key={template.name}
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                // A clone, never the template: editing the draft must leave the
+                // stored template exactly as it was for the next use.
+                mediator.loadDraft(template.clone());
+              }}
+            >
+              {template.name}
+            </Button>
+          ))}
+        </div>
       </section>
     </section>
   );
