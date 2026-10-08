@@ -103,6 +103,17 @@ def is_orchestrator_bookkeeping(path: str, task_id: str) -> bool:
     return any(path_matches(candidate, p.format(task_id=task_id)) for p in _BOOKKEEPING)
 
 
+def untested_changes(paths_since: Iterable[str], task_id: str) -> list[str]:
+    """Paths changed since a CI run's commit that the run therefore never saw.
+
+    The orchestrator commits its own `CI_STARTED` state after dispatching CI,
+    so a task branch is normally one bookkeeping commit past the tested SHA.
+    That is not untested code; anything else is, and a verdict for it must not
+    be applied (handoff.md §10, D1).
+    """
+    return [p for p in paths_since if not is_orchestrator_bookkeeping(p, task_id)]
+
+
 def check_diff(
     changed_paths: Iterable[str],
     role: str,
