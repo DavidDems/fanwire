@@ -64,25 +64,35 @@ Least privilege per workflow:
 |---|---|---|---|---|
 | `test-agent.yml` | read | — | — | It only runs tests. |
 | `agent-guard.yml` | read | — | — | It only checks a diff. |
-| `agent-worker.yml` | write | write | — | Commits to a task branch; wakes the orchestrator. |
+| `agent-worker.yml` `run-model` | read | — | — | Runs the model; hands on a patch. Holds no GitHub credential. |
+| `agent-worker.yml` `land` | write | write | — | Guards and commits the patch to a task branch; wakes the orchestrator. |
 | `agent-orchestrator.yml` | write | write | write | Commits state; triggers CI and workers; opens the review PR. |
 
-**The agent process itself gets no GitHub token.** In `agent-worker.yml`, the
-step that invokes the model sets `GITHUB_TOKEN: ""` and `GH_TOKEN: ""`
-explicitly, and the checkout sets `persist-credentials: false`, so no token
-sits in `.git/config` for the model to read (it did until 2026-10-08,
-handoff.md §10, D2). The job token reaches exactly two later steps: the push,
-which authenticates for that one `git push` and never writes the credential to
-disk, and the hand-off. A model that is persuaded to dispatch a workflow, push
-to `main`, or change branch protection has no credential with which to try.
+**Neither the model nor any code it writes ever runs where a GitHub token
+is.** The model runs in `agent-worker.yml`'s `run-model` job, which can only
+read the repository and holds no GitHub credential at all: its checkouts set
+`persist-credentials: false` (until 2026-10-08 the token sat in `.git/config`,
+handoff.md §10, D2), and the model runs as a separate unprivileged user,
+`agentrun`, with `.git` moved out of its tree. Every process that user left
+behind is killed before its work is packaged as a patch. The `land` job, on a
+fresh runner with a fresh checkout, applies that patch, guards **every** path
+in it — `.ai/` included, since the state and telemetry are written afterwards
+by the workflow — and only then commits, pushes and hands back (handoff.md
+§10, D2b).
 
-⚠️ **Not yet true of code the model writes** (handoff.md §10, D2b, open): the
-worker's in-job guard skips `.ai/`, and later steps of the same job — and the
-orchestrator — run `.ai/bin/agentctl.py` from a checkout the model could have
-edited. Until D2b closes, "no credential" holds for the model's process, not
-for code it plants.
+No step that holds a token runs code from a task branch: every `agentctl` call
+in the worker, the orchestrator and `agent-guard` runs from a checkout of
+`main` (for `agent-guard`, the PR's base) beside the task, with
+`AGENTCTL_DATA_ROOT` naming the task tree as data, under `python -I`. All three
+refuse, in bash before any python, a branch whose `.ai/` differs from `main`
+beyond its own `state.json` and telemetry. A branch that changes `.claude/` or
+`.mcp.json` is refused before the model runs, and the CLI is started with
+`--setting-sources user --strict-mcp-config` besides.
 
-The provider credential (`ANTHROPIC_API_KEY`) is present only in that one step.
+A model that is persuaded to dispatch a workflow, push to `main`, or change
+branch protection has no credential with which to try, and neither has
+anything it leaves behind. The provider credential (`ANTHROPIC_API_KEY`) is
+present only in the step that runs the model.
 
 ## Secrets
 
@@ -143,6 +153,13 @@ were judged not good enough:
   an oversight. **That reversal is a human call and has not been made.** The
   mirror-image gap on the other side — the test agent could not write the kit
   it produces — was unambiguous and is fixed.
+- **The provider key is the model's to misuse.** It must be in the model's
+  environment for the model to run, so a manipulated model could send it
+  elsewhere. Only the Console's monthly spend limit bounds that
+  (`wiki/GeneralContext/Architecture/github-automation-setup.md`). The
+  separate-user isolation (above) is proven by tests of the YAML and of the
+  landing guard against real patches, not yet by a live run (handoff.md §10.1,
+  under the table).
 - **Branch protection and CODEOWNERS** are GitHub repository settings, not
   files in this repo. `.github/CODEOWNERS` is committed; requiring review on
   `main` and requiring `agent-guard` to pass are settings a human must switch
