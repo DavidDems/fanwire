@@ -1,18 +1,14 @@
 # FrontendUI — implementation plan
 
-**Agent-facing, for each unit's Director.** One Director PR, then eight worker
-units, each the size of a `FRONTEND-00N` task. **Their specs are written:**
-`.ai/tasks/UI-001` … `UI-008` (the units below), plus the
-amended `FRONTEND-007`. **The spec is the contract;** this page is the
-reasoning behind it. They are run by hand from Claude Code sessions, not by the
-orchestrator (`decisions.md`, 2026-10-06):
-
-| Prompt (`wiki/GeneralContext/Prompts/`) | Units |
-|---|---|
-| `13-ui-foundation.md` | `D1`, `UI-001`, `UI-002`, `UI-003`. **Status (2026-10-06):** D1 `#97`, UI-001 `#98` and UI-002 `#99` are merged and deployed; UI-003 is in review |
-| `14-ui-auth-profile.md` | `UI-004`, `UI-008` |
-| `15-ui-feed-compose-notifications.md` | `UI-005`, `UI-006`, `UI-007` |
-| `16-ui-search.md` | `FRONTEND-007` |
+**Agent-facing; now a record.** One Director PR, then eight worker units,
+each the size of a `FRONTEND-00N` task, plus the amended `FRONTEND-007`.
+**All of them are merged and deployed (2026-10-07):** D1 `#97`, UI-001 `#98`,
+UI-002 `#99`, UI-003 `#100`, UI-004 `#106`, UI-008 `#107`, UI-005 `#109`,
+UI-006 `#110`, UI-007 `#111`, and `FRONTEND-007` `#114`. Their specs are
+`.ai/tasks/UI-001` … `UI-008` and `FRONTEND-007`; **the spec was the
+contract**, and this page is the reasoning behind each. They were run by hand
+from Claude Code sessions, not by the orchestrator (`decisions.md`,
+2026-10-06); how is `wiki/GeneralContext/Architecture/director-sessions.md`.
 
 Each unit lists: objective; acceptance criteria phrased to fail first (the kind
 of test each needs is in `verification.md`); an `allowed_paths` sketch; the
@@ -292,36 +288,9 @@ settings card.
 
 ## After the units
 
-- The browser checklist (`verification.md` §3) for every route, light and
-  dark, by the human or a confirmed tool; until then, NOT DONE.
-- Follow-ups this plan surfaced but doesn't own (they are in the PR body too):
-  a username character rule (`typography.md` §1); team abbreviations on
-  `LiveScoreView` (`components.md` §4); the game page that would make
-  `#GameId<n>` a link.
-- **"1 followers"** (found 2026-10-07, `UI-008`'s browser pass). The counts
-  are pinned exactly by tests (`components.md` §1), so singular/plural is a
-  behaviour change with its own red test, in `features/profile/`.
-- **No sign-out control exists anywhere in the UI** (found 2026-10-07).
-  `useAuth().signOut` exists and works, but nothing calls it, and no spec in
-  this plan adds one. It needs its own small unit: a "Sign out" button in the
-  shell header for signed-in visitors. It writes `src/routes/**`, so it never
-  runs concurrently with `FRONTEND-007`. Until then, sign out by clearing
-  `localStorage` (`dev-auth-setup.md`).
-- **Found in `UI-005`–`UI-007`'s browser pass (2026-10-07):**
-  - **`Badge neutral` is invisible on the score band.** Both use
-    `--color-surface-muted`, so "Final" and an unknown status lose their pill
-    and read as plain bold text. A `components/ui` change (Badge or
-    `GameScore`), so its own unit.
-  - **"1 likes"**, the same singular/plural case as "1 followers": pinned by
-    `FeedPage.test.tsx`, so a behaviour change with its own red test, in
-    `features/feed/`.
-  - **"Your profile" clips in the bottom bar** at 360 px when the browser
-    shows a classic scrollbar (345 px of content). Shell, `src/routes/**`.
-  - **`Field` has no checkbox layout.** `EmailPreference` reaches into its
-    markup to put the box before the label (`components.md` §5). Give
-    `Field` the layout, then delete that rule.
-  - **The local stack never creates notifications.** Without
-    `POST_EVENT_BUS_NAME`, domain events go to `InMemoryEventPublisher` and
-    nothing consumes them, so a follow or reply on `backend-dev` leaves the
-    list empty. Backend dev tooling, not a styling unit; until then,
-    `verification.md` §3a says how to get rows.
+The follow-ups these units found (sign-out, singular/plural counts, the
+neutral badge on the score band, the bottom-bar clip, `Field` layouts, local
+notifications, team abbreviations on `LiveScoreView`, the game page, a
+username character rule, and the axe pass) moved on 2026-10-07 to
+`TODO/02-backlog.md` and `TODO/01-for-you.md` §4, so the remaining work is one
+list.

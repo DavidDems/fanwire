@@ -22,10 +22,9 @@ touch a single application resource directly; it can only step into the roles
 `cdk bootstrap` created for that purpose.
 
 Requires `cdk bootstrap` to have been run in both regions with the default
-`hnb659fds` qualifier, or these ARNs do not exist. The rationale, the commands
-and the honest accounting of what this does *not* solve are in
-[`../../TODO/02-deployment-requirements.md`](../../TODO/02-deployment-requirements.md)
-§3.
+`hnb659fds` qualifier, or these ARNs do not exist. What is attached, when, and
+what it proved are in `wiki/CodeContext/Modules/0x00-architecture.md` →
+"AWS account state" → "CI access (OIDC)".
 
 ## `github-actions-deploy-role-trust-policy.json`
 

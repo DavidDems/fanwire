@@ -1,31 +1,30 @@
-# TODO — things only you can do
+# TODO — what is left
 
-**Human-facing.** Everything in this folder is a task that needs a person: an
-account, a credential, a purchase, a judgement call, or a click in a console.
-Nothing here can be done by an agent, which is exactly why it is collected in
-one place instead of scattered through files agents write.
+**Human-facing.** `01` is tasks that need a person: an account, a credential, a
+purchase, a judgement call, or a click in a console. `02` is the remaining
+build work, collected in one place so nothing is lost between the prompts and
+plans that found it; each item becomes a task spec when it is run.
 
 The rest of the repository is written for agents (`wiki/`, `.ai/`, `AGENTS.md`).
 This folder is written for you.
 
 ## Files
 
-| File | What it covers | Blocking? |
-|---|---|---|
-| [`02-deployment-requirements.md`](02-deployment-requirements.md) | SES production access (refused 2026-10-03, email turned off by PR #86), and what to watch on the next deploys (§2). The deploy path itself is finished | No |
-| [`03-open-decisions.md`](03-open-decisions.md) | Questions agents have asked and are waiting on. Today that's one: which browser tool sessions may drive | No. Without an answer, browser verification is reported as not done. Answered decisions are in `wiki/GeneralContext/Architecture/human-decisions.md` |
-| [`04-first-deploy.md`](04-first-deploy.md) | The first deploy, done 2026-09-30: what happened, and the traps that will catch the next person | No — a record. Read §4 "Traps" before running any AWS command |
+| File | What it covers |
+|---|---|
+| [`01-for-you.md`](01-for-you.md) | Only you can do these: the `jev` key as a secret (after the workflow review), the API credit balance, watching the live site, axe on every route, SES reapplication (optional, later) |
+| [`02-backlog.md`](02-backlog.md) | What is left to build, as small units for the automated workflow once the review lands. Not human-only, but kept here so the remaining work is one list |
 
-**Status as of 2026-10-06.** `05` (brand assets, added 2026-10-05) is **deleted**: the assets are on `main` under `brand/`, and the last check, a Canadian Trademarks Database search, found nothing similar (`brand/source/PROVENANCE.md`). `01` is **deleted** — every item in it was
-completed, and its durable content now lives at
-`wiki/GeneralContext/Architecture/github-automation-setup.md`. The site is
-live, `cfn-exec-role` is scoped and the NAT AMI is pinned (both 2026-10-02), and `02` holds SES production access (refused; email is off on purpose) and what to watch on the next deploys; what
-each check proved moved into `wiki/CodeContext/Modules/0x00-architecture.md`
-("Post-deploy checks, 2026-09-30"). `03` holds one open question, which
-browser tool sessions may drive; its answered decisions moved to
-`wiki/GeneralContext/Architecture/human-decisions.md` on 2026-10-02. `04` is the record of the first deploy — finished, kept for its
-"Traps" list, which every later AWS session reads before handing over a
-command.
+**Status as of 2026-10-07.** The frontend is finished (`FRONTEND-007`, #114),
+so the files that tracked getting there were deleted: `02` (deployment; the
+deploy path is finished and its record is in
+`wiki/CodeContext/Modules/0x00-architecture.md`), `03` (open decisions; the
+last one, which browser tool sessions may drive, was answered by Playwright
+MCP and is in `wiki/GeneralContext/Architecture/human-decisions.md` §3) and
+`04` (the first deploy; its traps are now
+`wiki/GeneralContext/Architecture/deploy-traps.md`). The project's focus is
+back on the automated agent workflow:
+`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`.
 
 This folder is doing what it was supposed to: shrinking. A completed item does
 not stay here as a tick — it becomes current-state fact in the wiki and the entry

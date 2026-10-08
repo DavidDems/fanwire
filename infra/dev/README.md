@@ -28,5 +28,6 @@ the IAM gate allows under its `tls-only-deny` waiver: broad in a `Deny` is the
 safe direction. The CORS rule allows the Vite dev server and the local backend
 to issue the presigned `POST` that `media/` uses.
 
-Nothing here is applied automatically. The steps are in
-[`../../TODO/02-deployment-requirements.md`](../../TODO/02-deployment-requirements.md) §7.
+Nothing here is applied automatically. A human applied it on 2026-09-25,
+when the dev buckets were created (the decision is
+`wiki/GeneralContext/Architecture/human-decisions.md` §1).

@@ -129,7 +129,7 @@ Each criterion is written so its test is red before the implementation:
   failure.
 
 Either way, check that the red is red for the right reason and not a broken test
-file (`00-session-protocol.md` step 3).
+file (`wiki/GeneralContext/Architecture/director-sessions.md`, loop step 3).
 
 ## 3. What needs a browser (B)
 
@@ -146,7 +146,7 @@ good" on the strength of passing tests.
 Installed by the human on 2026-10-06 as a local Claude Code MCP server
 (`claude mcp add playwright -- npx @playwright/mcp@latest`). It isn't a repo
 dependency and isn't in CI. It is available to a hand-run Director session
-(prompts `13`+). Dispatched workers don't have it. A row it really checked counts as
+(the hand-run sessions of 2026-10-06 and 07). Dispatched workers don't have it. A row it really checked counts as
 done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured.
 
 - **What it can drive:** viewport size (`browser_resize`: 360 and 1280 wide),
@@ -238,5 +238,5 @@ in which browser and OS, on which date. Unfilled means NOT DONE.
 
 **Gates, unchanged:** `npm test`, `npm run typecheck`, `npm run lint` and
 `npm run build`, then `docker compose run --rm frontend-test`
-(`00-session-protocol.md`). A local pass is a hint; the container is the
+(`wiki/GeneralContext/Architecture/director-sessions.md`). A local pass is a hint; the container is the
 result.
