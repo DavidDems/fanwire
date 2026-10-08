@@ -17,43 +17,25 @@ Work an agent can do is not here; it is `02-backlog.md`.
 
 ---
 
-## 1. Store the `jev` key as a repository secret — after the workflow review
+## 1. Agent workflow — what is left for you
 
-You have a **direct TypeSafe key** for `jev` (System One), the typed-decision
-model the `jev-decision-layer` branch wires in. That branch is parked and
-still points at the Vercel AI Gateway route (`AI_GATEWAY_API_KEY`), which
-never returned a 200. Its direct route reads **`TYPESAFE_API_KEY`**.
+Done 2026-10-08: `TYPESAFE_API_KEY` is a repository secret; the TypeSafe and
+Claude Console accounts each hold about CAD $10–11 of credit.
 
-**Wait for `wiki/GeneralContext/Prompts/01-agent-workflow-review.md`** to
-settle how `jev` is wired before storing it: the review may change the
-secret's name or where it is read. Then:
-
-- **Never paste the key into a chat or a file.** `gh secret set` prompts for
-  the value without echoing it.
-
-```powershell
-gh secret set TYPESAFE_API_KEY --repo DavidDems/fanwire
-```
-```powershell
-gh secret list --repo DavidDems/fanwire
-```
-
-**Confirm:** the list shows `TYPESAFE_API_KEY`. The proof that it *works* is
-the branch's merge precondition: one real call returning 200 with a
-`confidence` field.
-
-If the direct route replaces the gateway, delete the then-unused
-`AI_GATEWAY_API_KEY` (`gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire`):
-a gateway key reaches every model in its catalogue, so an unused one is pure
-blast radius.
-
-## 2. Check the API credit balance before the orchestrator runs again
-
-Every agent the orchestrator dispatches bills **metered API credits** from
-`ANTHROPIC_API_KEY` (a Claude Console key; a Pro/Max plan does not cover it).
-It has not run a task since 2026-09-23. Check the balance and set a spend
-limit in the Claude Console before the first automated task. A full task has
-cost $0.27–$0.38 so far (`.ai/telemetry/`).
+- [ ] **Delete the unused gateway key.** Nothing on `main` reads it, and a
+      gateway key reaches every model in its catalogue:
+      `gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire`
+- [ ] **Require approval for every fork PR** (handoff §10, D1):
+      `gh api -X PUT repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors`
+- [ ] **Set a monthly spend limit** in the Claude Console, so a loop cannot
+      drain the credit.
+- [ ] **Record both balances right before and right after the first
+      automated task** (`MEDIA-002`). Telemetry has under-counted input by
+      orders of magnitude (§10, D6), so that difference is the only trusted
+      cost figure until D6 lands.
+- [ ] **Review and merge the agent-system PRs in `02-backlog.md`'s order.**
+      Then say go before any task is dispatched; nothing starts the
+      orchestrator without you.
 
 ## 3. Watching the live site
 

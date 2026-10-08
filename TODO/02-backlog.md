@@ -19,18 +19,37 @@ fact in the module file it changed.
 
 ## Agent system
 
-These are the review's input, not a separate queue: `.ai/docs/handoff.md` §9.2
-lists them with what *done* means for each.
+The workflow review reported 2026-10-08. Findings, evidence and the agreed
+plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
+**Director** work (`.ai/`, `.github/`), one PR each, with its structural
+assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
+task is dispatched until 1–3 have merged.**
 
-- The CI half of bug 17 (a required check that a non-`agent/*` PR touches no
-  `.ai/tasks/*/state.json`).
-- Unhandled `workflow_run` conclusions in the orchestrator.
-- Concurrency can drop a transition (handoff §5.4).
-- The provider CLI is installed unpinned on every run (handoff §5.6).
-- `action_required` on bot-authored PRs: decide and write it down.
-- The `jev` decision layer: rebase `jev-decision-layer` (270 commits behind
-  `main`), switch it to the direct TypeSafe route, and earn the merge
-  precondition (one 200 with a `confidence` field). **Director.**
+1. **D1** — the orchestrator accepts only a `workflow_dispatch` CI run from
+   this repository whose `head_sha` is the branch tip. You: set fork-PR
+   approval to all external contributors.
+2. **D2** — `persist-credentials: false` in the worker; dispatch inputs via
+   `env:`; validate the task id.
+3. **D3** — the worker always applies an event; commit before dispatch;
+   record CI run id and dispatch time in `state.json`; every `workflow_run`
+   conclusion handled or documented inert (§9.2 items 2–3); MANAGER_RETRY /
+   RESCOPE legal from ESCALATED.
+4. **The test-kit hole** — `frontend/src/test/**` into `code_agent.deny`.
+5. **D4** — the red baseline must be red in the tests the test commit changed.
+6. **D5** — frontend `typecheck` + `lint` in CI; ruff/mypy after measuring.
+7. **D6** — telemetry records the CLI's real cost and cache tokens; prices.
+8. **First real task: `MEDIA-002`**, after 1–3.
+9. **`jev`, shadow mode**, after 1–3: rebuild `jev-decision-layer` onto
+   `main`, direct route (`TYPESAFE_API_KEY`, `TODO/01-for-you.md` §1), merge
+   gate one 200 with `confidence`, then record it beside the Manager without
+   applying it. Needs a deliberately failing task (handoff §6.3).
+
+10. **D7** — port the hand-run lessons into `.ai/skills`; drop instructions a
+    worker cannot follow. Before any frontend item runs.
+11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
+12. The CI half of bug 17.
+
+Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Backend and infra
 
