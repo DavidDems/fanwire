@@ -222,3 +222,33 @@ class TestOrchestratorBookkeeping:
         # The distinction is only for the PR-level check. A worker's own diff
         # must still never contain these.
         assert guard.is_always_forbidden(".ai/tasks/DEMO-001/state.json")
+
+
+class TestUntestedChanges:
+    """handoff.md §10, D1. A CI verdict is applied to a task only if it tested
+    the code the branch now carries. The orchestrator commits its own
+    `CI_STARTED` state *after* dispatching CI, so the branch tip is normally
+    one bookkeeping commit past the tested SHA — that difference is fine, and
+    anything else is code the verdict never saw."""
+
+    def test_only_this_tasks_bookkeeping_is_untested_by_nothing(self):
+        paths = [".ai/tasks/DEMO-001/state.json", ".ai/telemetry/runs/DEMO-001/1-x-a1.json"]
+        assert guard.untested_changes(paths, "DEMO-001") == []
+
+    def test_a_code_change_since_the_tested_sha_is_untested(self):
+        paths = [".ai/tasks/DEMO-001/state.json", "backend/app/main.py"]
+        assert guard.untested_changes(paths, "DEMO-001") == ["backend/app/main.py"]
+
+    def test_another_tasks_state_is_untested(self):
+        assert guard.untested_changes([".ai/tasks/AUTH-017/state.json"], "DEMO-001") == [
+            ".ai/tasks/AUTH-017/state.json"
+        ]
+
+    def test_the_task_contract_is_untested(self):
+        # A spec edit changes what CI should have been checking against.
+        assert guard.untested_changes([".ai/tasks/DEMO-001/task.json"], "DEMO-001") == [
+            ".ai/tasks/DEMO-001/task.json"
+        ]
+
+    def test_no_changes_at_all(self):
+        assert guard.untested_changes([], "DEMO-001") == []

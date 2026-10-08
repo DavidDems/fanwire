@@ -5,10 +5,17 @@ properties that unit tests cannot see because they live in workflow YAML, and
 every one of them is here because it broke a live run.
 """
 
+import os
 import re
+import shutil
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
+
+from agentlib.guard import TASK_ID_SAFE
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKER = WORKFLOWS / "agent-worker.yml"
@@ -20,6 +27,96 @@ def worker() -> str:
     if not WORKER.exists():
         pytest.skip("agent-worker.yml not present")
     return WORKER.read_text(encoding="utf-8")
+
+
+@pytest.fixture
+def orchestrator() -> str:
+    if not ORCHESTRATOR.exists():
+        pytest.skip("agent-orchestrator.yml not present")
+    return ORCHESTRATOR.read_text(encoding="utf-8")
+
+
+def step(text: str, name: str) -> str:
+    """One step's YAML, from its `- name:` line to the next step."""
+    marker = f"- name: {name}\n"
+    assert marker in text, f"no step named {name!r}"
+    return text.split(marker, 1)[1].split("\n      - ", 1)[0]
+
+
+_RUN_KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)run:\s*(?P<rest>.*)$")
+
+
+def run_bodies(text: str) -> list[str]:
+    """Every `run:` script in a workflow, as the text the runner will execute.
+
+    Handles both `run: one-liner` and block scalars (`run: |`, `run: >-`): a
+    block is every following line indented deeper than the `run` key, which is
+    how YAML ends it. Shell comments are deliberately kept — GitHub expands
+    `${{ }}` inside them too, before bash ever sees the `#`.
+    """
+    lines = text.splitlines()
+    bodies: list[str] = []
+    i = 0
+    while i < len(lines):
+        m = _RUN_KEY.match(lines[i])
+        i += 1
+        if not m:
+            continue
+        rest = m.group("rest").strip()
+        if rest and rest[0] not in "|>":
+            bodies.append(rest)
+            continue
+        key_col = len(m.group("lead"))
+        block: list[str] = []
+        while i < len(lines):
+            line = lines[i]
+            if line.strip() and len(line) - len(line.lstrip()) <= key_col:
+                break
+            block.append(line)
+            i += 1
+        bodies.append(textwrap.dedent("\n".join(block)).strip("\n"))
+    return bodies
+
+
+def _posix_bash() -> str | None:
+    """A bash that can run a step body against this filesystem, or None.
+
+    On Windows `shutil.which` can resolve to WSL's `bash.exe` launcher, which
+    runs in a different filesystem; Git Bash is fine.
+    """
+    path = shutil.which("bash")
+    if path is None:
+        return None
+    lowered = path.lower()
+    if sys.platform == "win32" and ("system32" in lowered or "windowsapps" in lowered):
+        return None
+    return path
+
+
+def run_step_body(body: str, env: dict[str, str], tmp_path: Path) -> tuple[int, str]:
+    """Execute one step's script the way the runner would, minus the runner.
+
+    Returns the exit code and what the script wrote to `$GITHUB_OUTPUT`.
+    """
+    bash = _posix_bash()
+    if bash is None:
+        pytest.skip("no POSIX bash on this machine")
+    output = tmp_path / "github_output"
+    output.write_text("", encoding="utf-8")
+    github_env = tmp_path / "github_env"
+    github_env.write_text("", encoding="utf-8")
+    scrubbed = ("TASK_ID", "INPUT_TASK_ID", "HEAD_BRANCH", "GITHUB_OUTPUT", "GITHUB_ENV")
+    full_env = {k: v for k, v in os.environ.items() if k not in scrubbed}
+    full_env.update(GITHUB_OUTPUT=output.as_posix(), GITHUB_ENV=github_env.as_posix(), **env)
+    proc = subprocess.run(
+        [bash, "-c", body],
+        env=full_env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,  # a refused id is a non-zero exit, which is the point
+    )
+    return proc.returncode, output.read_text(encoding="utf-8")
 
 
 class TestScratchFilesStayOutOfTheCheckout:
@@ -91,6 +188,58 @@ class TestTheAgentGetsNoGitHubToken:
         assert 'GITHUB_TOKEN: ""' in invoke
         assert 'GH_TOKEN: ""' in invoke
 
+    # handoff.md §10, D2. Blanking the variables was never enough on its own:
+    # `actions/checkout` persists the job token into `.git/config` by default,
+    # where the model can read it with nothing but its file tools — and that
+    # token carries `contents: write` and `actions: write`.
+
+    def test_the_checkout_does_not_persist_the_token(self, worker):
+        checkouts = worker.split("uses: actions/checkout@")[1:]
+        assert checkouts, "expected the worker to check out the task branch"
+        for chunk in checkouts:
+            with_block = chunk.split("\n      - ", 1)[0]
+            assert "persist-credentials: false" in with_block, (
+                "actions/checkout writes the job token into .git/config unless told not to, "
+                "and the model can read .git/config"
+            )
+
+    def test_nothing_writes_a_credential_into_the_repository(self, worker):
+        for body in run_bodies(worker):
+            for line in body.splitlines():
+                live = line.strip()
+                if live.startswith("#"):
+                    continue
+                assert not (live.startswith("git config") and "extraheader" in live), (
+                    f"writes an auth header into .git/config, where the model reads it: {live}"
+                )
+                assert "x-access-token@" not in live and "remote set-url" not in live, (
+                    f"puts a credential into a remote URL, which lands in .git/config: {live}"
+                )
+
+    def test_only_the_push_and_the_hand_off_hold_the_repo_token(self, worker):
+        holders = set()
+        for chunk in worker.split("      - name: ")[1:]:
+            if "github.token" in chunk:
+                holders.add(chunk.split("\n", 1)[0].strip())
+        assert holders == {"Push state and work", "Hand control back to the orchestrator"}, (
+            f"the job token must reach exactly the two steps that need it, found {holders}"
+        )
+
+    def test_the_push_step_does_nothing_but_push(self, worker):
+        # `git add` and `git commit` run fsmonitor, filters and hooks from a
+        # .git directory the model has just had write access to. They belong in
+        # a step that holds no token.
+        push = step(worker, "Push state and work")
+        assert "github.token" in push, "the push must authenticate explicitly, in this step"
+        body = "\n".join(run_bodies(push))
+        assert "git push" in body
+        assert "git commit" not in body and "git add" not in body
+
+    def test_the_push_credential_is_masked(self, worker):
+        # GitHub masks the raw token, not the base64 header derived from it.
+        body = "\n".join(run_bodies(step(worker, "Push state and work")))
+        assert "::add-mask::" in body
+
 
 class TestAWorkerCannotEscapeItsOwnBranch:
     """The single property the two-tier permission model rests on.
@@ -129,6 +278,16 @@ class TestAWorkerCannotEscapeItsOwnBranch:
 
     def test_the_checkout_is_the_same_task_branch(self, worker):
         assert "ref: agent/${{ github.event.inputs.task_id }}" in worker
+
+    def test_the_task_id_is_validated_before_anything_uses_it(self, worker):
+        # handoff.md §10, D2. The branch name is only as safe as the id it is
+        # built from; a crafted id must fail the job before the first step
+        # that consumes it.
+        steps = worker.split("    steps:\n", 1)[1].splitlines()
+        first_step = next(line for line in steps if line.startswith("      - "))
+        assert first_step == "      - name: Refuse a malformed task id", (
+            "the task id must be validated in the worker's very first step"
+        )
 
     def test_the_guard_covers_exactly_that_namespace(self):
         path = WORKFLOWS / "agent-guard.yml"
@@ -271,6 +430,44 @@ class TestAHandAuthoredBranchDoesNotDriveTheOrchestrator:
         assert "steps.drive.outputs.drive == 'true'" in head, (
             f"{name!r} reads or writes task state, so it must not run on a branch "
             f"this orchestrator never dispatched"
+        )
+
+
+class TestOnlyTheOrchestratorsOwnCiRunIsTrusted:
+    """handoff.md §10, D1. `workflow_run` fires for every completed
+    `test-agent` run, and `head_branch` is just a name: a fork PR from a branch
+    called `agent/<ID>`, or a path-filtered `pull_request` run on the real
+    branch, used to be applied as the task's authoritative verdict. The
+    repository is public, so the first was open to anyone whose fork run got
+    approved.
+
+    Only the run the orchestrator dispatched itself is the verdict: a
+    `workflow_dispatch` run, in this repository, on a commit the branch still
+    carries with nothing but bookkeeping since."""
+
+    @pytest.fixture
+    def orch(self) -> str:
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        return ORCHESTRATOR.read_text(encoding="utf-8")
+
+    def _job_if(self, orch: str) -> str:
+        return orch.split("  orchestrate:", 1)[1].split("runs-on:", 1)[0]
+
+    def test_only_a_dispatched_ci_run_wakes_the_orchestrator(self, orch):
+        assert "github.event.workflow_run.event == 'workflow_dispatch'" in self._job_if(orch)
+
+    def test_only_a_run_from_this_repository_wakes_it(self, orch):
+        assert (
+            "github.event.workflow_run.head_repository.full_name == github.repository"
+            in self._job_if(orch)
+        )
+
+    def test_the_verdict_must_be_for_code_the_branch_still_carries(self, orch):
+        step = orch.split("- name: Apply the CI result", 1)[1].split("- name:", 1)[0]
+        assert "agentctl.py guard tested" in step, "the tested SHA must be checked"
+        assert step.index("guard tested") < step.index("state advance"), (
+            "the SHA check must run before the verdict is applied"
         )
 
 
@@ -506,3 +703,132 @@ class TestActionsRunOnNode24:
             assert major >= self.MIN_MAJOR[action], (
                 f"{path.name}: {action}@v{major} is a Node 20 major"
             )
+
+
+class TestNoDispatchInputReachesTheShellAsCode:
+    """handoff.md §10, D2. `${{ }}` is expanded into the script text before bash
+    runs, so a dispatch input of `$(curl …)` is executed, not printed. Anyone
+    with `actions: write` can dispatch these workflows, a fork can name its
+    branch `agent/$(…)`, and later steps of the orchestrator hold
+    `AGENT_DISPATCH_TOKEN` — a person's PAT. Such values must reach the shell
+    through `env:`, where they are data."""
+
+    TAINTED = re.compile(
+        r"\$\{\{\s*(github\.event\.inputs|inputs\.|steps\.|github\.event\.workflow_run"
+        r"|github\.head_ref)"
+    )
+
+    def test_the_extractor_sees_block_and_inline_scripts(self):
+        sample = textwrap.dedent(
+            """\
+            steps:
+              - name: a
+                run: echo ${{ steps.x.outputs.y }}
+              - run: |
+                  # ${{ inputs.z }}
+                  echo ok
+              - name: c
+                env:
+                  V: ${{ steps.safe.outputs.v }}
+                run: echo "$V"
+            """
+        )
+        assert run_bodies(sample) == [
+            "echo ${{ steps.x.outputs.y }}",
+            "# ${{ inputs.z }}\necho ok",
+            'echo "$V"',
+        ]
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR], ids=lambda p: p.name)
+    def test_no_run_script_interpolates_attacker_influenced_context(self, path):
+        if not path.exists():
+            pytest.skip(f"{path.name} not present")
+        offenders = [
+            line.strip()
+            for body in run_bodies(path.read_text(encoding="utf-8"))
+            for line in body.splitlines()
+            if self.TAINTED.search(line)
+        ]
+        assert not offenders, (
+            f"{path.name} pastes attacker-influenced context into a script; pass it via "
+            "`env:` and quote it:\n    " + "\n    ".join(offenders)
+        )
+
+
+class TestACraftedTaskIdFailsEarly:
+    """handoff.md §10, D2. The task id names a branch, a directory under
+    `.ai/tasks/`, and a value written to `$GITHUB_OUTPUT` — where a newline in
+    it would forge a second output. `TASK_ID_SAFE` already exists for the
+    guard; these pin that both workflows apply the same rule, and that it runs
+    before the id is used for anything."""
+
+    CRAFTED = [
+        "$(touch pwned)",
+        "DEMO-001; touch pwned",
+        "DEMO-001\nbranch=main",
+        "DEMO-001\n",
+        "../../main",
+        "demo-001",
+        "",
+    ]
+
+    @staticmethod
+    def pattern_in(body: str) -> str:
+        m = re.search(r"TASK_ID_SAFE='([^']*)'", body)
+        assert m, "the step must state the TASK_ID_SAFE pattern it checks against"
+        return m.group(1)
+
+    def test_the_worker_checks_the_guards_own_pattern(self, worker):
+        body = run_bodies(step(worker, "Refuse a malformed task id"))[0]
+        assert self.pattern_in(body) == TASK_ID_SAFE.pattern, (
+            "the worker's copy of TASK_ID_SAFE has drifted from agentlib/guard.py"
+        )
+
+    def test_the_orchestrator_checks_the_guards_own_pattern(self, orchestrator):
+        body = run_bodies(step(orchestrator, "Resolve the task"))[0]
+        assert self.pattern_in(body) == TASK_ID_SAFE.pattern, (
+            "the orchestrator's copy of TASK_ID_SAFE has drifted from agentlib/guard.py"
+        )
+
+    def test_the_orchestrator_validates_before_it_writes_an_output(self, orchestrator):
+        body = run_bodies(step(orchestrator, "Resolve the task"))[0]
+        assert body.index("TASK_ID_SAFE") < body.index("GITHUB_OUTPUT")
+
+    @pytest.mark.parametrize("crafted", CRAFTED)
+    def test_the_worker_refuses_a_crafted_id(self, worker, crafted, tmp_path):
+        body = run_bodies(step(worker, "Refuse a malformed task id"))[0]
+        code, _ = run_step_body(body, {"TASK_ID": crafted}, tmp_path)
+        assert code != 0, f"the worker accepted {crafted!r}"
+        assert not (tmp_path / "pwned").exists()
+
+    @pytest.mark.parametrize("crafted", CRAFTED)
+    def test_the_orchestrator_refuses_a_crafted_dispatch_input(
+        self, orchestrator, crafted, tmp_path
+    ):
+        body = run_bodies(step(orchestrator, "Resolve the task"))[0]
+        code, outputs = run_step_body(body, {"INPUT_TASK_ID": crafted, "HEAD_BRANCH": ""}, tmp_path)
+        assert code != 0, f"the orchestrator accepted {crafted!r}"
+        assert outputs == "", "nothing may be written to $GITHUB_OUTPUT for a refused id"
+        assert not (tmp_path / "pwned").exists()
+
+    def test_the_orchestrator_refuses_a_crafted_branch_name(self, orchestrator, tmp_path):
+        # The workflow_run path: a fork can name its PR branch anything.
+        body = run_bodies(step(orchestrator, "Resolve the task"))[0]
+        code, outputs = run_step_body(
+            body, {"INPUT_TASK_ID": "", "HEAD_BRANCH": "agent/$(touch pwned)"}, tmp_path
+        )
+        assert code != 0
+        assert outputs == ""
+        assert not (tmp_path / "pwned").exists()
+
+    def test_a_well_formed_id_still_resolves(self, orchestrator, worker, tmp_path):
+        body = run_bodies(step(orchestrator, "Resolve the task"))[0]
+        code, outputs = run_step_body(
+            body, {"INPUT_TASK_ID": "", "HEAD_BRANCH": "agent/DEMO-001"}, tmp_path
+        )
+        assert code == 0
+        assert "id=DEMO-001\n" in outputs
+        assert "branch=agent/DEMO-001\n" in outputs
+        body = run_bodies(step(worker, "Refuse a malformed task id"))[0]
+        code, _ = run_step_body(body, {"TASK_ID": "DEMO-001"}, tmp_path)
+        assert code == 0

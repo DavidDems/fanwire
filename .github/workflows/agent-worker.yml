@@ -12,8 +12,12 @@ name: agent-worker
 # agent would do damage:
 #   * `contents: write` is the only broad permission, and it is scoped to a
 #     task branch by the guard step below, not by trust.
-#   * The agent process itself runs with NO GitHub token in its environment
-#     (see "Invoke the agent"). Only the steps around it can talk to the API.
+#   * The agent process itself runs with NO GitHub token, in its environment
+#     or on disk (see "Invoke the agent" and the checkout). Only the steps
+#     around it can talk to the API, and the job token reaches exactly two of
+#     them: the push and the hand-off.
+#   * The task id is validated before anything uses it, and no dispatch input
+#     is ever pasted into a script — inputs reach the shell through `env:`.
 #   * The provider credential is present only for that one step.
 #   * A guard violation is not retried. It escalates to a human.
 
@@ -57,10 +61,34 @@ jobs:
       # file when it appears there — run 35556516395 failed with "workflow file
       # issue" and no job at all. A YAML parser cannot see that; only a push can.
     steps:
+      # handoff.md §10, D2. The id becomes a branch name, a path under
+      # .ai/tasks/ and an argument to every agentctl call below, and anyone
+      # with `actions: write` can dispatch this workflow with any string at
+      # all. It is checked before anything uses it, against the guard's own
+      # TASK_ID_SAFE. That is a copy, in bash, because this runs before the
+      # checkout and there is no repository code to import yet;
+      # test_workflows.py fails if it drifts from agentlib/guard.py. The id
+      # itself is never echoed: it is exactly the string not to trust.
+      - name: Refuse a malformed task id
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::task id does not match $TASK_ID_SAFE; refusing to run"
+            exit 1
+          fi
+
       - uses: actions/checkout@v5
         with:
           ref: agent/${{ github.event.inputs.task_id }}
           fetch-depth: 0
+          # handoff.md §10, D2. By default checkout leaves the job token in
+          # .git/config for the whole job, and the model reads files. Blanking
+          # the environment variables in "Invoke the agent" meant nothing while
+          # this was true. The one later network operation, the push,
+          # authenticates for itself.
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -111,21 +139,26 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # Deliberately blank. The agent must not be able to reach the GitHub
           # API, dispatch workflows, or touch branch protection, whatever it is
-          # told to do by content it reads.
+          # told to do by content it reads. Blank variables are only half of
+          # that; the other half is `persist-credentials: false` on the
+          # checkout, without which the token sits in .git/config.
           GITHUB_TOKEN: ""
           GH_TOKEN: ""
         run: bash .ai/bin/invoke_agent.sh "$ROLE" "$RUNNER_TEMP/prompt.md" "$RUNNER_TEMP/agent-result.json"
 
       - name: Record what the invocation cost
         if: always()
+        env:
+          STARTED: ${{ steps.clock.outputs.started }}
+          AGENT_OUTCOME: ${{ steps.agent.outcome }}
         run: |
           set -euo pipefail
           python .ai/bin/agentctl.py telemetry-from-run \
             --task "$TASK_ID" --role "$ROLE" \
-            --started "${{ steps.clock.outputs.started }}" \
+            --started "$STARTED" \
             --workflow-run-id "${{ github.run_id }}" \
             --agent-result "$RUNNER_TEMP/agent-result.json" \
-            --result "${{ steps.agent.outcome }}"
+            --result "$AGENT_OUTCOME"
 
       - name: Stop here if the provider call failed
         if: steps.agent.outcome == 'failure'
@@ -191,6 +224,8 @@ jobs:
 
       - name: Advance the workflow
         if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        env:
+          COMMIT_SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
           case "$ROLE" in
@@ -199,10 +234,11 @@ jobs:
             *)                  EVENT=AGENT_COMMITTED ;;
           esac
           python .ai/bin/agentctl.py state advance "$TASK_ID" \
-            --event "$EVENT" --commit-sha "${{ steps.commit.outputs.sha }}" \
+            --event "$EVENT" --commit-sha "$COMMIT_SHA" \
             --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result "$RUNNER_TEMP/agent-result.json")"
 
-      - name: Push state and work
+      - name: Commit state and telemetry
+        id: state_commit
         if: always()
         run: |
           set -euo pipefail
@@ -210,7 +246,31 @@ jobs:
           git config user.email "noreply@github.com"
           git add .ai/tasks/ .ai/telemetry/ || true
           git diff --cached --quiet || git commit -m "[agent-state] $TASK_ID: $ROLE finished"
-          git push origin HEAD:"$BRANCH"
+
+      # The only step after the model that holds the job token, and all it
+      # does is push: `git add`/`git commit` stay in the tokenless step above,
+      # because they run hooks, filters and fsmonitor out of a .git directory
+      # the model has just had write access to. Skipped only if that commit
+      # failed, which used to stop the push in the same way under `set -e`.
+      #
+      # The credential is an http.extraheader passed through GIT_CONFIG_* for
+      # this one git process, the same header actions/checkout would have
+      # persisted, so it is never written to .git/config and never appears in
+      # argv. GitHub masks the raw token in logs but not this base64 of it, so
+      # it is masked explicitly before anything can print it. The URL scope
+      # keeps the header from being sent to any host but github.com.
+      - name: Push state and work
+        if: always() && steps.state_commit.outcome == 'success'
+        env:
+          PUSH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          AUTH="$(printf 'x-access-token:%s' "$PUSH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$AUTH"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
+            git push origin HEAD:"$BRANCH"
 
       - name: Hand control back to the orchestrator
         if: always()
