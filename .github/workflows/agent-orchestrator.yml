@@ -80,8 +80,28 @@ jobs:
           else
             TASK_ID="${HEAD_BRANCH#agent/}"
           fi
+          # handoff.md §10, D2. Both sources are attacker-influenced: anyone
+          # with `actions: write` can dispatch this with any string, and a
+          # fork's PR branch can be named `agent/<anything>`. The id becomes a
+          # branch, a path and an output line (a newline in it would forge a
+          # second output), and later steps hold AGENT_DISPATCH_TOKEN. So it is
+          # checked here, before any of that, against the guard's own
+          # TASK_ID_SAFE — a bash copy, because nothing is checked out yet;
+          # test_workflows.py fails if it drifts from agentlib/guard.py. The
+          # rejected value is never echoed.
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::task id does not match $TASK_ID_SAFE; refusing to run"
+            exit 1
+          fi
           echo "id=$TASK_ID" >> "$GITHUB_OUTPUT"
           echo "branch=agent/$TASK_ID" >> "$GITHUB_OUTPUT"
+          # Every later script reads these as variables, never as an expression
+          # pasted into its text: an expression is expanded into the script
+          # before bash parses it, so a value there is code, not data.
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+          echo "BRANCH=agent/$TASK_ID" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v5
         with:
@@ -149,16 +169,22 @@ jobs:
           # merge), and the state machine rightly refuses a CI result for a
           # COMPLETE task. Waking to find nothing to do is not a failure -- it
           # used to fail the whole run and paint a red X on a healthy pipeline.
-          python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
             --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
             --commit-sha "$SHA" --ignore-terminal
 
       - name: Apply a human-supplied event
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.event != ''
+        # Free text from whoever dispatched the run, so it arrives as data
+        # (handoff.md §10, D2): `agentctl` rejects an unknown event itself, and
+        # the reason is only ever recorded.
+        env:
+          INPUT_EVENT: ${{ github.event.inputs.event }}
+          INPUT_REASON: ${{ github.event.inputs.reason }}
         run: |
-          python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
-            --event "${{ github.event.inputs.event }}" \
-            --reason "${{ github.event.inputs.reason }}"
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+            --event "$INPUT_EVENT" \
+            --reason "$INPUT_REASON"
 
       - name: Decide the next action
         id: decide
@@ -169,7 +195,7 @@ jobs:
         if: steps.drive.outputs.drive == 'true'
         run: |
           set -euo pipefail
-          ACTION=$(python .ai/bin/agentctl.py next "${{ steps.task.outputs.id }}")
+          ACTION=$(python .ai/bin/agentctl.py next "$TASK_ID")
           echo "$ACTION"
           echo "kind=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin)["kind"])')" >> "$GITHUB_OUTPUT"
           echo "role=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin).get("role",""))')" >> "$GITHUB_OUTPUT"
@@ -182,7 +208,7 @@ jobs:
 
       - name: Validate the spec and open the task
         if: steps.decide.outputs.kind == 'validate'
-        run: python .ai/bin/agentctl.py state init "${{ steps.task.outputs.id }}"
+        run: python .ai/bin/agentctl.py state init "$TASK_ID"
 
       - name: Run the authoritative test suite
         if: steps.decide.outputs.kind == 'run_ci'
@@ -190,8 +216,8 @@ jobs:
           GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
         run: |
           set -euo pipefail
-          gh workflow run test-agent.yml --ref "${{ steps.task.outputs.branch }}"
-          python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
+          gh workflow run test-agent.yml --ref "$BRANCH"
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
             --event CI_STARTED
 
       - name: Distil the failure
@@ -201,9 +227,9 @@ jobs:
         run: |
           set -euo pipefail
           RUN_ID=$(python -c "
-          import json,sys; sys.path.insert(0,'.ai')
+          import json, os, sys; sys.path.insert(0,'.ai')
           from agentlib import state as st
-          s = st.load_state('.ai/tasks/${{ steps.task.outputs.id }}/state.json')
+          s = st.load_state('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json')
           print((s.get('last_ci') or {}).get('run_id') or '')
           ")
           # Only the failing jobs' output, capped. The raw log never reaches a
@@ -214,9 +240,9 @@ jobs:
             echo "" > ci.log
           fi
           tail -c 200000 ci.log > ci.tail.log
-          python .ai/bin/agentctl.py distill "${{ steps.task.outputs.id }}" \
+          python .ai/bin/agentctl.py distill "$TASK_ID" \
             --log ci.tail.log --ci-status failure --out distilled.json
-          python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
+          python .ai/bin/agentctl.py state advance "$TASK_ID" \
             --event DISTILLED --distilled distilled.json
 
       - name: Dispatch the worker
@@ -233,12 +259,12 @@ jobs:
           # skipping it would also uncap the retry budget. An empty EVENT means
           # the manager, which holds MANAGER_REVIEW until it decides for itself.
           if [ -n "$EVENT" ]; then
-            python .ai/bin/agentctl.py state advance "${{ steps.task.outputs.id }}" \
+            python .ai/bin/agentctl.py state advance "$TASK_ID" \
               --event "$EVENT"
           fi
           gh workflow run agent-worker.yml \
             --ref "${{ github.event.repository.default_branch }}" \
-            -f task_id="${{ steps.task.outputs.id }}" \
+            -f task_id="$TASK_ID" \
             -f role="$ROLE"
 
       # --- persist and hand off -------------------------------------------
@@ -247,6 +273,8 @@ jobs:
         # Nothing to commit when nothing decided anything, and a hand-authored
         # branch must never receive an orchestrator commit it did not ask for.
         if: steps.drive.outputs.drive == 'true'
+        env:
+          KIND: ${{ steps.decide.outputs.kind }}
         run: |
           set -euo pipefail
           git config user.name "fanwire-agent-orchestrator"
@@ -255,8 +283,8 @@ jobs:
           if git diff --cached --quiet; then
             echo "no state change to commit"
           else
-            git commit -m "[agent-state] ${{ steps.task.outputs.id }}: ${{ steps.decide.outputs.kind }}"
-            git push origin HEAD:"${{ steps.task.outputs.branch }}"
+            git commit -m "[agent-state] $TASK_ID: $KIND"
+            git push origin HEAD:"$BRANCH"
           fi
 
       - name: Continue, when the next step needs no external event
@@ -270,15 +298,15 @@ jobs:
           set -euo pipefail
           # Cheap runaway guard on top of the state machine's own bounds.
           HOPS=$(python -c "
-          import json; print(len(json.load(open('.ai/tasks/${{ steps.task.outputs.id }}/state.json'))['history']))
+          import json, os; print(len(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['history']))
           ")
           if [ "$HOPS" -gt 200 ]; then
-            echo "::error::${{ steps.task.outputs.id }} has taken $HOPS transitions; refusing to continue"
+            echo "::error::$TASK_ID has taken $HOPS transitions; refusing to continue"
             exit 1
           fi
           gh workflow run agent-orchestrator.yml \
             --ref "${{ github.event.repository.default_branch }}" \
-            -f task_id="${{ steps.task.outputs.id }}"
+            -f task_id="$TASK_ID"
 
       - name: Open the review PR
         if: steps.decide.outputs.kind == 'halt'
@@ -287,7 +315,7 @@ jobs:
         run: |
           set -euo pipefail
           STATE=$(python -c "
-          import json; print(json.load(open('.ai/tasks/${{ steps.task.outputs.id }}/state.json'))['state'])
+          import json, os; print(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['state'])
           ")
           if [ "$STATE" != "COMPLETE" ] && [ "$STATE" != "ESCALATED" ]; then
             echo "halted in $STATE; nothing to open"; exit 0
@@ -297,18 +325,18 @@ jobs:
             echo "has merge permission, and this needs a human review like any other PR."
             echo ""
             echo "Paths changed are inside the task contract; \`agent-guard\` enforces that"
-            echo "independently on this PR. Start with \`.ai/tasks/${{ steps.task.outputs.id }}/brief.md\`."
+            echo "independently on this PR. Start with \`.ai/tasks/$TASK_ID/brief.md\`."
             echo ""
             echo "Task state at hand-off:"
             echo ""
             echo '```json'
-            python .ai/bin/agentctl.py state show "${{ steps.task.outputs.id }}"
+            python .ai/bin/agentctl.py state show "$TASK_ID"
             echo '```'
           } > pr-body.md
           gh pr create \
             --base "${{ github.event.repository.default_branch }}" \
-            --head "${{ steps.task.outputs.branch }}" \
-            --title "${{ steps.task.outputs.id }}: $STATE" \
+            --head "$BRANCH" \
+            --title "$TASK_ID: $STATE" \
             --body-file pr-body.md 2> pr-error.txt && exit 0
           # Only a genuine duplicate is benign. Anything else — most likely
           # "GitHub Actions is not permitted to create or approve pull
@@ -325,14 +353,14 @@ jobs:
           echo "enable Settings -> Actions -> General -> Workflow permissions ->"
           echo "'Allow GitHub Actions to create and approve pull requests'."
           echo "The task itself is unaffected; only the PR is missing. Open it"
-          echo "by hand: gh pr create --base ${{ github.event.repository.default_branch }} --head ${{ steps.task.outputs.branch }}"
+          echo "by hand: gh pr create --base ${{ github.event.repository.default_branch }} --head $BRANCH"
           exit 1
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### ${{ steps.task.outputs.id }}"
+            echo "### ${TASK_ID:-(task id not resolved)}"
             echo ""
             echo '```'
             python .ai/bin/agentctl.py status || true

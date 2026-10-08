@@ -69,9 +69,18 @@ Least privilege per workflow:
 
 **The agent process itself gets no GitHub token.** In `agent-worker.yml`, the
 step that invokes the model sets `GITHUB_TOKEN: ""` and `GH_TOKEN: ""`
-explicitly. Only the deterministic steps around it can reach the GitHub API. A
-model that is persuaded to dispatch a workflow, push to `main`, or change
-branch protection has no credential with which to try.
+explicitly, and the checkout sets `persist-credentials: false`, so no token
+sits in `.git/config` for the model to read (it did until 2026-10-08,
+handoff.md §10, D2). The job token reaches exactly two later steps: the push,
+which authenticates for that one `git push` and never writes the credential to
+disk, and the hand-off. A model that is persuaded to dispatch a workflow, push
+to `main`, or change branch protection has no credential with which to try.
+
+⚠️ **Not yet true of code the model writes** (handoff.md §10, D2b, open): the
+worker's in-job guard skips `.ai/`, and later steps of the same job — and the
+orchestrator — run `.ai/bin/agentctl.py` from a checkout the model could have
+edited. Until D2b closes, "no credential" holds for the model's process, not
+for code it plants.
 
 The provider credential (`ANTHROPIC_API_KEY`) is present only in that one step.
 
