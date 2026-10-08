@@ -730,11 +730,13 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    `code_agent.deny`, reversing `CODE_AGENT_MUST_WRITE`'s `server.ts` row in
    `tests/test_policy.py` (permissions.md's not-enforced list loses that item).
 
-**Recommended, not yet decided:** D7; models to `claude-sonnet-5-5` (same
-price as Sonnet 5) and `claude-opus-5-5` for the Manager ($4/$20); pinning the
-CLI at the version last seen working (2.1.280, run 35821738883); §9.2 item 1
-(the CI half of bug 17); §9.2 item 5 — keep `action_required` on bot PRs, as a
-human gate before CI spends on agent work.
+5. **Also queued, after D1–D6** (decided 2026-10-08): D7; models to
+   `claude-sonnet-5-5` (same price as Sonnet 5) and `claude-opus-5-5` for the
+   Manager ($4/$20); the CLI pinned at 2.1.280, the version last seen working
+   (run 35821738883); §9.2 item 1, the CI half of bug 17.
+6. **§9.2 item 5 is decided: keep `action_required` on bot-authored PRs.** A
+   human approves the run before CI spends on agent work, and the PR needs
+   that human's review to merge anyway. Deliberate, not a defect.
 
 ### 10.4 The backlog as test load
 

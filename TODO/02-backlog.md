@@ -44,9 +44,12 @@ task is dispatched until 1–3 have merged.**
    gate one 200 with `confidence`, then record it beside the Manager without
    applying it. Needs a deliberately failing task (handoff §6.3).
 
-Recommended, awaiting your decision: D7 (port the hand-run lessons into
-`.ai/skills`); models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI
-(2.1.280); the CI half of bug 17; keep `action_required` on bot PRs.
+10. **D7** — port the hand-run lessons into `.ai/skills`; drop instructions a
+    worker cannot follow. Before any frontend item runs.
+11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
+12. The CI half of bug 17.
+
+Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Backend and infra
 
