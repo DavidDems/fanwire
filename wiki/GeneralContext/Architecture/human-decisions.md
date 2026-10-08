@@ -87,11 +87,41 @@ All of these are recorded, with the measured contrast table, in
   dispatched through the API once a task branch and spec exist, rather than
   units run by hand from Claude Code. Before any task runs, the workflow is
   reviewed for safety, performance and cost, and the human decides the
-  changes (`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`). The
+  changes (the review prompt, done and deleted 2026-10-08; outcome in §7). The
   remaining build work is `TODO/02-backlog.md`.
 - **`jev`.** The "System One" typed-decision layer (TypeSafe's `jev`) is to
   be incorporated. The human has a **direct TypeSafe key** (route
   `api.typesafe.ai`, model `jev-latest`), not the Vercel AI Gateway route the
-  parked `jev-decision-layer` branch points at. It is not yet a repository
-  secret; storing it waits for the review (`TODO/01-for-you.md` §1).
+  parked `jev-decision-layer` branch points at. Stored as the repository
+  secret `TYPESAFE_API_KEY` on 2026-10-08; how it is wired is §7.
 
+## §7. The agent workflow review (2026-10-08)
+
+The review in §6 reported; its findings (D1–D7) and evidence are
+`.ai/docs/handoff.md` §10, and the work queue is `TODO/02-backlog.md` →
+"Agent system". The human decided:
+
+- **Order.** D1–D3 (the CI-verdict trust hole, the worker's readable token
+  and shell injection, the silent stalls) first — plus D2b, found while
+  doing D2 and not yet designed, one Director PR each; then
+  the test-kit deny, D4–D6; then D7, the newer models, the CLI pin and the CI
+  half of bug 17. **No task is dispatched until D1–D3 have merged**, and
+  none without the human saying go. The first real task is `MEDIA-002`.
+- **`jev` in shadow mode**, after D1–D3: asked beside the Opus Manager and
+  recorded, not applied, until enough agreement is on record. Flake
+  forgiveness by model confidence is declined.
+- **`ESCALATED` gets a human exit**: `MANAGER_RETRY`/`MANAGER_RESCOPE` become
+  legal from it.
+- **The test kit is closed to the code agent**: `frontend/src/test/**` joins
+  `code_agent.deny`.
+- **Bot-opened PRs keep `action_required`**: a deliberate human gate before CI
+  spends on agent work.
+- **Models**: Sonnet roles to `claude-sonnet-5-5`, the Manager to
+  `claude-opus-5-5`.
+- **Spend controls** (set by the human): Claude Console monthly limit $40,
+  auto-recharge to $15 below $5; about $10 of TypeSafe credit. Until D6 lands,
+  the cost of a run is measured by recording both balances before and after
+  it, not from `.ai/telemetry/`.
+- **Repository settings changed**: fork-PR workflow approval is now
+  `all_external_contributors`; `AI_GATEWAY_API_KEY` deleted. Both are
+  recorded in `github-automation-setup.md`.

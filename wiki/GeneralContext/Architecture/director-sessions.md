@@ -11,7 +11,7 @@ and deleted (2026-10-07), and this file kept their lessons.
 from Claude Code, rather than by the `.ai/` orchestrator: a subscription
 session costs nothing per call, while the orchestrator bills metered API
 credits (see "Who pays", below). The project's focus has now moved back to
-the automated workflow (`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`).
+the automated workflow (`wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`).
 A Director still uses this file for Director-only work (anything under `.ai/`,
 `.github/`, `wiki/GeneralContext/`, `AGENTS.md`), and for any unit a human
 chooses to run by hand.

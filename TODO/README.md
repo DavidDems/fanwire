@@ -24,7 +24,7 @@ MCP and is in `wiki/GeneralContext/Architecture/human-decisions.md` §3) and
 `04` (the first deploy; its traps are now
 `wiki/GeneralContext/Architecture/deploy-traps.md`). The project's focus is
 back on the automated agent workflow:
-`wiki/GeneralContext/Prompts/01-agent-workflow-review.md`.
+`wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`.
 
 This folder is doing what it was supposed to: shrinking. A completed item does
 not stay here as a tick — it becomes current-state fact in the wiki and the entry

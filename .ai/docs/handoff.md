@@ -8,7 +8,8 @@ review protocol read [philosophy.md](philosophy.md).
 
 > **Status, 2026-10-08 — the workflow review has reported. Its findings and
 > the plan the human agreed are §10. Until §10's first batch lands, do not
-> dispatch a task.**
+> dispatch a task.** The Director session that continues this work starts at
+> `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`.
 >
 > **Status, 2026-10-07 — read this first; the rest of the file is as of
 > 2026-09-23.**
@@ -21,7 +22,7 @@ review protocol read [philosophy.md](philosophy.md).
 >   orchestrator correctly no-ops on their CI. How those sessions worked, and
 >   what they learned: `wiki/GeneralContext/Architecture/director-sessions.md`.
 > - **The app is built and live**, so the focus is back on this system. The
->   next session is `wiki/GeneralContext/Prompts/01-agent-workflow-review.md`:
+>   next session was `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` (done 2026-10-08, §10):
 >   a safety, performance and cost review, discussed with the human before
 >   anything changes. It starts with §9.1's flow enumeration, which was never
 >   run. §9.2's five items are still open.
@@ -666,7 +667,7 @@ tells you how much weight that reviewer's "no finding" deserves elsewhere.
 
 ## 10. The workflow review, 2026-10-08 — findings and the agreed plan
 
-The review `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` asked
+The review `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` (deleted once done) asked
 for. §9.1's flow enumeration ran first, as a read-only subagent; its citations
 were spot-checked against the files. **Independence was not achieved:** both
 the reviewer and the subagent read §9.4 before reporting (a `sed`/`grep` over
