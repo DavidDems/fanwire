@@ -5,6 +5,7 @@ properties that unit tests cannot see because they live in workflow YAML, and
 every one of them is here because it broke a live run.
 """
 
+import json
 import os
 import re
 import shutil
@@ -1189,8 +1190,11 @@ class TestModelWrittenCodeNeverRunsWithAToken:
         # moving agentlib code onto a bookkeeping path would look like
         # bookkeeping alone.
         repo = branch(".ai/tasks/ABC-001/state.json")
+        (repo / ".ai" / "telemetry" / "runs" / "ABC-001").mkdir(parents=True)
         _git(repo, "mv", ".ai/agentlib/guard.py", ".ai/telemetry/runs/ABC-001/x.json")
         _git(repo, "commit", "-q", "-m", "rename")
+        # Rename detection must see it as one, or this proves nothing.
+        assert "R100" in _git(repo, "diff", "--name-status", "-M", "origin/main...HEAD")
         code, _ = run_step_body(gate_body, {"TASK_ID": "ABC-001"}, repo)
         assert code != 0
 
@@ -1300,3 +1304,120 @@ class TestModelWrittenCodeNeverRunsWithAToken:
         for line in live_lines(package):
             if line.startswith("git "):
                 assert "--git-dir=" in line, f"uses whatever .git the model left: {line}"
+
+
+class TestTheLandingGuardRunsAgainstARealPatch:
+    """handoff.md §10, D2b. The `land` job's guard step, run for real: a
+    repository on a task branch, a patch as `run-model` would hand it over,
+    and agentctl from this checkout as the tools copy."""
+
+    SPEC = {
+        "schema": 1,
+        "task_id": "ABC-001",
+        "objective": "x",
+        "acceptance_criteria": ["x"],
+        "allowed_paths": ["backend/app/**"],
+        "forbidden_paths": [],
+        "required_context": [],
+        "required_skills": [],
+        "workflow_policy": {},
+    }
+
+    @pytest.fixture
+    def guard_body(self, worker) -> str:
+        return run_bodies(
+            step(job_block(worker, "land"), "Check the diff against the permission model")
+        )[0]
+
+    @pytest.fixture
+    def repo(self, tmp_path) -> Path:
+        if shutil.which("git") is None:
+            pytest.skip("git not available")
+        repo = tmp_path / "task"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "agent/ABC-001")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "t")
+        _git(repo, "config", "core.autocrlf", "false")
+        spec = repo / ".ai" / "tasks" / "ABC-001" / "task.json"
+        spec.parent.mkdir(parents=True)
+        spec.write_text(json.dumps(self.SPEC), encoding="utf-8")
+        (repo / "backend" / "app").mkdir(parents=True)
+        # Bytes throughout: text mode on Windows writes CRLF, and the patch
+        # captured in text mode would lose the CRs and no longer apply.
+        (repo / "backend" / "app" / "x.py").write_bytes(b"base\n")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "base")
+        return repo
+
+    def apply(self, guard_body: str, repo: Path, patch: str) -> tuple[int, Path]:
+        temp = repo.parent / "runner_temp"
+        (temp / "result").mkdir(parents=True, exist_ok=True)
+        (temp / "result" / "work.patch").write_bytes(patch.encode("utf-8"))
+        tools = WORKFLOWS.parents[1]
+        code, _ = run_step_body(
+            guard_body,
+            {
+                "RUNNER_TEMP": temp.as_posix(),
+                "TASK_ID": "ABC-001",
+                "ROLE": "code_agent",
+                "TOOLS": tools.as_posix(),
+                "AGENTCTL_DATA_ROOT": str(repo),
+            },
+            repo,
+        )
+        return code, temp / "changed.txt"
+
+    def diff_of(self, repo: Path, rel: str, content: str) -> str:
+        target = repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content.encode("utf-8"))
+        _git(repo, "add", "-A")
+        patch = _git(repo, "diff", "--cached", "--binary", "--no-renames")
+        _git(repo, "reset", "-q", "--hard", "HEAD")
+        return patch
+
+    def test_work_inside_the_contract_passes(self, guard_body, repo):
+        code, changed = self.apply(
+            guard_body, repo, self.diff_of(repo, "backend/app/x.py", "new\n")
+        )
+        assert code == 0
+        assert changed.read_text(encoding="utf-8").split() == ["backend/app/x.py"]
+
+    def test_an_empty_patch_passes(self, guard_body, repo):
+        code, changed = self.apply(guard_body, repo, "")
+        assert code == 0
+        assert changed.read_text(encoding="utf-8") == ""
+
+    @pytest.mark.parametrize("rel", [".ai/agentlib/x.py", ".ai/tasks/ABC-001/state.json"])
+    def test_nothing_under_ai_passes(self, guard_body, repo, rel):
+        code, _ = self.apply(guard_body, repo, self.diff_of(repo, rel, "x\n"))
+        assert code != 0, f"{rel} landed"
+
+    def test_a_symlink_is_refused(self, guard_body, repo):
+        patch = (
+            "diff --git a/backend/app/link b/backend/app/link\n"
+            "new file mode 120000\n"
+            "index 0000000..1111111\n"
+            "--- /dev/null\n"
+            "+++ b/backend/app/link\n"
+            "@@ -0,0 +1 @@\n"
+            "+/etc/passwd\n"
+            "\\ No newline at end of file\n"
+        )
+        code, _ = self.apply(guard_body, repo, patch)
+        assert code != 0
+
+    @pytest.mark.parametrize("rel", [".git/hooks/pre-push", "backend/.GIT/config"])
+    def test_a_path_inside_a_git_dir_is_refused(self, guard_body, repo, rel):
+        patch = (
+            f"diff --git a/{rel} b/{rel}\n"
+            "new file mode 100644\n"
+            "--- /dev/null\n"
+            f"+++ b/{rel}\n"
+            "@@ -0,0 +1 @@\n"
+            "+evil\n"
+        )
+        code, _ = self.apply(guard_body, repo, patch)
+        assert code != 0
+        assert not (repo / ".git" / "hooks" / "pre-push").exists()

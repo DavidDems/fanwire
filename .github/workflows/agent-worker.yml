@@ -8,17 +8,33 @@ name: agent-worker
 # commits or escalates, records what was spent, and hands control back to the
 # orchestrator.
 #
-# Least privilege notes, because this is where a compromised or manipulated
-# agent would do damage:
-#   * `contents: write` is the only broad permission, and it is scoped to a
-#     task branch by the guard step below, not by trust.
-#   * The agent process itself runs with NO GitHub token, in its environment
-#     or on disk (see "Invoke the agent" and the checkout). Only the steps
-#     around it can talk to the API, and the job token reaches exactly two of
-#     them: the push and the hand-off.
-#   * The task id is validated before anything uses it, and no dispatch input
-#     is ever pasted into a script — inputs reach the shell through `env:`.
-#   * The provider credential is present only for that one step.
+# Two jobs, because of what the model can leave behind (handoff.md §10, D2b).
+# Taking the token out of the model's own process (D2) was not enough: the
+# model writes files, and the steps after it used to run code from the same
+# working tree — `.ai/bin/agentctl.py`, the `.git/` that `git push` read its
+# hooks and config from — with the push token and AGENT_DISPATCH_TOKEN in
+# reach. The guard did not even look under `.ai/`. So:
+#
+#   run-model  can only READ the repository and holds no GitHub credential at
+#              all. It runs the model as a separate, unprivileged user, kills
+#              everything that user left running, and hands the work on as a
+#              patch artifact. Nothing it writes is trusted.
+#   land       holds `contents: write` and `actions: write`. It starts from a
+#              fresh checkout on a fresh runner, applies that patch, guards
+#              every path in it (no `.ai/` exception: the model may write
+#              nothing there), and only then commits, records, pushes and
+#              hands back.
+#
+# In both jobs every agentctl call runs from a checkout of `main` beside the
+# task (`tools`, at the SHA this run is for), never from the task branch, and
+# python always runs with -I so the working directory is not on sys.path.
+#
+# Other least-privilege notes:
+#   * The task id is validated before anything uses it, in each job, and no
+#     dispatch input is ever pasted into a script: inputs reach the shell
+#     through `env:`.
+#   * The provider credential is present only for the one step that runs the
+#     model, and is handed to it without appearing on a command line.
 #   * A guard violation is not retried. It escalates to a human.
 
 on:
@@ -31,22 +47,37 @@ on:
         description: "manager | test_agent | code_agent | context_maintainer"
         required: true
 
+# Each job states its own. Anything added without one gets read-only.
 permissions:
-  contents: write
-  actions: write # hand control back to agent-orchestrator.yml
+  contents: read
 
 concurrency:
   group: agent-worker-${{ github.event.inputs.task_id }}
   cancel-in-progress: false
 
 jobs:
-  work:
+  run-model:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+    # Read by `land`. Job outputs are set by the runner from step results, so
+    # unlike the artifact nothing the model leaves running can rewrite them.
+    outputs:
+      started: ${{ steps.clock.outputs.started }}
+      agent: ${{ steps.agent.outcome }}
+      cli_config: ${{ steps.cliconfig.outcome }}
+    # The task branch is checked out at `task/` and `main` at `tools/`, side by
+    # side: checkout cannot place a repository outside the workspace, and
+    # inside the task checkout the tools would be part of the model's tree.
+    defaults:
+      run:
+        working-directory: task
     env:
       TASK_ID: ${{ github.event.inputs.task_id }}
       ROLE: ${{ github.event.inputs.role }}
-      BRANCH: agent/${{ github.event.inputs.task_id }}
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/task
       # The workflow's own scratch files (prompt, context, agent result) must
       # NOT live inside the checkout. They are not the agent's work, but
       # `git add -A` stages them all the same and the guard then — correctly —
@@ -70,6 +101,9 @@ jobs:
       # test_workflows.py fails if it drifts from agentlib/guard.py. The id
       # itself is never echoed: it is exactly the string not to trust.
       - name: Refuse a malformed task id
+        # Nothing is checked out yet, so the job's default directory does
+        # not exist.
+        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
           export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
@@ -82,13 +116,77 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: agent/${{ github.event.inputs.task_id }}
+          path: task
           fetch-depth: 0
           # handoff.md §10, D2. By default checkout leaves the job token in
-          # .git/config for the whole job, and the model reads files. Blanking
-          # the environment variables in "Invoke the agent" meant nothing while
-          # this was true. The one later network operation, the push,
-          # authenticates for itself.
+          # .git/config for the whole job, and the model reads files.
           persist-credentials: false
+
+      # The trusted copy every agentctl call below runs from (handoff.md §10,
+      # D2b): `main` at the commit this run's workflow file came from.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+
+      # handoff.md §10, D2b. Nothing under .ai/ on a task branch may differ
+      # from main except this task's own state and telemetry. Bash and git
+      # only, before any python runs; the same script is in the `land` job
+      # and in agent-orchestrator.yml, and test_workflows.py fails if the
+      # copies drift.
+      - name: Refuse .ai changes beyond this task's bookkeeping
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          # What this branch changed since it left main. --no-renames: with
+          # rename detection --name-only prints only a rename's destination.
+          # -z: no quoting, and a newline in a name cannot split it in two.
+          # A temp file, not a pipe, so a failing git (no origin/main) fails
+          # the step instead of yielding an empty, passing list.
+          CHANGED="$(mktemp)"
+          trap 'rm -f "$CHANGED"' EXIT
+          git diff --name-only -z --no-renames origin/main...HEAD -- .ai > "$CHANGED"
+          BAD=0
+          while IFS= read -r -d '' p; do
+            if [ "$p" = ".ai/tasks/$TASK_ID/state.json" ]; then
+              continue
+            fi
+            rest="${p#".ai/telemetry/runs/$TASK_ID/"}"
+            if [ "$rest" != "$p" ] && [[ "$rest" != */* ]] && [[ "$rest" == *.json ]]; then
+              continue
+            fi
+            printf '::error::%q differs from main and is not this task bookkeeping\n' "$p"
+            BAD=1
+          done < "$CHANGED"
+          if [ "$BAD" -ne 0 ]; then
+            echo "::error::refusing agent/$TASK_ID: its .ai/ may differ from main only in its own state and telemetry"
+            exit 1
+          fi
+          echo ".ai/ matches main apart from this task's bookkeeping"
+
+      # handoff.md §10, D2b. The provider CLI is started in the task checkout
+      # with the provider key in its environment, and would load
+      # .claude/settings*.json (whose hooks run commands) and .mcp.json (whose
+      # servers are processes) from it. invoke_agent.sh also tells it not to;
+      # this refuses the branch outright if either was changed, and `land`
+      # escalates that exactly like a guard violation.
+      - name: Refuse CLI project config that differs from main
+        id: cliconfig
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          CHANGED="$(mktemp)"
+          trap 'rm -f "$CHANGED"' EXIT
+          git diff --name-only -z --no-renames origin/main...HEAD -- .claude .mcp.json > "$CHANGED"
+          if [ -s "$CHANGED" ]; then
+            while IFS= read -r -d '' p; do
+              printf '::error::%q is CLI project config and differs from main\n' "$p"
+            done < "$CHANGED"
+            echo "::error::refusing to run the model on agent/$TASK_ID"
+            exit 1
+          fi
+          echo "no CLI project config differs from main"
 
       - uses: actions/setup-python@v6
         with:
@@ -101,15 +199,17 @@ jobs:
         with:
           node-version: 22
       - name: Install the provider CLI
+        # Outside the checkout, so no .npmrc from the task branch applies.
+        working-directory: ${{ runner.temp }}
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Refuse an unknown role
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python -I - <<'PY'
           import json, os, sys
           role = os.environ["ROLE"]
-          policy = json.load(open(".ai/policy.json", encoding="utf-8"))
+          policy = json.load(open(os.environ["TOOLS"] + "/.ai/policy.json", encoding="utf-8"))
           entry = policy["roles"].get(role)
           if entry is None or not entry.get("ci_dispatched"):
               print(f"::error::{role!r} is not a CI-dispatchable role")
@@ -120,10 +220,40 @@ jobs:
         id: prompt
         run: |
           set -euo pipefail
-          python .ai/bin/agentctl.py context "$TASK_ID" > "$RUNNER_TEMP/context.json"
-          python .ai/bin/agentctl.py prompt "$TASK_ID" --role "$ROLE" --out "$RUNNER_TEMP/prompt.md"
+          python -I "$TOOLS/.ai/bin/agentctl.py" context "$TASK_ID" > "$RUNNER_TEMP/context.json"
+          python -I "$TOOLS/.ai/bin/agentctl.py" prompt "$TASK_ID" --role "$ROLE" --out "$RUNNER_TEMP/prompt.md"
           echo "--- prompt ($(wc -c < "$RUNNER_TEMP/prompt.md") bytes) ---"
           head -40 "$RUNNER_TEMP/prompt.md"
+
+      # handoff.md §10, D2b. As the runner's own user, a process the model
+      # left running could rewrite the actions this job runs next (under
+      # _work/_actions, such as upload-artifact, which holds the token that
+      # writes the Actions cache main's workflows read), or anything else the
+      # runner user owns. As `agentrun` it can write the task checkout and
+      # its own result file, and nothing of the runner's.
+      - name: Hand the checkout to an unprivileged user
+        if: steps.cliconfig.outcome == 'success'
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /bin/bash agentrun
+          # The git dir leaves the checkout the model will own. Every later
+          # git command names it explicitly, so hooks, fsmonitor or config the
+          # model plants in a `.git` of its own are never read.
+          mv .git "$RUNNER_TEMP/task.git"
+          sudo chown -R agentrun: .
+          # Its input and output live in a root-owned directory: the model
+          # can write its result file but cannot swap it for a symlink.
+          sudo install -d -o root -g root -m 0755 "$RUNNER_TEMP/agentrun"
+          sudo install -o root -g root -m 0644 "$RUNNER_TEMP/prompt.md" "$RUNNER_TEMP/agentrun/prompt.md"
+          sudo install -o agentrun -g agentrun -m 0644 /dev/null "$RUNNER_TEMP/agentrun/agent-result.json"
+          # Traverse (not read) on the way down to the checkout, the tools
+          # and that directory.
+          for d in "$GITHUB_WORKSPACE" "$RUNNER_TEMP"; do
+            while [ "$d" != "/" ]; do
+              sudo chmod o+x "$d"
+              d="$(dirname "$d")"
+            done
+          done
 
       - name: Record the start time
         id: clock
@@ -131,77 +261,305 @@ jobs:
 
       - name: Invoke the agent
         id: agent
+        if: steps.cliconfig.outcome == 'success'
         continue-on-error: true
         env:
           # The one provider-specific seam in the whole system. Everything else
           # is provider-agnostic; swapping providers means editing
           # .ai/bin/invoke_agent.sh and .ai/config.json, and nothing else.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Deliberately blank. The agent must not be able to reach the GitHub
-          # API, dispatch workflows, or touch branch protection, whatever it is
-          # told to do by content it reads. Blank variables are only half of
-          # that; the other half is `persist-credentials: false` on the
-          # checkout, without which the token sits in .git/config.
+          # Deliberately blank, though sudo resets the environment anyway.
+          # The agent must not be able to reach the GitHub API, dispatch
+          # workflows, or touch branch protection, whatever it is told to do
+          # by content it reads.
           GITHUB_TOKEN: ""
           GH_TOKEN: ""
-        run: bash .ai/bin/invoke_agent.sh "$ROLE" "$RUNNER_TEMP/prompt.md" "$RUNNER_TEMP/agent-result.json"
+        # As `agentrun`, with an environment of exactly these: the key passes
+        # through --preserve-env, never argv, because sudo logs its command
+        # line. invoke_agent.sh comes from the tools copy, which that user
+        # can read but not write.
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=ANTHROPIC_API_KEY -u agentrun -H \
+            env PATH="$PATH" AGENTCTL_DATA_ROOT="$AGENTCTL_DATA_ROOT" \
+            bash "$TOOLS/.ai/bin/invoke_agent.sh" "$ROLE" \
+            "$RUNNER_TEMP/agentrun/prompt.md" "$RUNNER_TEMP/agentrun/agent-result.json"
 
-      - name: Record what the invocation cost
+      # Immediately after the model, whatever happened to it. Nothing below
+      # runs while anything of the model's might still be running, and
+      # nothing below runs code from the checkout or from the tools copy.
+      - name: Stop every process the model left behind
+        id: kill
         if: always()
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          if ! id agentrun > /dev/null 2>&1; then
+            echo "the model user was never created; nothing to stop"
+            exit 0
+          fi
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            sudo pkill -KILL -u agentrun || true
+            pgrep -u agentrun > /dev/null || break
+            sleep 1
+          done
+          if pgrep -u agentrun > /dev/null; then
+            echo "::error::processes of agentrun survived SIGKILL; refusing to package its work"
+            exit 1
+          fi
+          echo "no process of agentrun remains"
+
+      - name: Take the checkout back
+        id: reclaim
+        if: always() && steps.kill.outcome == 'success'
+        # -P (the default with -R) and -h: symlinks the model made are
+        # changed themselves, never followed.
+        run: sudo chown -R -P -h "$(id -u):$(id -g)" .
+
+      # The work, as a patch from the git dir that never left the runner
+      # user's hands. Also the agent result, for telemetry, even when the
+      # provider call failed. No commit and no telemetry here: anything
+      # written into the checkout now would be packaged as the model's work.
+      - name: Package the work
+        id: package
+        if: always() && steps.kill.outcome == 'success' && steps.reclaim.outcome == 'success'
         env:
-          STARTED: ${{ steps.clock.outputs.started }}
           AGENT_OUTCOME: ${{ steps.agent.outcome }}
         run: |
           set -euo pipefail
-          python .ai/bin/agentctl.py telemetry-from-run \
-            --task "$TASK_ID" --role "$ROLE" \
-            --started "$STARTED" \
-            --workflow-run-id "${{ github.run_id }}" \
-            --agent-result "$RUNNER_TEMP/agent-result.json" \
-            --result "$AGENT_OUTCOME"
+          mkdir -p "$RUNNER_TEMP/result"
+          if [ -f "$RUNNER_TEMP/agentrun/agent-result.json" ] && [ ! -L "$RUNNER_TEMP/agentrun/agent-result.json" ]; then
+            cp "$RUNNER_TEMP/agentrun/agent-result.json" "$RUNNER_TEMP/result/agent-result.json"
+          fi
+          if [ "$AGENT_OUTCOME" = "success" ]; then
+            git --git-dir="$RUNNER_TEMP/task.git" --work-tree=. add -A
+            git --git-dir="$RUNNER_TEMP/task.git" --work-tree=. diff --cached --binary --no-renames > "$RUNNER_TEMP/result/work.patch"
+            echo "patch: $(wc -c < "$RUNNER_TEMP/result/work.patch") bytes"
+          fi
 
-      - name: Stop here if the provider call failed
-        if: steps.agent.outcome == 'failure'
+      - uses: actions/upload-artifact@v6
+        if: always() && steps.package.outcome == 'success'
+        with:
+          name: agent-work
+          path: ${{ runner.temp }}/result
+          if-no-files-found: ignore
+          retention-days: 7
+
+  land:
+    needs: run-model
+    # Also after a failed model job: a failure must still be recorded
+    # (AGENT_FAILED), pushed and handed back, or the task sits in *_RUNNING.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write # hand control back to agent-orchestrator.yml
+    defaults:
+      run:
+        working-directory: task
+    env:
+      TASK_ID: ${{ github.event.inputs.task_id }}
+      ROLE: ${{ github.event.inputs.role }}
+      BRANCH: agent/${{ github.event.inputs.task_id }}
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/task
+    steps:
+      - name: Refuse a malformed task id
+        id: taskid
+        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
-            --event AGENT_FAILED --reason "provider invocation failed in run ${{ github.run_id }}"
-          echo "::warning::agent invocation failed; task routed to MANAGER_REVIEW"
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::task id does not match $TASK_ID_SAFE; refusing to run"
+            exit 1
+          fi
+
+      # A fresh runner and a fresh checkout: nothing the model touched in
+      # `run-model` exists here except the patch, which is data.
+      - uses: actions/checkout@v5
+        with:
+          ref: agent/${{ github.event.inputs.task_id }}
+          path: task
+          fetch-depth: 0
+          # The one network operation, the push, authenticates for itself.
+          persist-credentials: false
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+
+      - name: Refuse .ai changes beyond this task's bookkeeping
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          # What this branch changed since it left main. --no-renames: with
+          # rename detection --name-only prints only a rename's destination.
+          # -z: no quoting, and a newline in a name cannot split it in two.
+          # A temp file, not a pipe, so a failing git (no origin/main) fails
+          # the step instead of yielding an empty, passing list.
+          CHANGED="$(mktemp)"
+          trap 'rm -f "$CHANGED"' EXIT
+          git diff --name-only -z --no-renames origin/main...HEAD -- .ai > "$CHANGED"
+          BAD=0
+          while IFS= read -r -d '' p; do
+            if [ "$p" = ".ai/tasks/$TASK_ID/state.json" ]; then
+              continue
+            fi
+            rest="${p#".ai/telemetry/runs/$TASK_ID/"}"
+            if [ "$rest" != "$p" ] && [[ "$rest" != */* ]] && [[ "$rest" == *.json ]]; then
+              continue
+            fi
+            printf '::error::%q differs from main and is not this task bookkeeping\n' "$p"
+            BAD=1
+          done < "$CHANGED"
+          if [ "$BAD" -ne 0 ]; then
+            echo "::error::refusing agent/$TASK_ID: its .ai/ may differ from main only in its own state and telemetry"
+            exit 1
+          fi
+          echo ".ai/ matches main apart from this task's bookkeeping"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Missing when `run-model` died before packaging: that is an agent
+      # failure, decided below, not a reason to stop recording.
+      - name: Fetch what the model produced
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: agent-work
+          path: ${{ runner.temp }}/result
+
+      # refused: the branch changed the CLI's project config, so the model
+      #          was never run. Escalated like a guard violation.
+      # success: the model ran, succeeded, and its patch and result arrived.
+      # failure: anything else, including no artifact at all. AGENT_FAILED.
+      - name: What did the model run amount to?
+        id: outcome
+        env:
+          CLI_CONFIG: ${{ needs.run-model.outputs.cli_config }}
+          AGENT: ${{ needs.run-model.outputs.agent }}
+          DOWNLOAD: ${{ steps.download.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$CLI_CONFIG" = "failure" ]; then
+            VERDICT=refused
+          elif [ "$AGENT" = "success" ] && [ "$DOWNLOAD" = "success" ] \
+            && [ -f "$RUNNER_TEMP/result/work.patch" ] \
+            && [ -f "$RUNNER_TEMP/result/agent-result.json" ]; then
+            VERDICT=success
+          else
+            VERDICT=failure
+          fi
+          echo "model run: $VERDICT"
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
 
       - name: Check the diff against the permission model
-        if: steps.agent.outcome == 'success'
+        if: steps.outcome.outputs.verdict == 'success'
         id: guard
         # Without this the step's failure fails the JOB, so the escalate step
         # below never runs, the state is never advanced, and the task sits in
         # *_RUNNING forever. A boundary violation must be recorded and routed,
         # never silently dropped.
         continue-on-error: true
+        # Every path the patch touches is guarded, `.ai/` included: the state
+        # and telemetry are written after this step, by the workflow, so the
+        # model's own patch may contain nothing there (handoff.md §10, D2b).
         run: |
           set -euo pipefail
-          git add -A
-          git diff --cached --name-only > "$RUNNER_TEMP/changed.txt"
-          # State and telemetry are written by the steps around the agent, not
-          # by the agent, and are not part of what it is permitted to produce.
-          grep -v '^\.ai/' "$RUNNER_TEMP/changed.txt" > "$RUNNER_TEMP/agent-changed.txt" || true
-          echo "--- agent touched ---"; cat "$RUNNER_TEMP/agent-changed.txt"
-          python .ai/bin/agentctl.py guard check "$TASK_ID" \
-            --role "$ROLE" --diff-file "$RUNNER_TEMP/agent-changed.txt"
+          export LC_ALL=C
+          PATCH="$RUNNER_TEMP/result/work.patch"
+          # Header lines only; a hunk's content lines all start with ' ', '+'
+          # or '-', so content cannot match. A symlink could point the next
+          # reader anywhere; a gitlink is a repository inside this one.
+          if grep -Eq '^(new file mode|deleted file mode|old mode|new mode) (120000|160000)$|^index [0-9a-f]+\.\.[0-9a-f]+ (120000|160000)$' "$PATCH"; then
+            echo "::error::the patch adds or changes a symlink or a gitlink"
+            exit 1
+          fi
+          # Made with --no-renames, so a rename or copy header means the patch
+          # did not come from the packaging step.
+          if grep -Eq '^(rename|copy) (from|to) ' "$PATCH"; then
+            echo "::error::the patch carries a rename or copy"
+            exit 1
+          fi
+          : > "$RUNNER_TEMP/changed.txt"
+          if [ -s "$PATCH" ]; then
+            # Every path, as git apply itself reads them, before it writes
+            # anything: nothing inside a .git directory (any case), nothing
+            # absolute or climbing, no line breaks to split a name in two.
+            git apply --numstat -z "$PATCH" > "$RUNNER_TEMP/numstat"
+            while IFS= read -r -d '' rec; do
+              path="${rec#*$'\t'}"
+              path="${path#*$'\t'}"
+              lower="/${path,,}/"
+              if [[ "$path" == /* || "$lower" == */.git/* || "$lower" == */../* \
+                || "$path" == *$'\n'* || "$path" == *$'\r'* ]]; then
+                printf '::error::the patch touches %q\n' "$path"
+                exit 1
+              fi
+            done < "$RUNNER_TEMP/numstat"
+            git apply --index "$PATCH"
+            git diff --cached --name-only -z --no-renames | tr '\0' '\n' > "$RUNNER_TEMP/changed.txt"
+          fi
+          echo "--- agent touched ---"; cat "$RUNNER_TEMP/changed.txt"
+          python -I "$TOOLS/.ai/bin/agentctl.py" guard check "$TASK_ID" \
+            --role "$ROLE" --diff-file "$RUNNER_TEMP/changed.txt"
+
+      # After the guard, so the record is never part of what it checks. The
+      # work it applied is in the index; this file stays untracked until
+      # "Commit state and telemetry".
+      - name: Record what the invocation cost
+        if: always() && steps.outcome.outcome == 'success'
+        env:
+          STARTED: ${{ needs.run-model.outputs.started }}
+          VERDICT: ${{ steps.outcome.outputs.verdict }}
+        run: |
+          set -euo pipefail
+          RESULT=failure
+          if [ "$VERDICT" = "success" ]; then RESULT=success; fi
+          python -I "$TOOLS/.ai/bin/agentctl.py" telemetry-from-run \
+            --task "$TASK_ID" --role "$ROLE" \
+            --started "${STARTED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --agent-result "$RUNNER_TEMP/result/agent-result.json" \
+            --result "$RESULT"
+
+      - name: Stop here if the provider call failed
+        if: steps.outcome.outputs.verdict == 'failure'
+        run: |
+          set -euo pipefail
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event AGENT_FAILED --reason "provider invocation failed in run ${{ github.run_id }}"
+          echo "::warning::agent invocation failed; task routed to MANAGER_REVIEW"
 
       - name: Escalate a boundary violation
-        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'failure'
+        if: steps.outcome.outputs.verdict == 'refused' || (steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'failure')
+        env:
+          VERDICT: ${{ steps.outcome.outputs.verdict }}
         run: |
           set -euo pipefail
-          git reset --hard HEAD
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
-            --event GUARD_VIOLATION \
-            --reason "role $ROLE wrote outside its permitted paths in run ${{ github.run_id }}"
-          echo "::error::$ROLE wrote outside its permitted paths. Work discarded, task escalated."
+          git reset -q --hard HEAD
+          if [ "$VERDICT" = "refused" ]; then
+            REASON="agent/$TASK_ID changes the provider CLI's project config; the model was not run (run ${{ github.run_id }})"
+          else
+            REASON="role $ROLE wrote outside its permitted paths in run ${{ github.run_id }}"
+          fi
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event GUARD_VIOLATION --reason "$REASON"
+          echo "::error::$REASON. Work discarded, task escalated."
           # The state is now ESCALATED and will be pushed by the always() step
           # below; fail the job so the run is visibly red, not quietly green.
           exit 1
 
       - name: Commit the work
-        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        if: steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
         id: commit
         run: |
           set -euo pipefail
@@ -217,41 +575,45 @@ jobs:
               context_maintainer) VERB="wiki" ;;
               *) VERB="chore" ;;
             esac
-            git commit -m "$TASK_ID $VERB: $(python .ai/bin/agentctl.py summary-line --agent-result "$RUNNER_TEMP/agent-result.json")"
+            git commit -m "$TASK_ID $VERB: $(python -I "$TOOLS/.ai/bin/agentctl.py" summary-line --agent-result "$RUNNER_TEMP/result/agent-result.json")"
             echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Advance the workflow
-        if: steps.agent.outcome == 'success' && steps.guard.outcome == 'success'
+        if: steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
         env:
           COMMIT_SHA: ${{ steps.commit.outputs.sha }}
         run: |
           set -euo pipefail
           case "$ROLE" in
             context_maintainer) EVENT=MAINTAINER_DONE ;;
-            manager)            EVENT="$(python .ai/bin/agentctl.py manager-decision --agent-result "$RUNNER_TEMP/agent-result.json")" ;;
+            manager)            EVENT="$(python -I "$TOOLS/.ai/bin/agentctl.py" manager-decision --agent-result "$RUNNER_TEMP/result/agent-result.json")" ;;
             *)                  EVENT=AGENT_COMMITTED ;;
           esac
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event "$EVENT" --commit-sha "$COMMIT_SHA" \
-            --role "$ROLE" --session-id "$(python .ai/bin/agentctl.py session-id --agent-result "$RUNNER_TEMP/agent-result.json")"
+            --role "$ROLE" --session-id "$(python -I "$TOOLS/.ai/bin/agentctl.py" session-id --agent-result "$RUNNER_TEMP/result/agent-result.json")"
 
+      # Exactly this task's two bookkeeping paths, nothing else.
       - name: Commit state and telemetry
         id: state_commit
-        if: always()
+        if: always() && steps.taskid.outcome == 'success'
         run: |
           set -euo pipefail
           git config user.name "fanwire-$ROLE"
           git config user.email "noreply@github.com"
-          git add .ai/tasks/ .ai/telemetry/ || true
+          if [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
+            git add -- ".ai/tasks/$TASK_ID/state.json"
+          fi
+          if [ -d ".ai/telemetry/runs/$TASK_ID" ]; then
+            git add -- ".ai/telemetry/runs/$TASK_ID"
+          fi
           git diff --cached --quiet || git commit -m "[agent-state] $TASK_ID: $ROLE finished"
 
       # The only step after the model that holds the job token, and all it
-      # does is push: `git add`/`git commit` stay in the tokenless step above,
-      # because they run hooks, filters and fsmonitor out of a .git directory
-      # the model has just had write access to. Skipped only if that commit
-      # failed, which used to stop the push in the same way under `set -e`.
+      # does is push. Its .git is this job's own fresh checkout, which the
+      # model never had access to. Skipped only if that commit failed.
       #
       # The credential is an http.extraheader passed through GIT_CONFIG_* for
       # this one git process, the same header actions/checkout would have
@@ -273,10 +635,12 @@ jobs:
             git push origin HEAD:"$BRANCH"
 
       - name: Hand control back to the orchestrator
-        if: always()
+        if: always() && steps.taskid.outcome == 'success'
+        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
         run: |
           gh workflow run agent-orchestrator.yml \
+            --repo "$GITHUB_REPOSITORY" \
             --ref "${{ github.event.repository.default_branch }}" \
             -f task_id="$TASK_ID"

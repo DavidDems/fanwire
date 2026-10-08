@@ -52,7 +52,8 @@ _BOOKKEEPING = (
 TEST_ROLE = "test_agent"
 
 # A task id is interpolated into the bookkeeping patterns, so it is validated
-# rather than trusted: a crafted id must not be able to widen them.
+# rather than trusted: a crafted id must not be able to widen them. Always with
+# `fullmatch`: `match` lets `$` accept one trailing newline (handoff.md §10, D2b).
 TASK_ID_SAFE = re.compile(r"^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$")
 
 
@@ -95,7 +96,7 @@ def is_orchestrator_bookkeeping(path: str, task_id: str) -> bool:
     `brief.md` (rewriting your own `allowed_paths` mid-task is precisely what
     the permission model exists to prevent), and anything else whatsoever.
     """
-    if not TASK_ID_SAFE.match(task_id or ""):
+    if not TASK_ID_SAFE.fullmatch(task_id or ""):
         return False
     candidate = _normalise(path)
     if ".." in candidate.split("/"):
