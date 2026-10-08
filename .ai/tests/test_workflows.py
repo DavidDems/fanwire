@@ -903,6 +903,12 @@ def live_lines(text: str) -> list[str]:
     return out
 
 
+def makes_patch(text: str) -> bool:
+    """Does a live script line diff the index into a binary patch? Global
+    options such as `--git-dir=` may sit between `git` and `diff`."""
+    return any(re.search(r"^git\b.*\sdiff --cached --binary\b", line) for line in live_lines(text))
+
+
 def step_runs_python(chunk: str) -> bool:
     return any(re.search(r"\bpython\b", line) for line in live_lines(chunk))
 
@@ -969,7 +975,7 @@ class TestModelWrittenCodeNeverRunsWithAToken:
     def test_the_model_hands_its_work_on_as_a_patch(self, worker):
         model = job_block(worker, "run-model")
         land = job_block(worker, "land")
-        assert "git diff --cached --binary" in model
+        assert makes_patch(model)
         assert "actions/upload-artifact@" in model
         assert "actions/download-artifact@" in land
         assert "git apply --index" in step(land, "Check the diff against the permission model")
@@ -1279,7 +1285,7 @@ class TestModelWrittenCodeNeverRunsWithAToken:
         invoke = titles.index("Invoke the agent")
         kill = titles.index(KILL)
         reclaim = titles.index(RECLAIM)
-        package = next(i for i, c in enumerate(chunks) if "git diff --cached --binary" in c)
+        package = next(i for i, c in enumerate(chunks) if makes_patch(c))
         upload = next(i for i, c in enumerate(chunks) if "actions/upload-artifact@" in c)
         assert invoke + 1 == kill, "nothing may run between the model and the kill"
         assert kill < reclaim < package < upload
@@ -1290,7 +1296,7 @@ class TestModelWrittenCodeNeverRunsWithAToken:
 
     def test_the_patch_is_made_from_the_git_dir_outside_the_checkout(self, worker):
         chunks, _ = self._model_steps(worker)
-        package = next(c for c in chunks if "git diff --cached --binary" in c)
+        package = next(c for c in chunks if makes_patch(c))
         for line in live_lines(package):
             if line.startswith("git "):
                 assert "--git-dir=" in line, f"uses whatever .git the model left: {line}"
