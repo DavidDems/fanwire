@@ -50,9 +50,17 @@ jobs:
   orchestrate:
     # A test-agent run on anything other than a task branch is the ordinary
     # quality gate and is none of this workflow's business.
+    #
+    # And on a task branch, only the run this orchestrator dispatched is the
+    # task's verdict (handoff.md §10, D1). `head_branch` is just a name: a fork
+    # PR from a branch called `agent/<ID>` carries it too, and so does a
+    # path-filtered `pull_request` run on the real branch. The repository is
+    # public, so the first is anyone's to send.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.workflow_run.head_branch, 'agent/')
+      (startsWith(github.event.workflow_run.head_branch, 'agent/') &&
+       github.event.workflow_run.event == 'workflow_dispatch' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     # One run does one transition and stops, so this is generous by an order of
     # magnitude. Without it the job inherits GitHub's 6-hour default and a hung
@@ -122,6 +130,7 @@ jobs:
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           SHA: ${{ github.event.workflow_run.head_sha }}
+          TASK_ID: ${{ steps.task.outputs.id }}
         run: |
           set -euo pipefail
           case "$CONCLUSION" in
@@ -129,6 +138,12 @@ jobs:
             failure|timed_out) EVENT=CI_FAILED ;;
             *) echo "CI concluded '$CONCLUSION'; nothing to apply"; exit 0 ;;
           esac
+          # The verdict must be about code this branch still carries. The
+          # orchestrator's own CI_STARTED commit lands after CI is dispatched,
+          # so that bookkeeping is allowed; anything else fails this run
+          # visibly and leaves the state untouched, rather than applying a
+          # verdict for code nobody tested.
+          python .ai/bin/agentctl.py guard tested "$TASK_ID" --sha "$SHA"
           # --ignore-terminal: CI re-running on a finished task's branch is
           # routine (a review PR has to be brought up to date before it can
           # merge), and the state machine rightly refuses a CI result for a
