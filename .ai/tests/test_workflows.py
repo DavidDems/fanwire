@@ -20,6 +20,17 @@ from agentlib.guard import TASK_ID_SAFE
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKER = WORKFLOWS / "agent-worker.yml"
 ORCHESTRATOR = WORKFLOWS / "agent-orchestrator.yml"
+GUARD_WF = WORKFLOWS / "agent-guard.yml"
+
+# handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
+# trusted copy of `main` checked out beside the task, never the task branch's.
+AGENTCTL = 'python -I "$TOOLS/.ai/bin/agentctl.py"'
+GATE = "Refuse .ai changes beyond this task's bookkeeping"
+CLI_GATE = "Refuse CLI project config that differs from main"
+UNPRIVILEGED = "Hand the checkout to an unprivileged user"
+KILL = "Stop every process the model left behind"
+RECLAIM = "Take the checkout back"
+MODEL_USER = "agentrun"
 
 
 @pytest.fixture
@@ -106,7 +117,11 @@ def run_step_body(body: str, env: dict[str, str], tmp_path: Path) -> tuple[int, 
     github_env = tmp_path / "github_env"
     github_env.write_text("", encoding="utf-8")
     scrubbed = ("TASK_ID", "INPUT_TASK_ID", "HEAD_BRANCH", "GITHUB_OUTPUT", "GITHUB_ENV")
-    full_env = {k: v for k, v in os.environ.items() if k not in scrubbed}
+    # GIT_* too: under a git hook they would aim any `git` in the step at the
+    # repository being committed to (see conftest.py).
+    full_env = {
+        k: v for k, v in os.environ.items() if k not in scrubbed and not k.startswith("GIT_")
+    }
     full_env.update(GITHUB_OUTPUT=output.as_posix(), GITHUB_ENV=github_env.as_posix(), **env)
     proc = subprocess.run(
         [bash, "-c", body],
@@ -465,7 +480,8 @@ class TestOnlyTheOrchestratorsOwnCiRunIsTrusted:
 
     def test_the_verdict_must_be_for_code_the_branch_still_carries(self, orch):
         step = orch.split("- name: Apply the CI result", 1)[1].split("- name:", 1)[0]
-        assert "agentctl.py guard tested" in step, "the tested SHA must be checked"
+        # The tools copy since handoff.md §10, D2b.
+        assert f"{AGENTCTL} guard tested" in step, "the tested SHA must be checked"
         assert step.index("guard tested") < step.index("state advance"), (
             "the SHA check must run before the verdict is applied"
         )
@@ -690,6 +706,10 @@ class TestActionsRunOnNode24:
         "aws-actions/configure-aws-credentials": 6,
         "docker/setup-buildx-action": 4,
         "docker/build-push-action": 7,
+        # Checked 2026-10-08 for the D2b worker split: upload-artifact@v5 and
+        # download-artifact@v6 still declare node20.
+        "actions/upload-artifact": 6,
+        "actions/download-artifact": 7,
     }
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
@@ -739,7 +759,9 @@ class TestNoDispatchInputReachesTheShellAsCode:
             'echo "$V"',
         ]
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR], ids=lambda p: p.name)
+    # agent-guard.yml joined in D2b: it pasted the PR's branch name, which a
+    # fork chooses, into three scripts.
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, GUARD_WF], ids=lambda p: p.name)
     def test_no_run_script_interpolates_attacker_influenced_context(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -832,3 +854,443 @@ class TestACraftedTaskIdFailsEarly:
         body = run_bodies(step(worker, "Refuse a malformed task id"))[0]
         code, _ = run_step_body(body, {"TASK_ID": "DEMO-001"}, tmp_path)
         assert code == 0
+
+
+# --------------------------------------------------------------------------- D2b
+
+
+def job_block(text: str, name: str) -> str:
+    """One job's YAML, from its `  <name>:` key to the next job's."""
+    marker = f"\n  {name}:\n"
+    assert marker in text, f"no job named {name!r}"
+    lines = []
+    for line in text.split(marker, 1)[1].splitlines():
+        if line.strip() and not line.startswith("   "):
+            break  # the next two-space key, or a top-level one
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def job_names(text: str) -> list[str]:
+    body = text.split("\njobs:\n", 1)[1]
+    return re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", body, flags=re.MULTILINE)
+
+
+def steps_in(block: str) -> list[str]:
+    """Every step of a job, in order, each chunk starting at its `- ` line."""
+    chunks: list[list[str]] = []
+    for line in block.split("    steps:\n", 1)[1].splitlines():
+        if line.startswith("      - "):
+            chunks.append([line])
+        elif chunks:
+            chunks[-1].append(line)
+    return ["\n".join(c) for c in chunks]
+
+
+def step_title(chunk: str) -> str:
+    first = chunk.strip().removeprefix("- ").splitlines()[0]
+    return first.removeprefix("name: ").strip()
+
+
+def live_lines(text: str) -> list[str]:
+    """Every non-comment line of every `run:` script in `text`."""
+    out = []
+    for body in run_bodies(text):
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                out.append(stripped)
+    return out
+
+
+def step_runs_python(chunk: str) -> bool:
+    return any(re.search(r"\bpython\b", line) for line in live_lines(chunk))
+
+
+def _git(repo: Path, *args: str) -> str:
+    # Never inherit GIT_*: under a hook they point at the real repository.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return subprocess.run(
+        ["git", *args], cwd=repo, env=env, capture_output=True, text=True, check=True
+    ).stdout
+
+
+class TestModelWrittenCodeNeverRunsWithAToken:
+    """handoff.md §10, D2b. D2 took the token out of the model's own process,
+    but code the model *writes* still ran with one in reach. The worker's
+    guard skipped everything under `.ai/` (`grep -v '^\\.ai/'`), so a model's
+    edit to `.ai/bin/agentctl.py` was committed and then executed by the next
+    step of the same job, beside `AGENT_DISPATCH_TOKEN`; the push ran from a
+    `.git/` the model could write; the orchestrator ran the task branch's
+    `agentctl` with the PAT in env; `agent-guard` imported the PR's own
+    `agentlib`.
+
+    The invariant pinned here: no code the model can write ever runs in a step
+    that can reach a token. The worker is split in two. The job that runs the
+    model can only read, and hands its work on as a patch; the job that holds
+    the token starts from a fresh checkout, applies that patch and guards every
+    path in it, with no exception for `.ai/`. Every workflow runs `agentctl`
+    from a checkout of `main` beside the task, never the task branch's own,
+    and refuses a branch whose `.ai/` differs from `main` by anything but this
+    task's bookkeeping."""
+
+    # --- the split -------------------------------------------------------
+
+    def test_the_worker_has_two_jobs(self, worker):
+        assert job_names(worker) == ["run-model", "land"]
+
+    def test_the_model_job_can_only_read(self, worker):
+        block = job_block(worker, "run-model")
+        assert "\n    permissions:\n" in block, "the model job must declare its own permissions"
+        granted = []
+        for line in block.split("\n    permissions:\n", 1)[1].splitlines():
+            if not line.startswith("      "):
+                break
+            if line.split("#", 1)[0].strip():
+                granted.append(line.split("#", 1)[0].strip())
+        assert granted == ["contents: read"], f"the model job is granted {granted}"
+
+    def test_the_model_job_holds_no_secret_but_the_provider_key(self, worker):
+        block = job_block(worker, "run-model")
+        assert set(re.findall(r"secrets\.(\w+)", block)) == {"ANTHROPIC_API_KEY"}
+        holders = [step_title(c) for c in steps_in(block) if "secrets." in c]
+        assert holders == ["Invoke the agent"], holders
+        assert "AGENT_DISPATCH_TOKEN" not in block
+        assert "github.token" not in block
+
+    def test_the_landing_job_waits_for_the_model_and_always_runs(self, worker):
+        head = job_block(worker, "land").split("    steps:\n", 1)[0]
+        assert "needs: run-model" in head
+        assert "if: always()" in head, (
+            "a model job that failed must still be recorded, pushed and handed back"
+        )
+        assert "contents: write" in head and "actions: write" in head
+
+    def test_the_model_hands_its_work_on_as_a_patch(self, worker):
+        model = job_block(worker, "run-model")
+        land = job_block(worker, "land")
+        assert "git diff --cached --binary" in model
+        assert "actions/upload-artifact@" in model
+        assert "actions/download-artifact@" in land
+        assert "git apply --index" in step(land, "Check the diff against the permission model")
+
+    def test_the_model_job_commits_and_records_nothing(self, worker):
+        # Anything written into the checkout after the model is staged with
+        # the model's work and would land as if the model had written it.
+        block = job_block(worker, "run-model")
+        assert "telemetry-from-run" not in block
+        assert "git commit" not in block and "git push" not in block
+
+    def test_nothing_runs_from_the_tools_copy_after_the_model(self, worker):
+        # In the model job the model can write anywhere the runner can,
+        # including the tools copy beside the checkout. Once it has run,
+        # nothing in that job may execute repository code.
+        chunks = steps_in(job_block(worker, "run-model"))
+        titles = [step_title(c) for c in chunks]
+        after = chunks[titles.index("Invoke the agent") + 1 :]
+        assert after, "the model job must package the work after the model"
+        for chunk in after:
+            for line in live_lines(chunk):
+                assert "python" not in line and "$TOOLS" not in line, (
+                    f"{step_title(chunk)!r} runs code after the model: {line}"
+                )
+
+    def test_the_landing_job_validates_the_task_id_first(self, worker):
+        land = job_block(worker, "land")
+        assert step_title(steps_in(land)[0]) == "Refuse a malformed task id"
+
+    def test_both_jobs_check_out_without_persisting_a_token(self, worker):
+        for name in ("run-model", "land"):
+            block = job_block(worker, name)
+            assert "ref: agent/${{ github.event.inputs.task_id }}" in block, name
+            checkouts = block.split("uses: actions/checkout@")[1:]
+            assert len(checkouts) == 2, name
+            for chunk in checkouts:
+                assert "persist-credentials: false" in chunk.split("\n      - ", 1)[0], name
+
+    # --- the landing guard -------------------------------------------------
+
+    def test_the_guard_has_no_exception_for_the_agent_system(self, worker):
+        assert "grep -v '^\\.ai/'" not in worker
+        guard = step(job_block(worker, "land"), "Check the diff against the permission model")
+        assert f"{AGENTCTL} guard check" in guard
+
+    def test_the_patch_may_not_carry_links_or_reach_into_git(self, worker):
+        guard = "\n".join(
+            run_bodies(
+                step(job_block(worker, "land"), "Check the diff against the permission model")
+            )
+        )
+        assert "120000" in guard, "a symlink in the patch must be refused"
+        assert "160000" in guard, "a gitlink in the patch must be refused"
+        assert ".git" in guard, "a patch path inside .git must be refused"
+        assert guard.index("120000") < guard.index("git apply --index")
+
+    def test_telemetry_is_written_only_after_the_guard(self, worker):
+        land = job_block(worker, "land")
+        assert land.index("- name: Check the diff against the permission model") < land.index(
+            "telemetry-from-run"
+        )
+
+    # --- the tools copy ------------------------------------------------------
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, GUARD_WF], ids=lambda p: p.name)
+    def test_no_workflow_runs_the_checkouts_own_agentctl(self, path):
+        lines = live_lines(path.read_text(encoding="utf-8"))
+        offenders = [ln for ln in lines if "agentctl.py" in ln and AGENTCTL not in ln]
+        assert not offenders, "agentctl must come from the tools copy:\n    " + "\n    ".join(
+            offenders
+        )
+        assert any(AGENTCTL in ln for ln in lines)
+        imports_from_checkout = [
+            ln for ln in lines if re.search(r"""path\.insert\(0,\s*['"]\.ai""", ln)
+        ]
+        assert not imports_from_checkout, imports_from_checkout
+
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, GUARD_WF], ids=lambda p: p.name)
+    def test_every_python_is_isolated_from_the_checkout(self, path):
+        # `python -c` and `python -` put the working directory on sys.path, so
+        # a `json.py` in the task checkout would be imported. `-I` does not.
+        bare = [
+            ln
+            for ln in live_lines(path.read_text(encoding="utf-8"))
+            if re.search(r"(^|[\s(|])python(?!\s+-I\b)(\s|$)", ln)
+        ]
+        assert not bare, "python must run with -I:\n    " + "\n    ".join(bare)
+
+    @pytest.mark.parametrize(
+        "path,jobs",
+        [(WORKER, ["run-model", "land"]), (ORCHESTRATOR, ["orchestrate"])],
+        ids=["worker", "orchestrator"],
+    )
+    def test_the_tools_are_main_beside_the_task_checkout(self, path, jobs):
+        text = path.read_text(encoding="utf-8")
+        assert "TOOLS: ${{ github.workspace }}/tools" in text
+        assert "AGENTCTL_DATA_ROOT: ${{ github.workspace }}/task" in text
+        for name in jobs:
+            block = job_block(text, name)
+            checkouts = block.split("uses: actions/checkout@")[1:]
+            tools = [c for c in checkouts if "path: tools" in c.split("\n      - ", 1)[0]]
+            task = [c for c in checkouts if "path: task" in c.split("\n      - ", 1)[0]]
+            assert len(tools) == 1 and len(task) == 1, name
+            assert "ref: ${{ github.sha }}" in tools[0], name
+
+    def test_the_model_is_invoked_from_the_tools_copy(self, worker):
+        body = "\n".join(run_bodies(step(job_block(worker, "run-model"), "Invoke the agent")))
+        assert 'bash "$TOOLS/.ai/bin/invoke_agent.sh"' in body
+
+    def test_agent_guard_runs_the_base_branchs_code(self):
+        text = GUARD_WF.read_text(encoding="utf-8")
+        tools = [c for c in text.split("uses: actions/checkout@")[1:] if "path: tools" in c]
+        assert len(tools) == 1
+        assert "ref: ${{ github.event.pull_request.base.sha }}" in tools[0]
+        assert "AGENTCTL_DATA_ROOT: ${{ github.workspace }}/pr" in text
+
+    def test_agent_guard_validates_the_task_id_before_using_it(self):
+        text = GUARD_WF.read_text(encoding="utf-8")
+        body = run_bodies(step(text, "Derive the task id from the branch"))[0]
+        assert TestACraftedTaskIdFailsEarly.pattern_in(body) == TASK_ID_SAFE.pattern
+
+    # --- the .ai gate ----------------------------------------------------------
+
+    @pytest.mark.parametrize(
+        "path,name",
+        [(WORKER, "run-model"), (WORKER, "land"), (ORCHESTRATOR, "orchestrate")],
+        ids=["run-model", "land", "orchestrate"],
+    )
+    def test_the_gate_precedes_every_python_step(self, path, name):
+        chunks = steps_in(job_block(path.read_text(encoding="utf-8"), name))
+        titles = [step_title(c) for c in chunks]
+        assert GATE in titles, f"{name} has no {GATE!r} step"
+        first_python = next(i for i, c in enumerate(chunks) if step_runs_python(c))
+        assert titles.index(GATE) < first_python, (
+            f"{name} runs python ({titles[first_python]!r}) before the .ai gate"
+        )
+
+    def test_the_gate_is_one_script(self, worker, orchestrator):
+        bodies = {
+            run_bodies(step(job_block(text, name), GATE))[0]
+            for text, name in (
+                (worker, "run-model"),
+                (worker, "land"),
+                (orchestrator, "orchestrate"),
+            )
+        }
+        assert len(bodies) == 1, "the .ai gate has drifted between its copies"
+
+    @pytest.fixture
+    def gate_body(self, worker) -> str:
+        return run_bodies(step(job_block(worker, "run-model"), GATE))[0]
+
+    @pytest.fixture
+    def branch(self, tmp_path):
+        """A repository whose `origin/main` carries the agent system, and a
+        task branch cut from it. Returns a function that commits to the
+        branch and returns the repository."""
+        if shutil.which("git") is None:
+            pytest.skip("git not available")
+        repo = tmp_path
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "t")
+        for rel in (".ai/agentlib/guard.py", ".ai/tasks/ABC-001/task.json", "backend/app/x.py"):
+            (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (repo / rel).write_text(f"base {rel}\n", encoding="utf-8")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "base")
+        _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        _git(repo, "checkout", "-q", "-b", "agent/ABC-001")
+
+        def commit(*paths: str) -> Path:
+            for rel in paths:
+                (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                (repo / rel).write_text("changed\n", encoding="utf-8")
+                _git(repo, "add", "--", rel)
+            _git(repo, "commit", "-q", "-m", "work")
+            return repo
+
+        return commit
+
+    def test_the_gate_passes_bookkeeping_and_ordinary_work(self, gate_body, branch):
+        repo = branch(
+            ".ai/tasks/ABC-001/state.json",
+            ".ai/telemetry/runs/ABC-001/1-code_agent-a1.json",
+            "backend/app/x.py",
+        )
+        code, _ = run_step_body(gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code == 0
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ".ai/agentlib/x.py",
+            ".ai/agentlib/guard.py",
+            ".ai/tasks/OTHER-001/state.json",
+            ".ai/tasks/ABC-001/task.json",
+            ".ai/tasks/ABC-001/brief.md",
+            ".ai/telemetry/runs/ABC-001/sub/1.json",
+            ".ai/telemetry/runs/OTHER-001/1.json",
+            ".ai/policy.json",
+        ],
+    )
+    def test_the_gate_refuses_anything_else_under_ai(self, gate_body, branch, path):
+        repo = branch(".ai/tasks/ABC-001/state.json", path)
+        code, _ = run_step_body(gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code != 0, f"the gate accepted a branch changing {path}"
+
+    def test_a_rename_into_bookkeeping_is_still_seen(self, gate_body, branch):
+        # With rename detection, `--name-only` prints only the destination, so
+        # moving agentlib code onto a bookkeeping path would look like
+        # bookkeeping alone.
+        repo = branch(".ai/tasks/ABC-001/state.json")
+        _git(repo, "mv", ".ai/agentlib/guard.py", ".ai/telemetry/runs/ABC-001/x.json")
+        _git(repo, "commit", "-q", "-m", "rename")
+        code, _ = run_step_body(gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code != 0
+
+    def test_the_gate_fails_closed_without_main(self, gate_body, branch):
+        repo = branch("backend/app/x.py")
+        _git(repo, "update-ref", "-d", "refs/remotes/origin/main")
+        code, _ = run_step_body(gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code != 0, "a gate that cannot see main must refuse, not pass"
+
+    # --- the provider CLI's own project config -------------------------------
+    #
+    # The CLI loads `.claude/settings*.json` (hooks run commands) and
+    # `.mcp.json` (servers are processes) from the directory it is started in,
+    # with the provider key in its environment. That directory is the task
+    # checkout, so a branch that changed them would run code nobody reviewed.
+
+    def test_the_model_job_refuses_changed_cli_config_before_the_model(self, worker):
+        block = job_block(worker, "run-model")
+        titles = [step_title(c) for c in steps_in(block)]
+        assert CLI_GATE in titles
+        assert titles.index(CLI_GATE) < titles.index("Invoke the agent")
+        gate = step(block, CLI_GATE)
+        assert "id: cliconfig" in gate and "continue-on-error: true" in gate
+        invoke_head = step(block, "Invoke the agent").split("run: ", 1)[0]
+        assert "steps.cliconfig.outcome == 'success'" in invoke_head
+        assert "cli_config: ${{ steps.cliconfig.outcome }}" in block
+
+    def test_a_refused_cli_config_escalates_like_a_guard_violation(self, worker):
+        land = job_block(worker, "land")
+        escalate = step(land, "Escalate a boundary violation")
+        assert "verdict == 'refused'" in escalate.split("run: ", 1)[0]
+        assert "GUARD_VIOLATION" in escalate
+        assert "exit 1" in escalate
+
+    @pytest.fixture
+    def cli_gate_body(self, worker) -> str:
+        return run_bodies(step(job_block(worker, "run-model"), CLI_GATE))[0]
+
+    def test_the_cli_gate_passes_ordinary_work(self, cli_gate_body, branch):
+        repo = branch("backend/app/x.py", ".ai/tasks/ABC-001/state.json")
+        code, _ = run_step_body(cli_gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code == 0
+
+    @pytest.mark.parametrize(
+        "path",
+        [".claude/settings.json", ".claude/settings.local.json", ".claude/x/y.md", ".mcp.json"],
+    )
+    def test_the_cli_gate_refuses_changed_cli_config(self, cli_gate_body, branch, path):
+        repo = branch(path)
+        code, _ = run_step_body(cli_gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code != 0, f"the CLI gate accepted a branch changing {path}"
+
+    def test_the_cli_gate_fails_closed_without_main(self, cli_gate_body, branch):
+        repo = branch("backend/app/x.py")
+        _git(repo, "update-ref", "-d", "refs/remotes/origin/main")
+        code, _ = run_step_body(cli_gate_body, {"TASK_ID": "ABC-001"}, repo)
+        assert code != 0
+
+    # --- the model as an unprivileged user -----------------------------------
+    #
+    # As the runner's own user, a process the model leaves running can rewrite
+    # the actions the job runs next (`_work/_actions`, e.g. upload-artifact,
+    # which holds ACTIONS_RUNTIME_TOKEN and so can write the Actions cache that
+    # main's other workflows read), and read the runner's environment. As a
+    # separate user it can write only the checkout, and it is killed before
+    # anything else in the job runs.
+
+    def _model_steps(self, worker) -> tuple[list[str], list[str]]:
+        chunks = steps_in(job_block(worker, "run-model"))
+        return chunks, [step_title(c) for c in chunks]
+
+    def test_the_model_runs_as_another_user(self, worker):
+        body = "\n".join(run_bodies(step(job_block(worker, "run-model"), "Invoke the agent")))
+        assert "sudo" in body and f"-u {MODEL_USER}" in body
+        assert "--preserve-env=ANTHROPIC_API_KEY" in body, (
+            "the key must not be put on a command line, where sudo logs it"
+        )
+        assert "ANTHROPIC_API_KEY=" not in body
+
+    def test_the_user_is_made_and_the_git_dir_moved_out_before_the_model(self, worker):
+        chunks, titles = self._model_steps(worker)
+        setup = chunks[titles.index(UNPRIVILEGED)]
+        assert "useradd" in setup and MODEL_USER in setup
+        assert "mv .git" in setup, (
+            "the git dir must leave the checkout the model owns, or later git commands "
+            "run its hooks and config"
+        )
+        assert titles.index(UNPRIVILEGED) < titles.index("Invoke the agent")
+
+    def test_the_users_processes_are_killed_before_anything_else_runs(self, worker):
+        chunks, titles = self._model_steps(worker)
+        invoke = titles.index("Invoke the agent")
+        kill = titles.index(KILL)
+        reclaim = titles.index(RECLAIM)
+        package = next(i for i, c in enumerate(chunks) if "git diff --cached --binary" in c)
+        upload = next(i for i, c in enumerate(chunks) if "actions/upload-artifact@" in c)
+        assert invoke + 1 == kill, "nothing may run between the model and the kill"
+        assert kill < reclaim < package < upload
+        body = "\n".join(run_bodies(chunks[kill]))
+        assert f"pkill -KILL -u {MODEL_USER}" in body
+        assert f"pgrep -u {MODEL_USER}" in body, "the kill must be verified, not assumed"
+        assert "if: always()" in chunks[kill]
+
+    def test_the_patch_is_made_from_the_git_dir_outside_the_checkout(self, worker):
+        chunks, _ = self._model_steps(worker)
+        package = next(c for c in chunks if "git diff --cached --binary" in c)
+        for line in live_lines(package):
+            if line.startswith("git "):
+                assert "--git-dir=" in line, f"uses whatever .git the model left: {line}"
