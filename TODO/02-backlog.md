@@ -25,9 +25,6 @@ plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
 task is dispatched until 1–3 have merged.**
 
-1. **D1** — the orchestrator accepts only a `workflow_dispatch` CI run from
-   this repository whose `head_sha` is the branch tip. You: set fork-PR
-   approval to all external contributors.
 2. **D2** — `persist-credentials: false` in the worker; dispatch inputs via
    `env:`; validate the task id.
 3. **D3** — the worker always applies an event; commit before dispatch;
