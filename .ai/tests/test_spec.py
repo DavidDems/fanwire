@@ -61,7 +61,11 @@ class TestValidate:
         errors = sp.validate(s, known_skills={"backend-testing"})
         assert any(field in e for e in errors), errors
 
-    @pytest.mark.parametrize("bad", ["demo-001", "DEMO_001", "DEMO-1", "DEMO", "../../etc"])
+    # "DEMO-001\n": `re.match` with a `$` anchor accepts one trailing newline
+    # (handoff.md §10, D2b).
+    @pytest.mark.parametrize(
+        "bad", ["demo-001", "DEMO_001", "DEMO-1", "DEMO", "../../etc", "DEMO-001\n"]
+    )
     def test_task_id_format_is_enforced(self, bad):
         errors = sp.validate(valid_spec(task_id=bad), known_skills={"backend-testing"})
         assert any("task_id" in e for e in errors)

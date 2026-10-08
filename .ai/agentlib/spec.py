@@ -88,7 +88,7 @@ def validate(spec: dict, known_skills: Iterable[str]) -> list[str]:
             errors.append(f"missing required field: {field}")
 
     task_id = spec.get("task_id")
-    if task_id is not None and (not isinstance(task_id, str) or not TASK_ID_RE.match(task_id)):
+    if task_id is not None and (not isinstance(task_id, str) or not TASK_ID_RE.fullmatch(task_id)):
         errors.append(
             f"task_id {task_id!r} must match {TASK_ID_RE.pattern} "
             "(it is used verbatim as a directory and branch segment)"

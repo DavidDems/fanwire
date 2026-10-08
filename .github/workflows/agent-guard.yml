@@ -23,31 +23,67 @@ jobs:
     # CODEOWNERS, not by the agent permission model.
     if: startsWith(github.head_ref, 'agent/')
     runs-on: ubuntu-latest
+    # handoff.md §10, D2b. The checks below are the PR's own boundary, so
+    # they must not run the PR's own code: they used to import its
+    # `agentlib`. The PR is checked out at `pr/` as data; the code, policy
+    # and config come from the base commit at `tools/` beside it, and python
+    # runs with -I so the working directory is never on sys.path.
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/pr
+    defaults:
+      run:
+        working-directory: pr
     steps:
+      # The branch name is the fork's to choose, so the id derived from it is
+      # validated against the guard's own TASK_ID_SAFE (a bash copy, pinned by
+      # test_workflows.py) and reaches later scripts only as $TASK_ID, never
+      # pasted into their text (handoff.md §10, D2b).
+      - name: Derive the task id from the branch
+        working-directory: ${{ github.workspace }}
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID="${HEAD_REF#agent/}"
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::the task id in this branch name does not match $TASK_ID_SAFE"
+            exit 1
+          fi
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v5
         with:
+          path: pr
           fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: tools
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Derive the task id from the branch
-        id: task
-        run: echo "id=${GITHUB_HEAD_REF#agent/}" >> "$GITHUB_OUTPUT"
-
       - name: The spec must be valid
-        run: python .ai/bin/agentctl.py task validate "${{ steps.task.outputs.id }}"
+        run: python -I "$TOOLS/.ai/bin/agentctl.py" task validate "$TASK_ID"
 
       - name: No commit may touch the agent system's own boundaries
         # Checked separately from the per-role guard below so that the failure
         # message is unambiguous about which rule was broken.
         run: |
           set -euo pipefail
-          git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
-          python - "${{ steps.task.outputs.id }}" <<'PY'
-          import sys
-          sys.path.insert(0, ".ai")
+          # --no-renames: with rename detection --name-only prints only a
+          # rename's destination, hiding the path it was moved away from.
+          git diff --name-only --no-renames "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python -I - "$TASK_ID" <<'PY'
+          import os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
           from agentlib import guard
           task_id = sys.argv[1]
           paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
@@ -82,14 +118,14 @@ jobs:
         # reviewer actually needs guaranteed.
         run: |
           set -euo pipefail
-          git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
-          python - "${{ steps.task.outputs.id }}" <<'PY'
-          import json, sys
-          sys.path.insert(0, ".ai")
+          git diff --name-only --no-renames "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python -I - "$TASK_ID" <<'PY'
+          import json, os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
           from agentlib import guard, spec as spec_mod
           task_id = sys.argv[1]
           spec = spec_mod.load(f".ai/tasks/{task_id}")
-          policy = json.load(open(".ai/policy.json", encoding="utf-8"))
+          policy = json.load(open(os.environ["TOOLS"] + "/.ai/policy.json", encoding="utf-8"))
           paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
 
           allow_tests = spec_mod.workflow_policy(spec)["allow_test_edits_during_impl"]
@@ -122,9 +158,9 @@ jobs:
       - name: The task must not have been left in a failed or paused state
         run: |
           set -euo pipefail
-          python - "${{ steps.task.outputs.id }}" <<'PY'
-          import sys
-          sys.path.insert(0, ".ai")
+          python -I - "$TASK_ID" <<'PY'
+          import os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
           from agentlib import state as st
           from pathlib import Path
           task_id = sys.argv[1]

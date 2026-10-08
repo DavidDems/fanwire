@@ -25,10 +25,6 @@ plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
 task is dispatched until 1–3 have merged.**
 
-2. **D2b** — no code the model can write runs in a step that can reach a
-   token: guard every agent path (only bookkeeping excepted), run trusted
-   `agentctl`, keep `.git` out of the model's reach (handoff §10.1, D2b).
-   Design to be decided with the human first.
 3. **D3** — the worker always applies an event; commit before dispatch;
    record CI run id and dispatch time in `state.json`; every `workflow_run`
    conclusion handled or documented inert (§9.2 items 2–3); MANAGER_RETRY /

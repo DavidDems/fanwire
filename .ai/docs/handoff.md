@@ -683,7 +683,7 @@ Grade is the enforcement the fix reaches (philosophy.md §4).
 |---|---|---|---|---|
 | D1 | The orchestrator trusts **any** `workflow_run` on a branch named `agent/*` — a fork PR's, or a path-filtered `pull_request` run's — as the task's authoritative CI verdict | `agent-orchestrator.yml:55`, `:119-139` check only the branch prefix; the repo is public, forks allowed, fork-PR approval is `first_time_contributors` | Accept only `event == workflow_dispatch`, `head_repository == github.repository`, `head_sha` == branch tip. **Closed 2026-10-08** (`guard tested`, `TestOnlyTheOrchestratorsOwnCiRunIsTrusted`); fork approval set to all external contributors | impossible |
 | D2 | "The model gets no GitHub token" is false; the orchestrator interpolates dispatch inputs into shell | `actions/checkout@v5` (`agent-worker.yml:60`) persists `GITHUB_TOKEN` (contents+actions write) in `.git/config`, readable by the model; `agent-orchestrator.yml:145-146` and every `${{ steps.task.outputs.id }}`. Chain to `AGENT_DISPATCH_TOKEN`, held by later steps of that job; broken today only by the worker model probably having no shell, which nothing records | `persist-credentials: false` in the worker; inputs via `env:`; validate the task id against `TASK_ID_SAFE` in "Resolve the task" | impossible — **closed 2026-10-08** for the model's own process; see D2b |
-| D2b | **Code the model writes runs with the PAT in reach** (found by the D2 implementer, 2026-10-08; confirmed against the YAML) | The worker's guard step filters `grep -v '^\.ai/'`, so a model's edits under `.ai/` are never checked, and "Commit the work" commits them. Later steps of the same job run `python .ai/bin/agentctl.py` from that working tree — code that can append a fake `gh` to `$GITHUB_PATH` before "Hand control back" runs with `AGENT_DISPATCH_TOKEN`. The orchestrator also runs the task branch's `agentctl` with the PAT in env; `agent-guard` imports the PR's own `agentlib`. File edits alone suffice: no shell needed. Also `.git/config` (`core.fsmonitor`) is writable by file tools and executes on the next git command. `TASK_ID_SAFE.match` accepts a trailing newline | Open — design to be decided (handoff §10.3) | impossible, depending on design |
+| D2b | **Code the model writes runs with the PAT in reach** (found by the D2 implementer, 2026-10-08; confirmed against the YAML) | The worker's guard step filters `grep -v '^\.ai/'`, so a model's edits under `.ai/` are never checked, and "Commit the work" commits them. Later steps of the same job run `python .ai/bin/agentctl.py` from that working tree — code that can append a fake `gh` to `$GITHUB_PATH` before "Hand control back" runs with `AGENT_DISPATCH_TOKEN`. The orchestrator also runs the task branch's `agentctl` with the PAT in env; `agent-guard` imports the PR's own `agentlib`. File edits alone suffice: no shell needed. Also `.git/config` (`core.fsmonitor`) is writable by file tools and executes on the next git command. `TASK_ID_SAFE.match` accepts a trailing newline. Found while fixing it: "Push state and work" ran `git push`, with the token in env, from the model's `.git` (a planted `pre-push` hook runs); `invoke_agent.sh` ran from the task branch with the provider key; the CLI loads `.claude/settings*.json` hooks and `.mcp.json` from the checkout; a process the model leaves behind could rewrite `upload-artifact` under `_work/_actions`, whose runtime token writes the Actions cache `main` reads | The worker is two jobs (§10.3 item 7): `run-model` (`contents: read`, no GitHub credential) runs the model as the unprivileged `agentrun` user with `.git` moved out of its tree, kills everything it left, and uploads a patch; `land`, on a fresh runner, applies it, guards every path with no `.ai/` exception, and only then records, commits, pushes and hands back. Every `agentctl` in the worker, the orchestrator and `agent-guard` runs from a trusted checkout (`main`, or the PR's base) with `AGENTCTL_DATA_ROOT` naming the task tree, under `python -I`. All three refuse a branch whose `.ai/` differs from main beyond this task's bookkeeping, in bash before any python. A branch changing `.claude/` or `.mcp.json` is refused; the CLI runs with `--setting-sources user --strict-mcp-config`. `fullmatch` everywhere. **Closed in code 2026-10-08** (`TestModelWrittenCodeNeverRunsWithAToken`, `TestTheLandingGuardRunsAgainstARealPatch`); unproven until the first live run — see below the table | impossible |
 | D3 | Unbounded loop and silent stalls | **L1** a manager worker that applies no event is re-dispatched with no history entry, so no budget counts it (bug 5's shape); **S5** a worker cancelled or failing before the model call leaves `*_RUNNING` forever; **S8** a failed orchestrator action step skips the commit; **S1** conclusions other than success/failure/timed_out fall through (`:130`); **S2** a CI result arriving while paused is discarded; **S9** the documented ESCALATED recovery is illegal (`state.py:274,285`); **race** the worker is dispatched (`:207`) before `DISPATCH_*` is committed (`:231`) — USERS-002's margin was ~4s | Worker applies `AGENT_FAILED` from an `always()` step when the agent did not succeed; commit before dispatch; record the CI run id and dispatch time in `state.json` so a lost result is detectable; MANAGER_RETRY/RESCOPE legal from ESCALATED | detected → escalated |
 | D4 | The red baseline accepts red for any reason | `state.py:251`; dispatched CI runs every suite, so an audit CVE, openapi drift, a broken test file or a tree-scan test tripped by the new test all count as "red as required" — then the code agent, which cannot edit tests, spends its budget | Run `ciresult` on the baseline too; require the failures to lie in files the test commit changed and no non-test job to have failed | escalated |
 | D5 | CI never type-checks, lints or builds the frontend; no ruff/mypy for the backend | the frontend test container runs `vitest run` only; `tsc` first runs in `deploy.yml`, after merge. Hand-run sessions ran these by hand; a worker cannot | `typecheck` + `lint` in the frontend job; ruff/mypy after measuring current debt | detected |
@@ -697,6 +697,27 @@ no workflow; the YAML's `HOPS > 200` guard is dead code behind
 grants 1; `operations.md` lists `max_attempts_exhausted` and
 `red_baseline_not_red` as ESCALATED reasons, but both route to
 `MANAGER_REVIEW`.
+
+**D2b, what only the first live run proves** (watch `MEDIA-002`'s first
+worker): artifact hand-over between the jobs, and `land` running after a
+failed or cancelled `run-model`; `agentrun` on a hosted runner — `useradd` and
+`sudo`, `o+x` being enough to reach the checkout, the tools and its I/O
+directory, the npm-global CLI on the `PATH` it is given and runnable by that
+user with an empty `HOME`, `pkill`/`pgrep`; the CLI accepting
+`--setting-sources user --strict-mcp-config` (checked on 2.1.293 only — check
+again when it is pinned, §10.3 item 5); `github.sha` being `main`'s commit for
+both a dispatch and a `workflow_run`. `land` now also applies `AGENT_FAILED`
+when `run-model` died before the model ran, which is part of D3's S5.
+
+**D2b residue, not fixed:** `agentrun` could leave a cron job or timer that
+outlives the kill (it can write nothing the runner user owns, but can write
+`/tmp`); the model still holds `ANTHROPIC_API_KEY` and could send it anywhere,
+which no design that runs a model avoids — the Console's monthly limit
+(§10.3, `github-automation-setup.md`) bounds it; `agent-guard` still reads
+`git diff --name-only` without `-z`, so an oddly named path fails its first
+check uncleanly before the second refuses it; the `.ai` gate compares against
+the merge base, so a fix `main` makes under `.ai/` after a branch was cut is
+not flagged on it — harmless now that no code runs from the branch.
 
 ### 10.2 Measured, for the next person who optimises
 
@@ -739,6 +760,12 @@ affect (~6 min per frontend task) — safe only once D4 lands.
 6. **§9.2 item 5 is decided: keep `action_required` on bot-authored PRs.** A
    human approves the run before CI spends on agent work, and the PR needs
    that human's review to merge anyway. Deliberate, not a defect.
+7. **D2b's design (decided 2026-10-08): split the worker** (option A) rather
+   than harden one job (option B), because it is the only design that still
+   holds once workers get a shell. In the same PR, by the human's choice: the
+   orchestrator's `.ai` gate, `agent-guard` running from the base SHA,
+   `fullmatch`, refusing CLI project config, and running the model as an
+   unprivileged user so nothing it leaves running can reach the Actions cache.
 
 ### 10.4 The backlog as test load
 

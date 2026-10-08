@@ -67,9 +67,23 @@ jobs:
     # run holds this task's concurrency group for that long, dropping every
     # transition behind it (handoff.md 5.4, 5.5).
     timeout-minutes: 15
+    # handoff.md §10, D2b. Later steps hold AGENT_DISPATCH_TOKEN, so no code
+    # from the task branch runs here: the branch is checked out at `task/` as
+    # data, `main` at `tools/` beside it, and every agentctl call and every
+    # inline python that imports agentlib uses the tools copy (python -I, so
+    # the working directory is never on sys.path).
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/task
+    defaults:
+      run:
+        working-directory: task
     steps:
       - name: Resolve the task
         id: task
+        # Nothing is checked out yet, so the job's default directory does
+        # not exist.
+        working-directory: ${{ github.workspace }}
         env:
           INPUT_TASK_ID: ${{ github.event.inputs.task_id }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -106,11 +120,16 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ steps.task.outputs.branch }}
+          path: task
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      # The trusted copy (handoff.md §10, D2b): `main` at the commit this
+      # run's workflow file came from.
+      - uses: actions/checkout@v5
         with:
-          python-version: "3.12"
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
 
       - name: Is this a task this orchestrator drives?
         id: drive
@@ -144,6 +163,48 @@ jobs:
             echo "::notice::$TASK_ID has no state file; agent/$TASK_ID is hand-authored, so there is nothing to drive"
           fi
 
+      # handoff.md §10, D2b. Nothing under .ai/ on a task branch may differ
+      # from main except this task's own state and telemetry. Bash and git
+      # only, before any python runs; the same script is in both jobs of
+      # agent-worker.yml, and test_workflows.py fails if the copies drift.
+      # Only on a branch this orchestrator drives: a hand-authored branch is
+      # none of its business (see the step above), and refusing it would
+      # paint a red X on a human's PR.
+      - name: Refuse .ai changes beyond this task's bookkeeping
+        if: steps.drive.outputs.drive == 'true'
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          # What this branch changed since it left main. --no-renames: with
+          # rename detection --name-only prints only a rename's destination.
+          # -z: no quoting, and a newline in a name cannot split it in two.
+          # A temp file, not a pipe, so a failing git (no origin/main) fails
+          # the step instead of yielding an empty, passing list.
+          CHANGED="$(mktemp)"
+          trap 'rm -f "$CHANGED"' EXIT
+          git diff --name-only -z --no-renames origin/main...HEAD -- .ai > "$CHANGED"
+          BAD=0
+          while IFS= read -r -d '' p; do
+            if [ "$p" = ".ai/tasks/$TASK_ID/state.json" ]; then
+              continue
+            fi
+            rest="${p#".ai/telemetry/runs/$TASK_ID/"}"
+            if [ "$rest" != "$p" ] && [[ "$rest" != */* ]] && [[ "$rest" == *.json ]]; then
+              continue
+            fi
+            printf '::error::%q differs from main and is not this task bookkeeping\n' "$p"
+            BAD=1
+          done < "$CHANGED"
+          if [ "$BAD" -ne 0 ]; then
+            echo "::error::refusing agent/$TASK_ID: its .ai/ may differ from main only in its own state and telemetry"
+            exit 1
+          fi
+          echo ".ai/ matches main apart from this task's bookkeeping"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Apply the CI result
         if: github.event_name == 'workflow_run' && steps.drive.outputs.drive == 'true'
         env:
@@ -163,13 +224,13 @@ jobs:
           # so that bookkeeping is allowed; anything else fails this run
           # visibly and leaves the state untouched, rather than applying a
           # verdict for code nobody tested.
-          python .ai/bin/agentctl.py guard tested "$TASK_ID" --sha "$SHA"
+          python -I "$TOOLS/.ai/bin/agentctl.py" guard tested "$TASK_ID" --sha "$SHA"
           # --ignore-terminal: CI re-running on a finished task's branch is
           # routine (a review PR has to be brought up to date before it can
           # merge), and the state machine rightly refuses a CI result for a
           # COMPLETE task. Waking to find nothing to do is not a failure -- it
           # used to fail the whole run and paint a red X on a healthy pipeline.
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
             --commit-sha "$SHA" --ignore-terminal
 
@@ -182,7 +243,7 @@ jobs:
           INPUT_EVENT: ${{ github.event.inputs.event }}
           INPUT_REASON: ${{ github.event.inputs.reason }}
         run: |
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event "$INPUT_EVENT" \
             --reason "$INPUT_REASON"
 
@@ -195,20 +256,20 @@ jobs:
         if: steps.drive.outputs.drive == 'true'
         run: |
           set -euo pipefail
-          ACTION=$(python .ai/bin/agentctl.py next "$TASK_ID")
+          ACTION=$(python -I "$TOOLS/.ai/bin/agentctl.py" next "$TASK_ID")
           echo "$ACTION"
-          echo "kind=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin)["kind"])')" >> "$GITHUB_OUTPUT"
-          echo "role=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin).get("role",""))')" >> "$GITHUB_OUTPUT"
+          echo "kind=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin)["kind"])')" >> "$GITHUB_OUTPUT"
+          echo "role=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin).get("role",""))')" >> "$GITHUB_OUTPUT"
           # The transition this dispatch implies. Supplied by agentlib, never
           # re-derived here — a second copy of that mapping in YAML is exactly
           # what went wrong on the first live run.
-          echo "event=$(echo "$ACTION" | python -c 'import json,sys; print(json.load(sys.stdin).get("event",""))')" >> "$GITHUB_OUTPUT"
+          echo "event=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin).get("event",""))')" >> "$GITHUB_OUTPUT"
 
       # --- the one action -------------------------------------------------
 
       - name: Validate the spec and open the task
         if: steps.decide.outputs.kind == 'validate'
-        run: python .ai/bin/agentctl.py state init "$TASK_ID"
+        run: python -I "$TOOLS/.ai/bin/agentctl.py" state init "$TASK_ID"
 
       - name: Run the authoritative test suite
         if: steps.decide.outputs.kind == 'run_ci'
@@ -217,7 +278,7 @@ jobs:
         run: |
           set -euo pipefail
           gh workflow run test-agent.yml --ref "$BRANCH"
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event CI_STARTED
 
       - name: Distil the failure
@@ -226,8 +287,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          RUN_ID=$(python -c "
-          import json, os, sys; sys.path.insert(0,'.ai')
+          RUN_ID=$(python -I -c "
+          import json, os, sys; sys.path.insert(0, os.environ['TOOLS'] + '/.ai')
           from agentlib import state as st
           s = st.load_state('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json')
           print((s.get('last_ci') or {}).get('run_id') or '')
@@ -240,9 +301,9 @@ jobs:
             echo "" > ci.log
           fi
           tail -c 200000 ci.log > ci.tail.log
-          python .ai/bin/agentctl.py distill "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" distill "$TASK_ID" \
             --log ci.tail.log --ci-status failure --out distilled.json
-          python .ai/bin/agentctl.py state advance "$TASK_ID" \
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event DISTILLED --distilled distilled.json
 
       - name: Dispatch the worker
@@ -259,7 +320,7 @@ jobs:
           # skipping it would also uncap the retry budget. An empty EVENT means
           # the manager, which holds MANAGER_REVIEW until it decides for itself.
           if [ -n "$EVENT" ]; then
-            python .ai/bin/agentctl.py state advance "$TASK_ID" \
+            python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
               --event "$EVENT"
           fi
           gh workflow run agent-worker.yml \
@@ -297,7 +358,7 @@ jobs:
         run: |
           set -euo pipefail
           # Cheap runaway guard on top of the state machine's own bounds.
-          HOPS=$(python -c "
+          HOPS=$(python -I -c "
           import json, os; print(len(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['history']))
           ")
           if [ "$HOPS" -gt 200 ]; then
@@ -314,7 +375,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          STATE=$(python -c "
+          STATE=$(python -I -c "
           import json, os; print(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['state'])
           ")
           if [ "$STATE" != "COMPLETE" ] && [ "$STATE" != "ESCALATED" ]; then
@@ -330,7 +391,7 @@ jobs:
             echo "Task state at hand-off:"
             echo ""
             echo '```json'
-            python .ai/bin/agentctl.py state show "$TASK_ID"
+            python -I "$TOOLS/.ai/bin/agentctl.py" state show "$TASK_ID"
             echo '```'
           } > pr-body.md
           gh pr create \
@@ -358,11 +419,14 @@ jobs:
 
       - name: Summary
         if: always()
+        # Even when the checkout never happened. agentctl then exits 2 on the
+        # missing data root, which `|| true` absorbs.
+        working-directory: ${{ github.workspace }}
         run: |
           {
             echo "### ${TASK_ID:-(task id not resolved)}"
             echo ""
             echo '```'
-            python .ai/bin/agentctl.py status || true
+            python -I "$TOOLS/.ai/bin/agentctl.py" status || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

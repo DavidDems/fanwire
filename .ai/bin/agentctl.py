@@ -24,12 +24,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+# Code and data are found separately (handoff.md §10, D2b).
+#
+# AI_ROOT is wherever this file lives, and supplies everything that is code or
+# trusted configuration: agentlib, config.json, policy.json, prompts, skills.
+# In CI that is a checkout of `main` beside the task, so nothing a model wrote
+# on a task branch is ever imported or obeyed.
+#
+# REPO_ROOT is the tree being worked on: task specs and state, telemetry,
+# required context, and where git runs. `AGENTCTL_DATA_ROOT` names it (the
+# task branch's checkout, in CI); unset, it is this checkout, as it always was.
 AI_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = AI_ROOT.parent
+_DATA_ROOT = os.environ.get("AGENTCTL_DATA_ROOT", "")
+if _DATA_ROOT and not Path(_DATA_ROOT).is_dir():
+    # Fail fast: a wrong path would otherwise read as "no tasks", and state
+    # would be written into a directory nobody looks at.
+    print(f"agentctl: AGENTCTL_DATA_ROOT {_DATA_ROOT!r} is not a directory", file=sys.stderr)
+    raise SystemExit(2)
+REPO_ROOT = Path(_DATA_ROOT).resolve() if _DATA_ROOT else AI_ROOT.parent
 sys.path.insert(0, str(AI_ROOT))
 
 from agentlib import (
@@ -51,7 +68,7 @@ from agentlib import (
     telemetry as tm,
 )
 
-TASKS_DIR = AI_ROOT / "tasks"
+TASKS_DIR = REPO_ROOT / ".ai" / "tasks"
 SKILLS_DIR = AI_ROOT / "skills"
 
 OK, FAILED, USAGE = 0, 1, 2
@@ -80,7 +97,7 @@ def known_skills() -> set[str]:
 
 def task_dir(task_id: str) -> Path:
     d = TASKS_DIR / task_id
-    if not spec_mod.TASK_ID_RE.match(task_id):
+    if not spec_mod.TASK_ID_RE.fullmatch(task_id):
         die(f"{task_id!r} is not a valid task id")
     return d
 
@@ -386,7 +403,13 @@ def cmd_telemetry_from_run(args) -> int:
 
 
 def cmd_guard_check(args) -> int:
-    spec = spec_mod.load(task_dir(args.task_id))
+    try:
+        spec = spec_mod.load(task_dir(args.task_id))
+    except spec_mod.SpecError as exc:
+        # A missing or unreadable spec is a refusal, reported as one: not a
+        # traceback that reads like a crash of the guard itself.
+        die(f"guard: cannot load the spec: {exc}", FAILED)
+        raise  # unreachable; keeps the type checker honest
     if args.diff_file:
         paths = [
             line.strip()
@@ -419,7 +442,7 @@ def cmd_guard_tested(args) -> int:
     own bookkeeping changed after it (handoff.md §10, D1). A verdict for any
     other code is evidence about something the branch does not contain.
     """
-    if not guard.TASK_ID_SAFE.match(args.task_id):
+    if not guard.TASK_ID_SAFE.fullmatch(args.task_id):
         print(f"guard: {args.task_id!r} is not a valid task id", file=sys.stderr)
         return FAILED
     ancestor = subprocess.run(

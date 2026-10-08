@@ -22,11 +22,18 @@ ROLE="${1:?role required}"
 PROMPT_FILE="${2:?prompt file required}"
 OUT_FILE="${3:?output file required}"
 
+# Code and data are found separately (handoff.md §10, D2b), exactly as in
+# agentctl.py. AI_ROOT is where this script lives: in CI a checkout of `main`
+# beside the task, so the provider config below is main's. REPO_ROOT is the
+# tree the model works in: AGENTCTL_DATA_ROOT (the task checkout, in CI), or,
+# unset, this checkout as before.
 AI_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_ROOT="$(dirname "$AI_ROOT")"
+REPO_ROOT="$(cd "${AGENTCTL_DATA_ROOT:-$(dirname "$AI_ROOT")}" && pwd)"
 
+# `python -I` throughout: `python -` puts the working directory on sys.path,
+# and a `json.py` there would be imported with the provider key in env.
 read -r PROVIDER MODEL < <(
-  python - "$AI_ROOT/config.json" "$ROLE" <<'PY'
+  python -I - "$AI_ROOT/config.json" "$ROLE" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1], encoding="utf-8"))
 role = cfg["roles"].get(sys.argv[2])
@@ -39,7 +46,7 @@ PY
 echo "invoking role=$ROLE provider=$PROVIDER model=$MODEL"
 
 # Written up front so a crash below still leaves a parseable result.
-python - "$OUT_FILE" "$PROVIDER" "$MODEL" <<'PY'
+python -I - "$OUT_FILE" "$PROVIDER" "$MODEL" <<'PY'
 import json, sys
 json.dump(
     {
@@ -77,15 +84,27 @@ case "$PROVIDER" in
     # into $RAW. So the real message was captured into a temp file and thrown
     # away, and eight identical failed runs said only "exit code 1".
     # An automation whose failure is silent is worse than the step it replaced.
+    #
+    # Started in REPO_ROOT, the tree the model works on. The redirections sit
+    # outside the subshell so relative paths keep meaning the caller's cwd.
+    #
+    # --setting-sources user / --strict-mcp-config (both in `claude --help`,
+    # checked on 2.1.293): the CLI would otherwise load .claude/settings*.json
+    # (whose hooks run commands) and .mcp.json (whose servers are processes)
+    # from the task checkout, with the provider key in its environment
+    # (handoff.md §10, D2b). In CI "user" is the unprivileged model user's
+    # empty home. agent-worker.yml also refuses a branch that changed either.
     set +e
-    claude \
-      --print \
-      --output-format json \
-      --model "$MODEL" \
-      --permission-mode acceptEdits \
-      --add-dir "$REPO_ROOT" \
-      < "$PROMPT_FILE" \
-      > "$RAW" 2> "$ERR"
+    (
+      cd "$REPO_ROOT" && exec claude \
+        --print \
+        --output-format json \
+        --model "$MODEL" \
+        --permission-mode acceptEdits \
+        --setting-sources user \
+        --strict-mcp-config \
+        --add-dir "$REPO_ROOT"
+    ) < "$PROMPT_FILE" > "$RAW" 2> "$ERR"
     STATUS=$?
     set -e
 
@@ -115,7 +134,7 @@ esac
 # own structured trailer (a ```agent-result fenced block in its final message,
 # see .ai/prompts/_shared.md) supplies summary/decision/reason; usage and
 # session id come from the provider envelope.
-python - "$RAW" "$OUT_FILE" "$PROVIDER" "$MODEL" <<'PY'
+python -I - "$RAW" "$OUT_FILE" "$PROVIDER" "$MODEL" <<'PY'
 import json, re, sys
 
 raw_path, out_path, provider, model = sys.argv[1:5]

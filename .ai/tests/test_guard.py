@@ -252,3 +252,21 @@ class TestUntestedChanges:
 
     def test_no_changes_at_all(self):
         assert guard.untested_changes([], "DEMO-001") == []
+
+
+class TestTaskIdIsMatchedWhole:
+    """handoff.md §10, D2b. `re.match` with a `$` anchor accepts one trailing
+    newline, so `"ABC-001\\n"` passed `TASK_ID_SAFE` and was interpolated into
+    the bookkeeping patterns. The bash copies in the workflows already refuse
+    it; the Python original must agree."""
+
+    def test_a_trailing_newline_is_not_a_task_id(self):
+        assert not guard.TASK_ID_SAFE.fullmatch("ABC-001\n")
+        assert not guard.is_orchestrator_bookkeeping(".ai/tasks/ABC-001\n/state.json", "ABC-001\n")
+
+    def test_the_untested_check_does_not_waive_a_newline_id(self):
+        path = ".ai/tasks/ABC-001\n/state.json"
+        assert guard.untested_changes([path], "ABC-001\n") == [path]
+
+    def test_a_well_formed_id_still_matches(self):
+        assert guard.is_orchestrator_bookkeeping(".ai/tasks/ABC-001/state.json", "ABC-001")
