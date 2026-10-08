@@ -2,7 +2,10 @@
 
 **Status: COMPLETED 2026-09-23 (human).** Every repository setting the `.ai/`
 agent pipeline depends on is in place and has been exercised by a real task
-running unattended end to end. Nothing here is outstanding.
+running unattended end to end. Nothing here is outstanding. **Revised
+2026-10-08** after the workflow review (`.ai/docs/handoff.md` §10): fork-PR
+approval tightened, the secrets changed, spend controls added, and
+`action_required` decided.
 
 **Human-facing.** This page records *what is configured, and why* — the settings
 themselves live in GitHub's UI and API, where they are invisible to the
@@ -33,7 +36,22 @@ one nearly did.
 **You will keep seeing `agent-orchestrator` runs marked "skipped".** That is
 correct, not a failure: it listens on `workflow_run` for *every* `test-agent`
 completion, including on `main`, then skips anything that is not an `agent/*`
-branch. A skipped job costs nothing.
+branch. A skipped job costs nothing. Once D1 is merged it also skips every
+`test-agent` run that is not a `workflow_dispatch` from this repository —
+pull-request CI on an `agent/*` branch included — because only the run the
+orchestrator dispatched is a task's verdict.
+
+### Fork pull requests need approval from every outside contributor
+
+`approval_policy: all_external_contributors` (set 2026-10-08; it was
+`first_time_contributors`). The repository is public and forks are allowed,
+and before D1 the orchestrator applied any `test-agent` run on a branch named
+`agent/*` as a task's verdict, a fork's included. D1 closes that in code;
+this setting keeps a fork's workflows from running at all until a human looks.
+
+```powershell
+gh api repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval
+```
 
 ## 2. Secrets — all are *repository* secrets
 
@@ -41,7 +59,11 @@ branch. A skipped job costs nothing.
 |---|---|
 | `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
-| `AI_GATEWAY_API_KEY` | Added 2026-09-23 for the `jev` decision layer's Vercel AI Gateway route, which never returned a 200 (the branch `jev-decision-layer` is parked). Read by nothing on `main`. The human now has a direct TypeSafe key instead (`TYPESAFE_API_KEY`, not yet set; `TODO/01-for-you.md` §1); if that route replaces the gateway, delete this one. |
+| `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read by nothing on `main` yet; the `jev` shadow-mode work reads it from a CI job only (`TODO/02-backlog.md`). Never pasted into a session. |
+
+`AI_GATEWAY_API_KEY` (the Vercel gateway route, which never returned a 200)
+was deleted 2026-10-08: nothing read it, and a gateway key reaches every model
+in its catalogue.
 
 ### ⚠️ Repository secret, not an environment secret
 
@@ -147,9 +169,9 @@ Note this is a *separate action* from approving the PR: reviewing the PR
 satisfies the approval rule, approving the run makes the checks execute. Both
 are needed, and doing one does not do the other.
 
-Arguably a feature — a human gate between an agent finishing and CI spending
-minutes on its work — but it is GitHub's default rather than a decision anyone
-made here, and it sits in the end-to-end latency of every task.
+**Decided 2026-10-08: keep it.** It is a human gate between an agent
+finishing and CI spending on its work, and the PR needs that human's review
+to merge anyway. It sits in the end-to-end latency of every task, on purpose.
 
 ## 5. Head branches are deleted on merge
 
@@ -214,15 +236,22 @@ gh workflow disable agent-orchestrator.yml
 gh workflow disable agent-worker.yml
 ```
 
-## What a task costs
+## What a task costs, and the spend controls
 
-**About $0.38** for a complete pass, measured on USERS-002 (2026-09-23): test
-agent $0.151, code agent $0.151, context maintainer $0.076 — all sonnet, with
-the manager never invoked. Against a **$15** credit.
+**Not known yet.** `.ai/telemetry/` recorded about $0.38 for USERS-002, but it
+drops the CLI's cache tokens: its records show 30–66 input tokens for a
+~10k-token prompt, while the Claude Console showed 10.9M input and 86k output
+tokens over the three days of September runs. Its prices were stale too.
+Fixing that is D6 (`.ai/docs/handoff.md` §10). Until then, **the cost of a run
+is the difference between the balances recorded just before and just after
+it**: the Claude Console's credit balance and TypeSafe's.
 
-Model cost is separate from Actions minutes, and is the only one that is metered
-while the repository is public.
+Spend controls (human, 2026-10-08):
 
-```powershell
-python .ai/bin/agentctl.py telemetry report
-```
+| Account | Control |
+|---|---|
+| Claude Console (`ANTHROPIC_API_KEY`) | Monthly spend limit **$40**; auto-recharge to $15 when below $5. The limit, not the balance, is what stops a runaway loop. |
+| TypeSafe (`TYPESAFE_API_KEY`) | About $10 of credit; no limit configured here. |
+
+Model cost is separate from Actions minutes, and is the only one that is
+metered while the repository is public.

@@ -9,8 +9,8 @@ lives in one list.
 **How these get done next.** The project's focus is back on the automated
 workflow in `.ai/`. Each item below is meant to become a task spec
 (`.ai/tasks/<ID>/task.json` + `brief.md`) and run through the orchestrator,
-not a hand-run session, **once `wiki/GeneralContext/Prompts/01-agent-workflow-review.md`
-has run and its changes have landed**. Writing a spec is Director work. Items
+not a hand-run session, **once the review's fixes below have landed**
+(D1–D3 at least; `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`). Writing a spec is Director work. Items
 marked **Director** touch paths no worker may write (`.ai/`, `.github/`,
 `wiki/GeneralContext/`, `AGENTS.md`), or need a human decision first.
 

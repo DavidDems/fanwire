@@ -21,10 +21,10 @@ Live at `https://fanwire.daviddems.com` since 2026-09-30, deployed by hand; no w
 
 `TODO/`, rewritten 2026-10-07 when the frontend's last unit merged:
 
-1. **`TODO/01-for-you.md`**: what only you can do. The `jev` key as a repository secret (after the workflow review), the API credit balance, watching the live site, axe on every route, and SES reapplication (optional, later).
+1. **`TODO/01-for-you.md`**: what only you can do. The agent workflow's remaining human steps (balances around the first run, reviewing the fix PRs, saying go), watching the live site, axe on every route, and SES reapplication (optional, later).
 2. **`TODO/02-backlog.md`**: what is left to build, as small units for the automated workflow.
 
-The project's focus is back on that workflow: `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` is the next session to run. A finished item does not stay in `TODO/` as a tick; it becomes current-state fact in the wiki.
+The project's focus is back on that workflow: it was reviewed on 2026-10-08 (`.ai/docs/handoff.md` §10), and `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md` is the next session to run. A finished item does not stay in `TODO/` as a tick; it becomes current-state fact in the wiki.
 
 ## Where things are documented
 
