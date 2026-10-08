@@ -130,6 +130,7 @@ jobs:
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           SHA: ${{ github.event.workflow_run.head_sha }}
+          TASK_ID: ${{ steps.task.outputs.id }}
         run: |
           set -euo pipefail
           case "$CONCLUSION" in
@@ -142,7 +143,7 @@ jobs:
           # so that bookkeeping is allowed; anything else fails this run
           # visibly and leaves the state untouched, rather than applying a
           # verdict for code nobody tested.
-          python .ai/bin/agentctl.py guard tested "${{ steps.task.outputs.id }}" --sha "$SHA"
+          python .ai/bin/agentctl.py guard tested "$TASK_ID" --sha "$SHA"
           # --ignore-terminal: CI re-running on a finished task's branch is
           # routine (a review PR has to be brought up to date before it can
           # merge), and the state machine rightly refuses a CI result for a
