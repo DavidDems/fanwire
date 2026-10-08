@@ -412,6 +412,44 @@ def cmd_guard_check(args) -> int:
     return FAILED
 
 
+def cmd_guard_tested(args) -> int:
+    """May a CI verdict for `--sha` be applied to the checked-out task branch?
+
+    Only if that commit is in the branch's history and nothing but this task's
+    own bookkeeping changed after it (handoff.md §10, D1). A verdict for any
+    other code is evidence about something the branch does not contain.
+    """
+    if not guard.TASK_ID_SAFE.match(args.task_id):
+        print(f"guard: {args.task_id!r} is not a valid task id", file=sys.stderr)
+        return FAILED
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", args.sha, "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        print(
+            f"guard: {args.sha} is not in the history of the checked-out branch; "
+            f"its CI verdict says nothing about {args.task_id}",
+            file=sys.stderr,
+        )
+        return FAILED
+    since = [p for p in git("diff", "--name-only", args.sha, "HEAD").splitlines() if p]
+    untested = guard.untested_changes(since, args.task_id)
+    if untested:
+        print(
+            f"guard: {len(untested)} path(s) changed after {args.sha} was tested:",
+            file=sys.stderr,
+        )
+        for p in untested:
+            print(f"  {p}", file=sys.stderr)
+        return FAILED
+    print(f"guard: {args.sha} is what {args.task_id}'s branch carries; the verdict applies")
+    return OK
+
+
 # --------------------------------------------------------------------------- distil
 
 
@@ -696,6 +734,10 @@ def build_parser() -> argparse.ArgumentParser:
     g_chk.add_argument("--base", default="main")
     g_chk.add_argument("--head", default="HEAD")
     g_chk.set_defaults(func=cmd_guard_check)
+    g_tst = g.add_parser("tested", help="may a CI verdict for --sha apply to this branch")
+    g_tst.add_argument("task_id")
+    g_tst.add_argument("--sha", required=True)
+    g_tst.set_defaults(func=cmd_guard_tested)
 
     d = sub.add_parser("distill", help="CI log -> bounded structured result")
     d.add_argument("task_id")

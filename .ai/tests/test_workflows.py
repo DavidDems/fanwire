@@ -433,6 +433,44 @@ class TestAHandAuthoredBranchDoesNotDriveTheOrchestrator:
         )
 
 
+class TestOnlyTheOrchestratorsOwnCiRunIsTrusted:
+    """handoff.md §10, D1. `workflow_run` fires for every completed
+    `test-agent` run, and `head_branch` is just a name: a fork PR from a branch
+    called `agent/<ID>`, or a path-filtered `pull_request` run on the real
+    branch, used to be applied as the task's authoritative verdict. The
+    repository is public, so the first was open to anyone whose fork run got
+    approved.
+
+    Only the run the orchestrator dispatched itself is the verdict: a
+    `workflow_dispatch` run, in this repository, on a commit the branch still
+    carries with nothing but bookkeeping since."""
+
+    @pytest.fixture
+    def orch(self) -> str:
+        if not ORCHESTRATOR.exists():
+            pytest.skip("agent-orchestrator.yml not present")
+        return ORCHESTRATOR.read_text(encoding="utf-8")
+
+    def _job_if(self, orch: str) -> str:
+        return orch.split("  orchestrate:", 1)[1].split("runs-on:", 1)[0]
+
+    def test_only_a_dispatched_ci_run_wakes_the_orchestrator(self, orch):
+        assert "github.event.workflow_run.event == 'workflow_dispatch'" in self._job_if(orch)
+
+    def test_only_a_run_from_this_repository_wakes_it(self, orch):
+        assert (
+            "github.event.workflow_run.head_repository.full_name == github.repository"
+            in self._job_if(orch)
+        )
+
+    def test_the_verdict_must_be_for_code_the_branch_still_carries(self, orch):
+        step = orch.split("- name: Apply the CI result", 1)[1].split("- name:", 1)[0]
+        assert "agentctl.py guard tested" in step, "the tested SHA must be checked"
+        assert step.index("guard tested") < step.index("state advance"), (
+            "the SHA check must run before the verdict is applied"
+        )
+
+
 class TestEveryJobIsBounded:
     """A run with no `timeout-minutes` inherits GitHub's 6-hour default. The
     orchestrator holds its task's concurrency group for as long as it runs, and

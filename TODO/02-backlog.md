@@ -25,9 +25,6 @@ plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
 task is dispatched until 1–3 have merged.**
 
-1. **D1** — the orchestrator accepts only a `workflow_dispatch` CI run from
-   this repository whose `head_sha` is the branch tip. You: set fork-PR
-   approval to all external contributors.
 2. **D2b** — no code the model can write runs in a step that can reach a
    token: guard every agent path (only bookkeeping excepted), run trusted
    `agentctl`, keep `.git` out of the model's reach (handoff §10.1, D2b).
