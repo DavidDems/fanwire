@@ -24,9 +24,10 @@ model the `jev-decision-layer` branch wires in. That branch is parked and
 still points at the Vercel AI Gateway route (`AI_GATEWAY_API_KEY`), which
 never returned a 200. Its direct route reads **`TYPESAFE_API_KEY`**.
 
-**Wait for `wiki/GeneralContext/Prompts/01-agent-workflow-review.md`** to
-settle how `jev` is wired before storing it: the review may change the
-secret's name or where it is read. Then:
+**Settled by the workflow review (2026-10-08, `.ai/docs/handoff.md` §10.3):**
+the name stays `TYPESAFE_API_KEY`, read by a CI job only. Set it when
+`02-backlog.md`'s `jev` item starts, after the first three agent-system fixes
+have merged. Then:
 
 - **Never paste the key into a chat or a file.** `gh secret set` prompts for
   the value without echoing it.

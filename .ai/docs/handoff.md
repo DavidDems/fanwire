@@ -6,6 +6,10 @@ what to be careful of. It is a snapshot, not a design document — for the
 design read [architecture.md](architecture.md), and for the reasoning and the
 review protocol read [philosophy.md](philosophy.md).
 
+> **Status, 2026-10-08 — the workflow review has reported. Its findings and
+> the plan the human agreed are §10. Until §10's first batch lands, do not
+> dispatch a task.**
+>
 > **Status, 2026-10-07 — read this first; the rest of the file is as of
 > 2026-09-23.**
 >
@@ -329,8 +333,9 @@ landed together.
 
 `agent-worker.yml` runs `npm install -g @anthropic-ai/claude-code` on every run.
 The CLI can change under you and break the workflow with no change on your side.
-Pin a version, or move to a self-hosted runner with it preinstalled. Also costs
-~20–30s per invocation.
+Pin a version, or move to a self-hosted runner with it preinstalled. (This
+said it costs ~20–30s per invocation. Measured 2026-10-08 on USERS-002's three
+worker runs it is 3–4s, so pinning is for stability, not speed — §10.)
 
 ### 5.7 Nothing here deploys, and that is deliberate
 
@@ -372,9 +377,13 @@ nearly did. Model cost is separate and tracked:
 `python .ai/bin/agentctl.py telemetry report`.
 
 Current spend: **$0.074** of a $15 credit. A full DEMO-001 pass should be
-$0.15–0.25. The manager is configured to `claude-opus-5` (5× sonnet's rate);
+$0.15–0.25. The manager is configured to `claude-opus-5`;
 changing that is a one-line edit in `.ai/config.json` and needs no workflow
 change — that is what the file is for.
+
+⚠️ **These figures are not the real spend** (§10, D6): telemetry drops the
+CLI's cache tokens and `config.json`'s prices are stale (Opus 5 is $5/$25 and
+Sonnet 5 $2/$10 per MTok, not $15/$75 and $3/$15).
 
 ## 6. Immediate next steps
 
@@ -654,3 +663,85 @@ tells you how much weight that reviewer's "no finding" deserves elsewhere.
 - **Do not fix more than you can evidence.** Every entry in §4 traces to a run
   id, and that traceability is what made the pattern visible. A change with no
   trace behind it is a guess wearing a commit message.
+
+## 10. The workflow review, 2026-10-08 — findings and the agreed plan
+
+The review `wiki/GeneralContext/Prompts/01-agent-workflow-review.md` asked
+for. §9.1's flow enumeration ran first, as a read-only subagent; its citations
+were spot-checked against the files. **Independence was not achieved:** both
+the reviewer and the subagent read §9.4 before reporting (a `sed`/`grep` over
+this file prints it). Findings §9.4 did not predict — L1, S5, S8, S9, the
+dispatch race, and PR-triggered runs being trusted — are the independent part.
+A sealed section has to live outside the repository to stay sealed.
+
+### 10.1 Defects
+
+Grade is the enforcement the fix reaches (philosophy.md §4).
+
+| # | Defect | Evidence | Fix | Grade |
+|---|---|---|---|---|
+| D1 | The orchestrator trusts **any** `workflow_run` on a branch named `agent/*` — a fork PR's, or a path-filtered `pull_request` run's — as the task's authoritative CI verdict | `agent-orchestrator.yml:55`, `:119-139` check only the branch prefix; the repo is public, forks allowed, fork-PR approval is `first_time_contributors` | Accept only `event == workflow_dispatch`, `head_repository == github.repository`, `head_sha` == branch tip. Human: set fork approval to all external contributors | impossible |
+| D2 | "The model gets no GitHub token" is false; the orchestrator interpolates dispatch inputs into shell | `actions/checkout@v5` (`agent-worker.yml:60`) persists `GITHUB_TOKEN` (contents+actions write) in `.git/config`, readable by the model; `agent-orchestrator.yml:145-146` and every `${{ steps.task.outputs.id }}`. Chain to `AGENT_DISPATCH_TOKEN`, held by later steps of that job; broken today only by the worker model probably having no shell, which nothing records | `persist-credentials: false` in the worker; inputs via `env:`; validate the task id against `TASK_ID_SAFE` in "Resolve the task" | impossible |
+| D3 | Unbounded loop and silent stalls | **L1** a manager worker that applies no event is re-dispatched with no history entry, so no budget counts it (bug 5's shape); **S5** a worker cancelled or failing before the model call leaves `*_RUNNING` forever; **S8** a failed orchestrator action step skips the commit; **S1** conclusions other than success/failure/timed_out fall through (`:130`); **S2** a CI result arriving while paused is discarded; **S9** the documented ESCALATED recovery is illegal (`state.py:274,285`); **race** the worker is dispatched (`:207`) before `DISPATCH_*` is committed (`:231`) — USERS-002's margin was ~4s | Worker applies `AGENT_FAILED` from an `always()` step when the agent did not succeed; commit before dispatch; record the CI run id and dispatch time in `state.json` so a lost result is detectable; MANAGER_RETRY/RESCOPE legal from ESCALATED | detected → escalated |
+| D4 | The red baseline accepts red for any reason | `state.py:251`; dispatched CI runs every suite, so an audit CVE, openapi drift, a broken test file or a tree-scan test tripped by the new test all count as "red as required" — then the code agent, which cannot edit tests, spends its budget | Run `ciresult` on the baseline too; require the failures to lie in files the test commit changed and no non-test job to have failed | escalated |
+| D5 | CI never type-checks, lints or builds the frontend; no ruff/mypy for the backend | the frontend test container runs `vitest run` only; `tsc` first runs in `deploy.yml`, after merge. Hand-run sessions ran these by hand; a worker cannot | `typecheck` + `lint` in the frontend job; ruff/mypy after measuring current debt | detected |
+| D6 | Telemetry is not the real spend | records show 30–66 input tokens for a 38.6 KB prompt (cache tokens dropped); prices in `config.json` stale | Record the CLI envelope's cost, cache tokens and permission denials (field names to confirm on the next run); fix prices. Human: compare the Console's 2026-09-23 bill with $0.38 | detected |
+| D7 | Hand-run lessons never reached the workers | `.ai/skills` lacks tree scans reading test files, prettier on named files, the Vitest 4 CSS Module proxy; `frontend-unit` tells a worker to run `npm`/`docker`, which it cannot | Port them from `director-sessions.md` / `FrontendUI/verification.md` | prompt only |
+
+Also from the enumeration, lower severity: `MAX_CONSECUTIVE_FAILURES` is
+unreachable through the workflows (it peaks at 2); `INFRA_FAILED` is emitted by
+no workflow; the YAML's `HOPS > 200` guard is dead code behind
+`MAX_TRANSITIONS`; `extra_attempts` is never passed, so `MANAGER_RETRY` always
+grants 1; `operations.md` lists `max_attempts_exhausted` and
+`red_baseline_not_red` as ESCALATED reasons, but both route to
+`MANAGER_REVIEW`.
+
+### 10.2 Measured, for the next person who optimises
+
+USERS-002, 14m27s dispatch to PR: model time ~5.5 min (38%), CI ~6.8 min
+(47%: baseline 2:49, implementation 4:00, `backend-test` alone 234s of the
+latter), orchestrator hops ~2 min. CLI install 3–4s (§5.6). The largest
+available saving is running only the suites a spec's `allowed_paths` can
+affect (~6 min per frontend task) — safe only once D4 lands.
+
+### 10.3 Agreed by the human, 2026-10-08
+
+1. **Order:** D1–D3 first, each its own Director PR with its structural
+   assertion in `tests/test_workflows.py`; then D4–D6. No task is dispatched
+   before D1–D3 have merged. The first real task after them is **`MEDIA-002`**
+   (spec valid; backend-only, the path already proven twice).
+2. **`jev`: shadow mode, after D1–D3.** Rebuild `jev-decision-layer` onto
+   `main` (one conflict, `test_workflows.py`), switch to the direct route and
+   `TYPESAFE_API_KEY`, and fix its `${{ steps.decide.outputs.reason }}` shell
+   interpolation (D2's pattern). Merge gate: one 200 with a `confidence` field
+   from a dispatch-only smoke job in CI. Then ask `jev` alongside the Opus
+   Manager, record both, apply the Manager's; promote only after enough
+   recorded agreement. Unreachable or low-confidence → `ESCALATE`, as the
+   branch already does. The Manager has been invoked **zero** times so far, so
+   shadow mode needs a deliberately failing task (§6.3) to have anything to
+   compare. Flake forgiveness is **not** adopted: a deterministic single CI
+   re-run on an `infrastructure`-origin failure does that without loosening a
+   budget on a model's confidence. Spec readiness: a deterministic validator
+   first, `jev` advisory at most.
+3. **ESCALATED gets a human exit:** `MANAGER_RETRY` and `MANAGER_RESCOPE`
+   become legal from `ESCALATED` (part of D3). Only a dispatch supplies them,
+   so this is human-only once D2 closes the injection.
+4. **The test-kit hole is closed:** `frontend/src/test/**` joins
+   `code_agent.deny`, reversing `CODE_AGENT_MUST_WRITE`'s `server.ts` row in
+   `tests/test_policy.py` (permissions.md's not-enforced list loses that item).
+
+**Recommended, not yet decided:** D7; models to `claude-sonnet-5-5` (same
+price as Sonnet 5) and `claude-opus-5-5` for the Manager ($4/$20); pinning the
+CLI at the version last seen working (2.1.280, run 35821738883); §9.2 item 1
+(the CI half of bug 17); §9.2 item 5 — keep `action_required` on bot PRs, as a
+human gate before CI spends on agent work.
+
+### 10.4 The backlog as test load
+
+Runnable after D1–D3: `MEDIA-002`. Behaviour changes with a clean red test
+(sign-out, singular/plural, the email toggle): after D4, D5 and D7.
+Refactors (`fetchTeams`, the media-URL join): need `require_red_baseline:
+false`. Visual items (Badge on the score band, scroll padding, the 360px clip):
+no unit test pins them and the pipeline has no browser check — hand-run them.
+DLQ alarms: unsatisfiable as one task (`infra/iam/` is writable by no role;
+bug 16's shape).
