@@ -105,3 +105,22 @@ class TestSelfcheck:
     def test_selfcheck_passes_against_the_committed_tree(self):
         result = run("selfcheck")
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+class TestGuardTested:
+    """handoff.md §10, D1: `guard tested` decides whether a CI verdict for
+    `--sha` may be applied to the task branch now checked out."""
+
+    def test_the_checked_out_commit_is_tested(self, has_demo_task):
+        result = run("guard", "tested", SPEC_ONLY_TASK, "--sha", "HEAD")
+        assert result.returncode == 0, result.stderr
+
+    def test_a_commit_that_is_not_an_ancestor_is_refused(self, has_demo_task):
+        # A verdict for code that is not in this branch's history at all.
+        result = run("guard", "tested", SPEC_ONLY_TASK, "--sha", "0" * 40)
+        assert result.returncode != 0
+        assert "not" in result.stderr.lower()
+
+    def test_a_crafted_task_id_is_refused(self):
+        result = run("guard", "tested", "../DEMO-001", "--sha", "HEAD")
+        assert result.returncode != 0
