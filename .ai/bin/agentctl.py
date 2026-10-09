@@ -540,20 +540,39 @@ def cmd_telemetry_report(args) -> int:
     if args.json:
         emit(summary)
         return OK
+    # Cost is the provider's own figure wherever a record has one; a record
+    # whose cost is only the estimate is counted and listed (handoff.md §10,
+    # D6). Permission denials answer whether a worker tried a tool it is not
+    # given, a shell above all (D2's threat chain).
     t = summary["totals"]
     print(
         f"invocations {t['invocations']}  tokens {t['total_tokens']:,}  "
-        f"cost ${t['estimated_cost_usd']:.4f}  escalations {t['escalations']}"
+        f"cost ${t['cost_usd']:.4f} ({t['estimated_records']} estimated, "
+        f"{t['unpriced_records']} unpriced)  "
+        f"permission denials {t['permission_denials']}  escalations {t['escalations']}"
     )
     for scope in ("by_task", "by_role", "by_model"):
         if not summary[scope]:
             continue
         print(f"\n{scope.replace('_', ' ')}:")
         for key, b in sorted(summary[scope].items()):
+            flags = ""
+            if b["estimated_records"]:
+                flags += f"  {b['estimated_records']} estimated"
+            if b["permission_denials"]:
+                flags += f"  {b['permission_denials']} denied"
             print(
                 f"  {key:<34} {b['invocations']:>4} runs  {b['total_tokens']:>10,} tok  "
-                f"${b['estimated_cost_usd']:.4f}"
+                f"${b['cost_usd']:.4f}{flags}"
             )
+    if summary["estimated"]:
+        print("\nestimated cost, not the provider's figure (records before D6 omit cache tokens):")
+        for rel in summary["estimated"]:
+            print(f"  {rel}")
+    if summary["denials"]:
+        print("\npermission denied:")
+        for d in summary["denials"]:
+            print(f"  {d['record']}  {d['count']}  {', '.join(d['tools']) or '-'}")
     if summary["unreadable"]:
         print("\nunreadable records:", file=sys.stderr)
         for rel in summary["unreadable"]:

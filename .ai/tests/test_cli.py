@@ -544,3 +544,173 @@ class TestTheTestedShaIsTheTipAfterTheReorder:
         (data_root / "backend" / "x.py").write_text("x = 2\n", encoding="utf-8")
         g(data_root, "commit", "-q", "-am", "late code")
         assert run_in(data_root, "guard", "tested", DATA_TASK, "--sha", tested).returncode == 1
+
+
+# --------------------------------------------------------------------------- D6
+
+ENVELOPE_FIXTURE = REPO_ROOT / ".ai" / "tests" / "fixtures" / "claude-cli-2.1.295-envelope.json"
+
+# Prints a saved envelope as the CLI would, and exits as told.
+ENVELOPE_CLAUDE = """#!/usr/bin/env bash
+if [ "${1:-}" = "--version" ]; then echo "fake 0"; exit 0; fi
+cat > /dev/null
+cat "$FAKE_ENVELOPE"
+exit "${FAKE_EXIT:-0}"
+"""
+
+
+class TestInvokeAgentCarriesTheEnvelope:
+    """handoff.md §10, D6. The envelope of `claude --print --output-format
+    json` carries the real cost, the cache tokens and the permission denials;
+    invoke_agent.sh used to keep only input and output tokens."""
+
+    def _invoke(self, tmp_path, envelope: dict, exit_code: int = 0):
+        bash = _posix_bash()
+        if bash is None:
+            pytest.skip("no POSIX bash on this machine")
+        root = tmp_path / "task"
+        root.mkdir()
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        (bindir / "claude").write_bytes(ENVELOPE_CLAUDE.encode("utf-8"))
+        (bindir / "claude").chmod(0o755)
+        env_file = tmp_path / "envelope.json"
+        env_file.write_text(json.dumps(envelope), encoding="utf-8")
+        prompt = tmp_path / "prompt.md"
+        prompt.write_text("hello", encoding="utf-8")
+        out = tmp_path / "agent-result.json"
+        proc = subprocess.run(
+            [bash, INVOKE.as_posix(), "distiller", prompt.as_posix(), out.as_posix()],
+            cwd=tmp_path,
+            env=clean_env(
+                AGENTCTL_DATA_ROOT=root.as_posix(),
+                PATH=str(bindir) + os.pathsep + os.environ.get("PATH", ""),
+                FAKE_ENVELOPE=env_file.as_posix(),
+                FAKE_EXIT=str(exit_code),
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return proc, out
+
+    def _real(self) -> dict:
+        return json.loads(ENVELOPE_FIXTURE.read_text(encoding="utf-8"))
+
+    def test_the_real_envelope_is_normalised_in_full(self, tmp_path):
+        proc, out = self._invoke(tmp_path, self._real())
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        r = json.loads(out.read_text(encoding="utf-8"))
+        assert r["session_id"] == "00000000-0000-0000-0000-000000000001"
+        assert r["cost_usd"] == pytest.approx(0.0191064)
+        assert r["usage"] == {
+            "input_tokens": 9,
+            "output_tokens": 48,
+            "cache_creation_input_tokens": 8596,
+            "cache_read_input_tokens": 16654,
+            "cache_creation_1h_input_tokens": 8596,
+            "cache_creation_5m_input_tokens": 0,
+            "thinking_tokens": 42,
+        }
+        assert r["num_turns"] == 1
+        assert r["permission_denials"] == {"count": 0, "tools": []}
+        assert r["is_error"] is False
+        assert r["subtype"] == "success"
+
+    def test_denials_keep_tool_names_and_never_their_content(self, tmp_path):
+        envelope = {
+            **self._real(),
+            "permission_denials": [
+                {
+                    "tool_name": "Bash",
+                    "tool_use_id": "toolu_1",
+                    "tool_input": {"command": "cat .git/config SECRET-MARKER"},
+                },
+                {"tool_name": "WebFetch", "tool_input": {"url": "https://SECRET-MARKER"}},
+            ],
+        }
+        proc, out = self._invoke(tmp_path, envelope)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        text = out.read_text(encoding="utf-8")
+        assert "SECRET-MARKER" not in text
+        assert "toolu_1" not in text
+        assert json.loads(text)["permission_denials"] == {
+            "count": 2,
+            "tools": ["Bash", "WebFetch"],
+        }
+
+    def test_an_envelope_without_the_fields_still_normalises(self, tmp_path):
+        proc, out = self._invoke(tmp_path, {"result": "done", "usage": {"input_tokens": 1}})
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        r = json.loads(out.read_text(encoding="utf-8"))
+        assert r["usage"]["input_tokens"] == 1
+        assert r["cost_usd"] is None
+        assert r["usage"]["cache_read_input_tokens"] is None
+        assert r["num_turns"] is None
+        assert r["permission_denials"] is None
+        assert r["is_error"] is None
+
+    def test_a_failed_call_still_records_what_it_cost(self, tmp_path):
+        # A run that ends in error is billed too; its envelope is normalised
+        # before the script reports the failure.
+        envelope = {
+            **self._real(),
+            "is_error": True,
+            "subtype": "error_max_turns",
+            "total_cost_usd": 1.5,
+        }
+        proc, out = self._invoke(tmp_path, envelope, exit_code=1)
+        assert proc.returncode == 1
+        r = json.loads(out.read_text(encoding="utf-8"))
+        assert r["cost_usd"] == pytest.approx(1.5)
+        assert r["is_error"] is True
+        assert r["subtype"] == "error_max_turns"
+
+
+class TestTelemetryReportShowsTheRealSpend:
+    def _runs(self, tmp_path) -> Path:
+        runs = tmp_path / "data" / ".ai" / "telemetry" / "runs" / "DEMO-001"
+        runs.mkdir(parents=True)
+        base = {
+            "schema": 2,
+            "task_id": "DEMO-001",
+            "workflow_run_id": "1",
+            "provider": "anthropic",
+            "model": "claude-sonnet-5",
+            "attempt": 1,
+            "input_tokens": 10,
+            "output_tokens": 10,
+            "total_tokens": 20,
+            "result": "completed",
+        }
+        (runs / "1-test_agent-a1.json").write_text(
+            json.dumps(
+                {
+                    **base,
+                    "role": "test_agent",
+                    "cost_usd": 2.0,
+                    "cost_source": "provider",
+                    "permission_denials": 2,
+                    "permission_denied_tools": ["Bash", "Bash"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (runs / "2-code_agent-a1.json").write_text(
+            json.dumps({**base, "role": "code_agent", "schema": 1, "estimated_cost_usd": 0.5}),
+            encoding="utf-8",
+        )
+        return tmp_path / "data"
+
+    def test_cost_estimates_and_denials_are_shown(self, tmp_path):
+        result = run_in(self._runs(tmp_path), "telemetry", "report")
+        assert result.returncode == 0, result.stderr
+        out = result.stdout
+        assert "$2.5000" in out
+        assert "1 estimated" in out
+        estimated = out.split("estimated cost", 1)[1]
+        assert "DEMO-001/2-code_agent-a1.json" in estimated
+        assert "permission denials 2" in out
+        denied = out.split("permission denied", 1)[1]
+        assert "DEMO-001/1-test_agent-a1.json" in denied
+        assert "Bash" in denied

@@ -267,7 +267,24 @@ before pointing the system at a real feature.
 python .ai/bin/agentctl.py telemetry report
 ```
 
-Per task, per role, per model: invocations, tokens, estimated cost, attempts,
-escalations. The numbers that matter over time are cost per *successful* task
-and the Manager escalation rate — if the second is climbing, task specs are
-under-specified, and that is a Director problem, not a model problem.
+Per task, per role, per model: invocations, tokens (cache reads and writes
+included), cost, permission denials, attempts, escalations. The numbers that
+matter over time are cost per *successful* task and the Manager escalation
+rate — if the second is climbing, task specs are under-specified, and that is
+a Director problem, not a model problem.
+
+Cost is the provider's own figure for each call (the CLI envelope's
+`total_cost_usd`) wherever a record has one. A record without it falls back to
+an estimate from `.ai/config.json`'s price table; the report counts those
+("N estimated") and lists each by path. Every record before D6 is such an
+estimate and **leaves out cache tokens** — MEDIA-002's records claim $1.25
+against a real $2.65 — so for those runs read the Console, not the report.
+The Console stays the ground truth: the report is never checked against it.
+
+`permission denials` above 0 means a worker asked for a tool the CLI refused
+it; the report lists which record and the tool names (never what was asked).
+That is the evidence for whether a worker tries a shell (handoff.md §10, D2).
+
+When provider prices change, update `telemetry.prices` in `.ai/config.json`:
+it now only feeds the fallback estimate, but an estimate on stale prices is
+how the gap above went unnoticed.

@@ -1,6 +1,7 @@
 """Telemetry: append-only, immutable, and never LLM-generated."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -102,3 +103,187 @@ class TestAggregate:
         (tmp_path / "DEMO-001" / "broken.json").write_text("{not json", encoding="utf-8")
         summary = tm.aggregate(tmp_path)
         assert summary["unreadable"] == ["DEMO-001/broken.json"]
+
+
+# --------------------------------------------------------------------------- D6
+
+CONFIG = json.loads(
+    (Path(__file__).resolve().parents[1] / "config.json").read_text(encoding="utf-8")
+)
+PRICES = CONFIG["telemetry"]["prices"]
+
+# tests/fixtures/claude-cli-2.1.295-envelope.json, a real one-turn call.
+REAL = {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "input_tokens": 9,
+    "output_tokens": 48,
+    "cache_creation_input_tokens": 8596,
+    "cache_read_input_tokens": 16654,
+    "cache_creation_1h_input_tokens": 8596,
+    "cache_creation_5m_input_tokens": 0,
+}
+REAL_COST = 0.0191064
+OPUS_PRICES = {"anthropic/claude-opus-5": {"input_per_mtok": 15.0, "output_per_mtok": 75.0}}
+OPUS_ESTIMATE = 12000 / 1e6 * 15 + 3000 / 1e6 * 75
+
+
+def written(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+class TestTheProviderCostIsAuthoritative:
+    """handoff.md §10, D6: MEDIA-002 recorded USD $1.25 against a real $2.65."""
+
+    def test_provider_cost_is_the_cost(self, tmp_path):
+        data = written(tm.record(tmp_path, record(**REAL, provider_cost_usd=REAL_COST), PRICES))
+        assert data["cost_usd"] == pytest.approx(REAL_COST)
+        assert data["cost_source"] == "provider"
+        assert data["provider_cost_usd"] == pytest.approx(REAL_COST)
+
+    def test_without_a_provider_cost_the_estimate_is_used_and_said_so(self, tmp_path):
+        data = written(tm.record(tmp_path, record(), OPUS_PRICES))
+        assert data["cost_source"] == "estimate"
+        assert data["provider_cost_usd"] is None
+        assert data["cost_usd"] == pytest.approx(OPUS_ESTIMATE)
+
+    def test_the_caller_cannot_assert_a_cost_or_its_source(self, tmp_path):
+        rec = record(cost_usd=0.0001, cost_source="provider")
+        data = written(tm.record(tmp_path, rec, OPUS_PRICES))
+        assert data["cost_source"] == "estimate"
+        assert data["cost_usd"] == pytest.approx(OPUS_ESTIMATE)
+
+    @pytest.mark.parametrize("bad", ["2.65", -1.0, True, float("nan")])
+    def test_a_provider_cost_that_is_not_a_number_is_ignored(self, tmp_path, bad):
+        data = written(tm.record(tmp_path, record(provider_cost_usd=bad), {}))
+        assert data["provider_cost_usd"] is None
+        assert data["cost_source"] == "estimate"
+
+    def test_an_unpriced_model_with_no_provider_cost_is_null(self, tmp_path):
+        data = written(tm.record(tmp_path, record(model="some-new-model"), {}))
+        assert data["cost_usd"] is None
+        assert data["cost_source"] == "estimate"
+
+
+class TestTheEstimatePricesCacheTokens:
+    def test_the_estimate_reconciles_with_the_provider_on_a_real_envelope(self, tmp_path):
+        # The config's own prices against the real call: cache reads at 0.1x
+        # input and 1-hour cache writes at 2x reproduce the provider's figure.
+        data = written(tm.record(tmp_path, record(**REAL), PRICES))
+        assert data["cost_source"] == "estimate"
+        assert data["estimated_cost_usd"] == pytest.approx(REAL_COST)
+
+    def test_cache_tokens_count_toward_the_total(self, tmp_path):
+        data = written(tm.record(tmp_path, record(**REAL), PRICES))
+        assert data["total_tokens"] == 9 + 48 + 8596 + 16654
+
+    def test_cache_tokens_with_no_cache_price_are_never_guessed(self, tmp_path):
+        prices = {"anthropic/claude-haiku-4-5": {"input_per_mtok": 1.0, "output_per_mtok": 5.0}}
+        assert written(tm.record(tmp_path, record(**REAL), prices))["estimated_cost_usd"] is None
+
+    def test_a_cache_write_of_unknown_duration_is_never_guessed(self, tmp_path):
+        rec = record(**REAL)
+        del rec["cache_creation_1h_input_tokens"]
+        del rec["cache_creation_5m_input_tokens"]
+        assert written(tm.record(tmp_path, rec, PRICES))["estimated_cost_usd"] is None
+
+    def test_every_model_a_role_uses_is_priced_including_its_cache(self):
+        for role, cfg in CONFIG["roles"].items():
+            price = PRICES.get(f"{cfg['provider']}/{cfg['model']}")
+            assert price, role
+            for field in (
+                "input_per_mtok",
+                "output_per_mtok",
+                "cache_read_per_mtok",
+                "cache_write_5m_per_mtok",
+                "cache_write_1h_per_mtok",
+            ):
+                assert isinstance(price.get(field), (int, float)), (role, field)
+
+    @pytest.mark.parametrize(
+        ("model", "inp", "out"),
+        [
+            ("claude-opus-5", 5.0, 25.0),
+            ("claude-sonnet-5", 2.0, 10.0),
+            ("claude-haiku-4-5", 1.0, 5.0),
+            ("claude-opus-5-5", 4.0, 20.0),
+            ("claude-sonnet-5-5", 2.0, 10.0),
+            ("claude-haiku-5-5", 0.10, 0.50),
+        ],
+    )
+    def test_list_prices(self, model, inp, out):
+        price = PRICES[f"anthropic/{model}"]
+        assert price["input_per_mtok"] == pytest.approx(inp)
+        assert price["output_per_mtok"] == pytest.approx(out)
+
+
+class TestEnvelopeFieldsAreStored:
+    def test_they_default_to_null(self, tmp_path):
+        data = written(tm.record(tmp_path, record()))
+        for field in (
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+            "thinking_tokens",
+            "num_turns",
+            "permission_denials",
+            "is_error",
+            "subtype",
+        ):
+            assert field in data and data[field] is None, field
+
+    def test_they_are_kept(self, tmp_path):
+        rec = record(
+            num_turns=7,
+            permission_denials=2,
+            permission_denied_tools=["Bash"],
+            is_error=False,
+            subtype="success",
+            thinking_tokens=42,
+        )
+        data = written(tm.record(tmp_path, rec))
+        assert data["num_turns"] == 7
+        assert data["permission_denials"] == 2
+        assert data["permission_denied_tools"] == ["Bash"]
+        assert data["is_error"] is False
+        assert data["subtype"] == "success"
+        assert data["thinking_tokens"] == 42
+
+
+class TestAggregateReportsTheRealSpend:
+    def test_provider_cost_is_summed_and_estimates_are_flagged(self, tmp_path):
+        tm.record(tmp_path, record(role="test_agent", provider_cost_usd=2.0), {})
+        est = tm.record(tmp_path, record(role="code_agent"), OPUS_PRICES)
+        summary = tm.aggregate(tmp_path)
+        assert summary["totals"]["cost_usd"] == pytest.approx(2.0 + OPUS_ESTIMATE)
+        assert summary["totals"]["estimated_records"] == 1
+        assert summary["by_role"]["test_agent"]["estimated_records"] == 0
+        assert summary["estimated"] == [f"DEMO-001/{est.name}"]
+
+    def test_a_record_from_before_d6_counts_as_an_estimate(self, tmp_path):
+        (tmp_path / "MEDIA-002").mkdir()
+        old = {**record(task_id="MEDIA-002"), "schema": 1, "estimated_cost_usd": 0.85}
+        (tmp_path / "MEDIA-002" / "old.json").write_text(json.dumps(old), encoding="utf-8")
+        summary = tm.aggregate(tmp_path)
+        assert summary["totals"]["cost_usd"] == pytest.approx(0.85)
+        assert summary["totals"]["estimated_records"] == 1
+        assert summary["estimated"] == ["MEDIA-002/old.json"]
+
+    def test_an_unpriced_record_is_counted(self, tmp_path):
+        tm.record(tmp_path, record(model="some-new-model"), {})
+        assert tm.aggregate(tmp_path)["totals"]["unpriced_records"] == 1
+
+    def test_permission_denials_are_summed_and_listed(self, tmp_path):
+        rec = record(permission_denials=3, permission_denied_tools=["Bash", "Bash"])
+        p = tm.record(tmp_path, rec)
+        tm.record(tmp_path, record(permission_denials=0, attempt=3))
+        summary = tm.aggregate(tmp_path)
+        assert summary["totals"]["permission_denials"] == 3
+        assert summary["denials"] == [
+            {"record": f"DEMO-001/{p.name}", "count": 3, "tools": ["Bash", "Bash"]}
+        ]
+
+    def test_cache_tokens_are_summed(self, tmp_path):
+        tm.record(tmp_path, record(**REAL, provider_cost_usd=REAL_COST))
+        totals = tm.aggregate(tmp_path)["totals"]
+        assert totals["cache_read_input_tokens"] == 16654
+        assert totals["cache_creation_input_tokens"] == 8596
