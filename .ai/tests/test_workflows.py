@@ -33,6 +33,22 @@ KILL = "Stop every process the model left behind"
 RECLAIM = "Take the checkout back"
 MODEL_USER = "agentrun"
 
+# handoff.md §10, D5. test-agent.yml's static checks: job -> (the image it runs
+# in, the exact `docker compose run` it ends with). One tool per job, so the job
+# name alone tells ciresult which output format to read.
+STATIC_CHECKS = {
+    "backend-ruff": (
+        "backend",
+        "--entrypoint python backend-test -m ruff check --output-format concise .",
+    ),
+    "backend-mypy": ("backend", "--entrypoint python backend-test -m mypy app"),
+    "frontend-typecheck": (
+        "frontend",
+        "--entrypoint npm frontend-test run typecheck -- --pretty false",
+    ),
+    "frontend-lint": ("frontend", "--entrypoint npm frontend-test run lint"),
+}
+
 
 @pytest.fixture
 def worker() -> str:
@@ -504,6 +520,15 @@ class TestEveryJobIsBounded:
                 return
         raise AssertionError(
             f"{path.name} declares no timeout-minutes, so it inherits the 6-hour default"
+        )
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_every_static_check_job_declares_a_timeout(self, name):
+        """handoff.md §10, D5. test-agent.yml's older jobs still inherit the
+        default (a D3 residue); a job added to it does not."""
+        text = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(text, name), re.MULTILINE), (
+            f"{name} declares no timeout-minutes"
         )
 
 
@@ -1932,3 +1957,110 @@ class TestTheTestJobsAreTestAgentsOwn:
         frontend = (docker / "frontend.Dockerfile").read_text(encoding="utf-8")
         assert "COPY backend/tests ./tests" in backend
         assert "COPY frontend/ ." in frontend
+
+
+# --------------------------------------------------------------------------- D5
+
+# Every other job test-agent.yml has: neither a test suite nor a static check,
+# so a baseline it fails is never the new tests' doing.
+NOT_A_CHECK = {
+    "changes",
+    "agent-infra-test",
+    "pip-audit",
+    "openapi-drift",
+    "npm-audit",
+    "infra-synth",
+    "gate",
+}
+
+
+class TestTheStaticChecksGateEveryRun:
+    """handoff.md §10, D5. CI never type-checked, linted or built the
+    frontend and ran no ruff or mypy for the backend: `tsc` first ran in
+    deploy.yml, after merge, and hand-run sessions ran the rest by hand, which
+    a worker cannot. Now each is a job of test-agent.yml, in the image its
+    suite already runs in, required by `gate`, and never skipped on a
+    dispatched run.
+
+    One job per tool rather than steps inside backend-test/frontend-test: the
+    job name is what `gh run view --log-failed` attributes every line to, and
+    what ciresult already reads (D4), so it alone says which tool's output a
+    failed log holds; and a red typecheck cannot hide whether lint, or the
+    suite, would have passed."""
+
+    @pytest.fixture
+    def gate(self) -> str:
+        if not TEST_AGENT_WF.exists():
+            pytest.skip("test-agent.yml not present")
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_check_runs_in_its_suites_image(self, gate, name):
+        side, command = STATIC_CHECKS[name]
+        block = job_block(gate, name)
+        assert f"file: docker/{side}.Dockerfile" in block
+        assert "target: test" in block
+        # The tag compose runs (TestTheGateStaysAuthoritative): without it
+        # compose would build its own image, uncached.
+        assert f"tags: fanwire-{side}-test:latest" in block
+        assert f"cache-from: type=gha,scope={side}-test" in block
+        # Reads the suite's cache, never writes it: the suite's job owns it.
+        assert "cache-to:" not in block
+        # -T: no TTY, so no colour and no pretty-printing in the log the
+        # baseline check parses. --no-deps: no database for a static check.
+        assert f"docker compose run --rm -T --no-deps {command}" in "\n".join(live_lines(block))
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_check_runs_whenever_its_suite_does(self, gate, name):
+        """Keyed on the same `changes` output as its suite, which is `true`
+        for every event but a pull request: a dispatched run never skips it."""
+        side, _ = STATIC_CHECKS[name]
+        block = job_block(gate, name)
+        assert "    needs: changes" in block.splitlines()
+        assert f"    if: needs.changes.outputs.{side} == 'true'" in block.splitlines()
+        assert f"    if: needs.changes.outputs.{side} == 'true'" in job_block(gate, f"{side}-test")
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_gate_requires_the_check(self, gate, name):
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert name in needs
+
+    def test_mypy_checks_the_application_only(self, gate):
+        """A test commit only adds tests. Type-checking `tests/` would put
+        every new test's import of a not-yet-written module in front of the
+        red baseline as a second failure; `app` is what mypy (strict) is for."""
+        lines = live_lines(job_block(gate, "backend-mypy"))
+        assert [ln for ln in lines if "mypy" in ln] == [
+            "docker compose run --rm -T --no-deps " + STATIC_CHECKS["backend-mypy"][1]
+        ]
+
+    def test_every_job_is_a_suite_a_check_or_neither(self, gate):
+        """ciresult.STATIC_JOBS is a copy of these job names, as TEST_JOBS is
+        of the suites'. A job added to test-agent.yml must be placed in one of
+        the three, deliberately."""
+        from agentlib import ciresult
+
+        assert set(ciresult.STATIC_JOBS) == set(STATIC_CHECKS)
+        for name, directory in ciresult.STATIC_JOBS.items():
+            assert directory == STATIC_CHECKS[name][0] + "/"
+        assert set(job_names(gate)) == set(ciresult.TEST_JOBS) | set(STATIC_CHECKS) | NOT_A_CHECK
+        assert ciresult.LINT_JOBS == {"backend-ruff", "frontend-lint"}
+        assert ciresult.LINT_JOBS <= set(ciresult.STATIC_JOBS)
+
+    def test_the_images_carry_the_tools(self):
+        """No tool is installed by the job: the test images already hold
+        them, and the checks run from the directory the suites run from."""
+        root = WORKFLOWS.parents[1]
+        backend = (root / "docker" / "backend.Dockerfile").read_text(encoding="utf-8")
+        frontend = (root / "docker" / "frontend.Dockerfile").read_text(encoding="utf-8")
+        test_stage = backend.split("FROM base AS test", 1)[1].split("\nFROM ", 1)[0]
+        assert "pip install --no-cache-dir .[dev]" in test_stage
+        assert "COPY backend/pyproject.toml ./" in backend  # mypy's and ruff's config
+        dev = (root / "backend" / "pyproject.toml").read_text(encoding="utf-8")
+        dev = dev.split("dev = [", 1)[1].split("\n]", 1)[0]
+        assert '"ruff' in dev and '"mypy' in dev
+        assert "RUN npm ci\n" in frontend  # devDependencies included
+        package = json.loads((root / "frontend" / "package.json").read_text(encoding="utf-8"))
+        assert package["scripts"]["typecheck"].startswith("tsc ")
+        assert package["scripts"]["lint"].startswith("eslint ")
+        assert {"typescript", "eslint"} <= set(package["devDependencies"])
