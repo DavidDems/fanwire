@@ -1,0 +1,20 @@
+{
+  "attempt": 1,
+  "ci_run_id": null,
+  "commit_sha": null,
+  "duration_seconds": 261,
+  "ended_at": "2026-10-09T02:50:10Z",
+  "estimated_cost_usd": 0.305298,
+  "input_tokens": 96,
+  "model": "claude-sonnet-5",
+  "output_tokens": 20334,
+  "provider": "anthropic",
+  "result": "completed",
+  "role": "code_agent",
+  "schema": 1,
+  "session_id": "7017513b-7771-43db-b499-f9878c9b98a3",
+  "started_at": "2026-10-09T02:45:49Z",
+  "task_id": "MEDIA-002",
+  "total_tokens": 20430,
+  "workflow_run_id": "37875968795"
+}
