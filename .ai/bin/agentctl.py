@@ -14,6 +14,7 @@ thing, write state.
   agentctl state control DEMO-001 --set PAUSE
   agentctl guard check DEMO-001 --role code_agent --base main --head HEAD
   agentctl distill DEMO-001 --log ci.txt --ci-status failure
+  agentctl ci-event --conclusion cancelled   the event a CI conclusion means
   agentctl telemetry report
   agentctl selfcheck                    prove the machinery works, no tokens spent
 
@@ -27,6 +28,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Code and data are found separately (handoff.md §10, D2b).
@@ -265,6 +267,27 @@ def cmd_state_advance(args) -> int:
     if args.ignore_terminal and st.is_terminal(s):
         print(f"agentctl: {args.task_id} is {s['state']}; {args.event} not applied")
         return OK
+    # A worker's result is only ever about the state it was dispatched into
+    # (handoff.md §10, D3, S9): MANAGER_RETRY is legal from ESCALATED for a
+    # human, and a manager landing after the task escalated must not use it.
+    if args.from_state and s["state"] != args.from_state:
+        die(
+            f"{args.task_id} is {s['state']}, not {args.from_state}; {args.event} not applied",
+            FAILED,
+        )
+    # A CI result for a task a human has paused (handoff.md §10, D3, S2). Not
+    # applied, and not lost silently either: its run id is recorded and the
+    # notice names it. operations.md has the re-run recipe.
+    if args.discard_if_paused and s.get("control") == "PAUSE":
+        if args.ci_run_id:
+            s = st.note_ci_run(s, args.ci_run_id, args.ci_conclusion, args.commit_sha, False)
+            st.save_state(state_path(args.task_id), s)
+        print(
+            f"::notice::{args.task_id} is paused; CI run {args.ci_run_id or '(unknown)'} "
+            f"({args.ci_conclusion or 'no conclusion'}) was discarded, not applied. "
+            "To get a verdict: resume the task, then re-dispatch test-agent on its branch."
+        )
+        return OK
     try:
         s = st.advance(s, args.event, **ctx)
     except st.Paused as exc:
@@ -272,6 +295,8 @@ def cmd_state_advance(args) -> int:
         return FAILED
     except st.StateError as exc:
         die(str(exc), FAILED)
+    if args.ci_run_id:
+        s = st.note_ci_run(s, args.ci_run_id, args.ci_conclusion, args.commit_sha, True)
     if args.session_id:
         s = st.record_session(s, args.role or "manager", args.session_id)
     st.save_state(state_path(args.task_id), s)
@@ -291,6 +316,12 @@ def cmd_state_control(args) -> int:
 
 
 # --------------------------------------------------------------------------- dispatch
+
+
+def cmd_ci_event(args) -> int:
+    """The event a CI run's `workflow_run` conclusion means (handoff.md §10, D3, S1)."""
+    print(st.ci_event(args.conclusion))
+    return OK
 
 
 def cmd_next(args) -> int:
@@ -535,6 +566,7 @@ def cmd_telemetry_report(args) -> int:
 
 def cmd_status(args) -> int:
     rows = []
+    now = datetime.now(UTC)
     # Keyed on task.json, not state.json: a task with a spec and no state is a
     # DRAFT waiting to start, and it belongs on the board. Keying on state
     # files is why a just-created task read as "no tasks".
@@ -553,13 +585,18 @@ def cmd_status(args) -> int:
             continue
         action = orchestrator.next_action(s, spec)
         nxt = action["kind"] + (f":{action['role']}" if action.get("role") else "")
+        # A dispatch whose result is overdue (handoff.md §10, D3): the run
+        # was lost, cancelled, or never started. Nothing will wake the task.
+        overdue = st.stalled(s, now)
+        if overdue:
+            nxt = f"STALLED: {overdue}"
         rows.append(
             (
                 s["task_id"],
                 s["state"],
                 s["control"],
                 f"{s['attempt']}/{s['max_attempts']}",
-                s.get("escalation_reason") or nxt,
+                nxt if overdue else (s.get("escalation_reason") or nxt),
             )
         )
     if not rows:
@@ -649,6 +686,16 @@ def cmd_selfcheck(args) -> int:
     if s["attempt"] > 2:
         problems.append(f"retry loop exceeded its budget (attempt {s['attempt']})")
 
+    # A manager that never decides cannot be dispatched forever (D3, L1).
+    s = dict(st.new_state("SELF-004", max_attempts=2), state="MANAGER_REVIEW")
+    for _ in range(orchestrator.MAX_TRANSITIONS):
+        action = orchestrator.next_action(s, demo)
+        if action["kind"] != "dispatch_agent":
+            break
+        s = st.advance(s, action["event"])
+    if s["state"] != "ESCALATED":
+        problems.append(f"manager loop did not escalate (got {s['state']})")
+
     # The guard refuses a worker reaching for the system's own boundaries.
     breach = guard.check_diff(
         [".github/workflows/agent-orchestrator.yml", ".ai/policy.json"],
@@ -711,11 +758,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 0 instead of failing when the task has already finished "
         "(for unsolicited events such as a late CI result)",
     )
+    s_adv.add_argument(
+        "--discard-if-paused",
+        action="store_true",
+        help="when the task is paused, record --ci-run-id, print a notice and exit 0 "
+        "instead of applying the event",
+    )
+    s_adv.add_argument(
+        "--from-state",
+        choices=sorted(st.STATES),
+        help="refuse unless the task is in this state (a worker's result applies only "
+        "to the state it was dispatched into)",
+    )
     s_adv.set_defaults(func=cmd_state_advance)
     s_ctl = state.add_parser("control", help="human stop/start")
     s_ctl.add_argument("task_id")
     s_ctl.add_argument("--set", required=True, choices=sorted(st.CONTROLS))
     s_ctl.set_defaults(func=cmd_state_control)
+
+    p_ci = sub.add_parser("ci-event", help="the event a CI run's conclusion means")
+    p_ci.add_argument("--conclusion", required=True)
+    p_ci.set_defaults(func=cmd_ci_event)
 
     p_next = sub.add_parser("next", help="what the orchestrator does now")
     p_next.add_argument("task_id")

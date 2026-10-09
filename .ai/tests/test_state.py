@@ -243,3 +243,246 @@ class TestInvocationFailuresAreBounded:
 
     def test_a_brand_new_state_starts_with_no_failures(self):
         assert st.new_state("DEMO-001")["consecutive_failures"] == 0
+
+
+# --------------------------------------------------------------------------- D3
+
+
+class TestEveryManagerInvocationIsCountedAndBounded:
+    """handoff.md §10, D3 (L1). The orchestrator dispatched the manager from
+    MANAGER_REVIEW with no event at all, so a manager whose worker applied
+    nothing was re-dispatched with no history entry and no budget counting
+    it. Every dispatch, the manager's included, is now an event, and the
+    manager has a ceiling of its own."""
+
+    def test_dispatching_the_manager_is_recorded(self):
+        s = fresh(state="MANAGER_REVIEW")
+        s = st.advance(s, "DISPATCH_MANAGER")
+        assert s["state"] == "MANAGER_REVIEW"
+        assert s["history"][-1]["event"] == "DISPATCH_MANAGER"
+        assert s["manager_invocations"] == 1
+
+    def test_the_manager_may_only_be_dispatched_from_review(self):
+        with pytest.raises(st.StateError):
+            st.advance(fresh(state="READY"), "DISPATCH_MANAGER")
+
+    def test_exceeding_the_manager_bound_escalates(self):
+        s = fresh(state="MANAGER_REVIEW")
+        for _ in range(st.MAX_MANAGER_INVOCATIONS):
+            s = st.advance(s, "DISPATCH_MANAGER")
+            assert s["state"] == "MANAGER_REVIEW"
+        s = st.advance(s, "DISPATCH_MANAGER")
+        assert s["state"] == "ESCALATED"
+        assert "manager" in s["escalation_reason"]
+        assert str(st.MAX_MANAGER_INVOCATIONS) in s["escalation_reason"]
+
+    def test_the_bound_is_small(self):
+        assert 1 <= st.MAX_MANAGER_INVOCATIONS <= 5
+
+    def test_a_manager_that_applies_nothing_cannot_loop(self):
+        # The L1 shape: the manager is dispatched, its worker records nothing,
+        # and the orchestrator dispatches it again. It must stop on its own.
+        s = fresh(state="MANAGER_REVIEW")
+        for _ in range(50):
+            if s["state"] != "MANAGER_REVIEW":
+                break
+            s = st.advance(s, "DISPATCH_MANAGER")
+        assert s["state"] == "ESCALATED"
+        assert len(s["history"]) == st.MAX_MANAGER_INVOCATIONS + 1
+
+    def test_a_brand_new_state_has_invoked_no_manager(self):
+        assert st.new_state("DEMO-001")["manager_invocations"] == 0
+
+
+class TestEveryDispatchIsRecorded:
+    """handoff.md §10, D3 (detection). The time and target of every worker
+    and CI dispatch is kept in state.json, so a result that never arrives is
+    visible as an overdue dispatch rather than as nothing at all."""
+
+    @pytest.mark.parametrize(
+        "state,event,workflow,role",
+        [
+            ("READY", "DISPATCH_TEST_AGENT", "agent-worker", "test_agent"),
+            ("READY_FOR_IMPLEMENTATION", "DISPATCH_CODE_AGENT", "agent-worker", "code_agent"),
+            ("CONTEXT_MAINTENANCE", "DISPATCH_MAINTAINER", "agent-worker", "context_maintainer"),
+            ("MANAGER_REVIEW", "DISPATCH_MANAGER", "agent-worker", "manager"),
+            ("TESTS_COMMITTED", "CI_STARTED", "test-agent", None),
+            ("IMPL_COMMITTED", "CI_STARTED", "test-agent", None),
+        ],
+    )
+    def test_the_dispatch_is_recorded(self, state, event, workflow, role):
+        s = st.advance(fresh(state=state), event)
+        d = s["last_dispatch"]
+        assert d["workflow"] == workflow
+        assert d["role"] == role
+        assert d["event"] == event
+        assert d["at"] == s["updated_at"]
+        assert d["run_id"] is None
+
+    def test_a_brand_new_state_has_dispatched_nothing(self):
+        s = st.new_state("DEMO-001")
+        assert s["last_dispatch"] is None
+        assert s["last_ci_run"] is None
+
+    def test_the_ci_run_id_is_recorded_once_known(self):
+        s = st.advance(fresh(state="IMPL_COMMITTED"), "CI_STARTED")
+        s = st.note_ci_run(s, run_id="123", conclusion="success", commit="abc", applied=True)
+        assert s["last_dispatch"]["run_id"] == "123"
+        assert s["last_ci_run"]["run_id"] == "123"
+        assert s["last_ci_run"]["conclusion"] == "success"
+        assert s["last_ci_run"]["commit"] == "abc"
+        assert s["last_ci_run"]["applied"] is True
+
+    def test_a_ci_run_does_not_claim_a_worker_dispatch(self):
+        s = st.advance(fresh(state="READY"), "DISPATCH_TEST_AGENT")
+        s = st.note_ci_run(s, run_id="9", conclusion="success", commit="abc", applied=False)
+        assert s["last_dispatch"]["run_id"] is None
+        assert s["last_ci_run"]["run_id"] == "9"
+
+    def test_noting_a_run_is_not_a_transition(self):
+        s = st.advance(fresh(state="IMPL_COMMITTED"), "CI_STARTED")
+        before = len(s["history"])
+        s = st.note_ci_run(s, run_id="1", conclusion="cancelled", commit="abc", applied=False)
+        assert len(s["history"]) == before
+        assert s["state"] == "IMPL_CI"
+
+
+def _minutes_after(at: str, minutes: int):
+    from datetime import UTC, datetime, timedelta
+
+    return datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC) + timedelta(
+        minutes=minutes
+    )
+
+
+class TestALostResultIsDetected:
+    """handoff.md §10, D3 (detection). `stalled` says a task is waiting on a
+    dispatch older than that workflow can possibly run for."""
+
+    def test_a_worker_overdue_is_stalled(self):
+        s = st.advance(fresh(state="READY_FOR_IMPLEMENTATION"), "DISPATCH_CODE_AGENT")
+        limit = st.DISPATCH_TIMEOUT_MINUTES["agent-worker"] + st.STALL_GRACE_MINUTES
+        assert st.stalled(s, _minutes_after(s["updated_at"], limit - 1)) is None
+        reason = st.stalled(s, _minutes_after(s["updated_at"], limit + 1))
+        assert reason and "agent-worker" in reason and "code_agent" in reason
+
+    def test_ci_overdue_is_stalled(self):
+        s = st.advance(fresh(state="IMPL_COMMITTED"), "CI_STARTED")
+        limit = st.DISPATCH_TIMEOUT_MINUTES["test-agent"] + st.STALL_GRACE_MINUTES
+        assert st.stalled(s, _minutes_after(s["updated_at"], limit - 1)) is None
+        assert "test-agent" in st.stalled(s, _minutes_after(s["updated_at"], limit + 1))
+
+    def test_a_manager_in_flight_is_watched_too(self):
+        s = st.advance(fresh(state="MANAGER_REVIEW"), "DISPATCH_MANAGER")
+        assert st.stalled(s, _minutes_after(s["updated_at"], 10_000))
+
+    def test_nothing_in_flight_is_never_stalled(self):
+        s = st.advance(fresh(state="DRAFT"), "VALIDATED")
+        assert st.stalled(s, _minutes_after(s["updated_at"], 10_000)) is None
+
+    def test_a_result_that_arrived_clears_it(self):
+        s = st.advance(fresh(state="READY"), "DISPATCH_TEST_AGENT")
+        s = st.advance(s, "AGENT_COMMITTED")
+        assert st.stalled(s, _minutes_after(s["updated_at"], 10_000)) is None
+
+    def test_a_finished_task_is_never_stalled(self):
+        s = st.advance(fresh(state="READY"), "DISPATCH_TEST_AGENT")
+        s = dict(s, state="CANCELLED")
+        assert st.stalled(s, _minutes_after(s["updated_at"], 10_000)) is None
+
+    def test_a_state_written_before_d3_does_not_crash(self):
+        # USERS-002 and DEMO-001 have state files with none of D3's fields.
+        s = fresh(state="CODE_AGENT_RUNNING")
+        for key in ("last_dispatch", "last_ci_run", "manager_invocations"):
+            s.pop(key, None)
+        s["history"] = [
+            {"at": "2026-09-23T05:10:08Z", "from": "x", "to": "y", "event": "DISPATCH_CODE_AGENT"}
+        ]
+        assert st.stalled(s, _minutes_after("2026-09-23T05:10:08Z", 10_000))
+
+
+class TestEveryCiConclusionHasACase:
+    """handoff.md §10, D3 (S1). Any conclusion but success, failure and
+    timed_out fell through as "nothing to apply", leaving the task waiting on
+    CI forever. Every documented conclusion now has an explicit case, and
+    anything that is not a real test verdict escalates to a human instead of
+    spending the code agent's attempts."""
+
+    DOCUMENTED = (
+        "success",
+        "failure",
+        "timed_out",
+        "cancelled",
+        "skipped",
+        "stale",
+        "neutral",
+        "action_required",
+        "startup_failure",
+    )
+
+    def test_every_documented_conclusion_is_listed(self):
+        assert set(self.DOCUMENTED) == set(st.CI_CONCLUSIONS)
+
+    def test_a_pass_is_a_pass(self):
+        assert st.ci_event("success") == "CI_PASSED"
+
+    @pytest.mark.parametrize("conclusion", ["failure", "timed_out"])
+    def test_a_failure_is_a_failure(self, conclusion):
+        assert st.ci_event(conclusion) == "CI_FAILED"
+
+    @pytest.mark.parametrize(
+        "conclusion",
+        ["cancelled", "skipped", "stale", "neutral", "action_required", "startup_failure"],
+    )
+    def test_anything_else_escalates(self, conclusion):
+        assert st.ci_event(conclusion) == "ESCALATE"
+
+    @pytest.mark.parametrize("conclusion", ["", "bogus", "SUCCESS"])
+    def test_an_unknown_conclusion_escalates(self, conclusion):
+        assert st.ci_event(conclusion) == "ESCALATE"
+
+    def test_a_cancelled_baseline_is_not_red_as_required(self):
+        # The case that matters most: a cancelled baseline run counted as
+        # "red" would open implementation on tests nobody ran.
+        s = fresh(state="BASELINE_CI")
+        s = st.advance(s, st.ci_event("cancelled"), reason="CI run 7 concluded 'cancelled'")
+        assert s["state"] == "ESCALATED"
+        assert s["attempt"] == 0
+
+
+class TestAHumanCanRecoverAnEscalatedTask:
+    """handoff.md §10, D3 (S9) and §10.3 item 3. operations.md told a human to
+    recover an ESCALATED task with MANAGER_RETRY or MANAGER_RESCOPE; both were
+    illegal from ESCALATED."""
+
+    def test_retry_from_escalated(self):
+        s = fresh(state="ESCALATED", attempt=3, max_attempts=3, escalation_reason="x")
+        s = st.advance(s, "MANAGER_RETRY", extra_attempts=1)
+        assert s["state"] == "RETRY_READY"
+        assert s["max_attempts"] == 4
+        assert s["escalation_reason"] is None
+
+    def test_rescope_from_escalated(self):
+        s = fresh(state="ESCALATED", escalation_reason="x")
+        s = st.advance(s, "MANAGER_RESCOPE")
+        assert s["state"] == "READY"
+
+    def test_retry_from_escalated_still_respects_the_hard_cap(self):
+        s = fresh(state="ESCALATED", attempt=8, max_attempts=st.HARD_MAX_ATTEMPTS)
+        with pytest.raises(st.StateError, match="hard cap"):
+            st.advance(s, "MANAGER_RETRY", extra_attempts=1)
+
+    def test_a_human_recovery_resets_the_manager_bound(self):
+        s = fresh(state="ESCALATED", manager_invocations=st.MAX_MANAGER_INVOCATIONS + 1)
+        s = st.advance(s, "MANAGER_RESCOPE")
+        assert s["manager_invocations"] == 0
+
+    def test_a_late_worker_failure_does_not_un_escalate(self):
+        # The fallback that records a worker result it could not apply is
+        # AGENT_FAILED. From ESCALATED it must stay ESCALATED: routing it to
+        # MANAGER_REVIEW would let a worker's run take a task back from a
+        # human.
+        s = fresh(state="ESCALATED", escalation_reason="guard violation: x")
+        s = st.advance(s, "AGENT_FAILED", reason="late")
+        assert s["state"] == "ESCALATED"
+        assert s["escalation_reason"] == "guard violation: x"
