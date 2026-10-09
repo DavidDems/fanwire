@@ -10,8 +10,9 @@ and deleted (2026-10-07), and this file kept their lessons.
 (`INFRA-002`/`003`, `FRONTEND-001`…`007`, `UI-001`…`008`) was run this way,
 from Claude Code, rather than by the `.ai/` orchestrator: a subscription
 session costs nothing per call, while the orchestrator bills metered API
-credits (see "Who pays", below). The project's focus has now moved back to
-the automated workflow (`wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`).
+credits (see "Who pays", below). Since 2026-10-09 this is the **default**
+mode for code again, by decision: `work-modes.md` says which work runs by hand,
+which through the pipeline, and what the API is still used for.
 A Director still uses this file for Director-only work (anything under `.ai/`,
 `.github/`, `wiki/GeneralContext/`, `AGENTS.md`), and for any unit a human
 chooses to run by hand.
