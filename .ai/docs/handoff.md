@@ -766,7 +766,8 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    so this is human-only once D2 closes the injection.
 4. **The test-kit hole is closed:** `frontend/src/test/**` joins
    `code_agent.deny`, reversing `CODE_AGENT_MUST_WRITE`'s `server.ts` row in
-   `tests/test_policy.py` (permissions.md's not-enforced list loses that item).
+   `tests/test_policy.py` (permissions.md's not-enforced list loses that item). **Closed 2026-10-09**, with `frontend/src/**/__tests__/**`,
+   the same hole in another directory.
 
 5. **Also queued, after D1–D6** (decided 2026-10-08): D7; models to
    `claude-sonnet-5-5` (same price as Sonnet 5) and `claude-opus-5-5` for the

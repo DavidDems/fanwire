@@ -25,7 +25,6 @@ plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
 task is dispatched until 1–3 have merged.**
 
-4. **The test-kit hole** — `frontend/src/test/**` into `code_agent.deny`.
 5. **D4** — the red baseline must be red in the tests the test commit changed.
 6. **D5** — frontend `typecheck` + `lint` in CI; ruff/mypy after measuring.
 7. **D6** — telemetry records the CLI's real cost and cache tokens; prices.

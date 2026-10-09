@@ -137,29 +137,6 @@ were judged not good enough:
   `TestAWorkerCannotEscapeItsOwnBranch` pins that, and it is the single
   property this whole model rests on — if it ever fails, the tiers have
   collapsed into one.
-- **`allow_test_edits_during_impl: false` has a hole the size of
-  `frontend/src/test/**`.** That flag stops a code agent weakening the contract
-  during implementation: a diff containing a test change is discarded whole.
-  But `code_agent.deny` names only `frontend/src/**/*.test.ts(x)`, and this
-  frontend keeps its msw handler factories and fixtures in `frontend/src/test/`
-  under ordinary names — `users.ts`, `notifications.ts`, `compose.ts`. A
-  fixture decides what the server answers, so an implementation that may
-  rewrite one can make an assertion pass without touching a file named
-  `*.test.*`, and the discard rule never fires.
-
-  Closing it is one line — `frontend/src/test/**` in `code_agent.deny` — but it
-  reverses `CODE_AGENT_MUST_WRITE`'s explicit `frontend/src/test/server.ts` row
-  in `tests/test_policy.py`, which reads as a deliberate decision rather than
-  an oversight. **That reversal is a human call and has not been made.** The
-  mirror-image gap on the other side — the test agent could not write the kit
-  it produces — was unambiguous and is fixed.
-- **The provider key is the model's to misuse.** It must be in the model's
-  environment for the model to run, so a manipulated model could send it
-  elsewhere. Only the Console's monthly spend limit bounds that
-  (`wiki/GeneralContext/Architecture/github-automation-setup.md`). The
-  separate-user isolation (above) is proven by tests of the YAML and of the
-  landing guard against real patches, not yet by a live run (handoff.md §10.1,
-  under the table).
 - **Branch protection and CODEOWNERS** are GitHub repository settings, not
   files in this repo. `.github/CODEOWNERS` is committed; requiring review on
   `main` and requiring `agent-guard` to pass are settings a human must switch
