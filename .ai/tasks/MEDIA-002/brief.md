@@ -8,11 +8,10 @@ dev S3 buckets rather than an emulator, consistent with the earlier "real auth,
 not a shortcut" decision. That answer included **"a dev-only script that runs
 the processing pipeline on demand"**, and this is it.
 
-The buckets are a human step and are written up in
-[`TODO/02`](../../../TODO/02-deployment-requirements.md) §7. Creating them is
+The buckets are a human step. Creating them is
 not enough on its own: **GuardDuty Malware Protection for S3 does not exist
 locally**, so no scan verdict is ever emitted, so an uploaded object never
-leaves `Quarantined`, so it can never be attached to a post. Compose-with-media
+leaves `Uploaded` (the status chain is `Uploaded -> Scanning -> Processed | Rejected`, `backend/app/media/state.py`), so it can never be attached to a post. Compose-with-media
 cannot be clicked through in a browser until something supplies that verdict.
 
 ## The one thing to get right

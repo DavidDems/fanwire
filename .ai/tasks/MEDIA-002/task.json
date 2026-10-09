@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "task_id": "MEDIA-002",
-  "objective": "Add a dev-only script that advances a quarantined media object to Processed on demand. Locally there is no GuardDuty, so nothing ever issues the scan verdict the media pipeline waits for, and an uploaded image sits in Quarantined forever and can never be attached to a post. The script stands in for that verdict so compose-with-media can be clicked through in a browser.",
+  "objective": "Add a dev-only script that advances an uploaded media object (status Uploaded, its object still in the quarantine bucket) to Processed on demand. Locally there is no GuardDuty, so nothing ever issues the scan verdict the media pipeline waits for, and an uploaded image stays in Uploaded forever and can never be attached to a post. The script stands in for that verdict so compose-with-media can be clicked through in a browser.",
   "acceptance_criteria": [
-    "Running the script against a media row in Quarantined moves it to Processed and records the same fields the real GuardDuty-verdict path records.",
+    "Running the script against a media row in Uploaded moves it, through Scanning, to Processed and records the same fields the real GuardDuty-verdict path records.",
     "Running it against a media row that is already Processed leaves the row unchanged and reports that, rather than raising or double-processing.",
     "Running it against a media id that does not exist exits non-zero with a message naming the id, and changes nothing.",
     "The script refuses to run when the environment is not development, exits non-zero, and says why \u2014 it must be impossible to point at a deployed environment.",
