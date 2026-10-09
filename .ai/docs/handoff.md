@@ -6,9 +6,10 @@ what to be careful of. It is a snapshot, not a design document — for the
 design read [architecture.md](architecture.md), and for the reasoning and the
 review protocol read [philosophy.md](philosophy.md).
 
-> **Status, 2026-10-08 — the workflow review has reported. Its findings and
-> the plan the human agreed are §10. Until §10's first batch lands, do not
-> dispatch a task.** The Director session that continues this work starts at
+> **Status, 2026-10-09 — D1, D2, D2b and D3 have merged, and `MEDIA-002` ran
+> through the orchestrator unattended, end to end, for USD $2.65 real
+> (§10.5). Its findings and the plan the human agreed are §10; what is left is
+> `TODO/02-backlog.md` → "Agent system".** The Director session that continues this work starts at
 > `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`.
 >
 > **Status, 2026-10-07 — read this first; the rest of the file is as of
@@ -687,7 +688,7 @@ Grade is the enforcement the fix reaches (philosophy.md §4).
 | D3 | Unbounded loop and silent stalls | **L1** a manager worker that applies no event is re-dispatched with no history entry, so no budget counts it (bug 5's shape); **S5** a worker cancelled or failing before the model call leaves `*_RUNNING` forever; **S8** a failed orchestrator action step skips the commit; **S1** conclusions other than success/failure/timed_out fall through (`:130`); **S2** a CI result arriving while paused is discarded; **S9** the documented ESCALATED recovery is illegal (`state.py:274,285`); **race** the worker is dispatched (`:207`) before `DISPATCH_*` is committed (`:231`) — USERS-002's margin was ~4s | Worker applies `AGENT_FAILED` from an `always()` step when the agent did not succeed; commit before dispatch; record the CI run id and dispatch time in `state.json` so a lost result is detectable; MANAGER_RETRY/RESCOPE legal from ESCALATED. **Closed in code 2026-10-08:** `DISPATCH_MANAGER` puts every manager call in the history, capped at `MAX_MANAGER_INVOCATIONS = 3`; `land` routes every outcome under `always()` and records an unappliable result as `AGENT_FAILED`; each result applies only from its role's own state (`--from-state`); the orchestrator advances, commits and pushes before it dispatches, escalates any failed action step, and maps all nine CI conclusions (`state.CI_CONCLUSIONS`: anything not a test verdict escalates); `last_dispatch`/`last_ci_run` in `state.json`, `agentctl status` reports `STALLED`; a result for a paused task is discarded with a notice and `operations.md`'s re-run recipe; MANAGER_RETRY/RESCOPE legal from ESCALATED, a late `AGENT_FAILED` there stays ESCALATED. D1's rule rechecked: CI now tests the tip | detected → escalated |
 | D4 | The red baseline accepts red for any reason | `state.py:251`; dispatched CI runs every suite, so an audit CVE, openapi drift, a broken test file or a tree-scan test tripped by the new test all count as "red as required" — then the code agent, which cannot edit tests, spends its budget | Run `ciresult` on the baseline too; require the failures to lie in files the test commit changed and no non-test job to have failed | escalated |
 | D5 | CI never type-checks, lints or builds the frontend; no ruff/mypy for the backend | the frontend test container runs `vitest run` only; `tsc` first runs in `deploy.yml`, after merge. Hand-run sessions ran these by hand; a worker cannot | `typecheck` + `lint` in the frontend job; ruff/mypy after measuring current debt | detected |
-| D6 | Telemetry is not the real spend | records show 30–66 input tokens for a 38.6 KB prompt (cache tokens dropped); prices in `config.json` stale | Record the CLI envelope's cost, cache tokens and permission denials (field names to confirm on the next run); fix prices. Human: compare the Console's 2026-09-23 bill with $0.38 | detected |
+| D6 | Telemetry is not the real spend | records show 30–66 input tokens for a 38.6 KB prompt (cache tokens dropped); `MEDIA-002` measured USD $2.65 real against $1.25 recorded (§10.5); prices in `config.json` stale | Record the CLI envelope's cost, cache tokens and permission denials (field names to confirm on the next run); fix prices. Human: compare the Console's 2026-09-23 bill with $0.38 | detected |
 | D7 | Hand-run lessons never reached the workers | `.ai/skills` lacks tree scans reading test files, prettier on named files, the Vitest 4 CSS Module proxy; `frontend-unit` tells a worker to run `npm`/`docker`, which it cannot | Port them from `director-sessions.md` / `FrontendUI/verification.md` | prompt only |
 
 Also from the enumeration, lower severity: `MAX_CONSECUTIVE_FAILURES` is
@@ -698,8 +699,10 @@ grants 1; `operations.md` lists `max_attempts_exhausted` and
 `red_baseline_not_red` as ESCALATED reasons, but both route to
 `MANAGER_REVIEW`.
 
-**D2b, what only the first live run proves** (watch `MEDIA-002`'s first
-worker): artifact hand-over between the jobs, and `land` running after a
+**D2b, what only the first live run proves** — `MEDIA-002` (§10.5) proved the
+normal path of every item below except the CLI version (installed unpinned)
+and `land` after a failed or cancelled `run-model`, which no step of it
+exercised: artifact hand-over between the jobs, and `land` running after a
 failed or cancelled `run-model`; `agentrun` on a hosted runner — `useradd` and
 `sudo`, `o+x` being enough to reach the checkout, the tools and its I/O
 directory, the npm-global CLI on the `PATH` it is given and runnable by that
@@ -709,7 +712,9 @@ again when it is pinned, §10.3 item 5); `github.sha` being `main`'s commit for
 both a dispatch and a `workflow_run`. `land` now also applies `AGENT_FAILED`
 when `run-model` died before the model ran, which is part of D3's S5.
 
-**D3, what only a live run proves:** `land` running after a cancelled
+**D3, what only a live run proves** — `MEDIA-002` proved the pushed state
+being visible to the worker and to CI before either started (D1 accepted both
+verdicts on the tip); the failure paths below are still unexercised: `land` running after a cancelled
 `run-model`; folded `>-` `if:` conditions; the pushed state being visible to
 the worker's checkout before it starts; `Escalate an action that failed` on a
 real `gh workflow run` failure.
@@ -781,6 +786,18 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    orchestrator's `.ai` gate, `agent-guard` running from the base SHA,
    `fullmatch`, refusing CLI project config, and running the model as an
    unprivileged user so nothing it leaves running can reach the Actions cache.
+8. **Work modes (decided 2026-10-09, after `MEDIA-002`'s USD $2.65):** major
+   code changes are hand-run by the human on the Claude subscription (a
+   session against a task spec on `agent/<ID>`, held by `agent-guard`), not
+   by the API pipeline, whose cost is dominated by the test and code agents.
+   API calls are kept for cheap, useful automation on `claude-haiku-5-5`
+   ($0.10/$0.50 per MTok) or `jev`: a **spec drift check** before a task, a
+   **CI failure summary** on a red task PR, a **criteria coverage check** on a
+   task PR, and a **wiki update proposal** after one merges. The automated pipeline stays working but secondary.
+   **Order:** finish D4–D7 first, then the work-modes wiki structure (one
+   backlog with a Mode column; spec + `agent/<ID>` as the unit in every mode;
+   hand runs recorded in `state.json`; one live prompt per thread from a
+   template; `Architecture/work-modes.md`), then the four automations.
 
 ### 10.4 The backlog as test load
 
@@ -791,3 +808,29 @@ false`. Visual items (Badge on the score band, scroll padding, the 360px clip):
 no unit test pins them and the pipeline has no browser check — hand-run them.
 DLQ alarms: unsatisfiable as one task (`infra/iam/` is writable by no role;
 bug 16's shape).
+
+### 10.5 The first real task after the fixes: `MEDIA-002`, 2026-10-09
+
+Dispatched by the human at 02:30 UTC; `COMPLETE` at 02:55 — 25 minutes, no
+retry, no manager call, no human step until the review PR (#123, merged
+03:17, deployed). History: VALIDATED → test agent (10.5 min, 417-line test)
+→ baseline CI red for the right reason (only `backend-test`, a collection
+error: `No module named 'scripts.dev_process_media'`; checked by hand, D4 is
+not built) → code agent (4.4 min, 110-line script reusing the real
+`ImageUploadPipeline`, fail-closed on `ENVIRONMENT != "development"`) → CI
+green → context maintainer (1.9 min, no wiki change) → review PR. The PR's
+`pull_request` CI did not wake the orchestrator (D1); `agent-guard` passed
+running from the base SHA (D2b).
+
+**Cost, measured by the human from the Console balance:** CAD $3.76 =
+**USD $2.65** (CAD $11.17 → $7.42). Telemetry claimed USD $1.25 (test agent
+$0.85, code agent $0.31, maintainer $0.09) — **2.1× under**, with 146, 96 and
+24 input tokens recorded for prompts of tens of KB: cache reads and writes are
+dropped (D6). TypeSafe: $0.00 (`jev` not yet involved). A task of this size —
+backend-only, one script and its test — costs about USD $2.65 and 25 minutes.
+Until D6 lands, multiply the telemetry by ~2 for a budget, or read the
+Console.
+
+Before dispatch the spec had drifted (criteria named a `Quarantined` status
+that no longer exists; #122 fixed the wording). Recheck a spec against the
+code, not just `task validate`, before every first dispatch.
