@@ -45,8 +45,9 @@ After the test agent commits, CI runs on the tests with no implementation
 behind them, and **that run must fail**.
 
 ```
-BASELINE_CI ──CI_FAILED──► READY_FOR_IMPLEMENTATION   (correct)
-BASELINE_CI ──CI_PASSED──► MANAGER_REVIEW             (red_baseline_not_red)
+BASELINE_CI ──CI_FAILED──────────────► READY_FOR_IMPLEMENTATION  (red for the right reason)
+BASELINE_CI ──CI_FAILED_WRONG_REASON─► MANAGER_REVIEW  (red_baseline_wrong_reason: ...)
+BASELINE_CI ──CI_PASSED──────────────► MANAGER_REVIEW  (red_baseline_not_red)
 ```
 
 A green baseline means the committed tests pass against code that does not
@@ -55,12 +56,42 @@ nothing for the code agent to make pass. Sending it to the Manager is the
 cheap outcome; dispatching a code agent against a test that already passes is
 the expensive one.
 
+**Red for the right reason** (handoff.md §10, D4). Dispatched CI runs every
+suite, so a baseline can fail for reasons that have nothing to do with the new
+tests — a CVE in `pip-audit`, `openapi-drift`, an unrelated broken test, a
+tree-scan test the new test tripped. The code agent cannot edit tests, so
+sending it after any of those only spends its attempts. A failed baseline
+therefore counts as red only when `ciresult.baseline_verdict` says so, from the
+run's job list and its failed-job log:
+
+- every failed job is a test job (`ciresult.TEST_JOBS`: `backend-test`,
+  `frontend-test`), apart from the aggregate `gate`, which fails with them;
+- each failed test job's log names all of its failures (pytest's short
+  summary against its tally; vitest's `FAIL` lines against `Test Files N
+  failed`, with no unhandled errors);
+- every one of those files was changed by a test-agent commit
+  (`state.test_commits`: the `AGENT_COMMITTED` entries out of
+  `TEST_AGENT_RUNNING`, whose note is the commit). A collection or import
+  error in the new test file counts — it is what a test for code that does not
+  exist yet usually looks like.
+
+Anything else, including a log or job list that cannot be read, is
+`CI_FAILED_WRONG_REASON`, and the manager is given the reason. Same route as a
+green baseline, for the same reason: the manager's levers (re-scope, escalate)
+fit, the code agent's do not. The check lives in `agentctl state advance`: a
+`CI_FAILED` applied to a task in `BASELINE_CI` is classified from `--ci-jobs`
+and `--ci-log` whoever applies it, and with neither it fails closed. The
+orchestrator fetches both for every failed run (`gh run view --json jobs`,
+`--log-failed`). `state.advance` itself still reads `CI_FAILED` from
+`BASELINE_CI` as "red for the right reason".
+
 This is the deliberate enforcement point. "Write the test first" is an
 instruction any agent can ignore; a CI run that must be red is not.
 
 `workflow_policy.require_red_baseline: false` waives it for a task where a
-red baseline genuinely is not meaningful. Use it rarely and say why in the
-brief.
+red baseline genuinely is not meaningful, and the reason check with it: a
+waived baseline goes to implementation whatever it failed on. Use it rarely
+and say why in the brief.
 
 ## Retry policy
 

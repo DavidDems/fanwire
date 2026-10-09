@@ -58,7 +58,11 @@ _INFRA = re.compile(
 
 def distill(raw_log: str, ci_status: str, task_id: str, attempt: int) -> dict[str, Any]:
     """Turn a CI log into the retry contract. Never raises on malformed input."""
-    log = raw_log or ""
+    # `gh run view --log-failed` prefixes every line with its job, step and a
+    # timestamp, which the line-anchored patterns below never matched: every
+    # real failure distilled to `ambiguous` (handoff.md §10, D4). A log
+    # without the prefix is read as it is.
+    log = "\n".join(content for _, content in _gh_lines(raw_log or "")) or (raw_log or "")
     passed = ci_status == "success"
 
     if passed:
@@ -180,3 +184,174 @@ def _origin(failures: list[dict[str, str]]) -> str | None:
 def _clip(text: str) -> str:
     flat = " ".join(text.split())
     return flat[:MAX_SUMMARY_CHARS]
+
+
+# --------------------------------------------------------------------------- the red baseline
+#
+# handoff.md §10, D4. A baseline run that failed is only "red, as required"
+# when the new tests are what failed. Dispatched CI runs every suite, so it
+# also fails on an audit CVE, openapi drift, an unrelated broken test, or a
+# tree-scan test the new test tripped -- none of which a code agent, which
+# cannot edit tests, can fix. Decided here, deterministically, from the run's
+# job list and its failed-job log; anything this cannot read is not the right
+# reason (fail closed: the manager looks, no code-agent attempt is spent).
+
+# The jobs in .github/workflows/test-agent.yml whose failure can be the new
+# tests' doing, and the directory each one's suite runs from (pytest and
+# vitest name files relative to it). Pinned to the YAML and the Dockerfiles by
+# tests/test_workflows.py::TestTheTestJobsAreTestAgentsOwn. A job not listed is
+# a non-test job, so a suite added to test-agent.yml and not here fails closed.
+TEST_JOBS: dict[str, str] = {"backend-test": "backend/", "frontend-test": "frontend/"}
+
+# test-agent.yml's always-running aggregate. It fails whenever any job does,
+# so on its own it says nothing; it is excused only alongside a failed test job.
+AGGREGATE_JOB = "gate"
+
+# A wrong-reason verdict becomes the task's escalation_reason, which the
+# manager is shown and `agentctl status` prints. Bounded like everything else
+# that reaches a prompt.
+MAX_REASON_CHARS = 400
+_MAX_NAMED = 5
+
+# `<job>\t<step>\t<timestamp> <line>`: how `gh run view --log-failed` prints.
+_GH_LINE = re.compile(r"^([^\t\n]+)\t([^\t\n]*)\t(.*)$")
+_GH_STAMP = re.compile(r"^\ufeff?(?:\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ?)?")
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+# pytest's short test summary (`-r fE`, its default) names every failure and
+# every error on a line of its own; its last line tallies them.
+_PYTEST_ENTRY = re.compile(r"^(?:FAILED|ERROR) (\S+)")
+_PYTEST_TALLY = re.compile(r"^=+ (.*\bin [\d.]+s\b.*?) =+$")
+_PYTEST_TALLY_COUNTS = re.compile(r"(\d+) (failed|errors?)\b")
+# vitest prints `FAIL  <file> > <test>` for a failed test and
+# `FAIL  <file> [ <file> ]` for a file it could not even collect (_JEST_FILE
+# reads both), then tallies failed files.
+_VITEST_FILES = re.compile(r"^\s*Test Files\s+(\d+) failed")
+_VITEST_ERRORS = re.compile(r"^\s*Errors\s+(\d+) errors?")
+
+
+def _gh_lines(raw: str) -> list[tuple[str, str]]:
+    """(job, content) for each line of `--log-failed` output.
+
+    A line without the prefix continues the previous line's job. Nothing
+    before the first prefixed line can be attributed to a job, so it is
+    dropped: an unprefixed log yields nothing, and the baseline check then
+    calls it unreadable rather than guessing whose it is.
+    """
+    out: list[tuple[str, str]] = []
+    job = ""
+    for line in raw.splitlines():
+        m = _GH_LINE.match(line)
+        if m:
+            job, line = m.group(1), m.group(3)
+        elif not job:
+            continue
+        out.append((job, _ANSI.sub("", _GH_STAMP.sub("", line, count=1)).rstrip("\r")))
+    return out
+
+
+def _job_conclusions(ran: Any) -> dict[str, str] | None:
+    """name -> conclusion from `gh run view --json jobs`, or None if unreadable."""
+    listed = ran.get("jobs") if isinstance(ran, dict) else None
+    if not isinstance(listed, list) or not listed:
+        return None
+    out: dict[str, str] = {}
+    for job in listed:
+        if not isinstance(job, dict) or not isinstance(job.get("name"), str):
+            return None
+        out[job["name"]] = str(job.get("conclusion") or "")
+    return out
+
+
+def _pytest_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    """Files named in pytest's short summary, or why they cannot be trusted."""
+    entries = list(dict.fromkeys(m.group(0) for ln in lines if (m := _PYTEST_ENTRY.match(ln))))
+    tallies = [m.group(1) for ln in lines if (m := _PYTEST_TALLY.match(ln.strip()))]
+    if not tallies:
+        return [], "no pytest summary in its log"
+    counted = sum(int(n) for n, _ in _PYTEST_TALLY_COUNTS.findall(tallies[-1]))
+    if not entries or counted == 0:
+        return [], "no failing test named in its log"
+    if len(entries) < counted:
+        return [], f"its log counts {counted} failures but names {len(entries)}"
+    return [e.split(" ", 1)[1].split("::", 1)[0] for e in entries], None
+
+
+def _vitest_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    """Files vitest names as failed, or why they cannot be trusted."""
+    if any(_VITEST_ERRORS.match(ln) for ln in lines):
+        return [], "vitest reported unhandled errors, which name no test file"
+    counted = [int(m.group(1)) for ln in lines if (m := _VITEST_FILES.match(ln))]
+    if not counted:
+        return [], "no vitest summary in its log"
+    files = list(dict.fromkeys(m.group(1) for ln in lines if (m := _JEST_FILE.match(ln))))
+    if not files:
+        return [], "no failing test file named in its log"
+    if len(files) < counted[-1]:
+        return [], f"its log counts {counted[-1]} failed files but names {len(files)}"
+    return files, None
+
+
+# How each test job's log is read. Every TEST_JOBS entry has one.
+_FAILED_FILES = {"backend-test": _pytest_failed_files, "frontend-test": _vitest_failed_files}
+
+
+def _repo_path(directory: str, reported: str) -> str:
+    path = reported.replace("\\", "/").removeprefix("./")
+    for root in ("/var/task/", "/app/"):  # the two test images' working directories
+        path = path.removeprefix(root)
+    return directory + path
+
+
+def _named(items: list[str]) -> str:
+    shown = ", ".join(items[:_MAX_NAMED])
+    return shown + (f" and {len(items) - _MAX_NAMED} more" if len(items) > _MAX_NAMED else "")
+
+
+def baseline_verdict(raw_log: str, ran: Any, test_files: set[str] | frozenset[str]) -> dict:
+    """Is a failed baseline run red for the right reason?
+
+    `raw_log` is `gh run view --log-failed`, `ran` is `gh run view --json
+    jobs`, `test_files` the repository paths the test commit changed. Right
+    only if every failed job is a test job (or the aggregate, alongside one),
+    each failed test job's log names all of its failures, and every one is in
+    `test_files`. Never raises: anything unreadable is a wrong-reason verdict
+    whose `reason` says what could not be read.
+    """
+    failures: list[dict[str, str]] = []
+    problems: list[str] = []
+    conclusions = _job_conclusions(ran)
+    if conclusions is None:
+        problems.append("could not read the run's job list")
+        conclusions = {}
+    bad = {n: c for n, c in conclusions.items() if c not in ("success", "skipped")}
+    other = sorted(n for n in bad if n not in TEST_JOBS and n != AGGREGATE_JOB)
+    if other:
+        problems.append(f"non-test job(s) failed: {_named(other)}")
+    unfinished = sorted(n for n in bad if n in TEST_JOBS and bad[n] != "failure")
+    if unfinished:
+        problems.append(
+            "test job(s) did not fail outright: " + _named([f"{n} ({bad[n]})" for n in unfinished])
+        )
+    red = sorted(n for n in bad if n in TEST_JOBS and bad[n] == "failure")
+    if conclusions and not red:
+        problems.append("no test job failed")
+    lines = _gh_lines(raw_log or "")
+    for job in red:
+        files, why = _FAILED_FILES[job]([content for name, content in lines if name == job])
+        if why:
+            problems.append(f"could not read {job}'s failures: {why}")
+        for f in files:
+            entry = {"job": job, "file": _repo_path(TEST_JOBS[job], f)}
+            if entry not in failures:
+                failures.append(entry)
+    if not test_files:
+        problems.append("no files recorded for the test commit")
+    else:
+        outside = [f["file"] for f in failures if f["file"] not in test_files]
+        if outside:
+            problems.append(f"failures outside the test commit's files: {_named(outside)}")
+    reason = "; ".join(problems)
+    if len(reason) > MAX_REASON_CHARS:
+        reason = reason[: MAX_REASON_CHARS - 3] + "..."
+    return {"right_reason": not problems, "reason": reason, "failures": failures}

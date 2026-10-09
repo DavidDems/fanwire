@@ -8,6 +8,11 @@ You will be here for one of:
 - `max_attempts_exhausted` — the code agent failed its whole budget.
 - `red_baseline_not_red` — the test agent's tests passed with no implementation,
   so they pin nothing.
+- `red_baseline_wrong_reason` — the baseline CI was red, but not because the
+  new tests failed: another job failed (an audit, openapi drift), or tests the
+  test commit never touched did. The reason names which. The code agent can fix
+  neither; usually `ESCALATE` (the branch or `main` needs a human), or
+  `MANAGER_RESCOPE` if the new tests broke a suite they were not meant to touch.
 - an agent invocation failed, or a failure the distiller could not classify.
 
 ## What you have
