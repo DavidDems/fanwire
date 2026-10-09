@@ -65,15 +65,26 @@ therefore counts as red only when `ciresult.baseline_verdict` says so, from the
 run's job list and its failed-job log:
 
 - every failed job is a test job (`ciresult.TEST_JOBS`: `backend-test`,
-  `frontend-test`), apart from the aggregate `gate`, which fails with them;
-- each failed test job's log names all of its failures (pytest's short
-  summary against its tally; vitest's `FAIL` lines against `Test Files N
-  failed`, with no unhandled errors);
+  `frontend-test`) or a type-check job (`backend-mypy`, `frontend-typecheck`,
+  of `ciresult.STATIC_JOBS`, D5), apart from the aggregate `gate`, which fails
+  with them -- and at least one test job failed: a type error alone, with
+  every suite green, is a green baseline;
+- no lint job (`ciresult.LINT_JOBS`: `backend-ruff`, `frontend-lint`)
+  failed. Neither linter reads across files, so a lint error is in the file
+  that has it: the test commit's, which the code agent cannot edit, or one the
+  test commit did not touch. Nor did tsc report an unused declaration
+  (`TS6133` and kin), which only an edit to the test file clears;
+- each failed job's log names all of its failures (pytest's short summary
+  against its tally; vitest's `FAIL` lines against `Test Files N failed`,
+  with no unhandled errors; mypy's, ruff's and eslint's errors against their
+  own tallies, and tsc's, which prints none, only from a log that reaches
+  GitHub's `Process completed` line);
 - every one of those files was changed by a test-agent commit
   (`state.test_commits`: the `AGENT_COMMITTED` entries out of
   `TEST_AGENT_RUNNING`, whose note is the commit). A collection or import
   error in the new test file counts — it is what a test for code that does not
-  exist yet usually looks like.
+  exist yet usually looks like — and so does tsc's `Cannot find module` for
+  the same import.
 
 Anything else, including a log or job list that cannot be read, is
 `CI_FAILED_WRONG_REASON`, and the manager is given the reason. Same route as a

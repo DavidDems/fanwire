@@ -34,6 +34,14 @@ a self-reply/self-repost (recipient == actor) is skipped, not notified --
 mirrors app.users.service's existing no-self-follow rule. UserFollowed
 never hits this branch since users/ already disallows self-follow at the
 source.
+
+A row an event names that does not exist (the post, its parent or original,
+the recipient) raises MissingReferenceError, before anything is committed.
+Posts are never deleted and users only soft-deleted, so that is a malformed
+event, not a race a retry would win: it fails the record, and SQS dead-letters
+it for a human. The recipient is looked up before the commit for the same
+reason -- after it, failing the record would commit a duplicate row on
+redelivery (see "Email is best-effort" in the module wiki).
 """
 
 from __future__ import annotations
@@ -53,6 +61,18 @@ POST_CREATED = "PostCreated"
 USER_FOLLOWED = "UserFollowed"
 
 logger = Logger()
+
+
+class MissingReferenceError(LookupError):
+    """An event names a row that does not exist. Carries the model name only:
+    the lambda handler logs the exception, and ids stay out of the logs."""
+
+
+def _require[RowT: (Post, User)](session: Session, model: type[RowT], row_id: Any) -> RowT:
+    row = session.get(model, row_id)
+    if row is None:
+        raise MissingReferenceError(f"the event names a {model.__name__} that does not exist")
+    return row
 
 
 def handle_domain_event(
@@ -77,7 +97,8 @@ def handle_domain_event(
     the durable outcome, so any exception from email delivery (e.g. SES
     MessageRejected) is logged -- notification type and id only, no PII --
     and swallowed, and the notification is still returned. Failures before
-    the commit (e.g. a nonexistent post) still propagate.
+    the commit still propagate, MissingReferenceError among them (see the
+    module docstring).
     """
     if event_name == POST_CREATED:
         recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(session, detail)
@@ -94,6 +115,8 @@ def handle_domain_event(
     if recipient_id == actor_id:
         return None  # self-reply/self-repost -- see module docstring
 
+    recipient = _require(session, User, recipient_id)
+
     notification = Notification(
         recipient_user_id=recipient_id,
         type=notif_type,
@@ -104,7 +127,6 @@ def handle_domain_event(
     session.commit()
 
     factory = NotificationFactory(email_sender)
-    recipient = session.get(User, recipient_id)
 
     # In-app "delivery" is always attempted for interface uniformity, even
     # though it's a no-op -- see app.notifications.channels.
@@ -135,14 +157,14 @@ def _resolve_post_created(
     """Returns (recipient_id, actor_id, type, reference_id) for a
     PostCreated event, or (None, actor_id, None, None) if the new post is
     neither a reply nor a repost (a plain post -- no notification)."""
-    post = session.get(Post, detail["post_id"])
+    post = _require(session, Post, detail["post_id"])
     actor_id = detail["author_id"]
 
     if post.is_reply:
-        parent = session.get(Post, post.parent_post_id)
+        parent = _require(session, Post, post.parent_post_id)
         return parent.author_id, actor_id, NotificationType.REPLY, post.id
     if post.is_repost:
-        original = session.get(Post, post.original_post_id)
+        original = _require(session, Post, post.original_post_id)
         return original.author_id, actor_id, NotificationType.REPOST, post.id
 
     return None, actor_id, None, None

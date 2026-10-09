@@ -335,3 +335,59 @@ def test_email_send_failure_does_not_propagate_and_leaves_one_notification(sessi
             select(Notification).where(Notification.recipient_user_id == followed.id)
         ).all()
         assert len(rows) == 1
+
+
+# --- An event naming a row that does not exist ----------------------------------
+#
+# Posts are never deleted and users are only soft-deleted, so an event that
+# names a missing row is malformed, not a race a retry would win. It still
+# fails the record (wiki/CodeContext/Modules/0x05-notifications.md: SQS
+# redelivers it, then dead-letters it), but by name and before anything is
+# committed -- it used to be an AttributeError on None, which mypy (strict)
+# rightly refused (handoff.md §10, D5). For UserFollowed the recipient is now
+# looked up before the commit, so a missing one can never surface after the
+# row exists, where failing the record would commit a duplicate on redelivery.
+
+
+def test_post_created_for_a_nonexistent_post_fails_before_any_row(session_factory):
+    from app.notifications.consumer import MissingReferenceError, handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        author = _make_user(session, username="missing_post_author")
+        sender = RecordingEmailSender()
+
+        with pytest.raises(MissingReferenceError):
+            handle_domain_event(
+                session,
+                event_name="PostCreated",
+                detail={"post_id": 999_999_999, "author_id": author.id},
+                email_sender=sender,
+            )
+
+        session.rollback()
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []
+
+
+def test_user_followed_for_a_nonexistent_user_fails_before_any_row(session_factory):
+    from app.notifications.consumer import MissingReferenceError, handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        follower = _make_user(session, username="missing_followed_follower")
+        sender = RecordingEmailSender()
+
+        with pytest.raises(MissingReferenceError):
+            handle_domain_event(
+                session,
+                event_name="UserFollowed",
+                detail={"follower_user_id": follower.id, "followed_user_id": 999_999_999},
+                email_sender=sender,
+            )
+
+        session.rollback()
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []
