@@ -786,6 +786,18 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    orchestrator's `.ai` gate, `agent-guard` running from the base SHA,
    `fullmatch`, refusing CLI project config, and running the model as an
    unprivileged user so nothing it leaves running can reach the Actions cache.
+8. **Work modes (decided 2026-10-09, after `MEDIA-002`'s USD $2.65):** major
+   code changes are hand-run by the human on the Claude subscription (a
+   session against a task spec on `agent/<ID>`, held by `agent-guard`), not
+   by the API pipeline, whose cost is dominated by the test and code agents.
+   API calls are kept for cheap, useful automation on `claude-haiku-5-5`
+   ($0.10/$0.50 per MTok) or `jev`: a **spec drift check** before a task, a
+   **criteria coverage check** on a task PR, and a **wiki update proposal**
+   after one merges. The automated pipeline stays working but secondary.
+   **Order:** finish D4–D7 first, then the work-modes wiki structure (one
+   backlog with a Mode column; spec + `agent/<ID>` as the unit in every mode;
+   hand runs recorded in `state.json`; one live prompt per thread from a
+   template; `Architecture/work-modes.md`), then the three automations.
 
 ### 10.4 The backlog as test load
 

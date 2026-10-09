@@ -38,6 +38,12 @@ merged and `MEDIA-002` ran end to end (handoff §10.5).
     worker cannot follow. Before any frontend item runs.
 11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. The CI half of bug 17.
+13. **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
+    (`hand` / `auto` / `director`); hand runs recorded in `state.json`
+    (`agentctl hand start|finish`); a prompt template and one live prompt per
+    thread; `wiki/GeneralContext/Architecture/work-modes.md`.
+14. **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
+    criteria coverage check on a task PR; wiki update proposal after merge.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
