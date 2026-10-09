@@ -71,7 +71,8 @@ def distill(raw_log: str, ci_status: str, task_id: str, attempt: int) -> dict[st
     if _INFRA.search(log):
         return _result(task_id, attempt, "failed", [], "infrastructure", 0, False, [])
 
-    failures = _parse_pytest(log) or _parse_jest(log)
+    # A suite and a static check can fail in the same run; the retry needs both.
+    failures = (_parse_pytest(log) or _parse_jest(log)) + _parse_static(log)
     total = _count(log, failures)
     truncated = len(failures) > MAX_FAILURES
     shown = failures[:MAX_FAILURES]
@@ -176,9 +177,37 @@ def _origin(failures: list[dict[str, str]]) -> str | None:
         # The tests cannot even be imported: that is the test commit's problem,
         # not the implementation's.
         return "test"
-    if categories & {"assertion_failure", "exception", "type_error", "timeout"}:
+    if categories & {"assertion_failure", "exception", "type_error", "lint_error", "timeout"}:
         return "implementation"
     return "ambiguous"
+
+
+def _parse_static(log: str) -> list[dict[str, str]]:
+    """Errors from tsc, mypy, ruff and eslint (handoff.md §10, D5), each
+    under the file it names, relative to where its tool ran. Warnings and
+    notes are not failures."""
+    out: list[dict[str, str]] = []
+    eslint_file = ""
+    for line in log.splitlines():
+        if m := _TSC_ERROR.match(line):
+            file, where = m.group(1), f"{m.group(2)}:{m.group(3)}"
+            what, category = f"{m.group(4)}: {m.group(5)}", "type_error"
+        elif m := _MYPY_ERROR.match(line):
+            file, where, what, category = m.group(1), m.group(2), m.group(3), "type_error"
+        elif m := _RUFF_ERROR.match(line):
+            file, where, what, category = m.group(1), m.group(2), m.group(3), "lint_error"
+        elif m := _ESLINT_FILE.match(line):
+            eslint_file = m.group(1)
+            continue
+        elif (m := _ESLINT_ENTRY.match(line)) and m.group(2) == "error" and eslint_file:
+            file, where, what, category = eslint_file, m.group(1), m.group(3), "lint_error"
+        else:
+            continue
+        file = _unrooted(file)
+        out.append(
+            {"test": f"{file}:{where}", "category": category, "summary": _clip(what), "file": file}
+        )
+    return out
 
 
 def _clip(text: str) -> str:
@@ -202,6 +231,30 @@ def _clip(text: str) -> str:
 # tests/test_workflows.py::TestTheTestJobsAreTestAgentsOwn. A job not listed is
 # a non-test job, so a suite added to test-agent.yml and not here fails closed.
 TEST_JOBS: dict[str, str] = {"backend-test": "backend/", "frontend-test": "frontend/"}
+
+# handoff.md §10, D5. test-agent.yml's static checks, one tool per job, and the
+# directory each runs from. Pinned to the YAML by tests/test_workflows.py::
+# TestTheStaticChecksGateEveryRun. A type-check error in a file the test commit
+# changed is red for the right reason -- the new test names an interface that
+# does not exist yet, which is what the code agent is there to write -- but
+# only alongside a failed suite: a check red while every suite passed is a
+# green baseline with a type error in it, and the tests pin nothing.
+STATIC_JOBS: dict[str, str] = {
+    "backend-ruff": "backend/",
+    "backend-mypy": "backend/",
+    "frontend-typecheck": "frontend/",
+    "frontend-lint": "frontend/",
+}
+
+# Lint is never the right reason. Neither linter here reads across files (no
+# type-aware eslint rules, and ruff does not resolve imports), so a lint error
+# is in the file that has it: in the test commit's, the code agent cannot edit
+# it (D4's own criterion); anywhere else, the test commit did not cause it.
+LINT_JOBS: frozenset[str] = frozenset({"backend-ruff", "frontend-lint"})
+
+# tsc findings no implementation clears: unused declarations
+# (noUnusedLocals/noUnusedParameters), in the file that has them.
+_TSC_FILE_LOCAL = frozenset({"TS6133", "TS6138", "TS6192", "TS6196", "TS6198"})
 
 # test-agent.yml's always-running aggregate. It fails whenever any job does,
 # so on its own it says nothing; it is excused only alongside a failed test job.
@@ -228,6 +281,25 @@ _PYTEST_TALLY_COUNTS = re.compile(r"(\d+) (failed|errors?)\b")
 # reads both), then tallies failed files.
 _VITEST_FILES = re.compile(r"^\s*Test Files\s+(\d+) failed")
 _VITEST_ERRORS = re.compile(r"^\s*Errors\s+(\d+) errors?")
+
+# The static checks (D5), in the formats test-agent.yml asks for. `tsc --pretty
+# false` prints `file(line,col): error TSnnnn: message` and no tally, so its
+# log is trusted only when complete: GitHub ends a failed step with the
+# `Process completed` line, and a log without it was cut short.
+_TSC_ERROR = re.compile(r"^(\S[^(]*)\((\d+),(\d+)\): error (TS\d+): (.*)$")
+_TSC_ANY = re.compile(r"\berror TS\d+:")
+_MYPY_ERROR = re.compile(r"^(\S+?\.pyi?):(\d+)(?::\d+)?: error: (.*)$")
+_MYPY_ANY = re.compile(r"\berror: ")
+_MYPY_TALLY = re.compile(r"^Found (\d+) errors? in \d+ files? \(checked \d+ source files?\)")
+# ruff's `concise` format: `file:line:col: CODE message`.
+_RUFF_ERROR = re.compile(r"^(\S+?\.(?:pyi?|ipynb)):(\d+:\d+): (\S.*)$")
+_RUFF_TALLY = re.compile(r"^Found (\d+) errors?\.")
+# eslint's default `stylish` format: an absolute path on a line of its own,
+# then one indented `line:col  error|warning  message  rule` per finding.
+_ESLINT_FILE = re.compile(r"^(/\S+)$")
+_ESLINT_ENTRY = re.compile(r"^\s+(\d+:\d+)\s+(error|warning)\s+(.*)$")
+_ESLINT_TALLY = re.compile(r"^\u2716 \d+ problems? \((\d+) errors?, \d+ warnings?\)")
+_STEP_DONE = re.compile(r"^##\[error\]Process completed with exit code \d+\.")
 
 
 def _gh_lines(raw: str) -> list[tuple[str, str]]:
@@ -292,15 +364,91 @@ def _vitest_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
     return files, None
 
 
-# How each test job's log is read. Every TEST_JOBS entry has one.
-_FAILED_FILES = {"backend-test": _pytest_failed_files, "frontend-test": _vitest_failed_files}
+def _tsc_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    """Files tsc names an error in, or why they cannot be trusted."""
+    errors = [m.group(1) for ln in lines if (m := _TSC_ERROR.match(ln))]
+    if any(_TSC_ANY.search(ln) and not _TSC_ERROR.match(ln) for ln in lines):
+        return [], "a tsc error names no file"
+    if not errors:
+        return [], "no error named in its log"
+    if not any(_STEP_DONE.match(ln) for ln in lines):
+        return [], "its log ends before the step does"
+    return errors, None
 
 
-def _repo_path(directory: str, reported: str) -> str:
+def _tsc_local_findings(lines: list[str]) -> list[str]:
+    """`file (TSnnnn)` for each tsc finding only an edit to that file clears."""
+    return [
+        f"{_unrooted(m.group(1))} ({m.group(4)})"
+        for ln in lines
+        if (m := _TSC_ERROR.match(ln)) and m.group(4) in _TSC_FILE_LOCAL
+    ]
+
+
+def _mypy_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    errors = [m.group(1) for ln in lines if (m := _MYPY_ERROR.match(ln))]
+    if any(_MYPY_ANY.search(ln) and not _MYPY_ERROR.match(ln) for ln in lines):
+        return [], "a mypy error names no file"
+    return _tallied(errors, [m for ln in lines if (m := _MYPY_TALLY.match(ln))], lines)
+
+
+def _ruff_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    errors = [m.group(1) for ln in lines if (m := _RUFF_ERROR.match(ln))]
+    return _tallied(errors, [m for ln in lines if (m := _RUFF_TALLY.match(ln))], lines)
+
+
+def _eslint_failed_files(lines: list[str]) -> tuple[list[str], str | None]:
+    errors: list[str] = []
+    current = ""
+    for ln in lines:
+        if m := _ESLINT_FILE.match(ln):
+            current = m.group(1)
+        elif (m := _ESLINT_ENTRY.match(ln)) and m.group(2) == "error":
+            if not current:
+                return [], "an eslint error names no file"
+            errors.append(current)
+    return _tallied(errors, [m for ln in lines if (m := _ESLINT_TALLY.match(ln))], lines)
+
+
+def _tallied(
+    errors: list[str], tallies: list[re.Match[str]], lines: list[str]
+) -> tuple[list[str], str | None]:
+    """The files errors were named in, if the tool's own tally agrees and the
+    step's log is complete."""
+    if not errors:
+        return [], "no error named in its log"
+    if not tallies:
+        return [], "no tally in its log"
+    counted = int(tallies[-1].group(1))
+    if counted != len(errors):
+        return [], f"its log counts {counted} errors but names {len(errors)}"
+    if not any(_STEP_DONE.match(ln) for ln in lines):
+        return [], "its log ends before the step does"
+    return errors, None
+
+
+# How each test or static job's log is read. Every TEST_JOBS and STATIC_JOBS
+# entry has one.
+_FAILED_FILES = {
+    "backend-test": _pytest_failed_files,
+    "frontend-test": _vitest_failed_files,
+    "backend-ruff": _ruff_failed_files,
+    "backend-mypy": _mypy_failed_files,
+    "frontend-typecheck": _tsc_failed_files,
+    "frontend-lint": _eslint_failed_files,
+}
+
+
+def _unrooted(reported: str) -> str:
+    """A path as a tool printed it, relative to where the tool ran."""
     path = reported.replace("\\", "/").removeprefix("./")
     for root in ("/var/task/", "/app/"):  # the two test images' working directories
         path = path.removeprefix(root)
-    return directory + path
+    return path
+
+
+def _repo_path(directory: str, reported: str) -> str:
+    return directory + _unrooted(reported)
 
 
 def _named(items: list[str]) -> str:
@@ -313,10 +461,12 @@ def baseline_verdict(raw_log: str, ran: Any, test_files: set[str] | frozenset[st
 
     `raw_log` is `gh run view --log-failed`, `ran` is `gh run view --json
     jobs`, `test_files` the repository paths the test commit changed. Right
-    only if every failed job is a test job (or the aggregate, alongside one),
-    each failed test job's log names all of its failures, and every one is in
-    `test_files`. Never raises: anything unreadable is a wrong-reason verdict
-    whose `reason` says what could not be read.
+    only if every failed job is a test job, a type-check job (D5) or the
+    aggregate, at least one test job failed, each failed job's log names all
+    of its failures, and every one is in `test_files`. No lint job may fail,
+    and tsc may not report an unused declaration. Never raises: anything
+    unreadable is a wrong-reason verdict whose `reason` says what could not
+    be read.
     """
     failures: list[dict[str, str]] = []
     problems: list[str] = []
@@ -325,24 +475,32 @@ def baseline_verdict(raw_log: str, ran: Any, test_files: set[str] | frozenset[st
         problems.append("could not read the run's job list")
         conclusions = {}
     bad = {n: c for n, c in conclusions.items() if c not in ("success", "skipped")}
-    other = sorted(n for n in bad if n not in TEST_JOBS and n != AGGREGATE_JOB)
+    checks = {**TEST_JOBS, **STATIC_JOBS}
+    other = sorted(n for n in bad if n not in checks and n != AGGREGATE_JOB)
     if other:
         problems.append(f"non-test job(s) failed: {_named(other)}")
-    unfinished = sorted(n for n in bad if n in TEST_JOBS and bad[n] != "failure")
+    unfinished = sorted(n for n in bad if n in checks and bad[n] != "failure")
     if unfinished:
         problems.append(
-            "test job(s) did not fail outright: " + _named([f"{n} ({bad[n]})" for n in unfinished])
+            "job(s) did not fail outright: " + _named([f"{n} ({bad[n]})" for n in unfinished])
         )
-    red = sorted(n for n in bad if n in TEST_JOBS and bad[n] == "failure")
-    if conclusions and not red:
+    red = sorted(n for n in bad if n in checks and bad[n] == "failure")
+    if conclusions and not any(n in TEST_JOBS for n in red):
         problems.append("no test job failed")
     lines = _gh_lines(raw_log or "")
     for job in red:
-        files, why = _FAILED_FILES[job]([content for name, content in lines if name == job])
+        own = [content for name, content in lines if name == job]
+        files, why = _FAILED_FILES[job](own)
         if why:
             problems.append(f"could not read {job}'s failures: {why}")
-        for f in files:
-            entry = {"job": job, "file": _repo_path(TEST_JOBS[job], f)}
+        paths = list(dict.fromkeys(_repo_path(checks[job], f) for f in files))
+        mine = [p for p in paths if p in test_files]
+        if job in LINT_JOBS and mine:
+            problems.append(f"{job} failed in the test commit's own files: {_named(mine)}")
+        if job == "frontend-typecheck" and (local := _tsc_local_findings(own)):
+            problems.append(f"{job} found what only the test file can fix: {_named(local)}")
+        for path in paths:
+            entry = {"job": job, "file": path}
             if entry not in failures:
                 failures.append(entry)
     if not test_files:

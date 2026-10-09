@@ -182,10 +182,12 @@ reason names what was wrong, parts joined by `; `:
 
 | Part | What happened | Usual response |
 |---|---|---|
-| `non-test job(s) failed: pip-audit, ...` | A job other than `backend-test` / `frontend-test` (and `gate`) failed: an audit, `openapi-drift`, `infra-synth`, `agent-infra-test` | Not the task's problem. Fix it on `main`, then re-run the baseline (below). |
+| `non-test job(s) failed: pip-audit, ...` | A job other than the suites, the static checks (and `gate`) failed: an audit, `openapi-drift`, `infra-synth`, `agent-infra-test` | Not the task's problem. Fix it on `main`, then re-run the baseline (below). |
+| `backend-ruff failed in the test commit's own files: ...` (or `frontend-lint`) | The new tests do not lint. The code agent cannot edit them (D5) | `MANAGER_RESCOPE`: the test agent writes them again. |
+| `frontend-typecheck found what only the test file can fix: ... (TS6133)` | tsc reports an unused declaration in the new tests (D5) | As above. |
 | `failures outside the test commit's files: ...` | A test the test agent did not write failed: an existing test the new one broke (a tree scan), or one already broken | Re-scope if the new test caused it; otherwise fix `main` first. |
-| `could not read <job>'s failures: ...`, `could not read the run's job list` | The log or job list was missing, unparseable or truncated, or vitest reported unhandled errors | Read the run. If it was red for the right reason after all, re-run the baseline. |
-| `test job(s) did not fail outright: ...`, `no test job failed` | A suite was cancelled or timed out, or only a non-test job failed | Read the run. |
+| `could not read <job>'s failures: ...`, `could not read the run's job list` | The log or job list was missing, unparseable or truncated; vitest reported unhandled errors; a static check's tally disagreed with what it named, or its log stopped before GitHub's `Process completed` line | Read the run. If it was red for the right reason after all, re-run the baseline. |
+| `job(s) did not fail outright: ...`, `no test job failed` | A suite or check was cancelled or timed out, or no suite failed: only a non-test job, or only a static check while every suite passed (the tests pin nothing) | Read the run. |
 | `no files recorded for the test commit` | The history has no test-agent commit to compare against | Read `history`. |
 
 To re-run the baseline once the cause is fixed, set `state` back to

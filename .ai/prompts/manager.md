@@ -12,7 +12,9 @@ You will be here for one of:
   new tests failed: another job failed (an audit, openapi drift), or tests the
   test commit never touched did. The reason names which. The code agent can fix
   neither; usually `ESCALATE` (the branch or `main` needs a human), or
-  `MANAGER_RESCOPE` if the new tests broke a suite they were not meant to touch.
+  `MANAGER_RESCOPE` if the new tests broke a suite they were not meant to touch,
+  or if the reason says the test commit's own files fail lint or tsc's
+  unused-declaration check: only the test agent can fix those.
 - an agent invocation failed, or a failure the distiller could not classify.
 
 ## What you have

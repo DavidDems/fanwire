@@ -627,9 +627,7 @@ class TestDistillReadsStaticChecks:
         assert not any("exhaustive-deps" in f["summary"] for f in r["failures"])
 
     def test_a_suite_and_a_check_both_reach_the_retry(self):
-        log = gh_log("frontend-test", *VITEST_TEST_FAILED) + gh_log(
-            "frontend-typecheck", *TSC_IN_AN_APP_FILE
-        )
+        log = gh_log("backend-test", *PYTEST_FAILED) + gh_log("backend-mypy", *MYPY_FAILED)
         r = ciresult.distill(log, "failure", "D-001", 2)
-        categories = {f["category"] for f in r["failures"]}
-        assert "type_error" in categories and len(categories) > 1
+        files = {f["file"] for f in r["failures"]}
+        assert files == {"tests/media/test_dev_process_media.py", "app/media/service.py"}
