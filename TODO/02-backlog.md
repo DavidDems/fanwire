@@ -22,14 +22,13 @@ fact in the module file it changed.
 The workflow review reported 2026-10-08. Findings, evidence and the agreed
 plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 **Director** work (`.ai/`, `.github/`), one PR each, with its structural
-assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
-task is dispatched until 1–3 have merged.**
+assertion in `.ai/tests/test_workflows.py` where it changes a workflow. D1–D3 have
+merged and `MEDIA-002` ran end to end (handoff §10.5).
 
 5. **D4** — the red baseline must be red in the tests the test commit changed.
 6. **D5** — frontend `typecheck` + `lint` in CI; ruff/mypy after measuring.
 7. **D6** — telemetry records the CLI's real cost and cache tokens; prices.
-8. **First real task: `MEDIA-002`**, after 1–3.
-9. **`jev`, shadow mode**, after 1–3: rebuild `jev-decision-layer` onto
+9. **`jev`, shadow mode**: rebuild `jev-decision-layer` onto
    `main`, direct route (`TYPESAFE_API_KEY`, `TODO/01-for-you.md` §1), merge
    gate one 200 with `confidence`, then record it beside the Manager without
    applying it. Needs a deliberately failing task (handoff §6.3).
@@ -38,6 +37,13 @@ task is dispatched until 1–3 have merged.**
     worker cannot follow. Before any frontend item runs.
 11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. The CI half of bug 17.
+13. **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
+    (`hand` / `auto` / `director`); hand runs recorded in `state.json`
+    (`agentctl hand start|finish`); a prompt template and one live prompt per
+    thread; `wiki/GeneralContext/Architecture/work-modes.md`.
+14. **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
+    CI failure summary on a red task PR; criteria coverage check on a task
+    PR; wiki update proposal after merge.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
@@ -45,7 +51,6 @@ Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 | Item | Where it came from | Notes |
 |---|---|---|
-| **`MEDIA-002`**: the dev-only processing script, so a local upload reaches `processed` without GuardDuty | `.ai/tasks/MEDIA-002/` (spec exists) | Ready to run |
 | **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
 | **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | the runbook's known gap | Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
