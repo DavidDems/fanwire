@@ -7,19 +7,32 @@ shape, and nothing downstream knows which provider produced it:
       "provider":   "anthropic",
       "model":      "claude-sonnet-5",
       "session_id": "sess-abc123" | null,
-      "usage":      {"input_tokens": 0, "output_tokens": 0},
+      "usage":      {"input_tokens": 0, "output_tokens": 0,
+                     "cache_creation_input_tokens": 0 | null,
+                     "cache_read_input_tokens": 0 | null,
+                     "cache_creation_1h_input_tokens": 0 | null,
+                     "cache_creation_5m_input_tokens": 0 | null,
+                     "thinking_tokens": 0 | null},
+      "cost_usd":   0.0 | null,        the provider's own figure for the call
+      "num_turns":  0 | null,
+      "permission_denials": {"count": 0, "tools": ["Bash"]} | null,
+      "is_error":   false | null,
+      "subtype":    "success" | null,
       "summary":    "one line, used as the commit subject",
       "decision":   "MANAGER_RETRY" | "MANAGER_RESCOPE" | "ESCALATE" | null,
       "reason":     "free text, recorded in the state file"
     }
 
-Everything here degrades rather than raises. A provider that returns nothing
-useful must still leave a committable run and an honest telemetry record.
+A field the provider did not report is null - unknown, never a guessed zero
+(handoff.md §10, D6). Everything here degrades rather than raises. A provider
+that returns nothing useful must still leave a committable run and an honest
+telemetry record.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -31,6 +44,22 @@ MAX_SUMMARY_LINE = 72
 MANAGER_DECISIONS = frozenset({"MANAGER_RETRY", "MANAGER_RESCOPE", "ESCALATE"})
 
 _FIELDS = ("provider", "model", "session_id", "summary", "decision", "reason")
+
+# Optional counts under "usage": None when absent, so "not reported" and "zero"
+# stay distinguishable in telemetry.
+_USAGE_COUNTS = (
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_1h_input_tokens",
+    "cache_creation_5m_input_tokens",
+    "thinking_tokens",
+)
+
+# Denied tool names are model-influenced (a model picks the tool it asks for):
+# keep plain names only, and never more than this many.
+_TOOL_NAME = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
+_MAX_DENIED_TOOLS = 50
+_SUBTYPE = re.compile(r"[a-z0-9_]{1,40}")
 
 # `<TASK-ID> <verb>: ` written by the agent into its own summary. The worker
 # prepends exactly this itself, so a summary carrying one produces a doubled
@@ -52,6 +81,24 @@ def parse(path: str | Path) -> dict[str, Any]:
     out = {field: raw.get(field) for field in _FIELDS}
     out["input_tokens"] = _int(usage.get("input_tokens"))
     out["output_tokens"] = _int(usage.get("output_tokens"))
+    for field in _USAGE_COUNTS:
+        out[field] = _count(usage.get(field))
+    out["cost_usd"] = _money(raw.get("cost_usd"))
+    out["num_turns"] = _count(raw.get("num_turns"))
+    denials = raw.get("permission_denials")
+    if isinstance(denials, dict):
+        out["permission_denials"] = _count(denials.get("count"))
+        tools = denials.get("tools")
+        out["permission_denied_tools"] = [
+            t for t in (tools if isinstance(tools, list) else []) if _is_tool_name(t)
+        ][:_MAX_DENIED_TOOLS]
+    else:
+        out["permission_denials"] = None
+        out["permission_denied_tools"] = []
+    is_error = raw.get("is_error")
+    out["is_error"] = is_error if isinstance(is_error, bool) else None
+    subtype = raw.get("subtype")
+    out["subtype"] = subtype if isinstance(subtype, str) and _SUBTYPE.fullmatch(subtype) else None
     if not isinstance(out["summary"], str) or not out["summary"].strip():
         out["summary"] = FALLBACK_SUMMARY
     return out
@@ -98,9 +145,9 @@ def telemetry_record(
 ) -> dict[str, Any]:
     """Build the telemetry record for this invocation.
 
-    Token counts come from the provider; everything derived from them
-    (totals, cost, duration) is recomputed by `telemetry.record`, so an agent
-    cannot under-report what it spent.
+    Token counts and the provider's own cost come from the provider
+    envelope; everything derived from them (totals, the estimate, which cost
+    is used, duration) is recomputed by `telemetry.record`.
     """
     from datetime import UTC, datetime
 
@@ -116,10 +163,36 @@ def telemetry_record(
         "ended_at": ended_at or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "input_tokens": result.get("input_tokens", 0),
         "output_tokens": result.get("output_tokens", 0),
+        **{field: result.get(field) for field in _USAGE_COUNTS},
+        "provider_cost_usd": result.get("cost_usd"),
+        "num_turns": result.get("num_turns"),
+        "permission_denials": result.get("permission_denials"),
+        "permission_denied_tools": list(result.get("permission_denied_tools") or []),
+        "is_error": result.get("is_error"),
+        "subtype": result.get("subtype"),
         "result": "completed" if outcome == "success" else "failed",
         "commit_sha": commit_sha,
         "ci_run_id": ci_run_id,
     }
+
+
+def _count(value: Any) -> int | None:
+    """A non-negative int the provider reported, or None for anything else."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def _money(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return float(value)
+
+
+def _is_tool_name(value: Any) -> bool:
+    return isinstance(value, str) and _TOOL_NAME.fullmatch(value) is not None
 
 
 def _int(value: Any) -> int:
