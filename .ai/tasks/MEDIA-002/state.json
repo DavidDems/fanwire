@@ -61,26 +61,40 @@
       "from": "IMPL_COMMITTED",
       "note": "implementation CI started",
       "to": "IMPL_CI"
+    },
+    {
+      "at": "2026-10-09T02:53:04Z",
+      "event": "CI_PASSED",
+      "from": "IMPL_CI",
+      "note": "CI green",
+      "to": "CONTEXT_MAINTENANCE"
+    },
+    {
+      "at": "2026-10-09T02:53:04Z",
+      "event": "DISPATCH_MAINTAINER",
+      "from": "CONTEXT_MAINTENANCE",
+      "note": "context maintainer dispatched",
+      "to": "CONTEXT_MAINTENANCE"
     }
   ],
   "last_ci": {
-    "commit": "bcf4abe49082f627a1dddaeac612acd32397d7db",
-    "conclusion": "failure",
-    "run_id": "37875837267"
+    "commit": "f92d833b1e9644c6efd8df776e0c3aaf02df95bf",
+    "conclusion": "success",
+    "run_id": "37876459467"
   },
   "last_ci_run": {
     "applied": true,
-    "at": "2026-10-09T02:44:07Z",
-    "commit": "bcf4abe49082f627a1dddaeac612acd32397d7db",
-    "conclusion": "failure",
-    "run_id": "37875837267"
+    "at": "2026-10-09T02:53:04Z",
+    "commit": "f92d833b1e9644c6efd8df776e0c3aaf02df95bf",
+    "conclusion": "success",
+    "run_id": "37876459467"
   },
   "last_dispatch": {
-    "at": "2026-10-09T02:50:20Z",
-    "event": "CI_STARTED",
-    "role": null,
+    "at": "2026-10-09T02:53:04Z",
+    "event": "DISPATCH_MAINTAINER",
+    "role": "context_maintainer",
     "run_id": null,
-    "workflow": "test-agent"
+    "workflow": "agent-worker"
   },
   "manager_invocations": 0,
   "max_attempts": 3,
@@ -90,7 +104,7 @@
     "code_agent": "7017513b-7771-43db-b499-f9878c9b98a3",
     "test_agent": "dfc94a78-0dc2-4d52-ab9a-9ac9caea428b"
   },
-  "state": "IMPL_CI",
+  "state": "CONTEXT_MAINTENANCE",
   "task_id": "MEDIA-002",
-  "updated_at": "2026-10-09T02:50:20Z"
+  "updated_at": "2026-10-09T02:53:04Z"
 }
