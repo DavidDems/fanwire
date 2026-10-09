@@ -39,10 +39,10 @@ merged and `MEDIA-002` ran end to end (handoff §10.5).
 13. **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
     (`hand` / `auto` / `director`); hand runs recorded in `state.json`
     (`agentctl hand start|finish`); a prompt template and one live prompt per
-    thread; `wiki/GeneralContext/Architecture/work-modes.md`.
+    thread; `wiki/GeneralContext/Architecture/work-modes.md`. Brief: `Prompts/03-work-modes-structure.md`.
 14. **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
-    PR; wiki update proposal after merge.
+    PR; wiki update proposal after merge. Brief: `Prompts/04-cheap-automations.md`; after D4–D7.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
