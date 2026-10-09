@@ -1430,11 +1430,22 @@ GITHUB_DEFAULT_JOB_TIMEOUT = 360
 
 
 def step_if(chunk: str) -> str:
-    """A step's `if:` expression, or "" when it has none."""
-    for line in chunk.splitlines()[1:]:
+    """A step's `if:` expression, or "" when it has none. A folded `>-`
+    block is joined into one line."""
+    lines = chunk.splitlines()
+    for i, line in enumerate(lines[1:], start=1):
         stripped = line.strip()
         if stripped.startswith("if:"):
-            return stripped.removeprefix("if:").strip()
+            value = stripped.removeprefix("if:").strip()
+            if value in (">-", ">", "|", "|-"):
+                indent = len(line) - len(line.lstrip())
+                folded = []
+                for nxt in lines[i + 1 :]:
+                    if nxt.strip() and len(nxt) - len(nxt.lstrip()) <= indent:
+                        break
+                    folded.append(nxt.strip())
+                value = " ".join(f for f in folded if f)
+            return value
         if stripped.startswith(("run:", "uses:", "with:", "env:")):
             break
     first = chunk.strip().removeprefix("- ")

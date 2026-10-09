@@ -131,6 +131,25 @@ gh workflow run agent-orchestrator.yml -f task_id=AUTH-017 -f event=CANCEL
 While paused, every workflow event is refused and nothing dispatches. The
 branch and its commits are untouched.
 
+Anything already in flight still finishes, and what it reports is not applied:
+
+- **A CI result** is discarded on purpose. The orchestrator run stays green,
+  logs a notice naming the run, and records it in `state.json` as `last_ci_run`
+  with `"applied": false`. To get a verdict after resuming, re-run CI on the
+  branch — that run is the task's verdict like any the orchestrator started:
+
+  ```bash
+  # on agent/AUTH-017: set RUN, commit, push
+  python .ai/bin/agentctl.py state control AUTH-017 --set RUN
+  git commit -am "[agent-state] AUTH-017: resume" && git push
+  gh workflow run test-agent.yml --ref agent/AUTH-017
+  ```
+
+- **A worker's result** is refused: its work commit is pushed, but the run is
+  red and the task stays `*_RUNNING`. After resuming, apply the event the
+  worker would have (`-f event=AGENT_COMMITTED` if its commit is on the branch),
+  or re-dispatch the worker (see "If the chain stalls").
+
 You can also just disable the workflows in the Actions tab. The state file is
 still correct when you turn them back on — that is the point of keeping state
 in git rather than in a session.
@@ -145,12 +164,22 @@ python .ai/bin/agentctl.py state show AUTH-017 | grep escalation_reason
 
 | Reason | What happened | Usual response |
 |---|---|---|
-| `max_attempts_exhausted` | The code agent used its whole budget | Read the diff. Usually the spec was under-specified, or the tests pin the wrong thing. |
-| `red_baseline_not_red` | The tests passed without an implementation | Re-scope: the criteria were not testable as written. |
-| `guard violation: ...` | A worker wrote outside its paths | Read the run log. Either `allowed_paths` is too narrow for a legitimate change, or something went genuinely wrong. Work was discarded. |
-| `provider invocation failed` | The model call errored | Usually transient. `MANAGER_RETRY` or re-dispatch. |
+| `guard violation: ...` | A worker wrote outside its paths, or the branch changes the CLI's project config | Read the run log. Either `allowed_paths` is too narrow for a legitimate change, or something went genuinely wrong. Work was discarded. |
+| `manager could not be invoked: ...` | The manager failed, or its decision could not be applied (e.g. `MANAGER_RETRY` past the hard cap) | Read the manager's run. Decide yourself. |
+| `manager invoked N times (limit 3) ...` | The manager kept being asked and the task never resolved | The spec is the problem. Re-scope or take over. |
+| `N consecutive invocation failures: ...` | The provider failed repeatedly | Usually transient or a key/quota problem. `MANAGER_RETRY` once it is fixed. |
+| `CI run N concluded 'cancelled', which is not a test verdict` (or `skipped`, `stale`, `neutral`, `action_required`, `startup_failure`) | CI did not produce a verdict. Nothing was spent | Look at the run. See "Recovering a CI escalation" below. |
+| `orchestrator run N failed at ...` | A distil, transition, dispatch or self-wake failed; what it names was never started | Fix the cause (token, workflow file), then recover as below. |
 
-Then drive it by hand:
+`max_attempts_exhausted` and `red_baseline_not_red` are **not** escalation
+reasons: they route to `MANAGER_REVIEW`, and the manager is dispatched first.
+They reach you only if the manager then escalates.
+
+Then drive it by hand. `MANAGER_RETRY` (→ `RETRY_READY`, one more attempt,
+never past the hard cap of 8) and `MANAGER_RESCOPE` (→ `READY`, the test agent
+writes the tests again) are legal from `ESCALATED`, and only a dispatch like
+this one can supply them there — a manager worker's decision is applied only
+from `MANAGER_REVIEW`. Either also resets the manager's invocation count.
 
 ```bash
 gh workflow run agent-orchestrator.yml -f task_id=AUTH-017 \
@@ -159,6 +188,14 @@ gh workflow run agent-orchestrator.yml -f task_id=AUTH-017 \
 
 Legal events are in `agentlib/state.py`'s `EVENTS`. An illegal one is refused
 with an error rather than half-applied.
+
+**Recovering a CI escalation.** No event takes a task from `ESCALATED` back to
+waiting on CI, and `MANAGER_RETRY` from a baseline escalation would skip the
+red-baseline check. Instead, on the branch, set `state` in
+`.ai/tasks/<ID>/state.json` back to the state before CI (`TESTS_COMMITTED` for
+a baseline, `IMPL_COMMITTED` for an implementation) and `escalation_reason` to
+`null`, commit and push, then nudge the orchestrator. It is an ordinary
+reviewed file on an ordinary branch; `load_state` refuses an unknown state.
 
 ## Taking over by hand
 
@@ -169,9 +206,32 @@ lease, no daemon.
 
 ## If the chain stalls
 
-Each run wakes the next one with `gh workflow run`. GitHub restricts workflows
-triggered by the default `GITHUB_TOKEN` from triggering further runs in some
-situations, so if a task sits in a state with nothing happening:
+Every dispatch is recorded before it is made: the state is committed and pushed
+first, and `last_dispatch` in `state.json` says what was started and when (and,
+for CI, the run id once its result arrives). `agentctl status` shows
+`STALLED: ...` for a task whose last event is a dispatch older than that
+workflow can run for — the worker's two jobs (60 min), or `test-agent`'s
+longest job chain (1080 min: none of its jobs declares a timeout, so each gets
+GitHub's 360), plus 15 min. A stalled task's result was lost: a cancelled
+`land`, a run that never started, a dropped `workflow_run`.
+
+```
+TASK          STATE                     CTRL   ATT    NEXT / REASON
+AUTH-017      CODE_AGENT_RUNNING        RUN    2/3    STALLED: agent-worker (code_agent) dispatched 2026-10-08T10:00:00Z, 95 min ago (limit 75)
+```
+
+- **`*_RUNNING`, worker lost**: re-dispatch the same role. The state already
+  says it is running, so no attempt is spent again:
+  `gh workflow run agent-worker.yml -f task_id=<ID> -f role=<role>`
+- **`BASELINE_CI` / `IMPL_CI`, result lost**:
+  `gh workflow run test-agent.yml --ref agent/<ID>`
+- **`MANAGER_REVIEW` / `CONTEXT_MAINTENANCE`**: nudge the orchestrator (below);
+  it dispatches again, and a manager dispatch counts against its limit.
+
+A task that sits in a state with nothing happening and is *not* STALLED was
+never dispatched. Each run wakes the next one with `gh workflow run`. GitHub
+restricts workflows triggered by the default `GITHUB_TOKEN` from triggering
+further runs in some situations, so:
 
 1. Check the Actions tab — did the next run get created at all?
 2. If not, add a fine-grained PAT with `actions: write` as
@@ -179,6 +239,9 @@ situations, so if a task sits in a state with nothing happening:
    `github.token`.
 3. Either way, you can always nudge it manually:
    `gh workflow run agent-orchestrator.yml -f task_id=<ID>`
+
+A dispatch that fails outright escalates the task (`orchestrator run N failed
+at ...`), so it shows up as an escalation, not a stall.
 
 A stalled task is not a lost task. The state file is accurate; the orchestrator
 picks up exactly where it stopped.

@@ -88,13 +88,34 @@ append-only `history`, with the event, both states, a timestamp and a note.
 
 | Event | From | To | Why |
 |---|---|---|---|
-| `AGENT_FAILED` | any running | `MANAGER_REVIEW` | Provider error, timeout. Might be worth another approach. |
+| `AGENT_FAILED` | any running | `MANAGER_REVIEW` | Provider error, timeout, or a result that could not be applied. Might be worth another approach. |
+| `AGENT_FAILED` | `MANAGER_REVIEW` | `ESCALATED` | The manager is what failed; sending it back to itself looped. |
+| `AGENT_FAILED` | `ESCALATED` | `ESCALATED` | A worker landing late. The task stays with the human. |
 | `GUARD_VIOLATION` | any running | `ESCALATED` | A worker wrote outside its paths. Never retried automatically — a boundary failure is not a test failure. |
 | `INFRA_FAILED` | any | `FAILED` | The runner, not the work. |
-| `ESCALATE` | any | `ESCALATED` | Manager or human decided a human is needed. |
+| `ESCALATE` | any | `ESCALATED` | Manager or human decided a human is needed; a CI run that was not a verdict; an orchestrator action that failed. |
 
 A guard violation discards the work (`git reset --hard`) before escalating. The
 attempt is not re-run.
+
+## Bounded and detectable (handoff.md §10, D3)
+
+- **Every dispatch is an event**, the manager's included: `DISPATCH_MANAGER`
+  keeps `MANAGER_REVIEW` but is recorded and counted, and the one after
+  `MAX_MANAGER_INVOCATIONS` (3) escalates instead. Before, a manager whose
+  worker applied nothing was re-dispatched with no trace.
+- **Every dispatch is persisted before it is made.** The orchestrator commits
+  and pushes the transition, then starts the worker or CI.
+- **Every dispatch is timed.** It sets `last_dispatch` (event, workflow, role,
+  time, and for CI the run id once known); `stalled()` and `agentctl status`
+  report one older than its workflow's timeouts (`DISPATCH_TIMEOUT_MINUTES`)
+  as `STALLED`.
+- **Every CI conclusion has a case** (`CI_CONCLUSIONS`): `success` →
+  `CI_PASSED`; `failure`, `timed_out` → `CI_FAILED`; every other documented
+  conclusion, and any unknown one, → `ESCALATE`. Not `MANAGER_REVIEW`: the
+  manager could only spend code-agent attempts on what is a runner problem.
+- **A CI result for a paused task** is discarded, not applied, and recorded in
+  `last_ci_run` with `applied: false`. `operations.md` has the re-run recipe.
 
 ## Manager decisions
 
@@ -110,6 +131,12 @@ forge:
 Anything else, including a missing or unparseable decision, is treated as
 `ESCALATE`. A manager that cannot answer usefully is itself a reason for a
 human to look.
+
+`MANAGER_RETRY` and `MANAGER_RESCOPE` are also legal from `ESCALATED`, as a
+human's way back in (they reset the manager's invocation count). Only a
+dispatch of the orchestrator supplies an event there: the worker applies a
+manager's decision with `--from-state MANAGER_REVIEW`, and every other role's
+result with its own `*_RUNNING` state, so a late worker cannot use that door.
 
 ## Reconstruction
 
