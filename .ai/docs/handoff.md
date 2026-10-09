@@ -792,12 +792,12 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    by the API pipeline, whose cost is dominated by the test and code agents.
    API calls are kept for cheap, useful automation on `claude-haiku-5-5`
    ($0.10/$0.50 per MTok) or `jev`: a **spec drift check** before a task, a
-   **criteria coverage check** on a task PR, and a **wiki update proposal**
-   after one merges. The automated pipeline stays working but secondary.
+   **CI failure summary** on a red task PR, a **criteria coverage check** on a
+   task PR, and a **wiki update proposal** after one merges. The automated pipeline stays working but secondary.
    **Order:** finish D4–D7 first, then the work-modes wiki structure (one
    backlog with a Mode column; spec + `agent/<ID>` as the unit in every mode;
    hand runs recorded in `state.json`; one live prompt per thread from a
-   template; `Architecture/work-modes.md`), then the three automations.
+   template; `Architecture/work-modes.md`), then the four automations.
 
 ### 10.4 The backlog as test load
 
