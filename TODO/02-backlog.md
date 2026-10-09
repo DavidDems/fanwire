@@ -33,8 +33,6 @@ merged and `MEDIA-002` ran end to end (handoff §10.5).
    gate one 200 with `confidence`, then record it beside the Manager without
    applying it. Needs a deliberately failing task (handoff §6.3).
 
-10. **D7** — port the hand-run lessons into `.ai/skills`; drop instructions a
-    worker cannot follow. Before any frontend item runs.
 11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. The CI half of bug 17.
 13. **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
