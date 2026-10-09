@@ -1421,3 +1421,313 @@ class TestTheLandingGuardRunsAgainstARealPatch:
         code, _ = self.apply(guard_body, repo, patch)
         assert code != 0
         assert not (repo / ".git" / "hooks" / "pre-push").exists()
+
+
+# --------------------------------------------------------------------------- D3
+
+TEST_AGENT_WF = WORKFLOWS / "test-agent.yml"
+GITHUB_DEFAULT_JOB_TIMEOUT = 360
+
+
+def step_if(chunk: str) -> str:
+    """A step's `if:` expression, or "" when it has none. A folded `>-`
+    block is joined into one line."""
+    lines = chunk.splitlines()
+    for i, line in enumerate(lines[1:], start=1):
+        stripped = line.strip()
+        if stripped.startswith("if:"):
+            value = stripped.removeprefix("if:").strip()
+            if value in (">-", ">", "|", "|-"):
+                indent = len(line) - len(line.lstrip())
+                folded = []
+                for nxt in lines[i + 1 :]:
+                    if nxt.strip() and len(nxt) - len(nxt.lstrip()) <= indent:
+                        break
+                    folded.append(nxt.strip())
+                value = " ".join(f for f in folded if f)
+            return value
+        if stripped.startswith(("run:", "uses:", "with:", "env:")):
+            break
+    first = chunk.strip().removeprefix("- ")
+    if first.startswith("if:"):
+        return first.removeprefix("if:").strip()
+    return ""
+
+
+def titled(block: str) -> dict[str, str]:
+    return {step_title(c): c for c in steps_in(block)}
+
+
+def _timeouts_and_needs(text: str) -> dict[str, tuple[int, list[str]]]:
+    jobs: dict[str, tuple[int, list[str]]] = {}
+    for name in job_names(text):
+        block = job_block(text, name)
+        m = re.search(r"^    timeout-minutes:\s*(\d+)", block, flags=re.MULTILINE)
+        timeout = int(m.group(1)) if m else GITHUB_DEFAULT_JOB_TIMEOUT
+        needs: list[str] = []
+        lines = block.splitlines()
+        for i, line in enumerate(lines):
+            if not line.startswith("    needs:"):
+                continue
+            rest = line.split(":", 1)[1].strip()
+            if rest:
+                needs = [n.strip() for n in rest.strip("[]").split(",") if n.strip()]
+            else:
+                for nxt in lines[i + 1 :]:
+                    if not nxt.startswith("      - "):
+                        break
+                    needs.append(nxt.strip().removeprefix("- ").strip())
+        jobs[name] = (timeout, needs)
+    return jobs
+
+
+def longest_chain_minutes(text: str) -> int:
+    jobs = _timeouts_and_needs(text)
+
+    def chain(name: str) -> int:
+        timeout, needs = jobs[name]
+        return timeout + max((chain(n) for n in needs), default=0)
+
+    return max(chain(n) for n in jobs)
+
+
+class TestEveryDispatchIsPersistedBeforeItIsMade:
+    """handoff.md §10, D3 (the race). The orchestrator dispatched the worker,
+    and CI, *before* the DISPATCH_* / CI_STARTED transition was committed —
+    USERS-002's worker had about four seconds' margin before it would have
+    read a state that did not yet say it was running. Now the state is
+    advanced, committed AND pushed first, and only then is anything
+    dispatched. A dispatch that then fails is recorded, not lost."""
+
+    @pytest.fixture
+    def orch_steps(self, orchestrator) -> tuple[list[str], list[str]]:
+        chunks = steps_in(job_block(orchestrator, "orchestrate"))
+        return [step_title(c) for c in chunks], chunks
+
+    @staticmethod
+    def _index(chunks: list[str], needle: str) -> int:
+        hits = [i for i, c in enumerate(chunks) if any(needle in ln for ln in live_lines(c))]
+        assert len(hits) == 1, f"expected exactly one step running {needle!r}, found {len(hits)}"
+        return hits[0]
+
+    @pytest.mark.parametrize("workflow", ["test-agent.yml", "agent-worker.yml"])
+    def test_the_state_is_pushed_before_the_dispatch(self, orch_steps, workflow):
+        titles, chunks = orch_steps
+        dispatch = self._index(chunks, f"gh workflow run {workflow}")
+        push = titles.index("Commit the state change")
+        assert "git push" in "\n".join(live_lines(chunks[push]))
+        assert push < dispatch, f"{workflow} is dispatched before the state is pushed"
+
+    @pytest.mark.parametrize("workflow", ["test-agent.yml", "agent-worker.yml"])
+    def test_the_dispatch_step_moves_no_state(self, orch_steps, workflow):
+        _, chunks = orch_steps
+        body = "\n".join(live_lines(chunks[self._index(chunks, f"gh workflow run {workflow}")]))
+        assert "state advance" not in body, "the transition belongs before the push"
+
+    @pytest.mark.parametrize("workflow", ["test-agent.yml", "agent-worker.yml"])
+    def test_nothing_is_dispatched_unless_the_push_succeeded(self, orch_steps, workflow):
+        _, chunks = orch_steps
+        cond = step_if(chunks[self._index(chunks, f"gh workflow run {workflow}")])
+        assert "steps.persist.outcome == 'success'" in cond, cond
+        assert "steps.premove.outputs.dispatch == 'true'" in cond, cond
+
+    def test_the_transition_is_applied_before_the_push(self, orch_steps):
+        titles, chunks = orch_steps
+        premove = titles.index("Advance the state before dispatching")
+        body = "\n".join(live_lines(chunks[premove]))
+        assert "CI_STARTED" in body and '--event "$EVENT"' in body
+        assert premove < titles.index("Commit the state change")
+
+    def test_the_state_is_committed_even_after_a_failed_action(self, orch_steps):
+        titles, chunks = orch_steps
+        cond = step_if(chunks[titles.index("Commit the state change")])
+        assert "always()" in cond
+        assert "steps.drive.outputs.drive == 'true'" in cond
+
+    def test_a_failed_action_is_escalated_and_committed(self, orch_steps):
+        titles, chunks = orch_steps
+        failed = titles.index("Escalate an action that failed")
+        cond = step_if(chunks[failed])
+        assert cond.startswith("always()"), cond
+        for sid in ("distill", "premove", "ci", "dispatch", "continue"):
+            assert f"steps.{sid}.outcome == 'failure'" in cond, sid
+        assert "--event ESCALATE" in "\n".join(live_lines(chunks[failed]))
+        commit = titles.index("Commit the escalation")
+        assert commit > failed
+        assert "always()" in step_if(chunks[commit])
+        assert run_bodies(chunks[commit]) == run_bodies(
+            chunks[titles.index("Commit the state change")]
+        ), "the two commit steps must be one script"
+
+    def test_every_action_step_has_the_id_the_router_reads(self, orch_steps):
+        titles, chunks = orch_steps
+        ids = {
+            "Distil the failure": "distill",
+            "Advance the state before dispatching": "premove",
+            "Commit the state change": "persist",
+            "Run the authoritative test suite": "ci",
+            "Dispatch the worker": "dispatch",
+            "Continue, when the next step needs no external event": "continue",
+            "Escalate an action that failed": "failed",
+        }
+        for title, sid in ids.items():
+            assert f"\n        id: {sid}\n" in chunks[titles.index(title)] + "\n", title
+
+    def test_an_escalating_dispatch_is_not_dispatched(self, orchestrator, tmp_path):
+        # The manager's bound: DISPATCH_MANAGER past the ceiling escalates,
+        # and then no worker may start.
+        body = run_bodies(step(orchestrator, "Advance the state before dispatching"))[0]
+        repo = Path(__file__).resolve().parents[2]
+        spec = json.loads(
+            (repo / ".ai" / "tasks" / "DEMO-001" / "task.json").read_text(encoding="utf-8")
+        )
+        spec["task_id"] = "DTHREE-001"
+        task = tmp_path / ".ai" / "tasks" / "DTHREE-001"
+        task.mkdir(parents=True)
+        (task / "task.json").write_text(json.dumps(spec), encoding="utf-8")
+        from agentlib import state as st
+
+        def premove(manager_invocations: int) -> tuple[int, str, str]:
+            s = st.new_state("DTHREE-001", branch="agent/DTHREE-001")
+            s.update(state="MANAGER_REVIEW", manager_invocations=manager_invocations)
+            st.save_state(task / "state.json", s)
+            env = {
+                "TOOLS": repo.as_posix(),
+                "AGENTCTL_DATA_ROOT": tmp_path.as_posix(),
+                "TASK_ID": "DTHREE-001",
+                "EVENT": "DISPATCH_MANAGER",
+                "KIND": "dispatch_agent",
+            }
+            code, out = run_step_body(body, env, tmp_path)
+            return code, out, st.load_state(task / "state.json")["state"]
+
+        code, out, now = premove(0)
+        assert code == 0 and "dispatch=true" in out and now == "MANAGER_REVIEW"
+        code, out, now = premove(st.MAX_MANAGER_INVOCATIONS)
+        assert code == 0 and "dispatch=false" in out and now == "ESCALATED"
+
+
+class TestEveryCiConclusionIsRouted:
+    """handoff.md §10, D3 (S1, S2). "Apply the CI result" handled success,
+    failure and timed_out, and let every other conclusion fall through as
+    "nothing to apply": a cancelled run left the task in *_CI forever. The
+    mapping now lives in agentlib (`ci-event`), and a result for a paused task
+    is discarded with a notice naming its run rather than failing the run."""
+
+    @pytest.fixture
+    def ci_step(self, orchestrator) -> str:
+        return step(orchestrator, "Apply the CI result")
+
+    def test_no_conclusion_falls_through(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert "nothing to apply" not in body
+        assert f"{AGENTCTL} ci-event --conclusion" in body
+
+    def test_a_paused_task_discards_the_result_visibly(self, ci_step):
+        assert "--discard-if-paused" in ci_step
+
+    def test_the_run_id_is_recorded(self, ci_step):
+        assert '--ci-run-id "$RUN_ID"' in ci_step
+
+    def test_d1_still_checks_a_real_verdict_first(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert body.index("guard tested") < body.index("state advance")
+
+
+class TestNoFailureLeavesAWorkerRunning:
+    """handoff.md §10, D3 (L1, S5). `land` runs after any `run-model`
+    outcome, including a cancelled one or one that died before the model ran,
+    and must leave the task out of *_RUNNING every time: the routing steps
+    must not inherit an implicit `success()` that a failed telemetry step
+    would falsify, and a result that cannot be applied — an unusable manager
+    decision, say — is recorded as AGENT_FAILED rather than left unchanged.
+
+    Not covered, because nothing inside a run can cover it: `land` itself
+    being cancelled or timing out. That is what `agentctl status`'s STALLED
+    is for."""
+
+    @pytest.fixture
+    def land(self, worker) -> dict[str, str]:
+        return titled(job_block(worker, "land"))
+
+    def test_losing_a_telemetry_record_cannot_lose_the_run(self, land):
+        assert "continue-on-error: true" in land["Record what the invocation cost"]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Stop here if the provider call failed",
+            "Escalate a boundary violation",
+            "Commit the work",
+            "Advance the workflow",
+        ],
+    )
+    def test_routing_does_not_depend_on_earlier_steps_succeeding(self, land, name):
+        assert step_if(land[name]).startswith("always() &&"), step_if(land[name])
+
+    def test_a_result_that_cannot_be_applied_is_recorded(self, land):
+        assert "\n        id: advance\n" in land["Advance the workflow"] + "\n"
+        fallback = land["Record a result that could not be applied"]
+        assert step_if(fallback) == "always() && steps.advance.outcome == 'failure'"
+        assert "--event AGENT_FAILED" in "\n".join(live_lines(fallback))
+
+    def test_the_fallback_runs_before_the_state_is_committed(self, worker):
+        titles = [step_title(c) for c in steps_in(job_block(worker, "land"))]
+        assert (
+            titles.index("Advance the workflow")
+            < titles.index("Record a result that could not be applied")
+            < titles.index("Commit state and telemetry")
+        )
+
+    def test_every_decision_is_applied_only_from_its_running_state(self, land):
+        # S9: MANAGER_RETRY is legal from ESCALATED now, for a human. A
+        # manager landing after the task escalated must not reach it.
+        body = "\n".join(live_lines(land["Advance the workflow"]))
+        assert '--from-state "$FROM"' in body
+        assert "FROM=MANAGER_REVIEW" in body
+
+    @pytest.mark.parametrize(
+        "agent,download",
+        [
+            ("cancelled", "success"),
+            ("skipped", "failure"),
+            ("failure", "success"),
+            ("", "failure"),
+        ],
+    )
+    def test_a_model_that_did_not_finish_is_an_agent_failure(
+        self, worker, tmp_path, agent, download
+    ):
+        # S5: a cancelled `run-model`, or one that died before the model ran
+        # (the agent step skipped, its outputs empty), lands as AGENT_FAILED.
+        body = run_bodies(step(job_block(worker, "land"), "What did the model run amount to?"))[0]
+        (tmp_path / "result").mkdir()
+        (tmp_path / "result" / "work.patch").write_text("", encoding="utf-8")
+        (tmp_path / "result" / "agent-result.json").write_text("{}", encoding="utf-8")
+        env = {
+            "CLI_CONFIG": "success" if agent else "",
+            "AGENT": agent,
+            "DOWNLOAD": download,
+            "RUNNER_TEMP": tmp_path.as_posix(),
+        }
+        code, out = run_step_body(body, env, tmp_path)
+        assert code == 0
+        assert "verdict=failure" in out
+
+
+class TestStalledMeansPastTheWorkflowsOwnTimeout:
+    """handoff.md §10, D3 (detection). `agentctl status` calls a dispatch
+    STALLED once it is older than the dispatched workflow can run for. Those
+    numbers are copies of the workflows' own timeouts, so they are pinned to
+    the YAML here."""
+
+    def test_the_worker_limit_is_its_two_jobs(self, worker):
+        from agentlib import state as st
+
+        assert st.DISPATCH_TIMEOUT_MINUTES["agent-worker"] == longest_chain_minutes(worker)
+
+    def test_the_ci_limit_is_test_agents_longest_chain(self):
+        from agentlib import state as st
+
+        text = TEST_AGENT_WF.read_text(encoding="utf-8")
+        assert st.DISPATCH_TIMEOUT_MINUTES["test-agent"] == longest_chain_minutes(text)

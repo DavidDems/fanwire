@@ -47,8 +47,12 @@ _ACTIONS: dict[str, dict[str, Any]] = {
     "IMPL_COMMITTED": {"kind": "run_ci", "phase": "implementation"},
     "IMPL_CI": {"kind": "await_ci", "phase": "implementation"},
     "DISTILLING": {"kind": "distill"},
-    # No event: MANAGER_REVIEW holds until the manager itself returns a decision.
-    "MANAGER_REVIEW": {"kind": "dispatch_agent", "role": "manager"},
+    # MANAGER_REVIEW holds until the manager itself returns a decision, but
+    # every dispatch of it is still an event: one with none left no history
+    # entry, so nothing counted a manager that never decided (handoff.md §10,
+    # D3, L1). DISPATCH_MANAGER counts, and escalates past
+    # state.MAX_MANAGER_INVOCATIONS.
+    "MANAGER_REVIEW": {"kind": "dispatch_agent", "role": "manager", "event": "DISPATCH_MANAGER"},
     "CONTEXT_MAINTENANCE": {
         "kind": "dispatch_agent",
         "role": "context_maintainer",

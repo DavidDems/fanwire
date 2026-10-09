@@ -29,6 +29,29 @@ HARD_MAX_ATTEMPTS = 8
 # `attempt`, so without this counter such failures were unbounded. They were.
 MAX_CONSECUTIVE_FAILURES = 3
 
+# Ceiling on manager invocations per task (handoff.md §10, D3, L1). The manager
+# is dispatched from MANAGER_REVIEW and holds that state until it decides, so a
+# manager whose worker applied nothing used to be dispatched again with nothing
+# counting it. Every dispatch is now DISPATCH_MANAGER, which counts, and the
+# one after this many escalates. Three: each invocation is the manager's
+# answer to a task that has already run out of road (a spent budget, a green
+# baseline, a failed worker), and a task that needs a fourth answer needs a
+# human. Reset only by a human recovering the task from ESCALATED.
+MAX_MANAGER_INVOCATIONS = 3
+
+# How long each workflow the orchestrator dispatches can legitimately run, in
+# minutes: the longest chain of its jobs' `timeout-minutes`, counting GitHub's
+# default of 360 for a job that declares none. Copies of the YAML, pinned to it
+# by tests/test_workflows.py::TestStalledMeansPastTheWorkflowsOwnTimeout. A
+# dispatch older than this plus STALL_GRACE_MINUTES, with nothing recorded
+# since, is STALLED: its result is lost (handoff.md §10, D3).
+#   agent-worker  run-model 45 + land 15
+#   test-agent    changes -> a suite -> gate, none of which declares a timeout
+DISPATCH_TIMEOUT_MINUTES: dict[str, int] = {"agent-worker": 60, "test-agent": 1080}
+
+# Queueing, runner start-up and the hand-back, which no timeout covers.
+STALL_GRACE_MINUTES = 15
+
 STATES: frozenset[str] = frozenset(
     {
         "DRAFT",  # spec written, not yet validated
@@ -80,8 +103,39 @@ EVENTS: frozenset[str] = frozenset(
         "ESCALATE",
         "CANCEL",
         "INFRA_FAILED",
+        "DISPATCH_MANAGER",
     }
 )
+
+# Every event that starts something outside the orchestrator's own run, and
+# what it starts. Applying one records `last_dispatch`; `stalled` watches it.
+DISPATCHES: dict[str, tuple[str, str | None]] = {
+    "DISPATCH_TEST_AGENT": ("agent-worker", "test_agent"),
+    "DISPATCH_CODE_AGENT": ("agent-worker", "code_agent"),
+    "DISPATCH_MAINTAINER": ("agent-worker", "context_maintainer"),
+    "DISPATCH_MANAGER": ("agent-worker", "manager"),
+    "CI_STARTED": ("test-agent", None),
+}
+
+# Every conclusion GitHub documents for a completed workflow run, and the
+# event it means for a task waiting on CI (handoff.md §10, D3, S1). Only a run
+# that actually ran the suites is a verdict. Everything else escalates rather
+# than going to the manager: the manager's levers are another code-agent
+# attempt, new tests, or a human, and an infrastructure outcome is fixed by
+# neither of the first two, so routing it there spends the code agent's
+# attempts on the runner's problem. `cancelled` is usually a person, who is
+# then told. Escalating spends nothing; a human resumes it (operations.md).
+CI_CONCLUSIONS: dict[str, str] = {
+    "success": "CI_PASSED",
+    "failure": "CI_FAILED",
+    "timed_out": "CI_FAILED",  # the suites ran, too slowly: as before D3
+    "cancelled": "ESCALATE",
+    "skipped": "ESCALATE",
+    "stale": "ESCALATE",
+    "neutral": "ESCALATE",
+    "action_required": "ESCALATE",
+    "startup_failure": "ESCALATE",
+}
 
 
 class StateError(Exception):
@@ -105,6 +159,12 @@ def new_state(task_id: str, branch: str = "", max_attempts: int = 3) -> dict[str
         "history": [],
         "sessions": {},  # role -> provider session id; an optimisation, never a dependency
         "consecutive_failures": 0,
+        "manager_invocations": 0,
+        # What was last started outside the orchestrator's own run, when, and
+        # (for CI, once its result arrives) the run id. A result that never
+        # comes back is then an overdue dispatch, not nothing at all.
+        "last_dispatch": None,
+        "last_ci_run": None,  # the last CI result seen, applied or not
         "last_ci": None,
         "distilled": None,
         "escalation_reason": None,
@@ -123,6 +183,67 @@ def set_control(state: dict, control: str) -> dict[str, Any]:
     out["control"] = control
     out["updated_at"] = _now()
     return out
+
+
+def ci_event(conclusion: str) -> str:
+    """The event a `workflow_run` conclusion means. Unknown means ESCALATE."""
+    return CI_CONCLUSIONS.get(conclusion, "ESCALATE")
+
+
+def note_ci_run(
+    state: dict, run_id: str, conclusion: str, commit: str | None, applied: bool
+) -> dict[str, Any]:
+    """Record a CI result that arrived, whether or not it was applied.
+
+    Not a transition: a result discarded because the task was paused must
+    still say which run was lost (handoff.md §10, D3, S2).
+    """
+    out = dict(state)
+    out["last_ci_run"] = {
+        "run_id": run_id,
+        "conclusion": conclusion,
+        "commit": commit,
+        "applied": applied,
+        "at": _now(),
+    }
+    dispatch = state.get("last_dispatch")
+    if dispatch and dispatch.get("workflow") == "test-agent":
+        out["last_dispatch"] = {**dispatch, "run_id": run_id}
+    return out
+
+
+def stalled(state: dict, now: datetime) -> str | None:
+    """Why this task's in-flight dispatch is overdue, or None if it is not.
+
+    In flight means the last thing that happened to the task was a dispatch:
+    nothing has come back since. Overdue means older than the dispatched
+    workflow can run for. Read from `history`, so a state file written before
+    `last_dispatch` existed is watched too.
+    """
+    if state.get("state") in TERMINAL or state.get("state") == "ESCALATED":
+        return None
+    history = state.get("history") or []
+    if not history:
+        return None
+    last = history[-1]
+    target = DISPATCHES.get(last.get("event", ""))
+    if target is None:
+        return None
+    workflow, role = target
+    try:
+        at = datetime.strptime(last["at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except (KeyError, TypeError, ValueError):
+        return f"{workflow} dispatch has no readable time"
+    age = int((now - at).total_seconds() // 60)
+    limit = DISPATCH_TIMEOUT_MINUTES[workflow] + STALL_GRACE_MINUTES
+    if age <= limit:
+        return None
+    what = f"{workflow} ({role})" if role else workflow
+    seen = state.get("last_ci_run") or {}
+    lost = ""
+    if workflow == "test-agent" and seen.get("run_id") and not seen.get("applied"):
+        lost = f"; run {seen['run_id']} concluded {seen.get('conclusion')!r}, not applied"
+    return f"{what} dispatched {last['at']}, {age} min ago (limit {limit}){lost}"
 
 
 def record_session(state: dict, role: str, session_id: str) -> dict[str, Any]:
@@ -171,6 +292,15 @@ def advance(state: dict, event: str, **ctx: Any) -> dict[str, Any]:
     out["history"].append(
         {"at": out["updated_at"], "from": current, "to": nxt, "event": event, "note": note}
     )
+    if event in DISPATCHES and nxt != "ESCALATED":
+        workflow, role = DISPATCHES[event]
+        out["last_dispatch"] = {
+            "event": event,
+            "workflow": workflow,
+            "role": role,
+            "at": out["updated_at"],
+            "run_id": None,
+        }
     return out
 
 
@@ -191,6 +321,11 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         return "FAILED", out["escalation_reason"]
     if event == "AGENT_FAILED":
         reason = ctx.get("reason", "agent invocation failed")
+        if current == "ESCALATED":
+            # A worker landing after the task was escalated (handoff.md §10,
+            # D3, S9). Recorded, but the task stays with the human: routing it
+            # to MANAGER_REVIEW would let a late run take it back.
+            return "ESCALATED", f"late agent failure while escalated: {reason}"
         out["consecutive_failures"] = int(out.get("consecutive_failures") or 0) + 1
 
         if current == "MANAGER_REVIEW":
@@ -224,6 +359,17 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
 
     if event == "DISPATCH_MAINTAINER" and current == "CONTEXT_MAINTENANCE":
         return "CONTEXT_MAINTENANCE", "context maintainer dispatched"
+
+    if event == "DISPATCH_MANAGER" and current == "MANAGER_REVIEW":
+        invoked = int(out.get("manager_invocations") or 0)
+        if invoked >= MAX_MANAGER_INVOCATIONS:
+            out["escalation_reason"] = (
+                f"manager invoked {invoked} times (limit {MAX_MANAGER_INVOCATIONS}) "
+                "without resolving the task"
+            )
+            return "ESCALATED", out["escalation_reason"]
+        out["manager_invocations"] = invoked + 1
+        return "MANAGER_REVIEW", f"manager dispatched (invocation {invoked + 1})"
 
     if event == "AGENT_COMMITTED":
         if current == "TEST_AGENT_RUNNING":
@@ -271,7 +417,14 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         out["escalation_reason"] = "max_attempts_exhausted"
         return "MANAGER_REVIEW", "attempt budget exhausted"
 
-    if event == "MANAGER_RETRY" and current == "MANAGER_REVIEW":
+    # MANAGER_RETRY and MANAGER_RESCOPE are also a human's way out of
+    # ESCALATED (handoff.md §10.3 item 3, D3 S9). Only a dispatch of the
+    # orchestrator supplies an event there: a manager worker applies its
+    # decision with `--from-state MANAGER_REVIEW`, so it cannot.
+    if event in ("MANAGER_RETRY", "MANAGER_RESCOPE") and current == "ESCALATED":
+        out["manager_invocations"] = 0
+
+    if event == "MANAGER_RETRY" and current in ("MANAGER_REVIEW", "ESCALATED"):
         extra = int(ctx.get("extra_attempts", 1))
         new_max = out["max_attempts"] + extra
         if new_max > HARD_MAX_ATTEMPTS:
@@ -282,7 +435,7 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         out["escalation_reason"] = None
         return "RETRY_READY", f"manager granted {extra} more attempt(s)"
 
-    if event == "MANAGER_RESCOPE" and current == "MANAGER_REVIEW":
+    if event == "MANAGER_RESCOPE" and current in ("MANAGER_REVIEW", "ESCALATED"):
         out["escalation_reason"] = None
         return "READY", "manager re-scoped the task; tests to be rewritten"
 

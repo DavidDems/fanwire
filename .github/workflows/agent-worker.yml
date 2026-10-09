@@ -349,6 +349,12 @@ jobs:
     needs: run-model
     # Also after a failed model job: a failure must still be recorded
     # (AGENT_FAILED), pushed and handed back, or the task sits in *_RUNNING.
+    # That covers `run-model` failing before the model ran, timing out, or
+    # being cancelled — always() runs this job after a cancellation too
+    # (handoff.md §10, D3, S5). What it cannot cover is this job itself
+    # being cancelled or timing out: then nothing records anything, the task
+    # stays *_RUNNING, and `agentctl status` reports it STALLED once its
+    # dispatch is older than both jobs' timeouts (state.DISPATCH_TIMEOUT_MINUTES).
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -517,6 +523,10 @@ jobs:
       # "Commit state and telemetry".
       - name: Record what the invocation cost
         if: always() && steps.outcome.outcome == 'success'
+        # Losing an accounting record must not lose the run (handoff.md §10,
+        # D3, S5): without this a failure here skipped every routing step
+        # below that carried an implicit success(), leaving *_RUNNING.
+        continue-on-error: true
         env:
           STARTED: ${{ needs.run-model.outputs.started }}
           VERDICT: ${{ steps.outcome.outputs.verdict }}
@@ -531,8 +541,11 @@ jobs:
             --agent-result "$RUNNER_TEMP/result/agent-result.json" \
             --result "$RESULT"
 
+      # The four routing steps below each start with always() (handoff.md §10,
+      # D3, S5): which one runs is decided by the verdict and the guard, never
+      # by whether some unrelated earlier step happened to succeed.
       - name: Stop here if the provider call failed
-        if: steps.outcome.outputs.verdict == 'failure'
+        if: always() && steps.outcome.outputs.verdict == 'failure'
         run: |
           set -euo pipefail
           python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
@@ -540,7 +553,7 @@ jobs:
           echo "::warning::agent invocation failed; task routed to MANAGER_REVIEW"
 
       - name: Escalate a boundary violation
-        if: steps.outcome.outputs.verdict == 'refused' || (steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'failure')
+        if: always() && (steps.outcome.outputs.verdict == 'refused' || (steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'failure'))
         env:
           VERDICT: ${{ steps.outcome.outputs.verdict }}
         run: |
@@ -559,7 +572,7 @@ jobs:
           exit 1
 
       - name: Commit the work
-        if: steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
+        if: always() && steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
         id: commit
         run: |
           set -euo pipefail
@@ -581,19 +594,47 @@ jobs:
           fi
 
       - name: Advance the workflow
-        if: steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
+        id: advance
+        if: always() && steps.outcome.outputs.verdict == 'success' && steps.guard.outcome == 'success'
         env:
           COMMIT_SHA: ${{ steps.commit.outputs.sha }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
         run: |
           set -euo pipefail
+          if [ "$COMMIT_OUTCOME" != "success" ]; then
+            echo "::error::the work could not be committed; nothing to advance"
+            exit 1
+          fi
+          # FROM: each role's result applies only to the state it was
+          # dispatched into (handoff.md §10, D3, S9). MANAGER_RETRY and
+          # MANAGER_RESCOPE are legal from ESCALATED for a human; a manager
+          # landing after the task escalated must not reach them.
           case "$ROLE" in
-            context_maintainer) EVENT=MAINTAINER_DONE ;;
-            manager)            EVENT="$(python -I "$TOOLS/.ai/bin/agentctl.py" manager-decision --agent-result "$RUNNER_TEMP/result/agent-result.json")" ;;
-            *)                  EVENT=AGENT_COMMITTED ;;
+            test_agent)         EVENT=AGENT_COMMITTED; FROM=TEST_AGENT_RUNNING ;;
+            code_agent)         EVENT=AGENT_COMMITTED; FROM=CODE_AGENT_RUNNING ;;
+            context_maintainer) EVENT=MAINTAINER_DONE; FROM=CONTEXT_MAINTENANCE ;;
+            manager)            EVENT="$(python -I "$TOOLS/.ai/bin/agentctl.py" manager-decision --agent-result "$RUNNER_TEMP/result/agent-result.json")"; FROM=MANAGER_REVIEW ;;
+            *)                  echo "::error::no result mapping for role $ROLE"; exit 1 ;;
           esac
           python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
-            --event "$EVENT" --commit-sha "$COMMIT_SHA" \
+            --event "$EVENT" --from-state "$FROM" --commit-sha "$COMMIT_SHA" \
             --role "$ROLE" --session-id "$(python -I "$TOOLS/.ai/bin/agentctl.py" session-id --agent-result "$RUNNER_TEMP/result/agent-result.json")"
+
+      # handoff.md §10, D3 (L1). A result that could not be applied — a
+      # manager decision the state machine refuses (MANAGER_RETRY past the
+      # hard cap, say), a result for a state the task has left, a crash
+      # reading the agent result — used to leave the state unchanged, and the
+      # orchestrator dispatched the same worker again. Recorded as
+      # AGENT_FAILED instead: MANAGER_REVIEW for a worker, ESCALATED for the
+      # manager (or for a task already escalated).
+      - name: Record a result that could not be applied
+        if: always() && steps.advance.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event AGENT_FAILED \
+            --reason "role $ROLE's result could not be applied in run ${{ github.run_id }}"
+          echo "::warning::role $ROLE's result could not be applied; recorded as AGENT_FAILED"
 
       # Exactly this task's two bookkeeping paths, nothing else.
       - name: Commit state and telemetry

@@ -25,10 +25,6 @@ plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. **No
 task is dispatched until 1–3 have merged.**
 
-3. **D3** — the worker always applies an event; commit before dispatch;
-   record CI run id and dispatch time in `state.json`; every `workflow_run`
-   conclusion handled or documented inert (§9.2 items 2–3); MANAGER_RETRY /
-   RESCOPE legal from ESCALATED.
 4. **The test-kit hole** — `frontend/src/test/**` into `code_agent.deny`.
 5. **D4** — the red baseline must be red in the tests the test commit changed.
 6. **D5** — frontend `typecheck` + `lint` in CI; ruff/mypy after measuring.

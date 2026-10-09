@@ -309,3 +309,28 @@ class TestCircuitBreaker:
         s["state"] = "READY"
         s["history"] = [{"at": "x", "from": "A", "to": "B", "event": "E", "note": ""}] * 12
         assert orchestrator.next_action(s, SPEC)["kind"] == "dispatch_agent"
+
+
+class TestTheManagerLoopIsBounded:
+    """handoff.md §10, D3 (L1). MANAGER_REVIEW used to dispatch the manager
+    with no event, so a manager whose worker applied nothing was dispatched
+    again and again with nothing in the history to count it — bug 5's shape,
+    bounded only by MAX_TRANSITIONS' blunt backstop, which it never reached
+    because nothing was appended."""
+
+    def test_the_manager_dispatch_carries_an_event(self):
+        s = dict(st.new_state("DEMO-001", max_attempts=3), state="MANAGER_REVIEW")
+        action = orchestrator.next_action(s, SPEC)
+        assert action == {"kind": "dispatch_agent", "role": "manager", "event": "DISPATCH_MANAGER"}
+
+    def test_a_manager_that_never_decides_ends_escalated(self):
+        s = dict(st.new_state("DEMO-001", max_attempts=3), state="MANAGER_REVIEW")
+        for _ in range(orchestrator.MAX_TRANSITIONS):
+            action = orchestrator.next_action(s, SPEC)
+            if action["kind"] != "dispatch_agent":
+                break
+            # The orchestrator applies the dispatch event; the worker then
+            # lands nothing at all.
+            s = st.advance(s, action["event"])
+        assert s["state"] == "ESCALATED"
+        assert orchestrator.next_action(s, SPEC)["kind"] == "halt"

@@ -363,3 +363,184 @@ class TestInvokeAgentRunsTheModelInTheDataRoot:
         # Both flags confirmed in `claude --help`, CLI 2.1.293.
         assert "setting-sources=user" in seen
         assert "strict-mcp-config" in seen
+
+
+# --------------------------------------------------------------------------- D3
+
+
+def _write_state(data_root: Path, **over) -> Path:
+    """Initialise DATA_TASK's state under `data_root`, then overwrite fields."""
+    result = run_in(data_root, "state", "init", DATA_TASK)
+    assert result.returncode == 0, result.stderr
+    path = data_root / ".ai" / "tasks" / DATA_TASK / "state.json"
+    s = json.loads(path.read_text(encoding="utf-8"))
+    s.update(over)
+    path.write_text(json.dumps(s, indent=2), encoding="utf-8")
+    return path
+
+
+def _row(stdout: str, task: str) -> str:
+    rows = [ln for ln in stdout.splitlines() if ln.startswith(task)]
+    assert len(rows) == 1, stdout
+    return rows[0]
+
+
+class TestStatusFlagsAStalledTask:
+    """handoff.md §10, D3 (detection). A worker or CI run whose result never
+    came back used to be indistinguishable on the board from one still
+    running. `status` now says STALLED once the dispatch is older than that
+    workflow can possibly run for."""
+
+    def _dispatched(self, at: str) -> dict:
+        return {
+            "state": "CODE_AGENT_RUNNING",
+            "attempt": 1,
+            "history": [
+                {
+                    "at": at,
+                    "from": "READY_FOR_IMPLEMENTATION",
+                    "to": "CODE_AGENT_RUNNING",
+                    "event": "DISPATCH_CODE_AGENT",
+                    "note": "",
+                }
+            ],
+            "last_dispatch": {
+                "at": at,
+                "event": "DISPATCH_CODE_AGENT",
+                "workflow": "agent-worker",
+                "role": "code_agent",
+                "run_id": None,
+            },
+        }
+
+    def test_an_overdue_dispatch_is_stalled(self, data_root):
+        _write_state(data_root, **self._dispatched("2001-01-01T00:00:00Z"))
+        result = run_in(data_root, "status")
+        assert result.returncode == 0, result.stderr
+        row = _row(result.stdout, DATA_TASK)
+        assert "STALLED" in row and "agent-worker" in row
+
+    def test_a_recent_dispatch_is_not(self, data_root):
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        _write_state(data_root, **self._dispatched(now))
+        result = run_in(data_root, "status")
+        assert result.returncode == 0, result.stderr
+        assert "STALLED" not in _row(result.stdout, DATA_TASK)
+
+
+class TestACiResultWhilePausedIsDiscardedVisibly:
+    """handoff.md §10, D3 (S2). A CI result that arrives while a human has the
+    task paused is not applied, and used to vanish: the orchestrator run
+    failed and nothing recorded which run had been lost. Now it is discarded
+    on purpose, with a notice naming the run, and the run id is kept."""
+
+    ARGS = (
+        *("--event", "CI_PASSED", "--ci-run-id", "4242", "--ci-conclusion", "success"),
+        *("--commit-sha", "abc123", "--ignore-terminal"),
+    )
+
+    def test_the_result_is_discarded_with_a_notice(self, data_root):
+        path = _write_state(data_root, state="IMPL_CI", control="PAUSE", attempt=1)
+        result = run_in(data_root, "state", "advance", DATA_TASK, *self.ARGS, "--discard-if-paused")
+        assert result.returncode == 0, result.stderr
+        assert "::notice::" in result.stdout and "4242" in result.stdout
+        s = json.loads(path.read_text(encoding="utf-8"))
+        assert s["state"] == "IMPL_CI"
+        assert s["last_ci_run"]["run_id"] == "4242"
+        assert s["last_ci_run"]["applied"] is False
+
+    def test_without_the_flag_a_paused_task_still_refuses(self, data_root):
+        _write_state(data_root, state="IMPL_CI", control="PAUSE", attempt=1)
+        result = run_in(data_root, "state", "advance", DATA_TASK, *self.ARGS)
+        assert result.returncode == 1
+
+    def test_an_applied_result_records_its_run(self, data_root):
+        path = _write_state(data_root, state="IMPL_CI", attempt=1)
+        result = run_in(data_root, "state", "advance", DATA_TASK, *self.ARGS, "--discard-if-paused")
+        assert result.returncode == 0, result.stderr
+        s = json.loads(path.read_text(encoding="utf-8"))
+        assert s["state"] != "IMPL_CI"
+        assert s["last_ci_run"]["run_id"] == "4242"
+        assert s["last_ci_run"]["applied"] is True
+
+
+class TestTheCiConclusionIsMappedInPython:
+    """handoff.md §10, D3 (S1). The orchestrator asks agentlib which event a
+    conclusion means instead of keeping a `case` of its own."""
+
+    @pytest.mark.parametrize(
+        "conclusion,event",
+        [("success", "CI_PASSED"), ("timed_out", "CI_FAILED"), ("cancelled", "ESCALATE")],
+    )
+    def test_ci_event(self, conclusion, event):
+        result = run("ci-event", "--conclusion", conclusion)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == event
+
+
+class TestAWorkerDecisionCannotUnEscalate:
+    """handoff.md §10, D3 (S9). MANAGER_RETRY and MANAGER_RESCOPE are now
+    legal from ESCALATED, for a human. The manager worker applies its decision
+    with `--from-state MANAGER_REVIEW`, so a manager that lands after the task
+    was escalated cannot use that door."""
+
+    def test_a_decision_from_the_wrong_state_is_refused(self, data_root):
+        path = _write_state(data_root, state="ESCALATED", escalation_reason="human needed")
+        result = run_in(
+            data_root,
+            *("state", "advance", DATA_TASK, "--event", "MANAGER_RETRY"),
+            *("--from-state", "MANAGER_REVIEW"),
+        )
+        assert result.returncode == 1
+        assert "MANAGER_REVIEW" in result.stderr
+        assert json.loads(path.read_text(encoding="utf-8"))["state"] == "ESCALATED"
+
+    def test_a_decision_from_review_applies(self, data_root):
+        path = _write_state(data_root, state="MANAGER_REVIEW")
+        result = run_in(
+            data_root,
+            *("state", "advance", DATA_TASK, "--event", "MANAGER_RESCOPE"),
+            *("--from-state", "MANAGER_REVIEW"),
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(path.read_text(encoding="utf-8"))["state"] == "READY"
+
+
+class TestTheTestedShaIsTheTipAfterTheReorder:
+    """handoff.md §10, D3 (the race) against D1's rule. The orchestrator now
+    commits and pushes CI_STARTED *before* it dispatches CI, so the run tests
+    the branch tip itself; bookkeeping after it (a human's PAUSE, say) is
+    still allowed, code is not."""
+
+    def _git(self, root: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=root, env=clean_env(), capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+    def test_ci_dispatched_after_the_bookkeeping_commit_tests_the_tip(self, data_root):
+        if shutil.which("git") is None:
+            pytest.skip("git not available")
+        g = self._git
+        g(data_root, "init", "-q")
+        g(data_root, "config", "user.email", "t@example.com")
+        g(data_root, "config", "user.name", "t")
+        (data_root / "backend").mkdir()
+        (data_root / "backend" / "x.py").write_text("x = 1\n", encoding="utf-8")
+        g(data_root, "add", "-A")
+        g(data_root, "commit", "-q", "-m", "work")
+        # The orchestrator's CI_STARTED commit, pushed before CI is dispatched.
+        state = _write_state(data_root, state="IMPL_CI", attempt=1)
+        g(data_root, "add", "-A")
+        g(data_root, "commit", "-q", "-m", "[agent-state] CI_STARTED")
+        tested = g(data_root, "rev-parse", "HEAD")
+        assert run_in(data_root, "guard", "tested", DATA_TASK, "--sha", tested).returncode == 0
+        # More bookkeeping after the run started leaves the verdict valid.
+        state.write_text(state.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        g(data_root, "commit", "-q", "-am", "[agent-state] control")
+        assert run_in(data_root, "guard", "tested", DATA_TASK, "--sha", tested).returncode == 0
+        # Code after it does not.
+        (data_root / "backend" / "x.py").write_text("x = 2\n", encoding="utf-8")
+        g(data_root, "commit", "-q", "-am", "late code")
+        assert run_in(data_root, "guard", "tested", DATA_TASK, "--sha", tested).returncode == 1
