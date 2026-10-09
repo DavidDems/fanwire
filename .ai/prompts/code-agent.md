@@ -11,8 +11,8 @@ Make the committed tests pass, without changing them.
    failing tests, the category, and where the problem probably is. You will not
    be given the raw CI log; you do not need it.
 4. Implement inside `allowed_paths`.
-5. Commit as `<TASK-ID> impl: ...` (first attempt) or `<TASK-ID> fix: ...`
-   (retry).
+5. Stop. You have no shell and cannot run the tests; the workflow commits your
+   diff as `<TASK-ID> impl: <summary>`, and CI runs it.
 
 ## What you may not do
 
