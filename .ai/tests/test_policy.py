@@ -113,7 +113,6 @@ CODE_AGENT_MUST_WRITE = [
     "backend/openapi.json",
     "frontend/src/config.ts",
     "frontend/src/api/client.ts",
-    "frontend/src/test/server.ts",
     "frontend/src/vite-env.d.ts",
     "frontend/src/features/feed/FeedPage.tsx",
     "infra/lib/app-stack.ts",
@@ -125,6 +124,16 @@ CODE_AGENT_MUST_NOT_WRITE = [
     "infra/test/iam-policy.test.ts",
     "frontend/src/App.test.tsx",
     "frontend/src/config.test.ts",
+    # The test kit (handoff.md §10.3 item 4). msw handler factories and
+    # fixtures decide what the server answers, so a code agent that may
+    # rewrite one can make an assertion pass without touching a file named
+    # *.test.*, and allow_test_edits_during_impl: false never fires. Reverses
+    # this file's earlier `frontend/src/test/server.ts` MUST_WRITE row: the
+    # kit is the test agent's to produce, and only its.
+    "frontend/src/test/server.ts",
+    "frontend/src/test/users.ts",
+    "frontend/src/test/auth.tsx",
+    "frontend/src/features/feed/__tests__/fixtures.ts",
     "wiki/CodeContext/Modules/0x08-frontend.md",
     # Dependency and build changes are a Director call, never a retry-loop one.
     "backend/pyproject.toml",

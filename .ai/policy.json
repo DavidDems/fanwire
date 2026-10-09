@@ -91,6 +91,8 @@
         "infra/test/**",
         "frontend/src/**/*.test.ts",
         "frontend/src/**/*.test.tsx",
+        "frontend/src/test/**",
+        "frontend/src/**/__tests__/**",
         "wiki/**",
         "backend/pyproject.toml",
         "frontend/package.json",
