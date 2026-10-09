@@ -1,0 +1,28 @@
+{
+  "attempt": 0,
+  "branch": "agent/MEDIA-002",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-10-09T02:30:28Z",
+      "event": "VALIDATED",
+      "from": "DRAFT",
+      "note": "spec validated",
+      "to": "READY"
+    }
+  ],
+  "last_ci": null,
+  "last_ci_run": null,
+  "last_dispatch": null,
+  "manager_invocations": 0,
+  "max_attempts": 3,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "READY",
+  "task_id": "MEDIA-002",
+  "updated_at": "2026-10-09T02:30:28Z"
+}
