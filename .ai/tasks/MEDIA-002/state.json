@@ -54,6 +54,13 @@
       "from": "CODE_AGENT_RUNNING",
       "note": "efb6d8fc024d46b76951115d0326cd636af21401",
       "to": "IMPL_COMMITTED"
+    },
+    {
+      "at": "2026-10-09T02:50:20Z",
+      "event": "CI_STARTED",
+      "from": "IMPL_COMMITTED",
+      "note": "implementation CI started",
+      "to": "IMPL_CI"
     }
   ],
   "last_ci": {
@@ -69,11 +76,11 @@
     "run_id": "37875837267"
   },
   "last_dispatch": {
-    "at": "2026-10-09T02:44:08Z",
-    "event": "DISPATCH_CODE_AGENT",
-    "role": "code_agent",
+    "at": "2026-10-09T02:50:20Z",
+    "event": "CI_STARTED",
+    "role": null,
     "run_id": null,
-    "workflow": "agent-worker"
+    "workflow": "test-agent"
   },
   "manager_invocations": 0,
   "max_attempts": 3,
@@ -83,7 +90,7 @@
     "code_agent": "7017513b-7771-43db-b499-f9878c9b98a3",
     "test_agent": "dfc94a78-0dc2-4d52-ab9a-9ac9caea428b"
   },
-  "state": "IMPL_COMMITTED",
+  "state": "IMPL_CI",
   "task_id": "MEDIA-002",
-  "updated_at": "2026-10-09T02:50:10Z"
+  "updated_at": "2026-10-09T02:50:20Z"
 }
