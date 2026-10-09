@@ -63,7 +63,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-import scripts.dev_process_media as dev_process_media  # noqa: E402
+from scripts import dev_process_media
 
 QUARANTINE_BUCKET = "fanwire-media-quarantine"
 PUBLIC_BUCKET = "fanwire-media-public"

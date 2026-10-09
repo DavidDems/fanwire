@@ -13,7 +13,7 @@ tests/users/test_routes.py.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -28,12 +28,12 @@ from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
 from app.users.routes import router
 
-# The DTZ011 suppression below is deliberate and pre-existing. The age gate
-# is evaluated against the server's local date, so this suite's notion of
-# "today" has to match it; `datetime.now(tz=UTC).date()` would disagree
-# either side of midnight for any non-UTC deployment and make these tests
-# flaky by clock. Suppressed rather than changed - not this branch's call.
-TODAY = date.today()  # noqa: DTZ011
+# The age gate is evaluated against today's date in UTC (handoff.md §10, D5:
+# ruff's DTZ011, once CI ran ruff), so this suite's "today" has to be the same
+# date. It used to be the server's local date, which a deployment in UTC (the
+# Lambdas) never told apart, and which a developer's machine west of UTC did,
+# for some hours every evening.
+TODAY = datetime.now(UTC).date()
 
 
 def _years_before_today(years: int) -> date:

@@ -27,7 +27,7 @@ absent from the public response.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -49,7 +49,7 @@ class CreateUserRequest(BaseModel):
         by MINIMUM_AGE_YEARS and comparing to today, rather than subtracting
         floats, so a Feb 29 birth date compares correctly against a non-leap
         "today" (see wiki/CodeContext/Modules/0x01-users.md)."""
-        today = date.today()
+        today = datetime.now(UTC).date()
         if value >= today:
             raise ValueError("date_of_birth must be in the past")
         try:

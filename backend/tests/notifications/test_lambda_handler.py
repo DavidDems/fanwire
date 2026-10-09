@@ -168,9 +168,9 @@ def test_post_created_plain_post_is_a_no_op(session_factory):
 
 def test_a_record_that_raises_is_reported_as_a_batch_item_failure(session_factory):
     # post_id referencing a nonexistent Post -- consumer._resolve_post_created
-    # does session.get(Post, ...) then dereferences .is_reply, an
-    # AttributeError on None -- must be caught and reported per-record, not
-    # propagated and not silently swallowed for the rest of the batch.
+    # raises MissingReferenceError for it, before any row is committed -- must
+    # be caught and reported per-record, not propagated and not silently
+    # swallowed for the rest of the batch.
     from app.notifications.lambda_handler import handler
 
     event = _load_fixture("notification_post_created_sqs_event.json")
