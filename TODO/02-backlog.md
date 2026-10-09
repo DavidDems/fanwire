@@ -27,7 +27,6 @@ merged and `MEDIA-002` ran end to end (handoff §10.5).
 
 5. **D4** — the red baseline must be red in the tests the test commit changed.
 6. **D5** — frontend `typecheck` + `lint` in CI; ruff/mypy after measuring.
-7. **D6** — telemetry records the CLI's real cost and cache tokens; prices.
 9. **`jev`, shadow mode**: rebuild `jev-decision-layer` onto
    `main`, direct route (`TYPESAFE_API_KEY`, `TODO/01-for-you.md` §1), merge
    gate one 200 with `confidence`, then record it beside the Manager without
