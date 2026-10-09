@@ -26,16 +26,23 @@
       "from": "TEST_AGENT_RUNNING",
       "note": "722c42f3422de907d0caef9ca7da925f7b26e28e",
       "to": "TESTS_COMMITTED"
+    },
+    {
+      "at": "2026-10-09T02:42:23Z",
+      "event": "CI_STARTED",
+      "from": "TESTS_COMMITTED",
+      "note": "baseline CI started (expected RED)",
+      "to": "BASELINE_CI"
     }
   ],
   "last_ci": null,
   "last_ci_run": null,
   "last_dispatch": {
-    "at": "2026-10-09T02:30:42Z",
-    "event": "DISPATCH_TEST_AGENT",
-    "role": "test_agent",
+    "at": "2026-10-09T02:42:23Z",
+    "event": "CI_STARTED",
+    "role": null,
     "run_id": null,
-    "workflow": "agent-worker"
+    "workflow": "test-agent"
   },
   "manager_invocations": 0,
   "max_attempts": 3,
@@ -44,7 +51,7 @@
   "sessions": {
     "test_agent": "dfc94a78-0dc2-4d52-ab9a-9ac9caea428b"
   },
-  "state": "TESTS_COMMITTED",
+  "state": "BASELINE_CI",
   "task_id": "MEDIA-002",
-  "updated_at": "2026-10-09T02:42:11Z"
+  "updated_at": "2026-10-09T02:42:23Z"
 }
