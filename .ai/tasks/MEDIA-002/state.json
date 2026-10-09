@@ -12,17 +12,30 @@
       "from": "DRAFT",
       "note": "spec validated",
       "to": "READY"
+    },
+    {
+      "at": "2026-10-09T02:30:42Z",
+      "event": "DISPATCH_TEST_AGENT",
+      "from": "READY",
+      "note": "test agent dispatched",
+      "to": "TEST_AGENT_RUNNING"
     }
   ],
   "last_ci": null,
   "last_ci_run": null,
-  "last_dispatch": null,
+  "last_dispatch": {
+    "at": "2026-10-09T02:30:42Z",
+    "event": "DISPATCH_TEST_AGENT",
+    "role": "test_agent",
+    "run_id": null,
+    "workflow": "agent-worker"
+  },
   "manager_invocations": 0,
   "max_attempts": 3,
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {},
-  "state": "READY",
+  "state": "TEST_AGENT_RUNNING",
   "task_id": "MEDIA-002",
-  "updated_at": "2026-10-09T02:30:28Z"
+  "updated_at": "2026-10-09T02:30:42Z"
 }
