@@ -1731,3 +1731,204 @@ class TestStalledMeansPastTheWorkflowsOwnTimeout:
 
         text = TEST_AGENT_WF.read_text(encoding="utf-8")
         assert st.DISPATCH_TIMEOUT_MINUTES["test-agent"] == longest_chain_minutes(text)
+
+
+# --------------------------------------------------------------------------- D4
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FAKE_GH = """#!/bin/sh
+echo "$*" >> "$FAKE_GH_CALLS"
+[ "${FAKE_GH_EXIT:-0}" = 0 ] || exit "$FAKE_GH_EXIT"
+for a in "$@"; do
+  case "$a" in
+    --log-failed) cat "$FAKE_GH_LOG"; exit 0 ;;
+    --json) cat "$FAKE_GH_JOBS"; exit 0 ;;
+  esac
+done
+exit 1
+"""
+
+
+class TestTheBaselineIsRedForTheRightReason:
+    """handoff.md §10, D4. A failed baseline CI run counted as "red, as
+    required" whatever had failed: an audit CVE, openapi drift, an unrelated
+    broken test, a tree-scan test tripped by the new test. The code agent,
+    which cannot edit tests, then spent its budget on them. Now the step that
+    applies a CI result fetches the failed run's jobs and failed-job log first
+    and hands both to `agentctl state advance`, which classifies a BASELINE_CI
+    failure in agentlib (ciresult.baseline_verdict) before any event is
+    applied. The YAML only fetches; the decision is not made here."""
+
+    @pytest.fixture
+    def ci_step(self, orchestrator) -> str:
+        return step(orchestrator, "Apply the CI result")
+
+    def test_the_log_and_jobs_are_fetched_before_any_event_is_applied(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        advance = body.index("state advance")
+        for fetch in ('gh run view "$RUN_ID" --log-failed', 'gh run view "$RUN_ID" --json jobs'):
+            assert fetch in body, fetch
+            assert body.index(fetch) < advance, f"{fetch} must run before the event is applied"
+
+    def test_the_classifier_gets_both_files(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        after = body[body.index(f"{AGENTCTL} state advance") :]
+        assert '"${CI_EVIDENCE[@]}"' in after
+        assert 'CI_EVIDENCE=(--ci-jobs "$JOBS" --ci-log "$LOG")' in body
+
+    def test_only_a_failure_is_fetched_for(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert 'if [ "$EVENT" = "CI_FAILED" ]; then' in body
+        assert body.index('"$EVENT" = "CI_FAILED"') < body.index("--log-failed")
+
+    def test_the_evidence_stays_out_of_the_task_checkout(self, ci_step):
+        assert 'JOBS="$RUNNER_TEMP/' in ci_step and 'LOG="$RUNNER_TEMP/' in ci_step
+
+    def test_the_step_can_read_the_run(self, ci_step):
+        assert "GH_TOKEN: ${{ github.token }}" in ci_step
+        assert "GH_REPO: ${{ github.repository }}" in ci_step
+
+    def test_d1_and_d3_are_untouched(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert body.index("guard tested") < body.index("--log-failed")
+        assert "--discard-if-paused" in body and "--ignore-terminal" in body
+
+    # The step itself, run against a real branch with a fake `gh`.
+
+    @pytest.fixture
+    def branch(self, tmp_path) -> dict:
+        if shutil.which("git") is None:
+            pytest.skip("git not available")
+        repo = Path(__file__).resolve().parents[2]
+        root = tmp_path / "task"
+        task = root / ".ai" / "tasks" / "DFOUR-001"
+        task.mkdir(parents=True)
+        spec = json.loads(
+            (repo / ".ai" / "tasks" / "DEMO-001" / "task.json").read_text(encoding="utf-8")
+        )
+        spec["task_id"] = "DFOUR-001"
+        (task / "task.json").write_text(json.dumps(spec), encoding="utf-8")
+        _git(root, "init", "-q")
+        _git(root, "config", "user.email", "t@example.com")
+        _git(root, "config", "user.name", "t")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-q", "-m", "spec")
+        new_test = root / "backend" / "tests" / "media" / "test_dev_process_media.py"
+        new_test.parent.mkdir(parents=True)
+        new_test.write_text("import scripts.dev_process_media\n", encoding="utf-8")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-q", "-m", "DFOUR-001 test: the new test")
+        sha = _git(root, "rev-parse", "HEAD").strip()
+        from agentlib import state as st
+
+        s = st.new_state("DFOUR-001", branch="agent/DFOUR-001")
+        s["state"] = "BASELINE_CI"
+        s["history"] = [
+            {
+                "at": "2026-10-09T02:42:11Z",
+                "from": "TEST_AGENT_RUNNING",
+                "to": "TESTS_COMMITTED",
+                "event": "AGENT_COMMITTED",
+                "note": sha,
+            }
+        ]
+        st.save_state(task / "state.json", s)
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        (bindir / "gh").write_text(FAKE_GH, encoding="utf-8", newline="\n")
+        (bindir / "gh").chmod(0o755)
+        return {"repo": repo, "root": root, "sha": sha, "bin": bindir, "state": task / "state.json"}
+
+    def apply(self, ci_step: str, branch: dict, tmp_path: Path, **over: str) -> tuple[int, dict]:
+        from agentlib import state as st
+
+        env = {
+            "TOOLS": branch["repo"].as_posix(),
+            "AGENTCTL_DATA_ROOT": branch["root"].as_posix(),
+            "TASK_ID": "DFOUR-001",
+            "CONCLUSION": "failure",
+            "RUN_ID": "37875837267",
+            "SHA": branch["sha"],
+            "RUNNER_TEMP": tmp_path.as_posix(),
+            "PATH": str(branch["bin"]) + os.pathsep + os.environ.get("PATH", ""),
+            "FAKE_GH_CALLS": (tmp_path / "gh-calls.txt").as_posix(),
+            "FAKE_GH_LOG": (FIXTURES / "media002-baseline-failed.log").as_posix(),
+            "FAKE_GH_JOBS": (FIXTURES / "media002-baseline-jobs.json").as_posix(),
+            **over,
+        }
+        body = run_bodies(ci_step)[0]
+        # The data root is a git checkout; the step runs inside it, as the
+        # job's default working directory is the task checkout.
+        code, _ = run_step_body(f'cd "$AGENTCTL_DATA_ROOT"\n{body}', env, tmp_path)
+        return code, st.load_state(branch["state"])
+
+    def test_media002s_baseline_opens_implementation(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path)
+        assert code == 0
+        assert s["state"] == "READY_FOR_IMPLEMENTATION", s.get("escalation_reason")
+        calls = (tmp_path / "gh-calls.txt").read_text(encoding="utf-8")
+        assert "37875837267" in calls and "--log-failed" in calls
+
+    def test_a_failed_audit_goes_to_the_manager(self, ci_step, branch, tmp_path):
+        ran = json.loads((FIXTURES / "media002-baseline-jobs.json").read_text(encoding="utf-8"))
+        for job in ran["jobs"]:
+            if job["name"] == "openapi-drift":
+                job["conclusion"] = "failure"
+        jobs_file = tmp_path / "jobs.json"
+        jobs_file.write_text(json.dumps(ran), encoding="utf-8")
+        code, s = self.apply(ci_step, branch, tmp_path, FAKE_GH_JOBS=jobs_file.as_posix())
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"
+        assert "openapi-drift" in s["escalation_reason"]
+
+    def test_a_log_that_cannot_be_fetched_fails_closed(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path, FAKE_GH_EXIT="1")
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"
+
+    def test_a_passing_run_fetches_nothing(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path, CONCLUSION="success")
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"  # green baseline: red_baseline_not_red
+        assert s["escalation_reason"] == "red_baseline_not_red"
+        assert not (tmp_path / "gh-calls.txt").exists()
+
+
+class TestTheTestJobsAreTestAgentsOwn:
+    """handoff.md §10, D4. `ciresult.TEST_JOBS` names the jobs whose failure
+    can be the new test's doing, and where each one's suite runs. It is a copy
+    of test-agent.yml's job names, so it is pinned to them here. A job added
+    to test-agent.yml and not listed counts as a non-test job: the baseline
+    then fails closed to the manager, never open to the code agent."""
+
+    @pytest.fixture
+    def gate(self) -> str:
+        if not TEST_AGENT_WF.exists():
+            pytest.skip("test-agent.yml not present")
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    def test_every_test_job_runs_its_compose_suite(self, gate):
+        from agentlib import ciresult
+
+        assert set(ciresult.TEST_JOBS) == {"backend-test", "frontend-test"}
+        for name, directory in ciresult.TEST_JOBS.items():
+            assert name in job_names(gate), name
+            assert f"docker compose run --rm {name}" in job_block(gate, name)
+            assert directory == name.removesuffix("-test") + "/"
+
+    def test_the_aggregate_is_the_always_running_gate(self, gate):
+        from agentlib import ciresult
+
+        assert ciresult.AGGREGATE_JOB == "gate"
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert set(ciresult.TEST_JOBS) <= set(needs)
+        assert "if: always()" in job_block(gate, "gate")
+
+    def test_the_suites_run_from_those_directories(self):
+        # Pytest and vitest name files relative to where they run. Both
+        # images copy one directory to their working directory.
+        docker = WORKFLOWS.parents[1] / "docker"
+        backend = (docker / "backend.Dockerfile").read_text(encoding="utf-8")
+        frontend = (docker / "frontend.Dockerfile").read_text(encoding="utf-8")
+        assert "COPY backend/tests ./tests" in backend
+        assert "COPY frontend/ ." in frontend
