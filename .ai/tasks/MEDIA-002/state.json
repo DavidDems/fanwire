@@ -1,5 +1,5 @@
 {
-  "attempt": 0,
+  "attempt": 1,
   "branch": "agent/MEDIA-002",
   "consecutive_failures": 0,
   "control": "RUN",
@@ -33,16 +33,40 @@
       "from": "TESTS_COMMITTED",
       "note": "baseline CI started (expected RED)",
       "to": "BASELINE_CI"
+    },
+    {
+      "at": "2026-10-09T02:44:07Z",
+      "event": "CI_FAILED",
+      "from": "BASELINE_CI",
+      "note": "baseline is red, as required",
+      "to": "READY_FOR_IMPLEMENTATION"
+    },
+    {
+      "at": "2026-10-09T02:44:08Z",
+      "event": "DISPATCH_CODE_AGENT",
+      "from": "READY_FOR_IMPLEMENTATION",
+      "note": "code agent dispatched (attempt 1)",
+      "to": "CODE_AGENT_RUNNING"
     }
   ],
-  "last_ci": null,
-  "last_ci_run": null,
+  "last_ci": {
+    "commit": "bcf4abe49082f627a1dddaeac612acd32397d7db",
+    "conclusion": "failure",
+    "run_id": "37875837267"
+  },
+  "last_ci_run": {
+    "applied": true,
+    "at": "2026-10-09T02:44:07Z",
+    "commit": "bcf4abe49082f627a1dddaeac612acd32397d7db",
+    "conclusion": "failure",
+    "run_id": "37875837267"
+  },
   "last_dispatch": {
-    "at": "2026-10-09T02:42:23Z",
-    "event": "CI_STARTED",
-    "role": null,
+    "at": "2026-10-09T02:44:08Z",
+    "event": "DISPATCH_CODE_AGENT",
+    "role": "code_agent",
     "run_id": null,
-    "workflow": "test-agent"
+    "workflow": "agent-worker"
   },
   "manager_invocations": 0,
   "max_attempts": 3,
@@ -51,7 +75,7 @@
   "sessions": {
     "test_agent": "dfc94a78-0dc2-4d52-ab9a-9ac9caea428b"
   },
-  "state": "BASELINE_CI",
+  "state": "CODE_AGENT_RUNNING",
   "task_id": "MEDIA-002",
-  "updated_at": "2026-10-09T02:42:23Z"
+  "updated_at": "2026-10-09T02:44:08Z"
 }
