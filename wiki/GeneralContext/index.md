@@ -68,9 +68,9 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 ### Task prompts
 `wiki/GeneralContext/Prompts/` holds full briefs for Director sessions. Each is self-contained: a fresh session reads its own file plus whatever that file names.
 
-- **`02-agent-workflow-continue.md`**: land the review's fix queue (D4–D7 remain), then `jev` as a shadow decision layer. `MEDIA-002` has run (handoff §10.5).
+- **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).
 - **`03-work-modes-structure.md`**: the backlog's Mode column, a record for hand runs (`agentctl hand start|finish`), and a prompt template (`TODO/02` item 13).
-- **`04-cheap-automations.md`**: the spec drift check, CI failure summary, criteria coverage check and wiki update proposal on Haiku 5.5 or `jev` (`TODO/02` item 14). After D4–D7.
+- **`04-cheap-automations.md`**: the spec drift check, CI failure summary, criteria coverage check and wiki update proposal on Haiku 5.5 or `jev` (`TODO/02` item 14). Its prerequisite, D4–D7, is met.
 - **Deleted 2026-10-08:** `01-agent-workflow-review.md`, done; its findings and the agreed plan are `.ai/docs/handoff.md` §10.
 - **Deleted 2026-10-07:** `00`–`16`, the post-build sessions (the deploy path, the first deploy, the post-deploy checks, `cfn-exec-role` scoping, the NAT AMI pin, the deploy workflow, the branding research, the UI plan and the four styling passes). All were done, or their leftovers moved to `TODO/02-backlog.md`. `00-session-protocol.md` is now `Architecture/director-sessions.md`. Read the rest from git history if you need their reasoning.
 - **Deleted 2026-09-29 (commit `2fc5de9`):** the build-pass manager prompts (`first-pass-manager-agent.md`, `phase-2`/`3`/`4-manager-agent.md`, `phase-5a`/`5b-frontend-manager-agent.md`, `frontend-build-handoff.md`). Their settled facts live in the module files, and their decision log is `Architecture/human-decisions.md`.
