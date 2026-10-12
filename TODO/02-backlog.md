@@ -6,13 +6,23 @@ planned frontend unit are built and live; the last unit, `FRONTEND-007`
 the prompts and plan sections that found it (now deleted or trimmed), so it
 lives in one list.
 
-**How these get done next.** The project's focus is back on the automated
-workflow in `.ai/`. Each item below is meant to become a task spec
-(`.ai/tasks/<ID>/task.json` + `brief.md`) and run through the orchestrator,
-not a hand-run session, **once the review's fixes below have landed**
-(D1–D3 at least; `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`). Writing a spec is Director work. Items
-marked **Director** touch paths no worker may write (`.ai/`, `.github/`,
-`wiki/GeneralContext/`, `AGENTS.md`), or need a human decision first.
+**How each item is run: the Mode column.** Every item has a **Mode**, chosen
+by `wiki/GeneralContext/Architecture/work-modes.md` "Choosing a mode for a
+backlog item":
+
+- **`hand`**: the default for code. The human runs it in a Claude Code
+  session on the subscription, against a task spec on `agent/<ID>`
+  (`wiki/GeneralContext/Architecture/director-sessions.md`).
+- **`auto`**: the orchestrator runs it unattended on metered API credit
+  (about USD $2–3 a small task). Only when the human says so; record what it
+  cost (`.ai/docs/handoff.md` §10.5 is the template).
+- **`director`**: touches `.ai/`, `.github/`, `wiki/GeneralContext/` or
+  `AGENTS.md`, or needs a human decision first.
+
+**Task** is the task id once a spec exists (`.ai/tasks/<ID>/`), and `—` until
+then. Writing a spec is Director work. In every mode the unit is a spec plus an
+`agent/<ID>` branch held by `agent-guard`. Nothing is planned outside this
+file.
 
 When an item is done, delete it here and record the result as current-state
 fact in the module file it changed.
@@ -21,22 +31,22 @@ fact in the module file it changed.
 
 The workflow review reported 2026-10-08. Findings, evidence and the agreed
 plan are `.ai/docs/handoff.md` §10; this is the queue, in order. Every item is
-**Director** work (`.ai/`, `.github/`), one PR each, with its structural
+`director` work (`.ai/`, `.github/`), one PR each, with its structural
 assertion in `.ai/tests/test_workflows.py` where it changes a workflow. D1–D7 have
-merged (D7 with this PR) and `MEDIA-002` ran end to end (handoff §10.5).
+merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
 
-9. **`jev`, shadow mode**: rebuild `jev-decision-layer` onto
+9. `director`: **`jev`, shadow mode**: rebuild `jev-decision-layer` onto
    `main`, direct route (`TYPESAFE_API_KEY`, `TODO/01-for-you.md` §1), merge
    gate one 200 with `confidence`, then record it beside the Manager without
    applying it. Needs a deliberately failing task (handoff §6.3).
 
-11. Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
-12. The CI half of bug 17.
-13. **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
+11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
+12. `director`: The CI half of bug 17.
+13. `director`: **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
     (`hand` / `auto` / `director`); hand runs recorded in `state.json`
     (`agentctl hand start|finish`); a prompt template and one live prompt per
     thread; `wiki/GeneralContext/Architecture/work-modes.md`. Brief: `Prompts/03-work-modes-structure.md`.
-14. **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
+14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
     PR; wiki update proposal after merge. Brief: `Prompts/04-cheap-automations.md`; after D4–D7.
 
@@ -44,30 +54,32 @@ Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Backend and infra
 
-| Item | Where it came from | Notes |
-|---|---|---|
-| **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
-| **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | the runbook's known gap | Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
-| **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
-| **Team abbreviations on `LiveScoreView`**, so the feed's score block can name teams instead of "Home" and "Away" | `components.md` §4 | `feed/` backend, then a frontend unit |
+| Item | Mode | Task | Where it came from | Notes |
+|---|---|---|---|---|
+| **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `hand` | — | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
+| **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | `hand` | — | the runbook's known gap | Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
+| **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
+| **Team abbreviations on `LiveScoreView`**, so the feed's score block can name teams instead of "Home" and "Away" | `hand` | — | `components.md` §4 | `feed/` backend, then a frontend unit |
 
 ## Frontend
 
-| Item | Where it came from | Notes |
-|---|---|---|
-| **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**` |
-| **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
-| **Compose: drop the separate *Attach* click.** Upload → wait for the scan → click *Attach* | the human, 2026-09-30 ("a bit annoying") | The wait for `Processed` stays; only the click goes. `features/compose/` |
-| **"1 followers", "1 likes"**: singular and plural | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`) |
-| **`Badge neutral` is invisible on the score band**: both use `--color-surface-muted`, so "Final" loses its pill | `UI-005` browser pass | `components/ui` (Badge or `GameScore`), so its own unit |
-| **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**` |
-| **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css` |
-| **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `components.md` §5, `FRONTEND-007` | `src/components/` |
-| **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, `MentionAutocomplete`, search), sharing one cache key | `FRONTEND-007` | Move into `api/`; needs all four features in scope |
-| **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
-| **A username character rule** (look-alike usernames) | `typography.md` §1 | A product decision first. **Director** |
+| Item | Mode | Task | Where it came from | Notes |
+|---|---|---|---|---|
+| **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
+| **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
+| **Compose: drop the separate *Attach* click.** Upload → wait for the scan → click *Attach* | `hand` | — | the human, 2026-09-30 ("a bit annoying") | The wait for `Processed` stays; only the click goes. `features/compose/` |
+| **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does |
+| **`Badge neutral` is invisible on the score band**: both use `--color-surface-muted`, so "Final" loses its pill | `hand` | — | `UI-005` browser pass | `components/ui` (Badge or `GameScore`), so its own unit. Browser check: no unit test pins it |
+| **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `hand` | — | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**`. Browser check at 360 px |
+| **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |
+| **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components.md` §5, `FRONTEND-007` | `src/components/` |
+| **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, `MentionAutocomplete`, search), sharing one cache key | `hand` | — | `FRONTEND-007` | Move into `api/`; needs all four features in scope |
+| **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `hand` | — | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
+| **A username character rule** (look-alike usernames) | `director` | — | `typography.md` §1 | A product decision first. **Director** |
 
 ## Features in `business-rules.md` that are not built
+
+Both are `hand`, with no task yet: each needs a design pass before a spec.
 
 - **The game stats page.** "Posts with a link to a game should be clickable
   to go to the stats page." Once it exists, `#GameId<n>` in post text becomes
