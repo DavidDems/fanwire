@@ -66,7 +66,15 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 - **GitHub automation setup**: `wiki/GeneralContext/Architecture/github-automation-setup.md`: the repository settings the `.ai/` pipeline depends on and why — secrets (and the repository-vs-environment trap), the ruleset and its aggregate required checks, the solo-repo approval bypass, `action_required` on bot-authored PRs (kept, 2026-10-08), fork-PR approval, the spend controls, and how to run/stop a task. The one part of the agent system not under version control, so not diffable and not testable.
 
 ### Task prompts
-`wiki/GeneralContext/Prompts/` holds full briefs for Director sessions. Each is self-contained: a fresh session reads its own file plus whatever that file names.
+`wiki/GeneralContext/Prompts/` holds full briefs for Director and hand-run sessions. Each is self-contained: a fresh session reads its own file plus whatever that file names. New prompts start from **`_template.md`**, whose sections are the ones `02` proved out, each with a one-line note on what belongs there.
+
+**Lifecycle** (`Architecture/work-modes.md` "How work is handed on and planned"):
+
+- **One live prompt per active thread** of work. A second session on the same thread continues its prompt instead of starting a new one.
+- **A session that stops mid-thread updates its prompt** before it ends: a dated *Update* note at the top, and "Where things stand" corrected, so the next session starts cold from the file.
+- **A finished prompt is deleted**, and listed below under "Deleted" with the date and where its results now live (a module file, handoff, `TODO/02-backlog.md`). Git history keeps the text.
+
+Live:
 
 - **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).
 - **`03-work-modes-structure.md`**: the backlog's Mode column, a record for hand runs (`agentctl hand start|finish`), and a prompt template (`TODO/02` item 13).
