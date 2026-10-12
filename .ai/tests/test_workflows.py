@@ -489,10 +489,12 @@ class TestAHandRunIsNotTheOrchestratorsToDrive:
         return [ln for ln in stripped if ln and not ln.startswith("#")]
 
     def test_the_mode_is_read_with_jq_defaulting_to_auto(self, drive_body):
+        # `has`, not `//`: `.mode // "auto"` would read a null mode as auto and
+        # drive it, where load_state rejects it. Only a missing key is auto.
         lines = self._live(drive_body)
         reads = [ln for ln in lines if "jq" in ln]
         assert reads, "the drive step must read the state's mode"
-        assert any('.mode // "auto"' in ln for ln in reads), reads
+        assert any('if has("mode") then .mode else "auto" end' in ln for ln in reads), reads
         assert any(".ai/tasks/$TASK_ID/state.json" in ln for ln in reads), reads
 
     def test_only_auto_is_driven(self, drive_body):
@@ -531,6 +533,7 @@ class TestAHandRunIsNotTheOrchestratorsToDrive:
             ("legacy", "workflow_run", "true"),  # a state file from before modes
             ("weird", "workflow_run", "false"),
             ("weird", "workflow_dispatch", "false"),
+            ("null", "workflow_run", "false"),  # load_state rejects it too
             (None, "workflow_run", "false"),  # no state file: hand-authored
             (None, "workflow_dispatch", "true"),  # no state file: bootstrap
         ],
@@ -540,6 +543,8 @@ class TestAHandRunIsNotTheOrchestratorsToDrive:
             pytest.skip("jq is not on PATH here (it is on ubuntu-latest)")
         if mode == "legacy":
             self._state_file(tmp_path, state="IMPL_CI")
+        elif mode == "null":
+            self._state_file(tmp_path, mode=None)
         elif mode is not None:
             self._state_file(tmp_path, mode=mode)
         code, output = run_step_body(

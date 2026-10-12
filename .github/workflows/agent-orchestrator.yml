@@ -176,7 +176,7 @@ jobs:
           # Bash and jq only (jq is on ubuntu-latest): this runs before the
           # .ai gate below, so no python may.
           if [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
-            MODE="$(jq -r '.mode // "auto"' ".ai/tasks/$TASK_ID/state.json")"
+            MODE="$(jq -r 'if has("mode") then .mode else "auto" end' ".ai/tasks/$TASK_ID/state.json")"
             if [ "$MODE" = "auto" ]; then
               echo "drive=true" >> "$GITHUB_OUTPUT"
             elif [ "$MODE" = "hand" ]; then
