@@ -6,10 +6,11 @@ what to be careful of. It is a snapshot, not a design document — for the
 design read [architecture.md](architecture.md), and for the reasoning and the
 review protocol read [philosophy.md](philosophy.md).
 
-> **Status, 2026-10-09 — D1, D2, D2b and D3 have merged, and `MEDIA-002` ran
-> through the orchestrator unattended, end to end, for USD $2.65 real
-> (§10.5). Its findings and the plan the human agreed are §10; what is left is
-> `TODO/02-backlog.md` → "Agent system".** The Director session that continues this work starts at
+> **Status, 2026-10-12 — the review's whole fix queue (D1–D7) has merged
+> (#117–#130), and `MEDIA-002` ran through the orchestrator unattended, end to
+> end, for USD $2.65 real (§10.5). Since 2026-10-09 the project is hybrid
+> (§10.3 item 8, `wiki/GeneralContext/Architecture/work-modes.md`). What is
+> left is `TODO/02-backlog.md` → "Agent system".** The Director session that continues this work starts at
 > `wiki/GeneralContext/Prompts/02-agent-workflow-continue.md`.
 >
 > **Status, 2026-10-07 — read this first; the rest of the file is as of

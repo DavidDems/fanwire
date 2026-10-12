@@ -43,7 +43,7 @@ Verify with `git log origin/main`, `gh pr list` and `gh secret list` rather
 than trusting this.
 
 - **Prerequisite: D4–D7 have merged** (the human's order, handoff §10.3
-  item 8). D4 changes `ciresult.py`, D5 the CI jobs, D6 how telemetry reads the
+  item 8). **Met 2026-10-12** (#127–#130). D4 changes `ciresult.py`, D5 the CI jobs, D6 how telemetry reads the
   provider's real usage. You build on all three. **If any D-item PR touching
   `.github/workflows/` or `.ai/agentlib/ciresult.py`/`telemetry.py` is open, stop
   and ask the human.**

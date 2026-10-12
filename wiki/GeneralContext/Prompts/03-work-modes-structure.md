@@ -31,15 +31,23 @@ in the PR body.**
    `.ai/bin/agentctl.py` (`status`, `state`), `.ai/docs/state-machine.md`,
    `.ai/tests/test_state.py`, `test_cli.py`.
 
-## Where things stand (2026-10-09)
+## Where things stand (2026-10-12)
 
 Verify with `git log origin/main`, `gh pr list` and `agentctl status` rather
 than trusting this.
 
-- D1, D2, D2b, D3, the test-kit fix and `MEDIA-002` have merged. D4 is in
-  progress or in review; D5–D7 follow. They are **Director** items that change
-  `.ai/` and `.github/`; you may run alongside them, because this brief
-  touches different files, but re-check for overlap before every PR.
+- **The review's whole fix queue has merged** (D1–D7, #117–#130), as have
+  the test-kit fix and `MEDIA-002`. Nothing blocks this brief.
+- What changed under you since this brief was written, relevant to
+  deliverable 2: `state.py` gained `DISPATCH_MANAGER`, a manager-invocation
+  cap, `last_dispatch`/`last_ci_run`, `STALLED` detection, `--from-state`
+  (D3) and `CI_FAILED_WRONG_REASON` (D4); telemetry records are schema 2 with
+  the provider's real cost (D6); the worker is two jobs and every workflow runs
+  `agentctl` from a trusted `main` checkout with `AGENTCTL_DATA_ROOT` (D2b).
+  Read `.ai/docs/state-machine.md` as it is now, not as this brief assumes.
+- Still open on the queue alongside you (`TODO/02` "Agent system"): `jev` in
+  shadow mode, the model upgrade and CLI pin, bug 17's CI half. Check
+  `gh pr list` for overlap before every PR.
 - `agentctl status` shows every hand-run task (`INFRA-002`/`003`,
   `FRONTEND-001`…`007`, `UI-001`…`008`) as `DRAFT`, because no state file was
   ever written for them.

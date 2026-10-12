@@ -129,6 +129,5 @@ One structure for every mode, so any session can start cold:
   - the four automations → `Prompts/04-cheap-automations.md` (`TODO/02`
     item 14).
 - The order the human chose: D4–D7 (the remaining review fixes) first, then
-  03, then 04. A session may start 03 while a D-item is in review, because they
-  touch different files. 04 changes workflows, so start it only once no D-item
-  PR touching `.github/workflows/` is open.
+  03, then 04. **D4–D7 merged by 2026-10-12** (#127–#130), so 03 can start;
+  04 starts once no other PR touching `.github/workflows/` is open.

@@ -1,8 +1,8 @@
 # 02 — Continue the agent workflow: land the review's fixes, then run the first task
 
-> **Update, 2026-10-09.** D1, D2, D2b, D3, the test-kit fix and `MEDIA-002`
-> have merged (`MEDIA-002` cost USD $2.65, handoff §10.5). What is left here
-> is D4–D7, then `jev` in shadow mode. **The project is now hybrid**
+> **Update, 2026-10-12.** D1–D7, the test-kit fix and `MEDIA-002` have
+> merged (`MEDIA-002` cost USD $2.65, handoff §10.5). What is left here is
+> `jev` in shadow mode, the model upgrade and CLI pin, and bug 17's CI half. **The project is now hybrid**
 > (`Architecture/work-modes.md`): code is hand-run, the pipeline is for small
 > cheap tasks, so "After the queue" item 3's backlog runs are mostly `hand`.
 > The structure and helper work that follow are `Prompts/03` and `04`. Treat
