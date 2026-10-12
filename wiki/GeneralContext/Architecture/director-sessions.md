@@ -31,13 +31,14 @@ says, and `agent-guard` will hold it to the task spec.
 
 ## The loop, per unit
 
-1. **Cut the branch from `origin/main` explicitly**: `git switch -c agent/<TASK> origin/main`. `git switch -c` alone branches from whatever HEAD is.
+1. **Cut the branch and record the start.** `git switch -c agent/<TASK> origin/main` (from `origin/main` explicitly: `git switch -c` alone branches from whatever HEAD is), then `python .ai/bin/agentctl.py hand start <TASK>` and commit `.ai/tasks/<TASK>/state.json` on its own. It is mode `hand`, in `HAND_RUNNING`: `agentctl status` shows the unit as running instead of `DRAFT`, and the orchestrator leaves the branch alone (`.ai/docs/state-machine.md` "Hand runs").
 2. **Delegate the tests to a subagent.** Give it the acceptance criteria, the exact list of files it may write, and the traps. Tests only, no implementation, no placeholder module to make an import resolve, no skips, **and it must never run `git`** — you commit.
 3. **Review it yourself, verify the red is red for the right reason**, commit the tests alone. Distinguish "red because the thing under test does not exist" from "red because the test file is broken".
 4. **Delegate the implementation to a second subagent.** Its contract is the committed tests. `allow_test_edits_during_impl` is false on every remaining spec: a diff touching a test file is discarded wholesale. Tell it to run `prettier --write` on **named files only**: a glob such as `src/features/feed/*.tsx` also matches the committed tests (`UI-005`'s agent reformatted three that way, and they had to be restored before commit).
 5. **Review, run every gate yourself, commit the implementation separately.**
 6. **Update the relevant `wiki/CodeContext/Modules/0x0N-*.md`** if the unit changed a documented decision. A subagent handed no wiki path cannot do this — it is yours.
 7. **Push, open the PR, hand to the human. Merge nothing.**
+8. **Record the finish**: `python .ai/bin/agentctl.py hand finish <TASK> --pr <N>` with the PR's number, then commit `state.json` and push it to the PR (`COMPLETE`, with `pr` recorded). It is task bookkeeping, so `agent-guard` passes it.
 
 Give each subagent its own git worktree and its own dependency install. **Never
 `git stash`** — the stash stack is shared across worktrees.
@@ -60,9 +61,12 @@ reuses a tagged image, so rebuild explicitly when the branch changed:
 Run the guard over your real diff before pushing — `.ai/docs/permissions.md` and
 `agentlib.guard.check_diff(paths, role, spec, policy)`. It has caught a live
 defect that CI would not have. From the unit's worktree, per commit and role:
-`python .ai/bin/agentctl.py guard check <TASK> --role test_agent --base origin/main --head <test commit>`,
+`python .ai/bin/agentctl.py guard check <TASK> --role test_agent --base <test commit>~1 --head <test commit>`,
 then `--role code_agent` over the implementation commit and
-`--role context_maintainer` over a wiki commit. **Run the worktree's own
+`--role context_maintainer` over a wiki commit, each against its own parent.
+Not `--base origin/main`: that range also holds the `hand start` commit, and
+`state.json` is under `.ai/`, which no role may write. Only the PR-level
+guard treats it as bookkeeping. **Run the worktree's own
 `agentctl.py`:** the main checkout's copy diffs the main checkout's HEAD,
 whatever branch that is, and reports another branch's files as violations.
 

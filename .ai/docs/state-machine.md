@@ -25,6 +25,44 @@ is a bug.
 | `ESCALATED` | Needs a human. Recoverable by human action | — |
 | `CANCELLED` | Terminal. Human stopped it | — |
 | `FAILED` | Terminal. Infrastructure failure | — |
+| `HAND_RUNNING` | A human is running the task by hand (mode `hand`) | `agentctl hand finish` |
+
+## Hand runs: the `mode` field
+
+Since 2026-10-09 most code is run by hand, on the human's subscription, in a
+Claude Code session against the task spec on `agent/<ID>`
+(`wiki/GeneralContext/Architecture/work-modes.md`). `agent-guard` holds that
+branch to the spec exactly as it holds an orchestrated one. So that
+`agentctl status` tells the truth about it, a hand run records itself:
+
+```
+DRAFT ──HAND_STARTED──► HAND_RUNNING ──HAND_FINISHED (--pr N)──► COMPLETE
+```
+
+- `agentctl hand start <ID>` validates the spec, refuses if a state file
+  already exists, and writes one with `mode: "hand"` in `HAND_RUNNING`.
+- `agentctl hand finish <ID> --pr <N>` moves it to `COMPLETE` and records
+  `pr`. `COMPLETE` means ready for human review here too: the PR is open, not
+  merged.
+
+`mode` is `auto` (the orchestrator's) or `hand`. A state file from before
+modes existed has none and is `auto` (`state.task_mode`). The two share no
+events except a human's `CANCEL` and `ESCALATE`: `advance` refuses every
+orchestrator event on a hand task, and both hand events on an auto task,
+before the transition table is consulted. The table itself is unchanged.
+
+**The orchestrator ignores a hand task.** `next_action` halts on one, and
+`agent-orchestrator.yml`'s "Is this a task this orchestrator drives?" drives
+only a state file whose `mode` is `auto` (or missing), on any trigger,
+including a dispatch. It reads the mode with `jq` (no python runs before the
+`.ai` gate), and an unknown or null mode is not driven. With no state file,
+only a `workflow_dispatch` drives, which is how a new auto task is
+bootstrapped. `agent-guard.yml` passes a hand task in `HAND_RUNNING` or
+`COMPLETE`. Its `state.json` is the task's bookkeeping
+(`guard.is_orchestrator_bookkeeping`), so the `.ai` gates allow it.
+
+A hand task that is escalated can only be cancelled. A paused one can't be
+finished until it is resumed.
 
 ## Human control is not a state
 
