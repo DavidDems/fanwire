@@ -49,6 +49,7 @@ def processed_media_for_posts(
 
     result: dict[int, list[MediaView]] = {}
     for row in rows:
+        assert row.post_id is not None  # the query's `post_id IN (...)` excludes NULL
         result.setdefault(row.post_id, []).append(
             MediaView(
                 id=row.id,

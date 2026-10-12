@@ -94,6 +94,7 @@ This is load-bearing for the migration runner specifically, and `infra/test/app-
 ## CI/CD wiring
 GitHub Actions (OIDC-federated role, no long-lived keys, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]):
 - On PR: build `docker/backend.Dockerfile` target `test` and `docker/frontend.Dockerfile` target `test`, run both, results distilled to `wiki/GeneralContext/Reports/test-runs/`, not fed raw into any interactive agent's context.
+- Static checks, each its own job in the same test images (2026-10-09, `.ai/docs/handoff.md` §10, D5): `backend-ruff` (`ruff check .`), `backend-mypy` (`mypy app`, strict; `tests/` is not type-checked), `frontend-typecheck` (`npm run typecheck`) and `frontend-lint` (`npm run lint`). All four are required by `gate`. `ruff format` is not gated.
 - `pip-audit` and `npm audit`/Dependabot run in CI per [[wiki/CodeContext/Standards/security|Security]] and block merge on an unpatched critical.
 
 **Deploying is a separate workflow, `.github/workflows/deploy.yml`, run on merge to `main` and approved by a human** ("Automated deploy" below). It is not reachable from the agent workflows (`.ai/docs/handoff.md` §5.7). `.github/workflows/test-agent.yml` is the **one authoritative test executor**, and its `gate` job is a required check on `main` alongside `agent-guard.yml`'s `guard-gate`.

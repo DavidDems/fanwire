@@ -78,6 +78,78 @@ class TestRedBaseline:
         assert s["state"] == "READY_FOR_IMPLEMENTATION"
 
 
+class TestBaselineRedForTheWrongReason:
+    """handoff.md §10, D4. A red baseline opens implementation only when it is
+    red for the right reason (agentlib/ciresult.baseline_verdict, applied by
+    `agentctl state advance`). Red for any other reason is its own event, and
+    goes to the manager like a green baseline does, naming what was wrong."""
+
+    def test_the_event_exists(self):
+        assert "CI_FAILED_WRONG_REASON" in st.EVENTS
+
+    def test_wrong_reason_red_goes_to_the_manager_not_the_code_agent(self):
+        s = fresh(state="BASELINE_CI")
+        s = st.advance(
+            s,
+            "CI_FAILED_WRONG_REASON",
+            reason="non-test job(s) failed: pip-audit",
+            ci={"run_id": "7", "conclusion": "failure", "commit": "abc"},
+        )
+        assert s["state"] == "MANAGER_REVIEW"
+        assert s["escalation_reason"].startswith("red_baseline_wrong_reason")
+        assert "pip-audit" in s["escalation_reason"]
+        assert s["attempt"] == 0
+        assert s["last_ci"]["run_id"] == "7"
+        assert s["history"][-1]["event"] == "CI_FAILED_WRONG_REASON"
+
+    @pytest.mark.parametrize("state", ["IMPL_CI", "READY_FOR_IMPLEMENTATION", "TESTS_COMMITTED"])
+    def test_it_is_only_legal_from_the_baseline(self, state):
+        with pytest.raises(st.StateError):
+            st.advance(fresh(state=state, attempt=1), "CI_FAILED_WRONG_REASON")
+
+    def test_right_reason_red_still_opens_implementation(self):
+        s = st.advance(fresh(state="BASELINE_CI"), "CI_FAILED")
+        assert s["state"] == "READY_FOR_IMPLEMENTATION"
+
+
+class TestTheTestCommitIsReadFromHistory:
+    """handoff.md §10, D4. Which files may hold the baseline's failures comes
+    from the commit(s) the test agent landed, as the worker recorded them:
+    AGENT_COMMITTED out of TEST_AGENT_RUNNING, with the commit as its note."""
+
+    SHA_A = "722c42f3422de907d0caef9ca7da925f7b26e28e"
+    SHA_B = "1" * 40
+
+    @staticmethod
+    def _hop(frm: str, event: str, note: str) -> dict:
+        return {"at": "2026-10-09T02:42:11Z", "from": frm, "to": "X", "event": event, "note": note}
+
+    def test_the_test_agents_commit_is_found(self):
+        s = fresh(history=[self._hop("TEST_AGENT_RUNNING", "AGENT_COMMITTED", self.SHA_A)])
+        assert st.test_commits(s) == [self.SHA_A]
+
+    def test_every_test_agent_commit_counts_after_a_rescope(self):
+        s = fresh(
+            history=[
+                self._hop("TEST_AGENT_RUNNING", "AGENT_COMMITTED", self.SHA_A),
+                self._hop("MANAGER_REVIEW", "MANAGER_RESCOPE", "re-scoped"),
+                self._hop("TEST_AGENT_RUNNING", "AGENT_COMMITTED", self.SHA_B),
+            ]
+        )
+        assert st.test_commits(s) == [self.SHA_A, self.SHA_B]
+
+    def test_the_code_agents_commit_is_not_a_test_commit(self):
+        s = fresh(history=[self._hop("CODE_AGENT_RUNNING", "AGENT_COMMITTED", self.SHA_A)])
+        assert st.test_commits(s) == []
+
+    @pytest.mark.parametrize(
+        "note", ["tests committed", "", "722c42f", "g" * 40, SHA_A + "\n", "--all"]
+    )
+    def test_a_note_that_is_not_a_full_sha_is_ignored(self, note):
+        s = fresh(history=[self._hop("TEST_AGENT_RUNNING", "AGENT_COMMITTED", note)])
+        assert st.test_commits(s) == []
+
+
 class TestRetryPolicy:
     def test_failed_ci_distils_then_retries_while_budget_remains(self):
         s = fresh(state="IMPL_CI", attempt=1, max_attempts=3)

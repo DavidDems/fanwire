@@ -41,12 +41,12 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-import os  # noqa: E402
+import os
 
-from app.dependencies import get_settings, open_session  # noqa: E402
-from app.media.dependencies import get_s3_client  # noqa: E402
-from app.media.models import Media, MediaStatus  # noqa: E402
-from app.media.pipeline import GuardDutyScanResultScanner, ImageUploadPipeline  # noqa: E402
+from app.dependencies import get_settings, open_session
+from app.media.dependencies import get_s3_client
+from app.media.models import Media, MediaStatus
+from app.media.pipeline import GuardDutyScanResultScanner, ImageUploadPipeline
 
 REQUIRED_ENVIRONMENT = "development"
 

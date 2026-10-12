@@ -216,6 +216,10 @@ jobs:
           RUN_ID: ${{ github.event.workflow_run.id }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           TASK_ID: ${{ steps.task.outputs.id }}
+          # handoff.md §10, D4: read the failed run's jobs and log. This
+          # step's own token; the PAT is not needed to read a run.
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           # handoff.md §10, D3 (S1). Every documented conclusion has a case,
@@ -237,6 +241,31 @@ jobs:
             # nobody tested (D1).
             python -I "$TOOLS/.ai/bin/agentctl.py" guard tested "$TASK_ID" --sha "$SHA"
           fi
+          # handoff.md §10, D4. A failed baseline is red as required only
+          # when the new tests are what failed: not an audit, not openapi
+          # drift, not a test file the test commit never touched. That is
+          # decided in agentlib (ciresult.baseline_verdict, applied by
+          # `state advance` while the task is in BASELINE_CI), from the
+          # run's job list and its failed-job log, fetched here and passed as
+          # files. Fetched for every failure because only agentctl knows the
+          # state; an implementation failure ignores them and is distilled as
+          # before. A fetch that fails leaves an empty file, which the
+          # classifier fails closed on: the manager looks, the code agent
+          # spends nothing. Outside the task checkout, so never committed.
+          CI_EVIDENCE=()
+          if [ "$EVENT" = "CI_FAILED" ]; then
+            JOBS="$RUNNER_TEMP/ci-jobs.json"
+            LOG="$RUNNER_TEMP/ci-failed.log"
+            if ! gh run view "$RUN_ID" --json jobs > "$JOBS"; then
+              echo "::warning::could not read the jobs of CI run $RUN_ID"
+              : > "$JOBS"
+            fi
+            if ! gh run view "$RUN_ID" --log-failed > "$LOG"; then
+              echo "::warning::could not read the failed-job log of CI run $RUN_ID"
+              : > "$LOG"
+            fi
+            CI_EVIDENCE=(--ci-jobs "$JOBS" --ci-log "$LOG")
+          fi
           # --ignore-terminal: CI re-running on a finished task's branch is
           # routine (a review PR has to be brought up to date before it can
           # merge), and the state machine rightly refuses a CI result for a
@@ -248,7 +277,8 @@ jobs:
           python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
             --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
             --commit-sha "$SHA" --ignore-terminal --discard-if-paused \
-            --reason "CI run $RUN_ID concluded '$CONCLUSION', which is not a test verdict"
+            --reason "CI run $RUN_ID concluded '$CONCLUSION', which is not a test verdict" \
+            "${CI_EVIDENCE[@]}"
 
       - name: Apply a human-supplied event
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.event != ''
