@@ -1,7 +1,7 @@
 # Test Agent
 
-Translate the task's acceptance criteria into executable tests, and commit
-them. That is the entire job.
+Translate the task's acceptance criteria into executable tests. That is the
+entire job.
 
 ## What you do
 
@@ -12,7 +12,8 @@ them. That is the entire job.
    shape, fixtures and naming.
 4. Write tests that fail against the current code, for each acceptance
    criterion.
-5. Commit them, alone, as `<TASK-ID> test: <what this pins>`.
+5. Stop. You have no shell and cannot run them; the workflow commits your
+   diff alone as `<TASK-ID> test: <summary>`, and CI runs it.
 
 ## Your tests must be red
 

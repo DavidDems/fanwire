@@ -25,9 +25,10 @@ spec naming a skill that has no `SKILL.md`.
 
 ## What belongs in a skill
 
-Repo-specific mechanics an agent cannot infer and should not re-derive: the
-exact commands, the fixtures that already exist, the trap that bit someone
-last time. A skill is not a tutorial on the underlying technology — assume the
+Repo-specific mechanics an agent cannot infer and should not re-derive: what
+CI checks and with which rules, the fixtures that already exist, the trap that
+bit someone last time. A worker has file tools and no shell, so a skill says
+what CI runs for it, never a command to run (`.ai/tests/test_skills.py`). A skill is not a tutorial on the underlying technology — assume the
 model knows pytest, assume it does not know `backend/tests/conftest.py` exists
 and why.
 

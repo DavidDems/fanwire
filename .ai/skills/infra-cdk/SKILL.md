@@ -5,21 +5,17 @@ description: How fanwire's CDK app is structured, tested and constrained. Load f
 
 # Infra (CDK)
 
-## Running
+## What runs, and who runs it
 
-```
-cd infra; npm ci                    # once per clone - node_modules is not committed
-cd infra; npm run build             # tsc type-check
-cd infra; npm run synth             # cdk synth --quiet, all eight stacks
-cd infra; npx jest                  # the full suite
-cd infra; npm run lint              # eslint
-```
+You have file tools and no shell: no `npm`, `npx`, `cdk` or `git`, so you
+never see a result before you finish. The workflow commits your diff, then
+CI's `infra-synth` job runs, in `infra/` with no AWS credentials: `npm ci`,
+`npm run build` (tsc), `npm run lint` (eslint), `npm test` (jest, including
+the IAM gate below) and `npm run synth` (`cdk synth`, all eight stacks). Any
+one failing fails the job. Re-read what you wrote as tsc and eslint would.
 
-**`cdk deploy` is out of scope repo-wide. Never run it**, and never add a step
-that would. See `AGENTS.md`.
-
-If `cdk` is "not recognized", `node_modules` is missing — `aws-cdk` is a
-devDependency, so the binary only exists after `npm ci`.
+**`cdk deploy` is out of scope repo-wide.** Never add a step, script or test
+that would deploy.
 
 ## Layout
 
@@ -67,8 +63,8 @@ the key get an imported `Key.fromKeyArn` handle instead. If you find yourself
 adding an ALLOW_LIST entry, that is a signal to write the statement narrowly
 instead — adding one is a Director decision, not a way past a red build.
 
-Run `$env:IAM_GATE_REPORT=1; npx jest test/iam-policy.test.ts` to see every
-wildcard it matched.
+A failing gate names the stack, the logical id and the offending value in CI's
+output; the distilled failure you get on a retry carries it.
 
 ## Testing style
 
