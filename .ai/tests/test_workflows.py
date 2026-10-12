@@ -483,15 +483,20 @@ class TestAHandRunIsNotTheOrchestratorsToDrive:
     def drive_body(self, orchestrator) -> str:
         return run_bodies(step(job_block(orchestrator, "orchestrate"), DRIVE))[0]
 
+    @staticmethod
+    def _live(body: str) -> list[str]:
+        stripped = (ln.strip() for ln in body.splitlines())
+        return [ln for ln in stripped if ln and not ln.startswith("#")]
+
     def test_the_mode_is_read_with_jq_defaulting_to_auto(self, drive_body):
-        lines = live_lines(drive_body)
+        lines = self._live(drive_body)
         reads = [ln for ln in lines if "jq" in ln]
         assert reads, "the drive step must read the state's mode"
         assert any('.mode // "auto"' in ln for ln in reads), reads
         assert any(".ai/tasks/$TASK_ID/state.json" in ln for ln in reads), reads
 
     def test_only_auto_is_driven(self, drive_body):
-        lines = live_lines(drive_body)
+        lines = self._live(drive_body)
         assert any(re.search(r'"\$MODE" = "auto"', ln) for ln in lines), lines
         assert sum('echo "drive=true"' in ln for ln in lines) == 2, (
             "drive=true exactly twice: an auto state file, and a dispatch with no file"

@@ -12,6 +12,8 @@ thing, write state.
   agentctl context DEMO-001             the exact context a worker gets
   agentctl state advance DEMO-001 -e CI_PASSED
   agentctl state control DEMO-001 --set PAUSE
+  agentctl hand start UI-009            record a task a human runs by hand
+  agentctl hand finish UI-009 --pr 140
   agentctl guard check DEMO-001 --role code_agent --base main --head HEAD
   agentctl distill DEMO-001 --log ci.txt --ci-status failure
   agentctl ci-event --conclusion cancelled   the event a CI conclusion means
@@ -116,7 +118,7 @@ def load_spec(task_id: str) -> dict:
         raise  # unreachable; keeps the type checker honest
 
 
-def draft_state(task_id: str, spec: dict) -> dict:
+def draft_state(task_id: str, spec: dict, mode: str = "auto") -> dict:
     """The state a task is in before anything has run: DRAFT, on disk nowhere.
 
     A spec with no state file is not an error — it is a task nobody has started.
@@ -129,6 +131,7 @@ def draft_state(task_id: str, spec: dict) -> dict:
         task_id,
         branch=spec_mod.branch_name(task_id),
         max_attempts=policy_["max_impl_attempts"],
+        mode=mode,
     )
     s["require_red_baseline"] = policy_["require_red_baseline"]
     return s
@@ -216,13 +219,18 @@ def cmd_task_list(args) -> int:
 # --------------------------------------------------------------------------- state
 
 
-def cmd_state_init(args) -> int:
-    spec = load_spec(args.task_id)
+def _require_valid_spec(task_id: str) -> dict:
+    spec = load_spec(task_id)
     errors = spec_mod.validate(spec, known_skills())
     if errors:
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         die(f"refusing to start an invalid spec ({len(errors)} problems)", FAILED)
+    return spec
+
+
+def cmd_state_init(args) -> int:
+    spec = _require_valid_spec(args.task_id)
     if state_path(args.task_id).exists():
         # Idempotent: the orchestrator may retry a run, and re-initialising
         # would silently discard a task's history.
@@ -371,6 +379,49 @@ def cmd_state_control(args) -> int:
         die(str(exc), FAILED)
     st.save_state(state_path(args.task_id), s)
     print(f"{args.task_id}: control={s['control']} state={s['state']}")
+    return OK
+
+
+# --------------------------------------------------------------------------- hand runs
+
+
+def cmd_hand_start(args) -> int:
+    """Record that a human is running this task by hand (state.MODES).
+
+    Not idempotent, unlike `state init`: an existing state file is either the
+    orchestrator's, which a hand run must not take over, or an earlier hand
+    run's, whose history starting again would discard.
+    """
+    spec = _require_valid_spec(args.task_id)
+    path = state_path(args.task_id)
+    if path.exists():
+        s = st.load_state(path)
+        die(
+            f"{args.task_id} already has state ({s['state']}, {st.task_mode(s)} run); "
+            "leaving it alone",
+            FAILED,
+        )
+    s = st.advance(draft_state(args.task_id, spec, mode="hand"), "HAND_STARTED")
+    st.save_state(path, s)
+    emit(s)
+    print(f"next: commit .ai/tasks/{args.task_id}/state.json on agent/{args.task_id}")
+    return OK
+
+
+def cmd_hand_finish(args) -> int:
+    load_spec(args.task_id)  # the id is a task's, or this dies
+    if not state_path(args.task_id).exists():
+        die(f"no state file for {args.task_id}; run `agentctl hand start` first", FAILED)
+    s = st.load_state(state_path(args.task_id))
+    try:
+        s = st.advance(s, "HAND_FINISHED", pr=args.pr)
+    except st.Paused as exc:
+        print(f"agentctl: {exc}", file=sys.stderr)
+        return FAILED
+    except st.StateError as exc:
+        die(str(exc), FAILED)
+    st.save_state(state_path(args.task_id), s)
+    emit(s)
     return OK
 
 
@@ -653,13 +704,13 @@ def cmd_status(args) -> int:
         try:
             spec = spec_mod.load(d)
         except spec_mod.SpecError as exc:
-            rows.append((d.name, "BAD SPEC", "-", "-", str(exc)[:60]))
+            rows.append((d.name, "BAD SPEC", "-", "-", "-", str(exc)[:60]))
             continue
         state_file = d / "state.json"
         try:
             s = st.load_state(state_file) if state_file.exists() else draft_state(d.name, spec)
         except (st.StateError, json.JSONDecodeError) as exc:
-            rows.append((d.name, "UNREADABLE", "-", "-", str(exc)[:60]))
+            rows.append((d.name, "UNREADABLE", "-", "-", "-", str(exc)[:60]))
             continue
         action = orchestrator.next_action(s, spec)
         nxt = action["kind"] + (f":{action['role']}" if action.get("role") else "")
@@ -672,6 +723,7 @@ def cmd_status(args) -> int:
             (
                 s["task_id"],
                 s["state"],
+                st.task_mode(s),  # who runs it: the orchestrator, or a human by hand
                 s["control"],
                 f"{s['attempt']}/{s['max_attempts']}",
                 nxt if overdue else (s.get("escalation_reason") or nxt),
@@ -680,9 +732,9 @@ def cmd_status(args) -> int:
     if not rows:
         print("no tasks")
         return OK
-    print(f"{'TASK':<14}{'STATE':<26}{'CTRL':<7}{'ATT':<7}NEXT / REASON")
+    print(f"{'TASK':<14}{'STATE':<26}{'MODE':<6}{'CTRL':<7}{'ATT':<7}NEXT / REASON")
     for r in rows:
-        print(f"{r[0]:<14}{r[1]:<26}{r[2]:<7}{r[3]:<7}{r[4]}")
+        print(f"{r[0]:<14}{r[1]:<26}{r[2]:<6}{r[3]:<7}{r[4]:<7}{r[5]}")
     return OK
 
 
@@ -871,6 +923,17 @@ def build_parser() -> argparse.ArgumentParser:
     s_ctl.add_argument("task_id")
     s_ctl.add_argument("--set", required=True, choices=sorted(st.CONTROLS))
     s_ctl.set_defaults(func=cmd_state_control)
+
+    hand = sub.add_parser("hand", help="record a task a human runs by hand").add_subparsers(
+        dest="sub", required=True
+    )
+    h_start = hand.add_parser("start", help="create a hand-run state, in HAND_RUNNING")
+    h_start.add_argument("task_id")
+    h_start.set_defaults(func=cmd_hand_start)
+    h_fin = hand.add_parser("finish", help="mark a hand run COMPLETE, with its PR")
+    h_fin.add_argument("task_id")
+    h_fin.add_argument("--pr", type=int, required=True, help="the pull request number")
+    h_fin.set_defaults(func=cmd_hand_finish)
 
     p_ci = sub.add_parser("ci-event", help="the event a CI run's conclusion means")
     p_ci.add_argument("--conclusion", required=True)

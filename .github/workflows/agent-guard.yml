@@ -169,7 +169,11 @@ jobs:
               print("no state file; treating as a hand-authored branch")
               raise SystemExit(0)
           s = st.load_state(p)
-          print(f"{task_id}: {s['state']} (control={s['control']}, "
+          # A hand run (`agentctl hand start`) has a state file too: HAND_RUNNING
+          # while it is open, COMPLETE once `hand finish` records its PR. Both
+          # pass; ESCALATED and FAILED fail whoever ran the task.
+          mode = st.task_mode(s)
+          print(f"{task_id}: {s['state']} ({mode} run, control={s['control']}, "
                 f"attempt {s['attempt']}/{s['max_attempts']})")
           if s["state"] in ("ESCALATED", "FAILED"):
               print(f"\nReason: {s.get('escalation_reason')}")

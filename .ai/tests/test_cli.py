@@ -936,7 +936,7 @@ class TestAHandRunIsRecorded:
         assert "MODE" in result.stdout.splitlines()[0]
         row = _row(result.stdout, DATA_TASK).split()
         assert row[1:3] == ["HAND_RUNNING", "hand"]
-        assert "hand run; not driven by the orchestrator" in _row(result.stdout, DATA_TASK)
+        assert row[-1] == "halt", "the orchestrator has nothing to do for a hand run"
 
     def test_status_shows_an_orchestrated_task_as_auto(self, data_root):
         _write_state(data_root)
