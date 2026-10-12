@@ -118,11 +118,15 @@ case "$PROVIDER" in
       # log; it is never fed back into a prompt.
       tail -40 "$RAW" || true
       echo "------------------------------"
-      exit "$STATUS"
+      # Not exited yet: a call that ends in error is billed too, and its
+      # envelope says what it cost (handoff.md §10, D6). It is normalised
+      # below, and the script exits with $STATUS after that.
     fi
     # Surface warnings even on success - a run that worked but complained is
     # worth seeing before it becomes the next incident.
-    [ -s "$ERR" ] && { echo "--- provider stderr ---"; tail -20 "$ERR"; }
+    if [ "$STATUS" -eq 0 ] && [ -s "$ERR" ]; then
+      echo "--- provider stderr ---"; tail -20 "$ERR"
+    fi
     ;;
   *)
     echo "::error::unknown provider '$PROVIDER'; add a case here and to config.json" >&2
@@ -132,21 +136,70 @@ esac
 
 # Normalise the provider's native output into the shared contract. The agent's
 # own structured trailer (a ```agent-result fenced block in its final message,
-# see .ai/prompts/_shared.md) supplies summary/decision/reason; usage and
+# see .ai/prompts/_shared.md) supplies summary/decision/reason; usage, cost and
 # session id come from the provider envelope.
+#
+# The envelope's own cost is what the call was billed (handoff.md §10, D6:
+# MEDIA-002's records claimed USD $1.25 against a real $2.65, because cache
+# tokens and `total_cost_usd` were dropped here). Field names confirmed on CLI
+# 2.1.295; tests/fixtures/claude-cli-2.1.295-envelope.json is that envelope.
+# Any field missing or of the wrong type is written as null, never guessed.
+# Of `permission_denials` only the count and the tool names are kept: each
+# entry's `tool_input` is what the model asked to run, and is never echoed.
 python -I - "$RAW" "$OUT_FILE" "$PROVIDER" "$MODEL" <<'PY'
-import json, re, sys
+import json, math, re, sys
 
 raw_path, out_path, provider, model = sys.argv[1:5]
 
 try:
     envelope = json.loads(open(raw_path, encoding="utf-8").read())
-except (OSError, json.JSONDecodeError):
+except (OSError, ValueError):
     envelope = {}
 if isinstance(envelope, list):  # some CLIs stream a list of events
     envelope = next((e for e in reversed(envelope) if isinstance(e, dict)), {})
+if not isinstance(envelope, dict):
+    envelope = {}
 
-usage = envelope.get("usage") or {}
+
+def mapping(value):
+    return value if isinstance(value, dict) else {}
+
+
+def count(value):
+    """A token or turn count: a non-negative int, else None."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def money(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return float(value)
+
+
+TOOL_NAME = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
+SUBTYPE = re.compile(r"[a-z0-9_]{1,40}")
+
+usage = mapping(envelope.get("usage"))
+cache_creation = mapping(usage.get("cache_creation"))
+output_details = mapping(usage.get("output_tokens_details"))
+
+denials = envelope.get("permission_denials")
+if isinstance(denials, list):
+    names = [d.get("tool_name") for d in denials if isinstance(d, dict)]
+    permission_denials = {
+        "count": len(denials),
+        "tools": [n for n in names if isinstance(n, str) and TOOL_NAME.fullmatch(n)][:50],
+    }
+else:
+    permission_denials = None
+
+is_error = envelope.get("is_error")
+subtype = envelope.get("subtype")
+
 text = envelope.get("result") or envelope.get("text") or ""
 
 trailer = {}
@@ -167,9 +220,23 @@ json.dump(
         "model": envelope.get("model") or model,
         "session_id": envelope.get("session_id"),
         "usage": {
-            "input_tokens": int(usage.get("input_tokens") or 0),
-            "output_tokens": int(usage.get("output_tokens") or 0),
+            "input_tokens": count(usage.get("input_tokens")) or 0,
+            "output_tokens": count(usage.get("output_tokens")) or 0,
+            "cache_creation_input_tokens": count(usage.get("cache_creation_input_tokens")),
+            "cache_read_input_tokens": count(usage.get("cache_read_input_tokens")),
+            "cache_creation_1h_input_tokens": count(
+                cache_creation.get("ephemeral_1h_input_tokens")
+            ),
+            "cache_creation_5m_input_tokens": count(
+                cache_creation.get("ephemeral_5m_input_tokens")
+            ),
+            "thinking_tokens": count(output_details.get("thinking_tokens")),
         },
+        "cost_usd": money(envelope.get("total_cost_usd")),
+        "num_turns": count(envelope.get("num_turns")),
+        "permission_denials": permission_denials,
+        "is_error": is_error if isinstance(is_error, bool) else None,
+        "subtype": subtype if isinstance(subtype, str) and SUBTYPE.fullmatch(subtype) else None,
         "summary": trailer.get("summary"),
         "decision": trailer.get("decision"),
         "reason": trailer.get("reason"),
@@ -179,3 +246,6 @@ json.dump(
 )
 print(f"normalised result -> {out_path}")
 PY
+
+# The provider call's own status, now that its cost is on record.
+exit "$STATUS"
