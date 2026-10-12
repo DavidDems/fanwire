@@ -288,8 +288,18 @@ def cmd_state_advance(args) -> int:
             "To get a verdict: resume the task, then re-dispatch test-agent on its branch."
         )
         return OK
+    event = args.event
+    if event == "CI_FAILED" and s["state"] == "BASELINE_CI" and s.get("require_red_baseline", True):
+        # handoff.md §10, D4. Red is only "as required" when the new tests are
+        # what failed. Decided here, for every caller, so nothing applies a
+        # baseline CI_FAILED unclassified; with no evidence it fails closed.
+        verdict = baseline_verdict(s, args.ci_jobs, args.ci_log)
+        if not verdict["right_reason"]:
+            event = "CI_FAILED_WRONG_REASON"
+            ctx["reason"] = verdict["reason"]
+        print(f"agentctl: baseline red {_verdict_line(verdict)}", file=sys.stderr)
     try:
-        s = st.advance(s, args.event, **ctx)
+        s = st.advance(s, event, **ctx)
     except st.Paused as exc:
         print(f"agentctl: {exc}", file=sys.stderr)
         return FAILED
@@ -302,6 +312,55 @@ def cmd_state_advance(args) -> int:
     st.save_state(state_path(args.task_id), s)
     emit(s)
     return OK
+
+
+def baseline_verdict(s: dict, jobs_path: str | None, log_path: str | None) -> dict:
+    """ciresult.baseline_verdict for this task's failed baseline run.
+
+    The test commit's files come from git in the data root: every commit the
+    test agent landed (state.test_commits), as that commit changed it. Any
+    file that cannot be read is simply absent, which the verdict treats as
+    unreadable, never as a pass.
+    """
+    log = ""
+    ran = None
+    if log_path:
+        try:
+            log = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            pass
+    if jobs_path:
+        try:
+            ran = _json(Path(jobs_path))
+        except (OSError, ValueError):
+            pass
+    files: set[str] = set()
+    for sha in st.test_commits(s):
+        changed = subprocess.run(
+            ["git", "diff-tree", "-r", "-z", "--root", "--no-commit-id", "--name-only"]
+            + ["--no-renames", sha],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if changed.returncode == 0:
+            files.update(p for p in changed.stdout.split("\0") if p)
+    return ciresult.baseline_verdict(log, ran, files)
+
+
+def _verdict_line(verdict: dict) -> str:
+    """One line for the run log. Built from parsed paths and job names only,
+    never raw log text, and kept to a single line so nothing in it can be read
+    as a workflow command."""
+    if verdict["right_reason"]:
+        files = sorted({f["file"] for f in verdict["failures"]})
+        text = "for the right reason: " + ", ".join(files)
+    else:
+        text = "for the wrong reason: " + verdict["reason"]
+    return " ".join(text.split())
 
 
 def cmd_state_control(args) -> int:
@@ -540,20 +599,39 @@ def cmd_telemetry_report(args) -> int:
     if args.json:
         emit(summary)
         return OK
+    # Cost is the provider's own figure wherever a record has one; a record
+    # whose cost is only the estimate is counted and listed (handoff.md §10,
+    # D6). Permission denials answer whether a worker tried a tool it is not
+    # given, a shell above all (D2's threat chain).
     t = summary["totals"]
     print(
         f"invocations {t['invocations']}  tokens {t['total_tokens']:,}  "
-        f"cost ${t['estimated_cost_usd']:.4f}  escalations {t['escalations']}"
+        f"cost ${t['cost_usd']:.4f} ({t['estimated_records']} estimated, "
+        f"{t['unpriced_records']} unpriced)  "
+        f"permission denials {t['permission_denials']}  escalations {t['escalations']}"
     )
     for scope in ("by_task", "by_role", "by_model"):
         if not summary[scope]:
             continue
         print(f"\n{scope.replace('_', ' ')}:")
         for key, b in sorted(summary[scope].items()):
+            flags = ""
+            if b["estimated_records"]:
+                flags += f"  {b['estimated_records']} estimated"
+            if b["permission_denials"]:
+                flags += f"  {b['permission_denials']} denied"
             print(
                 f"  {key:<34} {b['invocations']:>4} runs  {b['total_tokens']:>10,} tok  "
-                f"${b['estimated_cost_usd']:.4f}"
+                f"${b['cost_usd']:.4f}{flags}"
             )
+    if summary["estimated"]:
+        print("\nestimated cost, not the provider's figure (records before D6 omit cache tokens):")
+        for rel in summary["estimated"]:
+            print(f"  {rel}")
+    if summary["denials"]:
+        print("\npermission denied:")
+        for d in summary["denials"]:
+            print(f"  {d['record']}  {d['count']}  {', '.join(d['tools']) or '-'}")
     if summary["unreadable"]:
         print("\nunreadable records:", file=sys.stderr)
         for rel in summary["unreadable"]:
@@ -665,6 +743,18 @@ def cmd_selfcheck(args) -> int:
     if s["state"] != "MANAGER_REVIEW":
         problems.append(f"green baseline was not caught (got {s['state']})")
 
+    # Nor may a baseline that is red for the wrong reason (handoff.md §10, D4).
+    audit = {"jobs": [{"name": "pip-audit", "conclusion": "failure"}]}
+    verdict = ciresult.baseline_verdict("", audit, {"backend/tests/test_x.py"})
+    if verdict["right_reason"]:
+        problems.append("a failed audit read as a baseline red for the right reason")
+    s = st.advance(st.new_state("SELF-005", max_attempts=2), "VALIDATED")
+    for event in ("DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED"):
+        s = st.advance(s, event)
+    s = st.advance(s, "CI_FAILED_WRONG_REASON", reason=verdict["reason"])
+    if s["state"] != "MANAGER_REVIEW":
+        problems.append(f"wrong-reason red baseline was not caught (got {s['state']})")
+
     # Retry loop terminates.
     s = st.advance(st.new_state("SELF-003", max_attempts=2), "VALIDATED")
     for event in ("DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_FAILED"):
@@ -750,6 +840,12 @@ def build_parser() -> argparse.ArgumentParser:
     s_adv.add_argument("--ci-conclusion")
     s_adv.add_argument("--commit-sha")
     s_adv.add_argument("--extra-attempts", type=int)
+    s_adv.add_argument(
+        "--ci-jobs",
+        help="`gh run view --json jobs` of the CI run; with --ci-log, how a failed baseline "
+        "is classified (handoff.md §10, D4)",
+    )
+    s_adv.add_argument("--ci-log", help="`gh run view --log-failed` of the CI run")
     s_adv.add_argument("--session-id", help="record a resumable provider session id")
     s_adv.add_argument("--role", help="which role the --session-id belongs to")
     s_adv.add_argument(

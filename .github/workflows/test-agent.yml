@@ -164,6 +164,106 @@ jobs:
       - name: Run frontend test suite
         run: docker compose run --rm frontend-test
 
+  # Static checks (handoff.md §10, D5). `tsc` used to run first in deploy.yml,
+  # after merge, and ruff, mypy and eslint only when a session ran them by hand,
+  # which a worker cannot. Each runs in the image its suite runs in, from the
+  # suite's directory, with the suite's config (backend/pyproject.toml,
+  # frontend/tsconfig*.json and eslint.config.js), and is keyed on the same
+  # `changes` output, so a dispatched run never skips one.
+  #
+  # One tool per job, not steps inside backend-test/frontend-test: the job is
+  # what `gh run view --log-failed` attributes each line to, and what
+  # .ai/agentlib/ciresult.py reads to decide whether a red baseline is red for
+  # the right reason (STATIC_JOBS there is pinned to these names), so a job
+  # name has to say which tool's output a log holds. A red typecheck also
+  # cannot hide whether lint would have passed. The cost is an image load from
+  # the layer cache per job, in parallel. These read the suites' cache and
+  # never write it.
+  #
+  # Output flags are for that parser: ruff's one-line `concise` format, tsc
+  # without its pretty-printer, and -T so nothing sees a TTY. mypy checks
+  # `app` only: a test commit adds tests that import modules not written yet,
+  # and type-checking those would only repeat what the suite already says.
+  backend-ruff:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          target: test
+          tags: fanwire-backend-test:latest
+          load: true
+          cache-from: type=gha,scope=backend-test
+      - name: Lint the backend (ruff)
+        run: docker compose run --rm -T --no-deps --entrypoint python backend-test -m ruff check --output-format concise .
+
+  backend-mypy:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          target: test
+          tags: fanwire-backend-test:latest
+          load: true
+          cache-from: type=gha,scope=backend-test
+      - name: Type-check the backend application (mypy, strict)
+        run: docker compose run --rm -T --no-deps --entrypoint python backend-test -m mypy app
+
+  frontend-typecheck:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/frontend.Dockerfile
+          target: test
+          tags: fanwire-frontend-test:latest
+          load: true
+          cache-from: type=gha,scope=frontend-test
+      - name: Type-check the frontend (tsc)
+        run: docker compose run --rm -T --no-deps --entrypoint npm frontend-test run typecheck -- --pretty false
+
+  frontend-lint:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the test image, reusing cached layers
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/frontend.Dockerfile
+          target: test
+          tags: fanwire-frontend-test:latest
+          load: true
+          cache-from: type=gha,scope=frontend-test
+      - name: Lint the frontend (eslint)
+        run: docker compose run --rm -T --no-deps --entrypoint npm frontend-test run lint
+
   # The agent system's own deterministic core (.ai/agentlib). Stdlib only, so
   # this needs pytest and nothing else. It gates the state machine, the
   # permission guard and the telemetry writer the same way the application
@@ -320,6 +420,10 @@ jobs:
       - changes
       - backend-test
       - frontend-test
+      - backend-ruff
+      - backend-mypy
+      - frontend-typecheck
+      - frontend-lint
       - agent-infra-test
       - pip-audit
       - openapi-drift

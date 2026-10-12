@@ -13,6 +13,7 @@ See `.ai/docs/state-machine.md`.
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -97,6 +98,10 @@ EVENTS: frozenset[str] = frozenset(
         "CI_STARTED",
         "CI_PASSED",
         "CI_FAILED",
+        # A baseline run that failed, but not because of the new tests
+        # (handoff.md §10, D4): agentctl applies it in place of CI_FAILED
+        # when ciresult.baseline_verdict says so.
+        "CI_FAILED_WRONG_REASON",
         "DISTILLED",
         "MANAGER_RETRY",
         "MANAGER_RESCOPE",
@@ -246,6 +251,29 @@ def stalled(state: dict, now: datetime) -> str | None:
     return f"{what} dispatched {last['at']}, {age} min ago (limit {limit}){lost}"
 
 
+# A full commit id, as the worker records it (`git rev-parse HEAD`).
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def test_commits(state: dict) -> list[str]:
+    """Every commit the test agent landed on this task, oldest first.
+
+    The worker applies AGENT_COMMITTED from TEST_AGENT_RUNNING with
+    `--commit-sha`, which becomes that history entry's note; a test agent
+    that produced no diff leaves a note that is not a commit, and is skipped.
+    Every one counts, not just the last: after a re-scope the earlier tests
+    are still this task's, and still on the branch (handoff.md §10, D4).
+    """
+    return [
+        h["note"]
+        for h in state.get("history") or []
+        if h.get("event") == "AGENT_COMMITTED"
+        and h.get("from") == "TEST_AGENT_RUNNING"
+        and isinstance(h.get("note"), str)
+        and _COMMIT_SHA.fullmatch(h["note"])
+    ]
+
+
 def record_session(state: dict, role: str, session_id: str) -> dict[str, Any]:
     out = dict(state)
     out["sessions"] = {**state.get("sessions", {}), role: session_id}
@@ -386,6 +414,17 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         if current == "IMPL_COMMITTED":
             return "IMPL_CI", "implementation CI started"
 
+    if event == "CI_FAILED_WRONG_REASON" and current == "BASELINE_CI":
+        # Red, but not because of the new tests (handoff.md §10, D4): a
+        # non-test job failed, failures lie outside the test commit's files,
+        # or the log could not be read. The code agent cannot edit tests, so
+        # it would only spend its attempts; the manager decides, as for a
+        # green baseline. Not ESCALATED: re-scoping is often the answer.
+        out["last_ci"] = ctx.get("ci") or out.get("last_ci")
+        detail = ctx.get("reason") or "no reason recorded"
+        out["escalation_reason"] = f"red_baseline_wrong_reason: {detail}"
+        return "MANAGER_REVIEW", "baseline CI red, but not for the right reason"
+
     if event in ("CI_PASSED", "CI_FAILED"):
         out["last_ci"] = ctx.get("ci") or out.get("last_ci")
 
@@ -394,6 +433,8 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
             # not actually pin the behaviour the task is about, so there is
             # nothing for the code agent to make pass. This is what makes
             # "test-first" an enforced property rather than an instruction.
+            # CI_FAILED here means red for the right reason: agentctl applies
+            # CI_FAILED_WRONG_REASON instead when it is not (D4).
             if event == "CI_FAILED":
                 return "READY_FOR_IMPLEMENTATION", "baseline is red, as required"
             if out.get("require_red_baseline", True):

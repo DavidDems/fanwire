@@ -1,0 +1,125 @@
+backend-test	Run backend test suite	﻿2026-10-09T02:43:17.6355718Z ##[group]Run docker compose run --rm backend-test
+backend-test	Run backend test suite	2026-10-09T02:43:17.6356177Z ^[[36;1mdocker compose run --rm backend-test^[[0m
+backend-test	Run backend test suite	2026-10-09T02:43:17.6628558Z shell: /usr/bin/bash -e {0}
+backend-test	Run backend test suite	2026-10-09T02:43:17.6628899Z ##[endgroup]
+backend-test	Run backend test suite	2026-10-09T02:43:17.7556692Z  postgres Pulling 
+backend-test	Run backend test suite	2026-10-09T02:43:17.7559608Z  dynamodb-local Pulling 
+backend-test	Run backend test suite	2026-10-09T02:43:23.9124562Z  Network fanwire_default  Created
+backend-test	Run backend test suite	2026-10-09T02:43:23.9133560Z  Container fanwire-dynamodb-local-1  Creating
+backend-test	Run backend test suite	2026-10-09T02:43:23.9134689Z  Container fanwire-postgres-1  Creating
+backend-test	Run backend test suite	2026-10-09T02:43:23.9350937Z  Container fanwire-dynamodb-local-1  Created
+backend-test	Run backend test suite	2026-10-09T02:43:23.9352448Z  Container fanwire-postgres-1  Created
+backend-test	Run backend test suite	2026-10-09T02:43:23.9361703Z  Container fanwire-dynamodb-local-1  Starting
+backend-test	Run backend test suite	2026-10-09T02:43:23.9362535Z  Container fanwire-postgres-1  Starting
+backend-test	Run backend test suite	2026-10-09T02:43:24.1332526Z  Container fanwire-dynamodb-local-1  Started
+backend-test	Run backend test suite	2026-10-09T02:43:24.1439996Z  Container fanwire-postgres-1  Started
+backend-test	Run backend test suite	2026-10-09T02:43:32.7442492Z ============================= test session starts ==============================
+backend-test	Run backend test suite	2026-10-09T02:43:32.7443227Z platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.6.0
+backend-test	Run backend test suite	2026-10-09T02:43:32.7443639Z rootdir: /var/task
+backend-test	Run backend test suite	2026-10-09T02:43:32.7443905Z configfile: pyproject.toml
+backend-test	Run backend test suite	2026-10-09T02:43:32.7444190Z testpaths: tests
+backend-test	Run backend test suite	2026-10-09T02:43:32.7444635Z plugins: asyncio-1.4.0, platformdirs-4.12.4, Faker-40.41.0, cov-7.1.0, anyio-4.15.1
+backend-test	Run backend test suite	2026-10-09T02:43:32.7445461Z asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+backend-test	Run backend test suite	2026-10-09T02:43:32.7446434Z collected 511 items / 1 error
+backend-test	Run backend test suite	2026-10-09T02:43:32.7446619Z 
+backend-test	Run backend test suite	2026-10-09T02:43:32.7446780Z ==================================== ERRORS ====================================
+backend-test	Run backend test suite	2026-10-09T02:43:32.7447303Z ____________ ERROR collecting tests/media/test_dev_process_media.py ____________
+backend-test	Run backend test suite	2026-10-09T02:43:32.7447979Z ImportError while importing test module '/var/task/tests/media/test_dev_process_media.py'.
+backend-test	Run backend test suite	2026-10-09T02:43:32.7448625Z Hint: make sure your test modules/packages have valid Python names.
+backend-test	Run backend test suite	2026-10-09T02:43:32.7449636Z Traceback:
+backend-test	Run backend test suite	2026-10-09T02:43:32.7450136Z ../lang/lib/python3.12/importlib/__init__.py:90: in import_module
+backend-test	Run backend test suite	2026-10-09T02:43:32.7450669Z     return _bootstrap._gcd_import(name[level:], package, level)
+backend-test	Run backend test suite	2026-10-09T02:43:32.7451098Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-test	Run backend test suite	2026-10-09T02:43:32.7451490Z tests/media/test_dev_process_media.py:66: in <module>
+backend-test	Run backend test suite	2026-10-09T02:43:32.7451989Z     import scripts.dev_process_media as dev_process_media  # noqa: E402
+backend-test	Run backend test suite	2026-10-09T02:43:32.7452451Z     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-test	Run backend test suite	2026-10-09T02:43:32.7452903Z E   ModuleNotFoundError: No module named 'scripts.dev_process_media'
+backend-test	Run backend test suite	2026-10-09T02:43:32.7453374Z =============================== warnings summary ===============================
+backend-test	Run backend test suite	2026-10-09T02:43:32.7453719Z tests/conftest.py:32
+backend-test	Run backend test suite	2026-10-09T02:43:32.7454289Z   /var/task/tests/conftest.py:32: DeprecationWarning: testcontainers.postgres is deprecated, use testcontainers.community.postgres instead
+backend-test	Run backend test suite	2026-10-09T02:43:32.7454975Z     from testcontainers.postgres import PostgresContainer
+backend-test	Run backend test suite	2026-10-09T02:43:32.7455211Z 
+backend-test	Run backend test suite	2026-10-09T02:43:32.7455374Z ../lang/lib/python3.12/site-packages/fastapi/testclient.py:1
+backend-test	Run backend test suite	2026-10-09T02:43:32.7456208Z   /var/lang/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+backend-test	Run backend test suite	2026-10-09T02:43:32.7457056Z     from starlette.testclient import TestClient as TestClient  # noqa
+backend-test	Run backend test suite	2026-10-09T02:43:32.7457338Z 
+backend-test	Run backend test suite	2026-10-09T02:43:32.7457483Z ../lang/lib/python3.12/site-packages/mangum/adapter.py:65
+backend-test	Run backend test suite	2026-10-09T02:43:32.7458053Z   /var/lang/lib/python3.12/site-packages/mangum/adapter.py:65: DeprecationWarning: There is no current event loop
+backend-test	Run backend test suite	2026-10-09T02:43:32.7458568Z     asyncio.get_event_loop()
+backend-test	Run backend test suite	2026-10-09T02:43:32.7459238Z 
+backend-test	Run backend test suite	2026-10-09T02:43:32.7459711Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+backend-test	Run backend test suite	2026-10-09T02:43:32.7460438Z =========================== short test summary info ============================
+backend-test	Run backend test suite	2026-10-09T02:43:32.7460991Z ERROR tests/media/test_dev_process_media.py
+backend-test	Run backend test suite	2026-10-09T02:43:32.7461549Z !!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+backend-test	Run backend test suite	2026-10-09T02:43:32.7462176Z ========================= 3 warnings, 1 error in 1.65s =========================
+backend-test	Run backend test suite	2026-10-09T02:43:33.0780675Z 
+backend-test	Run backend test suite	2026-10-09T02:43:33.0815835Z ##[error]Process completed with exit code 2.
+gate	Report the gate	﻿2026-10-09T02:43:55.3816275Z ##[group]Run set -euo pipefail
+gate	Report the gate	2026-10-09T02:43:55.3817214Z ^[[36;1mset -euo pipefail^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3818081Z ^[[36;1mpython3 - <<'PY'^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3818957Z ^[[36;1mimport json, os, sys^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3819762Z ^[[36;1m^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3820564Z ^[[36;1mresults = json.loads(os.environ["RESULTS"])^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3821536Z ^[[36;1mbad = sorted(^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3822287Z ^[[36;1m    name^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3823019Z ^[[36;1m    for name, job in results.items()^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3824102Z ^[[36;1m    if job.get("result") in {"failure", "cancelled"}^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3825168Z ^[[36;1m)^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3825891Z ^[[36;1mfor name, job in sorted(results.items()):^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3826989Z ^[[36;1m    print(f"  {job.get('result','?'):<10} {name}")^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3827889Z ^[[36;1mif bad:^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3828798Z ^[[36;1m    sys.exit("gate failed: " + ", ".join(bad))^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3829692Z ^[[36;1mprint("\ngate passed")^[[0m
+gate	Report the gate	2026-10-09T02:43:55.3830635Z ^[[36;1mPY^[[0m
+gate	Report the gate	2026-10-09T02:43:55.8418559Z shell: /usr/bin/bash -e {0}
+gate	Report the gate	2026-10-09T02:43:55.8419646Z env:
+gate	Report the gate	2026-10-09T02:43:55.8422036Z   RESULTS: {
+gate	Report the gate	  "changes": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {
+gate	Report the gate	      "backend": "true",
+gate	Report the gate	      "frontend": "true",
+gate	Report the gate	      "infra": "true",
+gate	Report the gate	      "agent": "true"
+gate	Report the gate	    }
+gate	Report the gate	  },
+gate	Report the gate	  "backend-test": {
+gate	Report the gate	    "result": "failure",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "frontend-test": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "agent-infra-test": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "pip-audit": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "openapi-drift": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "npm-audit": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  },
+gate	Report the gate	  "infra-synth": {
+gate	Report the gate	    "result": "success",
+gate	Report the gate	    "outputs": {}
+gate	Report the gate	  }
+gate	Report the gate	}
+gate	Report the gate	2026-10-09T02:43:55.8424573Z ##[endgroup]
+gate	Report the gate	2026-10-09T02:43:55.8750058Z gate failed: backend-test
+gate	Report the gate	2026-10-09T02:43:55.8750765Z   success    agent-infra-test
+gate	Report the gate	2026-10-09T02:43:55.8751423Z   failure    backend-test
+gate	Report the gate	2026-10-09T02:43:55.8751988Z   success    changes
+gate	Report the gate	2026-10-09T02:43:55.8818688Z   success    frontend-test
+gate	Report the gate	2026-10-09T02:43:55.8819437Z   success    infra-synth
+gate	Report the gate	2026-10-09T02:43:55.8820014Z   success    npm-audit
+gate	Report the gate	2026-10-09T02:43:55.8820597Z   success    openapi-drift
+gate	Report the gate	2026-10-09T02:43:55.8821192Z   success    pip-audit
+gate	Report the gate	2026-10-09T02:43:55.8846180Z ##[error]Process completed with exit code 1.

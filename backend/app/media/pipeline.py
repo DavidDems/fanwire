@@ -233,7 +233,9 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
         except Exception as exc:
             raise MediaRejected("not a parseable image") from exc
 
-        mime_type = Image.MIME.get(image.format)
+        # Pillow leaves `format` unset only for an image it built itself, never
+        # for one it opened; an unset format is simply not on the allow-list.
+        mime_type = Image.MIME.get(image.format) if image.format else None
         if mime_type not in self.ALLOWED_MIME_TYPES:
             raise MediaRejected(f"mime type {mime_type!r} not in allow-list")
 
@@ -245,9 +247,9 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
         self._raw_bytes = data
 
     def scan_for_malware(self) -> None:
-        clean = self._malware_scanner.scan(
-            bucket=self._quarantine_bucket, key=self._media.s3_key_quarantine
-        )
+        key = self._media.s3_key_quarantine
+        assert key is not None  # validate_type just read the object at this key
+        clean = self._malware_scanner.scan(bucket=self._quarantine_bucket, key=key)
         if not clean:
             raise MediaRejected("failed malware scan")
 
@@ -272,6 +274,7 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
 
     def generate_variants(self) -> None:
         assert self._stripped_image is not None  # strip_metadata always runs first
+        assert self._media.mime_type is not None  # validate_type always sets it
         fmt = self._FORMAT_BY_MIME_TYPE[self._media.mime_type]
 
         served = self._resized(self._stripped_image, self.SERVED_MAX_EDGE)
@@ -282,6 +285,7 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
 
     def publish(self) -> None:
         assert self._served_bytes is not None and self._thumbnail_bytes is not None
+        assert self._media.mime_type is not None  # validate_type always sets it
         ext = self._EXTENSION_BY_MIME_TYPE[self._media.mime_type]
         public_key = f"media/{self._media.id}/public.{ext}"
         thumbnail_key = f"media/{self._media.id}/thumbnail.{ext}"
@@ -320,7 +324,7 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
             return image.copy()  # never upscale past the original
         scale = max_edge / longest
         new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-        return image.resize(new_size, Image.LANCZOS)
+        return image.resize(new_size, Image.Resampling.LANCZOS)
 
     @staticmethod
     def _encode(image: Image.Image, fmt: str) -> bytes:

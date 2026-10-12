@@ -171,9 +171,31 @@ python .ai/bin/agentctl.py state show AUTH-017 | grep escalation_reason
 | `CI run N concluded 'cancelled', which is not a test verdict` (or `skipped`, `stale`, `neutral`, `action_required`, `startup_failure`) | CI did not produce a verdict. Nothing was spent | Look at the run. See "Recovering a CI escalation" below. |
 | `orchestrator run N failed at ...` | A distil, transition, dispatch or self-wake failed; what it names was never started | Fix the cause (token, workflow file), then recover as below. |
 
-`max_attempts_exhausted` and `red_baseline_not_red` are **not** escalation
-reasons: they route to `MANAGER_REVIEW`, and the manager is dispatched first.
-They reach you only if the manager then escalates.
+`max_attempts_exhausted`, `red_baseline_not_red` and
+`red_baseline_wrong_reason: ...` are **not** escalation reasons: they route to
+`MANAGER_REVIEW`, and the manager is dispatched first. They reach you only if
+the manager then escalates.
+
+`red_baseline_wrong_reason: ...` (handoff.md §10, D4) means the baseline CI
+run failed, but not only on the new tests, so no code agent was sent. The
+reason names what was wrong, parts joined by `; `:
+
+| Part | What happened | Usual response |
+|---|---|---|
+| `non-test job(s) failed: pip-audit, ...` | A job other than the suites, the static checks (and `gate`) failed: an audit, `openapi-drift`, `infra-synth`, `agent-infra-test` | Not the task's problem. Fix it on `main`, then re-run the baseline (below). |
+| `backend-ruff failed in the test commit's own files: ...` (or `frontend-lint`) | The new tests do not lint. The code agent cannot edit them (D5) | `MANAGER_RESCOPE`: the test agent writes them again. |
+| `frontend-typecheck found what only the test file can fix: ... (TS6133)` | tsc reports an unused declaration in the new tests (D5) | As above. |
+| `failures outside the test commit's files: ...` | A test the test agent did not write failed: an existing test the new one broke (a tree scan), or one already broken | Re-scope if the new test caused it; otherwise fix `main` first. |
+| `could not read <job>'s failures: ...`, `could not read the run's job list` | The log or job list was missing, unparseable or truncated; vitest reported unhandled errors; a static check's tally disagreed with what it named, or its log stopped before GitHub's `Process completed` line | Read the run. If it was red for the right reason after all, re-run the baseline. |
+| `job(s) did not fail outright: ...`, `no test job failed` | A suite or check was cancelled or timed out, or no suite failed: only a non-test job, or only a static check while every suite passed (the tests pin nothing) | Read the run. |
+| `no files recorded for the test commit` | The history has no test-agent commit to compare against | Read `history`. |
+
+To re-run the baseline once the cause is fixed, set `state` back to
+`TESTS_COMMITTED` and `escalation_reason` to `null` in `state.json` on the
+branch, commit, push and nudge the orchestrator, as in "Recovering a CI
+escalation" below. A human-supplied `-f event=CI_FAILED` is classified like
+any other, and with no log it fails closed, so it cannot force the baseline
+open. `MANAGER_RETRY` can, and skips the check.
 
 Then drive it by hand. `MANAGER_RETRY` (→ `RETRY_READY`, one more attempt,
 never past the hard cap of 8) and `MANAGER_RESCOPE` (→ `READY`, the test agent
@@ -267,7 +289,24 @@ before pointing the system at a real feature.
 python .ai/bin/agentctl.py telemetry report
 ```
 
-Per task, per role, per model: invocations, tokens, estimated cost, attempts,
-escalations. The numbers that matter over time are cost per *successful* task
-and the Manager escalation rate — if the second is climbing, task specs are
-under-specified, and that is a Director problem, not a model problem.
+Per task, per role, per model: invocations, tokens (cache reads and writes
+included), cost, permission denials, attempts, escalations. The numbers that
+matter over time are cost per *successful* task and the Manager escalation
+rate — if the second is climbing, task specs are under-specified, and that is
+a Director problem, not a model problem.
+
+Cost is the provider's own figure for each call (the CLI envelope's
+`total_cost_usd`) wherever a record has one. A record without it falls back to
+an estimate from `.ai/config.json`'s price table; the report counts those
+("N estimated") and lists each by path. Every record before D6 is such an
+estimate and **leaves out cache tokens** — MEDIA-002's records claim $1.25
+against a real $2.65 — so for those runs read the Console, not the report.
+The Console stays the ground truth: the report is never checked against it.
+
+`permission denials` above 0 means a worker asked for a tool the CLI refused
+it; the report lists which record and the tool names (never what was asked).
+That is the evidence for whether a worker tries a shell (handoff.md §10, D2).
+
+When provider prices change, update `telemetry.prices` in `.ai/config.json`:
+it now only feeds the fallback estimate, but an estimate on stale prices is
+how the gap above went unnoticed.

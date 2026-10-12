@@ -84,7 +84,12 @@ def _cached_secret_value(secret_arn: str, region: str) -> str:
     # and re-reading it on every ingestion run would be a needless Secrets
     # Manager call (and NAT-instance egress hop, see wiki/CodeContext/
     # Modules/0x00-architecture.md "Egress") on every cold start's first use.
-    return _secrets_manager_client(region).get_secret_value(SecretId=secret_arn)["SecretString"]
+    # boto3 has no stubs here (the client is `Any`); a string secret's value is
+    # always a str, and a binary one has no SecretString and raises KeyError.
+    secret: str = _secrets_manager_client(region).get_secret_value(SecretId=secret_arn)[
+        "SecretString"
+    ]
+    return secret
 
 
 def resolve_api_sports_key(settings: Settings) -> str:

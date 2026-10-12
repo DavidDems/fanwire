@@ -33,6 +33,22 @@ KILL = "Stop every process the model left behind"
 RECLAIM = "Take the checkout back"
 MODEL_USER = "agentrun"
 
+# handoff.md §10, D5. test-agent.yml's static checks: job -> (the image it runs
+# in, the exact `docker compose run` it ends with). One tool per job, so the job
+# name alone tells ciresult which output format to read.
+STATIC_CHECKS = {
+    "backend-ruff": (
+        "backend",
+        "--entrypoint python backend-test -m ruff check --output-format concise .",
+    ),
+    "backend-mypy": ("backend", "--entrypoint python backend-test -m mypy app"),
+    "frontend-typecheck": (
+        "frontend",
+        "--entrypoint npm frontend-test run typecheck -- --pretty false",
+    ),
+    "frontend-lint": ("frontend", "--entrypoint npm frontend-test run lint"),
+}
+
 
 @pytest.fixture
 def worker() -> str:
@@ -504,6 +520,15 @@ class TestEveryJobIsBounded:
                 return
         raise AssertionError(
             f"{path.name} declares no timeout-minutes, so it inherits the 6-hour default"
+        )
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_every_static_check_job_declares_a_timeout(self, name):
+        """handoff.md §10, D5. test-agent.yml's older jobs still inherit the
+        default (a D3 residue); a job added to it does not."""
+        text = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(text, name), re.MULTILINE), (
+            f"{name} declares no timeout-minutes"
         )
 
 
@@ -1731,3 +1756,311 @@ class TestStalledMeansPastTheWorkflowsOwnTimeout:
 
         text = TEST_AGENT_WF.read_text(encoding="utf-8")
         assert st.DISPATCH_TIMEOUT_MINUTES["test-agent"] == longest_chain_minutes(text)
+
+
+# --------------------------------------------------------------------------- D4
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+FAKE_GH = """#!/bin/sh
+echo "$*" >> "$FAKE_GH_CALLS"
+[ "${FAKE_GH_EXIT:-0}" = 0 ] || exit "$FAKE_GH_EXIT"
+for a in "$@"; do
+  case "$a" in
+    --log-failed) cat "$FAKE_GH_LOG"; exit 0 ;;
+    --json) cat "$FAKE_GH_JOBS"; exit 0 ;;
+  esac
+done
+exit 1
+"""
+
+
+class TestTheBaselineIsRedForTheRightReason:
+    """handoff.md §10, D4. A failed baseline CI run counted as "red, as
+    required" whatever had failed: an audit CVE, openapi drift, an unrelated
+    broken test, a tree-scan test tripped by the new test. The code agent,
+    which cannot edit tests, then spent its budget on them. Now the step that
+    applies a CI result fetches the failed run's jobs and failed-job log first
+    and hands both to `agentctl state advance`, which classifies a BASELINE_CI
+    failure in agentlib (ciresult.baseline_verdict) before any event is
+    applied. The YAML only fetches; the decision is not made here."""
+
+    @pytest.fixture
+    def ci_step(self, orchestrator) -> str:
+        return step(orchestrator, "Apply the CI result")
+
+    def test_the_log_and_jobs_are_fetched_before_any_event_is_applied(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        advance = body.index("state advance")
+        for fetch in ('gh run view "$RUN_ID" --log-failed', 'gh run view "$RUN_ID" --json jobs'):
+            assert fetch in body, fetch
+            assert body.index(fetch) < advance, f"{fetch} must run before the event is applied"
+
+    def test_the_classifier_gets_both_files(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        after = body[body.index(f"{AGENTCTL} state advance") :]
+        assert '"${CI_EVIDENCE[@]}"' in after
+        assert 'CI_EVIDENCE=(--ci-jobs "$JOBS" --ci-log "$LOG")' in body
+
+    def test_only_a_failure_is_fetched_for(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert 'if [ "$EVENT" = "CI_FAILED" ]; then' in body
+        assert body.index('"$EVENT" = "CI_FAILED"') < body.index("--log-failed")
+
+    def test_the_evidence_stays_out_of_the_task_checkout(self, ci_step):
+        assert 'JOBS="$RUNNER_TEMP/' in ci_step and 'LOG="$RUNNER_TEMP/' in ci_step
+
+    def test_the_step_can_read_the_run(self, ci_step):
+        assert "GH_TOKEN: ${{ github.token }}" in ci_step
+        assert "GH_REPO: ${{ github.repository }}" in ci_step
+
+    def test_d1_and_d3_are_untouched(self, ci_step):
+        body = "\n".join(live_lines(ci_step))
+        assert body.index("guard tested") < body.index("--log-failed")
+        assert "--discard-if-paused" in body and "--ignore-terminal" in body
+
+    # The step itself, run against a real branch with a fake `gh`.
+
+    @pytest.fixture
+    def branch(self, tmp_path) -> dict:
+        if shutil.which("git") is None:
+            pytest.skip("git not available")
+        repo = Path(__file__).resolve().parents[2]
+        root = tmp_path / "task"
+        task = root / ".ai" / "tasks" / "DFOUR-001"
+        task.mkdir(parents=True)
+        spec = json.loads(
+            (repo / ".ai" / "tasks" / "DEMO-001" / "task.json").read_text(encoding="utf-8")
+        )
+        spec["task_id"] = "DFOUR-001"
+        (task / "task.json").write_text(json.dumps(spec), encoding="utf-8")
+        _git(root, "init", "-q")
+        _git(root, "config", "user.email", "t@example.com")
+        _git(root, "config", "user.name", "t")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-q", "-m", "spec")
+        new_test = root / "backend" / "tests" / "media" / "test_dev_process_media.py"
+        new_test.parent.mkdir(parents=True)
+        new_test.write_text("import scripts.dev_process_media\n", encoding="utf-8")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-q", "-m", "DFOUR-001 test: the new test")
+        sha = _git(root, "rev-parse", "HEAD").strip()
+        from agentlib import state as st
+
+        s = st.new_state("DFOUR-001", branch="agent/DFOUR-001")
+        s["state"] = "BASELINE_CI"
+        s["history"] = [
+            {
+                "at": "2026-10-09T02:42:11Z",
+                "from": "TEST_AGENT_RUNNING",
+                "to": "TESTS_COMMITTED",
+                "event": "AGENT_COMMITTED",
+                "note": sha,
+            }
+        ]
+        st.save_state(task / "state.json", s)
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        (bindir / "gh").write_text(FAKE_GH, encoding="utf-8", newline="\n")
+        (bindir / "gh").chmod(0o755)
+        return {"repo": repo, "root": root, "sha": sha, "bin": bindir, "state": task / "state.json"}
+
+    def apply(self, ci_step: str, branch: dict, tmp_path: Path, **over: str) -> tuple[int, dict]:
+        from agentlib import state as st
+
+        env = {
+            "TOOLS": branch["repo"].as_posix(),
+            "AGENTCTL_DATA_ROOT": branch["root"].as_posix(),
+            "TASK_ID": "DFOUR-001",
+            "CONCLUSION": "failure",
+            "RUN_ID": "37875837267",
+            "SHA": branch["sha"],
+            "RUNNER_TEMP": tmp_path.as_posix(),
+            "PATH": str(branch["bin"]) + os.pathsep + os.environ.get("PATH", ""),
+            "FAKE_GH_CALLS": (tmp_path / "gh-calls.txt").as_posix(),
+            "FAKE_GH_LOG": (FIXTURES / "media002-baseline-failed.log").as_posix(),
+            "FAKE_GH_JOBS": (FIXTURES / "media002-baseline-jobs.json").as_posix(),
+            **over,
+        }
+        body = run_bodies(ci_step)[0]
+        # The data root is a git checkout; the step runs inside it, as the
+        # job's default working directory is the task checkout.
+        code, _ = run_step_body(f'cd "$AGENTCTL_DATA_ROOT"\n{body}', env, tmp_path)
+        return code, st.load_state(branch["state"])
+
+    def test_media002s_baseline_opens_implementation(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path)
+        assert code == 0
+        assert s["state"] == "READY_FOR_IMPLEMENTATION", s.get("escalation_reason")
+        calls = (tmp_path / "gh-calls.txt").read_text(encoding="utf-8")
+        assert "37875837267" in calls and "--log-failed" in calls
+
+    def test_a_failed_audit_goes_to_the_manager(self, ci_step, branch, tmp_path):
+        ran = json.loads((FIXTURES / "media002-baseline-jobs.json").read_text(encoding="utf-8"))
+        for job in ran["jobs"]:
+            if job["name"] == "openapi-drift":
+                job["conclusion"] = "failure"
+        jobs_file = tmp_path / "jobs.json"
+        jobs_file.write_text(json.dumps(ran), encoding="utf-8")
+        code, s = self.apply(ci_step, branch, tmp_path, FAKE_GH_JOBS=jobs_file.as_posix())
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"
+        assert "openapi-drift" in s["escalation_reason"]
+
+    def test_a_log_that_cannot_be_fetched_fails_closed(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path, FAKE_GH_EXIT="1")
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"
+
+    def test_a_passing_run_fetches_nothing(self, ci_step, branch, tmp_path):
+        code, s = self.apply(ci_step, branch, tmp_path, CONCLUSION="success")
+        assert code == 0
+        assert s["state"] == "MANAGER_REVIEW"  # green baseline: red_baseline_not_red
+        assert s["escalation_reason"] == "red_baseline_not_red"
+        assert not (tmp_path / "gh-calls.txt").exists()
+
+
+class TestTheTestJobsAreTestAgentsOwn:
+    """handoff.md §10, D4. `ciresult.TEST_JOBS` names the jobs whose failure
+    can be the new test's doing, and where each one's suite runs. It is a copy
+    of test-agent.yml's job names, so it is pinned to them here. A job added
+    to test-agent.yml and not listed counts as a non-test job: the baseline
+    then fails closed to the manager, never open to the code agent."""
+
+    @pytest.fixture
+    def gate(self) -> str:
+        if not TEST_AGENT_WF.exists():
+            pytest.skip("test-agent.yml not present")
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    def test_every_test_job_runs_its_compose_suite(self, gate):
+        from agentlib import ciresult
+
+        assert set(ciresult.TEST_JOBS) == {"backend-test", "frontend-test"}
+        for name, directory in ciresult.TEST_JOBS.items():
+            assert name in job_names(gate), name
+            assert f"docker compose run --rm {name}" in job_block(gate, name)
+            assert directory == name.removesuffix("-test") + "/"
+
+    def test_the_aggregate_is_the_always_running_gate(self, gate):
+        from agentlib import ciresult
+
+        assert ciresult.AGGREGATE_JOB == "gate"
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert set(ciresult.TEST_JOBS) <= set(needs)
+        assert "if: always()" in job_block(gate, "gate")
+
+    def test_the_suites_run_from_those_directories(self):
+        # Pytest and vitest name files relative to where they run. Both
+        # images copy one directory to their working directory.
+        docker = WORKFLOWS.parents[1] / "docker"
+        backend = (docker / "backend.Dockerfile").read_text(encoding="utf-8")
+        frontend = (docker / "frontend.Dockerfile").read_text(encoding="utf-8")
+        assert "COPY backend/tests ./tests" in backend
+        assert "COPY frontend/ ." in frontend
+
+
+# --------------------------------------------------------------------------- D5
+
+# Every other job test-agent.yml has: neither a test suite nor a static check,
+# so a baseline it fails is never the new tests' doing.
+NOT_A_CHECK = {
+    "changes",
+    "agent-infra-test",
+    "pip-audit",
+    "openapi-drift",
+    "npm-audit",
+    "infra-synth",
+    "gate",
+}
+
+
+class TestTheStaticChecksGateEveryRun:
+    """handoff.md §10, D5. CI never type-checked, linted or built the
+    frontend and ran no ruff or mypy for the backend: `tsc` first ran in
+    deploy.yml, after merge, and hand-run sessions ran the rest by hand, which
+    a worker cannot. Now each is a job of test-agent.yml, in the image its
+    suite already runs in, required by `gate`, and never skipped on a
+    dispatched run.
+
+    One job per tool rather than steps inside backend-test/frontend-test: the
+    job name is what `gh run view --log-failed` attributes every line to, and
+    what ciresult already reads (D4), so it alone says which tool's output a
+    failed log holds; and a red typecheck cannot hide whether lint, or the
+    suite, would have passed."""
+
+    @pytest.fixture
+    def gate(self) -> str:
+        if not TEST_AGENT_WF.exists():
+            pytest.skip("test-agent.yml not present")
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_check_runs_in_its_suites_image(self, gate, name):
+        side, command = STATIC_CHECKS[name]
+        block = job_block(gate, name)
+        assert f"file: docker/{side}.Dockerfile" in block
+        assert "target: test" in block
+        # The tag compose runs (TestTheGateStaysAuthoritative): without it
+        # compose would build its own image, uncached.
+        assert f"tags: fanwire-{side}-test:latest" in block
+        assert f"cache-from: type=gha,scope={side}-test" in block
+        # Reads the suite's cache, never writes it: the suite's job owns it.
+        assert "cache-to:" not in block
+        # -T: no TTY, so no colour and no pretty-printing in the log the
+        # baseline check parses. --no-deps: no database for a static check.
+        assert f"docker compose run --rm -T --no-deps {command}" in "\n".join(live_lines(block))
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_check_runs_whenever_its_suite_does(self, gate, name):
+        """Keyed on the same `changes` output as its suite, which is `true`
+        for every event but a pull request: a dispatched run never skips it."""
+        side, _ = STATIC_CHECKS[name]
+        block = job_block(gate, name)
+        assert "    needs: changes" in block.splitlines()
+        assert f"    if: needs.changes.outputs.{side} == 'true'" in block.splitlines()
+        assert f"    if: needs.changes.outputs.{side} == 'true'" in job_block(gate, f"{side}-test")
+
+    @pytest.mark.parametrize("name", sorted(STATIC_CHECKS))
+    def test_the_gate_requires_the_check(self, gate, name):
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert name in needs
+
+    def test_mypy_checks_the_application_only(self, gate):
+        """A test commit only adds tests. Type-checking `tests/` would put
+        every new test's import of a not-yet-written module in front of the
+        red baseline as a second failure; `app` is what mypy (strict) is for."""
+        lines = live_lines(job_block(gate, "backend-mypy"))
+        assert [ln for ln in lines if "mypy" in ln] == [
+            "docker compose run --rm -T --no-deps " + STATIC_CHECKS["backend-mypy"][1]
+        ]
+
+    def test_every_job_is_a_suite_a_check_or_neither(self, gate):
+        """ciresult.STATIC_JOBS is a copy of these job names, as TEST_JOBS is
+        of the suites'. A job added to test-agent.yml must be placed in one of
+        the three, deliberately."""
+        from agentlib import ciresult
+
+        assert set(ciresult.STATIC_JOBS) == set(STATIC_CHECKS)
+        for name, directory in ciresult.STATIC_JOBS.items():
+            assert directory == STATIC_CHECKS[name][0] + "/"
+        assert set(job_names(gate)) == set(ciresult.TEST_JOBS) | set(STATIC_CHECKS) | NOT_A_CHECK
+        assert ciresult.LINT_JOBS == {"backend-ruff", "frontend-lint"}
+        assert ciresult.LINT_JOBS <= set(ciresult.STATIC_JOBS)
+
+    def test_the_images_carry_the_tools(self):
+        """No tool is installed by the job: the test images already hold
+        them, and the checks run from the directory the suites run from."""
+        root = WORKFLOWS.parents[1]
+        backend = (root / "docker" / "backend.Dockerfile").read_text(encoding="utf-8")
+        frontend = (root / "docker" / "frontend.Dockerfile").read_text(encoding="utf-8")
+        test_stage = backend.split("FROM base AS test", 1)[1].split("\nFROM ", 1)[0]
+        assert "pip install --no-cache-dir .[dev]" in test_stage
+        assert "COPY backend/pyproject.toml ./" in backend  # mypy's and ruff's config
+        dev = (root / "backend" / "pyproject.toml").read_text(encoding="utf-8")
+        dev = dev.split("dev = [", 1)[1].split("\n]", 1)[0]
+        assert '"ruff' in dev and '"mypy' in dev
+        assert "RUN npm ci\n" in frontend  # devDependencies included
+        package = json.loads((root / "frontend" / "package.json").read_text(encoding="utf-8"))
+        assert package["scripts"]["typecheck"].startswith("tsc ")
+        assert package["scripts"]["lint"].startswith("eslint ")
+        assert {"typescript", "eslint"} <= set(package["devDependencies"])
