@@ -558,3 +558,108 @@ class TestAHumanCanRecoverAnEscalatedTask:
         s = st.advance(s, "AGENT_FAILED", reason="late")
         assert s["state"] == "ESCALATED"
         assert s["escalation_reason"] == "guard violation: x"
+
+
+# --------------------------------------------------------------------------- hand runs
+
+
+def hand(**over):
+    s = st.new_state("UI-009", branch="agent/UI-009", max_attempts=3, mode="hand")
+    s.update(over)
+    return s
+
+
+HAND_EVENTS = {"HAND_STARTED", "HAND_FINISHED"}
+ORCHESTRATOR_EVENTS = sorted(st.EVENTS - HAND_EVENTS - {"CANCEL", "ESCALATE"})
+
+
+class TestAHandRunLeavesARecord:
+    """A task run by a human in a Claude Code session, on `agent/<ID>`, used to
+    leave no state file, so `agentctl status` showed it as DRAFT however far
+    along it was. It now records its own two-step path, and none of the
+    orchestrator's events apply to it."""
+
+    def test_the_modes(self):
+        assert st.MODES == frozenset({"auto", "hand"})
+
+    def test_a_new_state_is_auto_by_default(self):
+        s = st.new_state("DEMO-001")
+        assert s["mode"] == "auto"
+        assert st.task_mode(s) == "auto"
+
+    def test_a_state_without_a_mode_reads_as_auto(self):
+        # DEMO-001, MEDIA-002 and USERS-002 were written before modes existed.
+        s = fresh()
+        s.pop("mode", None)
+        assert st.task_mode(s) == "auto"
+
+    def test_hand_running_is_a_live_state(self):
+        assert "HAND_RUNNING" in st.STATES
+        assert "HAND_RUNNING" not in st.TERMINAL
+        assert HAND_EVENTS <= st.EVENTS
+
+    def test_the_hand_path(self):
+        s = st.advance(hand(), "HAND_STARTED")
+        assert s["state"] == "HAND_RUNNING"
+        assert s["mode"] == "hand"
+        assert s["history"][-1]["note"] == "hand run started"
+        s = st.advance(s, "HAND_FINISHED", pr=140)
+        assert s["state"] == "COMPLETE"
+        assert s["pr"] == 140
+        assert s["history"][-1]["note"] == "hand run finished, PR #140"
+        assert [h["event"] for h in s["history"]] == ["HAND_STARTED", "HAND_FINISHED"]
+
+    @pytest.mark.parametrize("pr", [None, 0, -3, "140", 1.5, True])
+    def test_finishing_needs_a_real_pr_number(self, pr):
+        s = st.advance(hand(), "HAND_STARTED")
+        ctx = {} if pr is None else {"pr": pr}
+        with pytest.raises(st.StateError):
+            st.advance(s, "HAND_FINISHED", **ctx)
+
+    def test_finishing_is_only_legal_from_a_running_hand_run(self):
+        with pytest.raises(st.StateError):
+            st.advance(hand(), "HAND_FINISHED", pr=140)
+
+    @pytest.mark.parametrize("event", ORCHESTRATOR_EVENTS)
+    def test_no_orchestrator_event_applies_to_a_hand_run(self, event):
+        s = st.advance(hand(), "HAND_STARTED")
+        with pytest.raises(st.StateError, match="hand-run"):
+            st.advance(s, event)
+
+    @pytest.mark.parametrize("event", ORCHESTRATOR_EVENTS)
+    def test_no_orchestrator_event_applies_to_a_hand_draft(self, event):
+        with pytest.raises(st.StateError, match="hand-run"):
+            st.advance(hand(), event)
+
+    @pytest.mark.parametrize("event", sorted(HAND_EVENTS))
+    def test_the_hand_events_do_not_apply_to_an_auto_task(self, event):
+        with pytest.raises(st.StateError):
+            st.advance(fresh(), event, pr=140)
+        with pytest.raises(st.StateError):
+            st.advance(fresh(state="CODE_AGENT_RUNNING", attempt=1), event, pr=140)
+
+    def test_a_human_can_still_cancel_or_escalate_a_hand_run(self):
+        s = st.advance(hand(), "HAND_STARTED")
+        assert st.advance(s, "CANCEL")["state"] == "CANCELLED"
+        assert st.advance(s, "ESCALATE", reason="stuck")["state"] == "ESCALATED"
+
+    def test_a_hand_run_is_never_stalled(self):
+        s = st.advance(hand(), "HAND_STARTED")
+        assert st.stalled(s, _minutes_after(s["updated_at"], 100_000)) is None
+
+    def test_a_hand_state_round_trips(self, tmp_path):
+        s = st.advance(hand(), "HAND_STARTED")
+        p = tmp_path / "state.json"
+        st.save_state(p, s)
+        assert st.load_state(p) == s
+
+    def test_an_unknown_mode_fails_closed(self, tmp_path):
+        p = tmp_path / "state.json"
+        p.write_text('{"task_id": "X-001", "state": "DRAFT", "mode": "bogus"}', encoding="utf-8")
+        with pytest.raises(st.StateError, match="mode"):
+            st.load_state(p)
+
+    def test_a_missing_mode_still_loads(self, tmp_path):
+        p = tmp_path / "state.json"
+        p.write_text('{"task_id": "X-001", "state": "DRAFT"}', encoding="utf-8")
+        assert st.task_mode(st.load_state(p)) == "auto"

@@ -334,3 +334,31 @@ class TestTheManagerLoopIsBounded:
             s = st.advance(s, action["event"])
         assert s["state"] == "ESCALATED"
         assert orchestrator.next_action(s, SPEC)["kind"] == "halt"
+
+
+class TestTheOrchestratorNeverDrivesAHandRun:
+    """A hand-run task is run by a human in a Claude Code session. It records
+    HAND_RUNNING and COMPLETE so the board is honest, but nothing in it is the
+    orchestrator's to dispatch."""
+
+    def hand(self, state: str) -> dict:
+        return dict(st.new_state("UI-009", max_attempts=3, mode="hand"), state=state)
+
+    def test_a_running_hand_run_halts(self):
+        action = orchestrator.next_action(self.hand("HAND_RUNNING"), SPEC)
+        assert action == {"kind": "halt", "reason": "hand run; not driven by the orchestrator"}
+
+    def test_a_finished_hand_run_halts_as_complete(self):
+        assert orchestrator.next_action(self.hand("COMPLETE"), SPEC) == {
+            "kind": "halt",
+            "reason": "complete",
+        }
+
+    @pytest.mark.parametrize("state", sorted(st.STATES))
+    def test_no_state_of_a_hand_run_dispatches_anything(self, state):
+        action = orchestrator.next_action(self.hand(state), SPEC)
+        assert action["kind"] in ("halt", "cancel")
+
+    def test_every_live_state_is_mapped_or_is_the_hand_runs_own(self):
+        live = st.STATES - st.TERMINAL - {"ESCALATED"}
+        assert live - set(orchestrator._ACTIONS) == {"HAND_RUNNING"}
