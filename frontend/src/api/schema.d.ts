@@ -597,7 +597,7 @@ export interface components {
         /** GameOut */
         GameOut: {
             /** Api Sports Game Id */
-            api_sports_game_id: number;
+            api_sports_game_id: number | null;
             /** Away Score */
             away_score: number;
             /** Away Team Id */
@@ -607,12 +607,16 @@ export interface components {
              * Format: date-time
              */
             date: string;
+            /** Game Type */
+            game_type: string | null;
             /** Home Score */
             home_score: number;
             /** Home Team Id */
             home_team_id: number;
             /** Id */
             id: number;
+            /** Nba Game Id */
+            nba_game_id: number | null;
             /** Player Stats */
             player_stats: {
                 [key: string]: unknown;
@@ -845,7 +849,7 @@ export interface components {
             /** Abbreviation */
             abbreviation: string;
             /** Api Sports Team Id */
-            api_sports_team_id: number;
+            api_sports_team_id: number | null;
             /** Conference */
             conference: string;
             /** Division */
@@ -856,6 +860,8 @@ export interface components {
             logo_url: string | null;
             /** Name */
             name: string;
+            /** Nba Team Id */
+            nba_team_id: number | null;
         };
         /** ThreadView */
         ThreadView: {

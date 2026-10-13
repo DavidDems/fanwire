@@ -49,7 +49,10 @@ class GameRef:
     app.media.service.MediaView."""
 
     id: int
-    api_sports_game_id: int
+    # None for a game loaded from the NBA history dataset (nba_game_id only):
+    # CachedEventProxy is keyed by the API-SPORTS id, so such a game has no
+    # live score to ask for.
+    api_sports_game_id: int | None
     date: datetime
 
 
