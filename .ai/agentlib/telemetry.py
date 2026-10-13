@@ -207,6 +207,16 @@ def _duration(started: str, ended: str) -> int | None:
     return int((b - a).total_seconds())
 
 
+def estimate(rec: dict[str, Any], prices: dict[str, dict[str, float]]) -> float | None:
+    """The price-table estimate for one record shaped like `record()`'s.
+
+    Public so that a caller outside telemetry (the CI summary prices its one
+    call) uses the same rules, cache tokens and the never-guess rule included,
+    rather than a second copy of them that drifts.
+    """
+    return _cost(rec, prices)
+
+
 def _cost(rec: dict[str, Any], prices: dict[str, dict[str, float]]) -> float | None:
     """The estimate from the price table, or None when it cannot be honest.
 

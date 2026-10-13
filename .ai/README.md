@@ -70,6 +70,8 @@ Nothing depends on an agent session staying alive.
 | `.github/workflows/agent-orchestrator.yml` | The state machine's driver. One action per run. |
 | `.github/workflows/agent-worker.yml` | Runs exactly one agent, for one role, for one task. |
 | `.github/workflows/agent-guard.yml` | Enforces the permission model on every agent PR, independently of the orchestrator. |
+| `.github/workflows/jev-smoke.yml` | Dispatch-only, `main` only: one typed call to `jev` to prove the route and read its cost. |
+| `.github/workflows/ci-summary.yml` | A cheap automation (`work-modes.md`): when `test-agent` fails on an `agent/*` PR, one comment saying what failed, where and the likely cause (Haiku 5.5), kept up to date. |
 
 ## Commands worth knowing
 
