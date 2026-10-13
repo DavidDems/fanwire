@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "_comment": [
+    "The questions jev-smoke.yml asks: the merge gate for jev's seam",
+    "(Prompts/04-cheap-automations.md Deliverable 0, step 4). One question of",
+    "each documented type, so one real call shows the real shape of all three.",
+    "The answers are obvious from smoke-state.txt on purpose: the smoke tests",
+    "the wire, not the model's judgement. Keys starting with _ stay local."
+  ],
+  "questions": {
+    "ci_outcome": {
+      "type": "choice",
+      "instructions": "What was the outcome of the CI run described in the state?",
+      "criteria": {
+        "passed": "Every check in the run succeeded.",
+        "failed": "At least one check in the run failed."
+      },
+      "_why": "A choice carries a confidence, which is the field the merge gate asks for."
+    },
+    "ci_health": {
+      "type": "score",
+      "instructions": "How healthy is the change, judged only by the CI run described in the state?",
+      "criteria": ["broken", "unclear", "healthy"],
+      "_why": "Shows the score shape: a float mean, a legend and per-level probabilities."
+    },
+    "safe_to_review": {
+      "type": "noul",
+      "instructions": "The change described in the state is ready for a human to review.",
+      "_why": "Shows the noul shape, which is documented without a confidence."
+    }
+  }
+}

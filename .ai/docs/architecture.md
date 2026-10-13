@@ -153,8 +153,22 @@ holds a credential; it never holds the value.
 
 ## Provider independence
 
-One file is provider-specific: `.ai/bin/invoke_agent.sh`. It takes a prompt and
-a role, and returns the normalised result shape in `agentlib/agentresult.py`.
-Adding a provider means a `case` branch there and an entry in `config.json`.
-It means touching nothing in `.github/workflows/` and nothing in the state
-machine.
+Two files are provider-specific, one per kind of call:
+
+| Seam | Does | Contract |
+|---|---|---|
+| `.ai/bin/invoke_agent.sh` | runs an agent that writes code, tests or prose | `agentlib/agentresult.py` |
+| `.ai/bin/ask_jev.py` | asks `jev` typed questions (choice, score, noul) | `agentlib/decision.py` |
+
+Adding a text provider means a `case` branch in the first and an entry in
+`config.json`. Neither touches the state machine.
+
+The second seam came back from #41 on 2026-10-13
+(`wiki/GeneralContext/Prompts/04-cheap-automations.md` Deliverable 0), on
+TypeSafe's direct route and its documented response shape. It makes one call
+with no retry, caps the state under `jev`'s 32K-token window, and prices the
+call from the provider's usage. Nothing in the pipeline acts on its answers:
+its first users are the cheap automations, which ask it **in shadow** beside
+Haiku and record both (`wiki/GeneralContext/Architecture/work-modes.md`).
+`jev` returns typed answers, not strings, so it can make a decision a role was
+asked to make but never write what the role writes.

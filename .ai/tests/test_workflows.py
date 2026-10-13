@@ -22,6 +22,7 @@ WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKER = WORKFLOWS / "agent-worker.yml"
 ORCHESTRATOR = WORKFLOWS / "agent-orchestrator.yml"
 GUARD_WF = WORKFLOWS / "agent-guard.yml"
+JEV_SMOKE = WORKFLOWS / "jev-smoke.yml"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -334,7 +335,7 @@ class TestAWorkerCannotEscapeItsOwnBranch:
 class TestNoWorkflowCanMerge:
     """Nothing in the system may merge its own work."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
     def test_no_workflow_calls_pr_merge(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -348,7 +349,7 @@ class TestNoWorkflowCanApprove:
     requests", which also grants approval. Nothing here may use it: a workflow
     that can approve could satisfy the 1-approval rule on an agent's own PR."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
     def test_no_workflow_approves_a_pull_request(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -643,7 +644,7 @@ class TestEveryJobIsBounded:
     GitHub keeps only one pending run per group — so one hung orchestrator
     drops transitions and stalls the task for the rest of the day."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
     def test_the_job_declares_a_timeout(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -920,7 +921,9 @@ class TestNoDispatchInputReachesTheShellAsCode:
 
     # agent-guard.yml joined in D2b: it pasted the PR's branch name, which a
     # fork chooses, into three scripts.
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, GUARD_WF], ids=lambda p: p.name)
+    @pytest.mark.parametrize(
+        "path", [WORKER, ORCHESTRATOR, GUARD_WF, JEV_SMOKE], ids=lambda p: p.name
+    )
     def test_no_run_script_interpolates_attacker_influenced_context(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -2197,3 +2200,51 @@ class TestTheStaticChecksGateEveryRun:
         assert package["scripts"]["typecheck"].startswith("tsc ")
         assert package["scripts"]["lint"].startswith("eslint ")
         assert {"typescript", "eslint"} <= set(package["devDependencies"])
+
+
+class TestTheJevSmokeIsDispatchOnly:
+    """Prompts/04-cheap-automations.md Deliverable 0, step 4: the merge gate
+    for `jev`'s seam is one real 200 with a `confidence` field, from a smoke
+    job the human starts. It holds `TYPESAFE_API_KEY`, so nothing but a human's
+    dispatch may start it, nothing from a branch may run in it, and it can
+    write nothing (work-modes.md "Constraints every automation must keep")."""
+
+    @pytest.fixture
+    def smoke(self) -> str:
+        assert JEV_SMOKE.exists(), "jev-smoke.yml is missing"
+        return JEV_SMOKE.read_text(encoding="utf-8")
+
+    def test_only_a_dispatch_starts_it(self, smoke):
+        triggers = smoke.split("\non:\n", 1)[1].split("\n\n", 1)[0]
+        assert "workflow_dispatch" in triggers
+        for other in ("pull_request", "push", "workflow_run", "schedule", "issue"):
+            assert other not in triggers, f"jev-smoke.yml must not run on {other}"
+
+    def test_it_runs_only_on_main(self, smoke):
+        """A dispatch names a ref, and that ref's `ask_jev.py` is what runs with
+        the key. The job refuses any ref but `main`, so a slip in the
+        dispatching command cannot hand a branch's code the key."""
+        assert "if: github.ref == 'refs/heads/main'" in job_block(smoke, "smoke")
+
+    def test_it_can_write_nothing(self, smoke):
+        assert re.search(r"^permissions:\n  contents: read\n", smoke, re.MULTILINE)
+        assert not re.search(r"^\s+[a-z-]+:\s*write\b", smoke, re.MULTILINE)
+
+    def test_the_key_is_held_by_one_step_only(self, smoke):
+        assert smoke.count("secrets.TYPESAFE_API_KEY") == 1
+        assert "secrets." not in smoke.replace("secrets.TYPESAFE_API_KEY", "")
+        assert "github.token" not in smoke
+        holder = [s for s in steps_in(job_block(smoke, "smoke")) if "TYPESAFE_API_KEY" in s]
+        assert len(holder) == 1 and "ask_jev.py" in holder[0]
+
+    def test_the_checkout_keeps_no_credential(self, smoke):
+        assert "actions/checkout@" in smoke
+        assert smoke.count("persist-credentials: false") == smoke.count("actions/checkout@")
+
+    def test_it_runs_the_trusted_copy_isolated_and_demands_confidence(self, smoke):
+        line = next(ln for ln in live_lines(smoke) if "ask_jev.py" in ln)
+        assert line.startswith("python -I ")
+        body = " ".join(live_lines(smoke))
+        assert "--require-confidence" in body
+        assert '--summary "$GITHUB_STEP_SUMMARY"' in body
+        assert ".ai/questions/smoke.json" in body

@@ -1,0 +1,62 @@
+name: jev-smoke
+
+# The merge gate for jev's seam (Prompts/04-cheap-automations.md Deliverable 0,
+# step 4): one real 200 from TypeSafe with a `confidence` field in it. The
+# tests prove .ai/bin/ask_jev.py against a faked wire; only this proves the
+# wire itself, so a human runs it once and reads the step summary.
+#
+# It holds TYPESAFE_API_KEY, so it is shaped to give that key nothing to
+# reach (work-modes.md "Constraints every automation must keep"):
+#   - dispatch-only. No push, pull_request or schedule trigger: nothing but a
+#     person's deliberate click spends a call.
+#   - read-only. The token can write nothing, and the checkout keeps no
+#     credential.
+#   - the key is in one step's env, the one that makes the call, and no other
+#     step can see it.
+#   - it runs main's own copy. A dispatch picks a ref, and that ref's code is
+#     what runs, so the job refuses every ref but main: a branch's ask_jev.py
+#     must never be handed the key. python -I keeps the working directory off
+#     sys.path.
+#
+# The questions and the state are committed files, fixed and harmless. No
+# untrusted input reaches this job.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Main's copy only: on any other ref this job does not run, and the key
+    # is never handed to a branch's code.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # One call, no retry (ask_jev.py). --require-confidence fails the job
+      # unless every answer carries the field its type promises.
+      - name: Ask jev the smoke questions
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: >-
+          python -I .ai/bin/ask_jev.py
+          --questions .ai/questions/smoke.json
+          --state-file .ai/questions/smoke-state.txt
+          --out "$RUNNER_TEMP/jev-answers.json"
+          --summary "$GITHUB_STEP_SUMMARY"
+          --require-confidence
+
+      # The raw response shape, for the record. No secret in this step.
+      - name: Show the answers as they came back
+        if: always()
+        run: cat "$RUNNER_TEMP/jev-answers.json"
