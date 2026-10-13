@@ -130,3 +130,9 @@ One structure for every mode, so any session can start cold:
 - **Not built yet**, and briefed: the four automations →
   `Prompts/04-cheap-automations.md` (`TODO/02` item 14). It starts once no
   other PR touching `.github/workflows/` is open.
+- **`jev`'s seam rebuilt** (2026-10-13, `Prompts/04` Deliverable 0):
+  `.ai/bin/ask_jev.py` on the direct route, and a dispatch-only
+  `jev-smoke.yml`. It lands inert (nothing calls it but the smoke), and no
+  automation asks `jev` until the smoke, run on `main`, returns a 200 with
+  `confidence`. The triggers for the four were decided the same day
+  (`Prompts/04` "Decided by the human").

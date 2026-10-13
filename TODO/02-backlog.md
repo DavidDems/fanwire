@@ -41,7 +41,11 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
    Deliverable 0 (2026-10-13)**, with its first use: shadow answers beside
    Haiku in the coverage and spec-drift checks. Shadow beside the Manager
    stays in `Prompts/02` and still needs a deliberately failing task
-   (handoff §6.3).
+   (handoff §6.3). **Seam rebuilt 2026-10-13** on `director/jev-seam`
+   (seam only, the documented wire shape, `jev-smoke.yml`). It merges inert,
+   because a dispatch needs the workflow on `main`; the smoke run on `main`
+   then gates *use*: no automation asks `jev` until it returns a 200 with
+   `confidence`.
 
 11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. `director`: The CI half of bug 17.
