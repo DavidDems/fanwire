@@ -41,17 +41,17 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
    Deliverable 0 (2026-10-13)**, with its first use: shadow answers beside
    Haiku in the coverage and spec-drift checks. Shadow beside the Manager
    stays in `Prompts/02` and still needs a deliberately failing task
-   (handoff §6.3). **Seam rebuilt 2026-10-13** on `director/jev-seam`
-   (seam only, the documented wire shape, `jev-smoke.yml`). It merges inert,
-   because a dispatch needs the workflow on `main`; the smoke run on `main`
-   then gates *use*: no automation asks `jev` until it returns a 200 with
-   `confidence`.
+   (handoff §6.3). **Seam on `main` (#138, 2026-10-13)**, and its smoke
+   returned a 200 with `confidence` the same day (run 38422783284,
+   $0.0000184), so automations 2 and 3 may ask it in shadow.
 
 11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. `director`: The CI half of bug 17.
 14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
     PR; wiki update proposal after merge. Brief: `Prompts/04-cheap-automations.md`; after D4–D7.
+    **CI failure summary built** (`ci-summary.yml`, 2026-10-13, Director PR);
+    its first live run is the human's go. Next: coverage, drift, wiki.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 

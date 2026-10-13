@@ -130,9 +130,14 @@ One structure for every mode, so any session can start cold:
 - **Not built yet**, and briefed: the four automations →
   `Prompts/04-cheap-automations.md` (`TODO/02` item 14). It starts once no
   other PR touching `.github/workflows/` is open.
-- **`jev`'s seam rebuilt** (2026-10-13, `Prompts/04` Deliverable 0):
+- **`jev`'s seam on `main`** (#138, 2026-10-13, `Prompts/04` Deliverable 0):
   `.ai/bin/ask_jev.py` on the direct route, and a dispatch-only
-  `jev-smoke.yml`. It lands inert (nothing calls it but the smoke), and no
-  automation asks `jev` until the smoke, run on `main`, returns a 200 with
-  `confidence`. The triggers for the four were decided the same day
+  `jev-smoke.yml`. Its smoke on `main` returned a 200 with `confidence` the
+  same day (run 38422783284, $0.0000184), so automations 2 and 3 may ask it
+  in shadow. The triggers for the four were decided the same day
   (`Prompts/04` "Decided by the human").
+- **CI failure summary built** (2026-10-13): `.github/workflows/ci-summary.yml`
+  runs `main`'s copy on `workflow_run` when `test-agent` fails on an
+  `agent/*` PR from this repository, parses the log with `ciresult`, asks
+  Haiku 5.5 for one "likely cause" sentence, and keeps one comment on the PR
+  up to date, with the cost in its footer. Not yet proven live.

@@ -767,6 +767,11 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    `wiki/GeneralContext/Prompts/04-cheap-automations.md` Deliverable 0
    (seam only, TypeSafe's documented response shape, which #41 had guessed
    wrong); its first users are the cheap automations, in shadow beside Haiku.
+   It merged as #138, and the smoke on `main` returned its first 200 the
+   same day (run 38422783284): the documented shape exactly, `confidence`
+   on the choice and the score, 438 input tokens, release `jev-1.13.0`,
+   **$0.0000184**. The TypeSafe console showed no usage for it; at this
+   size the run's own figure is the record.
    Flake forgiveness is **not** adopted: a deterministic single CI
    re-run on an `infrastructure`-origin failure does that without loosening a
    budget on a model's confidence. Spec readiness: a deterministic validator

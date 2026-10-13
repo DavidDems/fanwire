@@ -57,11 +57,9 @@ than trusting this.
   and ask the human.**
 - Secrets: `ANTHROPIC_API_KEY` (metered; the Console has a USD $40 monthly
   limit), `TYPESAFE_API_KEY` (for `jev`), `AGENT_DISPATCH_TOKEN`.
-- **`jev`'s typed-decision seam is not on `main`.** It sits on the stale
-  `jev-decision-layer` branch (#41, parked, `[BLOCKED]`), which still points at
-  the Vercel gateway route. Deliverable 0 brings it back. `jev` has **never
-  made a call** in this project: the TypeSafe account holds about CAD $10 of
-  credit, untouched.
+- **`jev`'s typed-decision seam** was on the stale `jev-decision-layer`
+  branch (#41) until Deliverable 0; see "Progress" for where it is now. The
+  TypeSafe account holds about CAD $10 of credit.
 - `.ai/` is stdlib-only, with no SDK. A Messages API call from `agentlib` uses
   `urllib`.
 - The repository is public, and forks are allowed. Bot-authored PRs wait in
@@ -126,6 +124,23 @@ record per call), and bring it to the human.
   (`<!-- fanwire-shadow {...} -->`) plus the job summary, collected later by
   an `agentctl shadow report` over `gh api`. No new permission.
 - **Wiki proposal output: (a), a comment with a patch** on the merged PR.
+
+## Progress
+
+- **Deliverable 0: done.** Seam merged as #138 (#41 closed). The smoke on
+  `main` (run 38422783284, 2026-10-13) returned a 200 in the documented shape:
+  `confidence` on the choice and the score, none on the noul, 438 input
+  tokens, release `jev-1.13.0`, **$0.0000184**. The TypeSafe console showed
+  no usage: at this size the run's own figure is the record. `jev` may be
+  asked in shadow from automation 2 on.
+- **Automation 1, CI failure summary: built, not yet proven live**
+  (`director/ci-failure-summary`). `ci-summary.yml`, `.ai/bin/ci_summary.py`,
+  `agentlib/cisummary.py`, `.ai/prompts/ci-summary.md`, and
+  `config.json` `automations.ci_summary`. One deviation from the decided
+  permissions: the job also has **`actions: read`**, which downloading a
+  run's failed-job log needs. Its first live run is a real red `agent/*` PR,
+  not a dispatch: `workflow_run` cannot be started by hand.
+- Next: 2 coverage (with `jev`), 3 drift (with `jev`), 4 wiki.
 
 ## The four, with design notes (starting points, not decisions)
 

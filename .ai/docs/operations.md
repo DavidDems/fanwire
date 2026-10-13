@@ -105,6 +105,10 @@ Nothing below is done by this repository's files; a human has to switch it on.
    job, which bills one tiny call:
    `gh workflow run jev-smoke.yml --ref main`, then read the run's job
    summary for the answers and their cost.
+6. **`ANTHROPIC_API_KEY` also serves `ci-summary.yml`**, which comments on a
+   red `agent/*` PR (one Haiku 5.5 call per failed run). It cannot be
+   dispatched: it runs when `test-agent` fails on such a PR. Its job summary
+   and the comment's footer carry what the call cost.
 
 ## Starting a task
 
