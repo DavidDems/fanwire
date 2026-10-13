@@ -256,6 +256,8 @@ export function testGames(): GameOut[] {
     {
       id: 123,
       api_sports_game_id: 5001,
+      nba_game_id: null,
+      game_type: null,
       home_team_id: 1,
       away_team_id: 2,
       home_score: 110,
@@ -268,6 +270,8 @@ export function testGames(): GameOut[] {
     {
       id: 789,
       api_sports_game_id: 5002,
+      nba_game_id: null,
+      game_type: null,
       home_team_id: 2,
       away_team_id: 1,
       home_score: 101,

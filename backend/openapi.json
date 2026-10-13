@@ -303,8 +303,15 @@
       "GameOut": {
         "properties": {
           "api_sports_game_id": {
-            "title": "Api Sports Game Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Sports Game Id"
           },
           "away_score": {
             "title": "Away Score",
@@ -319,6 +326,17 @@
             "title": "Date",
             "type": "string"
           },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
           "home_score": {
             "title": "Home Score",
             "type": "integer"
@@ -330,6 +348,17 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "nba_game_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nba Game Id"
           },
           "player_stats": {
             "items": {
@@ -358,6 +387,7 @@
         "required": [
           "id",
           "api_sports_game_id",
+          "nba_game_id",
           "home_team_id",
           "away_team_id",
           "date",
@@ -365,7 +395,8 @@
           "home_score",
           "away_score",
           "venue",
-          "player_stats"
+          "player_stats",
+          "game_type"
         ],
         "title": "GameOut",
         "type": "object"
@@ -988,8 +1019,15 @@
             "type": "string"
           },
           "api_sports_team_id": {
-            "title": "Api Sports Team Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Sports Team Id"
           },
           "conference": {
             "title": "Conference",
@@ -1017,11 +1055,23 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "nba_team_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nba Team Id"
           }
         },
         "required": [
           "id",
           "api_sports_team_id",
+          "nba_team_id",
           "name",
           "abbreviation",
           "conference",

@@ -19,7 +19,8 @@ class TeamOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    api_sports_team_id: int
+    api_sports_team_id: int | None
+    nba_team_id: int | None
     name: str
     abbreviation: str
     conference: str
@@ -31,7 +32,8 @@ class GameOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    api_sports_game_id: int
+    api_sports_game_id: int | None
+    nba_game_id: int | None
     home_team_id: int
     away_team_id: int
     date: datetime
@@ -40,3 +42,4 @@ class GameOut(BaseModel):
     away_score: int
     venue: str | None
     player_stats: list[dict[str, Any]]
+    game_type: str | None

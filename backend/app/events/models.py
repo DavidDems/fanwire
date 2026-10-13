@@ -7,6 +7,13 @@ wiki/CodeContext/Modules/0x00-architecture.md "Cross-cutting conventions".
 `Team` is seeded up front; `Game` FKs into it. There is no auto-create path
 for an unrecognized team — see wiki/CodeContext/Modules/0x00-architecture.md
 "Data seeding order" and app.events.ingestion.UnrecognizedTeamError.
+
+Each row is keyed by the id of the source it came from: `api_sports_*_id`
+(the API-SPORTS ingestion Lambda) or `nba_*_id` (nba.com's ids, from the
+Kaggle "NBA games" dataset via app.events.nba_history), or both. The two
+live in separate columns so a later real API-SPORTS import can never
+collide with an nba.com id; a CHECK constraint requires at least one, so no
+row is ever unidentifiable by its source.
 """
 
 from __future__ import annotations
@@ -14,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Text
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Identity, Index, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,12 +35,21 @@ class Team(Base):
     __tablename__ = "teams"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    api_sports_team_id: Mapped[int] = mapped_column(unique=True, nullable=False)
+    api_sports_team_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
+    # nba.com TEAM_IDs (1610612737...) exceed a 32-bit int, hence BigInteger.
+    nba_team_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     abbreviation: Mapped[str] = mapped_column(Text, nullable=False)
     conference: Mapped[str] = mapped_column(Text, nullable=False)
     division: Mapped[str] = mapped_column(Text, nullable=False)
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "api_sports_team_id IS NOT NULL OR nba_team_id IS NOT NULL",
+            name="ck_teams_has_source_id",
+        ),
+    )
 
 
 class Game(Base):
@@ -49,7 +65,8 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    api_sports_game_id: Mapped[int] = mapped_column(unique=True, nullable=False)
+    api_sports_game_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
+    nba_game_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     home_team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"), nullable=False)
     away_team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"), nullable=False)
     date: Mapped[datetime] = mapped_column(nullable=False)
@@ -59,8 +76,18 @@ class Game(Base):
     away_score: Mapped[int] = mapped_column(nullable=False)
     venue: Mapped[str | None] = mapped_column(Text, nullable=True)
     player_stats: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    # "regular" / "playoffs" / "play-in", set by the NBA history loader
+    # (app.events.nba_history) from the nba.com GAME_ID prefix. The stats
+    # section's "team records during the regular season" needs it. The
+    # API-SPORTS ingestion path leaves it null: its payload carries no game
+    # type to set it from, and nothing is invented.
+    game_type: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
+        CheckConstraint(
+            "api_sports_game_id IS NOT NULL OR nba_game_id IS NOT NULL",
+            name="ck_games_has_source_id",
+        ),
         # search/'s position filter (wiki/CodeContext/Modules/0x07-search.md)
         # queries this via JSONB containment (`player_stats @> '[{"position":
         # "<P>"}]'`) -- jsonb_path_ops is the right opclass for containment

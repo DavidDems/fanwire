@@ -167,6 +167,10 @@ def _live_scores_for_games(
 
     result: dict[int, LiveScoreView] = {}
     for game_id, game in games.items():
+        # A game with no API-SPORTS id (loaded from the NBA history dataset)
+        # has nothing for the proxy, which is keyed by that id, to look up.
+        if game.api_sports_game_id is None:
+            continue
         game_date = game.date if game.date.tzinfo is not None else game.date.replace(tzinfo=UTC)
         if not (window_start <= game_date <= now):
             continue
