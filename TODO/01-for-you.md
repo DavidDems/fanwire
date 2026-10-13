@@ -37,12 +37,37 @@ Claude Console accounts each hold about CAD $10–11 of credit.
       Then say go before any task is dispatched; nothing starts the
       orchestrator without you.
 
-## 2. Sports data: the dataset
+## 2. Sports data
 
-- [ ] **Download the Kaggle "NBA games" dataset** before starting
-      `Prompts/05-nba-history.md`. Its "The human's setup" section has the
-      steps: a free Kaggle account, read the licence, download, unzip to
-      `C:\data\nba-games`, outside the repository.
+`wiki/GeneralContext/Prompts/06-nba-data.md` is the thread; its units run in
+its order.
+
+- [x] **Download the Eoin Moore dataset** to `C:\data\nba-eoin` (done
+      2026-10-13; licence CC0, checked).
+- [ ] **Run the migration for #139 on the live site.** On 2026-10-13 after
+      #139's deploy, `/api/events/teams` and `/api/events/games` answered
+      500 because the `Migration` function had not been invoked.
+      `wiki/CodeContext/Standards/build-deployment.md` "Run migrations" has
+      the two commands. Check with
+      `curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams`
+      (prints `200`). Do the same after every deploy whose PR adds a
+      migration.
+- [ ] **Before `EVENTS-003` deploys:** check that
+      `curl.exe -s https://fanwire.daviddems.com/api/events/teams` prints
+      `[]` (its migration refuses rows without an nba.com id). After the
+      deploy, run the migration. Then clear the dev database's fixture
+      teams and games: `docker compose -p fanwire down -v` (this drops dev
+      users and posts too).
+- [ ] **After the API-SPORTS infra clean-up deploys:** the idempotency table
+      and the API-SPORTS secret are `RETAIN`, so they stay in the account
+      after leaving the template. Delete them by hand; that PR names them.
+- [ ] **When `EVENTS-002` is merged and deployed:** take an RDS snapshot,
+      upload the dataset files to the bucket it creates, and invoke the load
+      function. Its PR gives each command as one line.
+- [ ] **For `EVENTS-008` only, later:** after about 2026-10-21, check that
+      the Kaggle dataset shows versions newer than 2026-06-15. If it does,
+      create a Kaggle API token (kaggle.com → Settings → API) and store it
+      in Secrets Manager under the name the `EVENTS-008` spec gives.
 
 ## 3. Watching the live site
 

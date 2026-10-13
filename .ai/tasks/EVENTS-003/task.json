@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-003",
+  "objective": "Retire the API-SPORTS sports-data path, which never ran against real data and is replaced by the Kaggle dataset: remove the adapter, provider factory, ingestion pipeline and its Lambda handler, the live-score proxy and its caches, the feed's live-score block (backend and the frontend ticker), the API-SPORTS settings, seed_dev.py's API-SPORTS fixture rows, and the api_sports_* columns, so that nba.com ids are the only sports-data keys. In infra, remove every consumer of the API-SPORTS resources (the ingestion function, its schedule, async destination and retry trigger, and the api function's live-score cache grant) while the resources themselves stay, exported, for a later unit to delete.",
+  "acceptance_criteria": [
+    "No module under backend/app imports or defines ApiSportsAdapter, SportsProviderFactory, SportsDataSource, the ingestion pipeline, CachedEventProxy or the live-score caches, and app.events.lambda_handler no longer exists.",
+    "Settings no longer carries api_sports_key, api_sports_secret_arn, api_sports_base_url, idempotency_table_name or live_score_cache_table_name, and the app starts with none of those variables set.",
+    "A feed response carries no live_scores field, the feed makes no live-score lookup, and every other feed field and behaviour is unchanged.",
+    "The frontend renders posts without a live-score ticker, typechecks against the regenerated schema.d.ts, and its tests pass.",
+    "After the migration, teams.nba_team_id and games.nba_game_id are NOT NULL and unique, the api_sports_team_id and api_sports_game_id columns and the two has-source-id CHECK constraints are gone, and downgrading restores them.",
+    "The migration stops with a message naming the problem, and changes nothing, when a Team or Game row has no nba.com id, instead of deleting or inventing data.",
+    "TeamOut and GameOut no longer expose api_sports_* fields, and openapi.json and schema.d.ts match the backend.",
+    "seed_dev.py no longer creates Team or Game rows, and the dev-stack instructions say how to get games into a dev database instead.",
+    "The synthesized App stack has no Ingestion function, no ingestion schedule or schedule role, no IngestionRetry event source mapping or async invoke config, and grants no function access to the live-score cache table; the Data and Messaging stacks still synthesize the idempotency table, live-score cache table, API-SPORTS secret and ingestion-retry queue and DLQ, each still exported so that the deploy does not fail on an export in use.",
+    "Every infra test, including the IAM wildcard gate and the CloudFormation exec-policy test, passes, and every remaining test in the backend and frontend suites passes."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/app/settings.py",
+    "backend/app/dependencies.py",
+    "backend/app/main.py",
+    "backend/alembic/versions/**",
+    "backend/scripts/seed_dev.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/features/feed/**",
+    "frontend/src/test/**",
+    "infra/lib/app-stack.ts",
+    "infra/lib/data-stack.ts",
+    "infra/lib/messaging-stack.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "infra/iam/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/build-deployment.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "frontend-unit",
+    "infra-cdk",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

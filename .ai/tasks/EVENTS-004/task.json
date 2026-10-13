@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-004",
+  "objective": "Make players and box scores first-class data from the Eoin Moore Kaggle dataset (Games.csv, PlayerStatistics.csv, TeamStatistics.csv, Players.csv): add Player and PlayerGameStats tables, game labels and line scores on Game, and a re-runnable loader for 2003-04 onward that replaces the EVENTS-001 loader; move search's position filter onto the box-score table and drop Game.player_stats. Proven against a local database.",
+  "acceptance_criteria": [
+    "A Player is stored with its nba.com personId (unique) and the attributes Players.csv gives it: first and last name, birth date, height in inches, weight in pounds, country, school, jersey, position (from the guard, forward and center flags), draft year, round and number, and first and last season; an attribute the file leaves blank is stored as null, never invented.",
+    "A PlayerGameStats row is stored once per player per game, linked to its Game, Player and Team, with starter flag, starting position, minutes, field goals, three-pointers and free throws made and attempted, offensive, defensive and total rebounds, assists, steals, blocks, turnovers, personal fouls, points, plus-minus, and the did-not-play reason; percentages are not stored.",
+    "A row whose player did not play (blank minutes) is stored with its reason and no minutes, and is not counted as having played.",
+    "A box-score row with a blank playerteamId gets its team from the game's home or away team according to its home flag.",
+    "Running the loader against a directory holding the four CSVs stores every team, every player who appears in a loaded box score, and every regular-season, NBA Cup, play-in and playoff game in the chosen seasons from 2003-04 onward, with home and away teams, date, season as 'YYYY-YY', both final scores, venue, label, sub-label, series game number, line score by period and box score.",
+    "Game type is 'regular' for regular-season and NBA Cup group and knockout games, 'cup-final' for the NBA Cup final, 'play-in' and 'playoffs' otherwise; preseason and All-Star games are not loaded, and the loader reports per season how many it skipped.",
+    "A game whose box score is missing from the data is stored with an empty box score and reported, and a team whose players' points do not add up to its final score is reported, not corrected.",
+    "A game or box-score row naming a team or player the loader does not know stops the load with a message naming it, and leaves the database as it was before that run.",
+    "Running the loader twice over the same data leaves the same rows, keeps every existing Game's id (so post mentions still resolve), and the second run reports nothing new.",
+    "The loader can be limited to named seasons and says per season how many games and box-score rows it loaded, skipped and found already present; the whole 2003-04 to 2025-26 range loads into a local Postgres in a time the PR states.",
+    "Search's game filter by position matches a game when any player in its box score started at that position, and its other filters behave as before.",
+    "Game.player_stats and its GIN index are gone; GameOut and the search response no longer carry player_stats, and openapi.json and schema.d.ts match the backend.",
+    "Tests run against a small synthetic fixture with the dataset's exact column names; the dataset itself is never committed."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/app/search/**",
+    "backend/alembic/versions/**",
+    "backend/scripts/load_nba_history.py",
+    "backend/scripts/load_nba_data.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x07-search.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
