@@ -37,6 +37,13 @@ Claude Console accounts each hold about CAD $10–11 of credit.
       Then say go before any task is dispatched; nothing starts the
       orchestrator without you.
 
+## 2. Sports data: the dataset
+
+- [ ] **Download the Kaggle "NBA games" dataset** before starting
+      `Prompts/05-nba-history.md`. Its "The human's setup" section has the
+      steps: a free Kaggle account, read the licence, download, unzip to
+      `C:\data\nba-games`, outside the repository.
+
 ## 3. Watching the live site
 
 The deploy path is finished and needs only watching. Each deploy: approve it

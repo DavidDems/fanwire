@@ -51,6 +51,16 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
+## Sports data
+
+Historical NBA games from the Kaggle "NBA games" dataset (the human's choice,
+2026-10-13). No live data in this pass. Live brief: `Prompts/05-nba-history.md`.
+
+| Item | Mode | Task | Where it came from | Notes |
+|---|---|---|---|---|
+| **Load historical games and box scores** into `Team`/`Game` with a re-runnable loader, proven on the dev database | `hand` | `EVENTS-001` | `business-rules.md` "Events" | The human downloads the dataset first (`Prompts/05` setup). Id design and regular-season/playoff storage are decisions for the human |
+| **Get the history into the live RDS** | `hand` | — | `EVENTS-001` | RDS is private; needs an infra design (one-off Lambda from S3, SSM port forward, or a container task) and an IAM rollout before the deploy. `EVENTS-001`'s session proposes it; the spec is Director work |
+
 ## Backend and infra
 
 | Item | Mode | Task | Where it came from | Notes |
