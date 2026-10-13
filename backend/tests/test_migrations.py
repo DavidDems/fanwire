@@ -68,7 +68,9 @@ def test_upgrade_head_adds_search_columns_and_indexes(alembic_config, postgres_u
 
 def test_downgrade_one_removes_search_columns_and_indexes(alembic_config, postgres_url):
     command.upgrade(alembic_config, "head")
-    command.downgrade(alembic_config, "-1")
+    # The search migration's parent, by name: "-1" stopped meaning "undo the
+    # search migration" once a later revision (EVENTS-001's) became head.
+    command.downgrade(alembic_config, "a3f7c2e19b4d")
 
     engine = make_engine(postgres_url)
     try:
