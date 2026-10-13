@@ -45,6 +45,8 @@ MAX_CAUSE_CHARS = 400
 MAX_LISTED = 5
 _MAX_CODE_CHARS = 200
 _MAX_SUMMARY_CHARS = 200
+# A response's shape is a stop reason and a few block types: tens of chars.
+_MAX_DESCRIBED_CHARS = 200
 
 # Markdown punctuation that could start emphasis, a link, a heading, a table
 # or a code span. Backslash-escaped, so it renders as itself.
@@ -150,20 +152,49 @@ def _fenced(label: str, body: str) -> str:
 
 
 def read_cause(body: Any) -> str | None:
-    """The first text block of a Messages API response, flattened to one line
-    and cut to `MAX_CAUSE_CHARS`, or None when there is no usable text."""
+    """The first non-empty text block of a Messages API response, flattened
+    to one line and cut to `MAX_CAUSE_CHARS`, or None when there is none.
+
+    Blocks of any other type, and text blocks with nothing but whitespace,
+    are passed over rather than ending the search: an empty block ahead of
+    the answer must not hide the answer.
+    """
     blocks = body.get("content") if isinstance(body, dict) else None
     if not isinstance(blocks, list):
         return None
     for block in blocks:
-        if isinstance(block, dict) and block.get("type") == "text":
-            text = " ".join(str(block.get("text") or "").split())
-            if not text:
-                return None
-            if len(text) > MAX_CAUSE_CHARS:
-                text = text[: MAX_CAUSE_CHARS - 3].rstrip() + "..."
-            return text
+        if not isinstance(block, dict) or block.get("type") != "text":
+            continue
+        text = " ".join(str(block.get("text") or "").split())
+        if not text:
+            continue
+        if len(text) > MAX_CAUSE_CHARS:
+            text = text[: MAX_CAUSE_CHARS - 3].rstrip() + "..."
+        return text
     return None
+
+
+def describe_response(body: Any) -> str:
+    """Why a response gave no cause, as one short line: its `stop_reason` and
+    the types of its content blocks, in order, e.g.
+    `stop_reason=max_tokens; content=[thinking]`.
+
+    Only the shape, never a block's text: that is the model's, and this line
+    goes to the job log and summary unescaped. Never raises, whatever `body`
+    is, because it is only ever called once something has already gone wrong.
+    """
+    data = body if isinstance(body, dict) else {}
+    stop = data.get("stop_reason")
+    stop_text = stop if isinstance(stop, str) and stop.strip() else "none"
+    blocks = data.get("content")
+    types = []
+    if isinstance(blocks, list):
+        for block in blocks:
+            kind = block.get("type") if isinstance(block, dict) else None
+            types.append(kind if isinstance(kind, str) and kind.strip() else "?")
+    described = f"stop_reason={stop_text}; content=[{', '.join(types) or 'none'}]"
+    flat = " ".join(described.split()).replace("`", "'")
+    return flat if len(flat) <= _MAX_DESCRIBED_CHARS else flat[: _MAX_DESCRIBED_CHARS - 3] + "..."
 
 
 def cost_usd(usage: Any, price: dict[str, float] | None) -> float | None:

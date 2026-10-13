@@ -19,7 +19,9 @@ them:
   - fail quiet: any comment file left from before is deleted first, and on
     any error no new one is written. No comment beats a wrong or half one.
   - recorded cost: priced from the response's own `usage`, cache tokens
-    included (D6), in the comment footer and the job summary.
+    included (D6), in the comment footer, the job summary and one job-log
+    line. A call whose answer is unusable was billed all the same, so its
+    cost and the response's shape are recorded too, though no comment is.
   - the key is never printed: it goes into one header and nowhere else, and
     is redacted from any remote text before that text is written anywhere.
 
@@ -151,15 +153,20 @@ def main(argv: list[str] | None = None) -> int:
     if error is not None:
         return _give_up(summary, _redact(error, api_key), FAILED, "model call failed")
 
+    # Billed whether or not the answer is usable, so priced before it is read.
+    usage, answered_by, cost = _priced(body, model, config)
+    described = _redact(cisummary.describe_response(body), api_key)
     cause = cisummary.read_cause(body)
     if cause is None:
-        return _give_up(summary, "the model gave no usable answer", FAILED)
-
-    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
-    answered_by = body.get("model") if isinstance(body.get("model"), str) else model
-    # Priced by the model requested, as config.json's prices are keyed.
-    price = config.get("telemetry", {}).get("prices", {}).get(f"{PROVIDER}/{model}")
-    cost = cisummary.cost_usd(usage, price)
+        error = "the model gave no usable answer"
+        _summarize(
+            summary,
+            [f"- no comment: `{error}`", f"- response: `{_inline(described)}`"]
+            + _call_lines(answered_by, usage, cost),
+        )
+        print(f"no usable answer: {_log_line(described, usage, cost)}")
+        print(f"::error::{error}", file=sys.stderr)
+        return FAILED
 
     comment = cisummary.render(
         distilled,
@@ -171,21 +178,21 @@ def main(argv: list[str] | None = None) -> int:
         run_url=args.run_url,
     )
     _write(comment_out, comment)
-    _summarize(
-        summary,
-        [
-            f"- model: `{_inline(answered_by)}`",
-            (
-                f"- usage: {_tokens(usage, 'input_tokens')} input tokens, "
-                f"{_tokens(usage, 'output_tokens')} output tokens, "
-                f"{_tokens(usage, 'cache_read_input_tokens')} cache read, "
-                f"{_tokens(usage, 'cache_creation_input_tokens')} cache write"
-            ),
-            f"- cost: ${cost:.6f}" if isinstance(cost, float) else "- cost: unpriced",
-        ],
-    )
+    _summarize(summary, _call_lines(answered_by, usage, cost))
+    print(f"answered: {_log_line(described, usage, cost)}")
     print(f"comment -> {comment_out}")
     return OK
+
+
+def _priced(
+    body: dict[str, Any], model: str, config: dict[str, Any]
+) -> tuple[dict[str, Any], str, float | None]:
+    """The response's usage, the model that answered, and the call's cost."""
+    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+    answered_by = body.get("model") if isinstance(body.get("model"), str) else model
+    # Priced by the model requested, as config.json's prices are keyed.
+    price = config.get("telemetry", {}).get("prices", {}).get(f"{PROVIDER}/{model}")
+    return usage, answered_by, cisummary.cost_usd(usage, price)
 
 
 # --------------------------------------------------------------------------- the one call
@@ -249,6 +256,33 @@ def _summarize(path: Path | None, lines: list[str]) -> None:
             fh.write("\n".join(["### CI failure summary", "", *lines]) + "\n\n")
     except OSError as exc:
         print(f"::warning::cannot write the summary: {exc}", file=sys.stderr)
+
+
+def _call_lines(answered_by: str, usage: dict[str, Any], cost: float | None) -> list[str]:
+    """The job summary's account of a call that was made: model, usage, cost."""
+    return [
+        f"- model: `{_inline(answered_by)}`",
+        (
+            f"- usage: {_tokens(usage, 'input_tokens')} input tokens, "
+            f"{_tokens(usage, 'output_tokens')} output tokens, "
+            f"{_tokens(usage, 'cache_read_input_tokens')} cache read, "
+            f"{_tokens(usage, 'cache_creation_input_tokens')} cache write"
+        ),
+        f"- cost: {_cost(cost)}",
+    ]
+
+
+def _log_line(described: str, usage: dict[str, Any], cost: float | None) -> str:
+    """The same call as one job-log line. The step summary cannot be read
+    back through the API; `gh run view --log` can read this."""
+    return (
+        f"{_inline(described)}; {_tokens(usage, 'input_tokens')} input / "
+        f"{_tokens(usage, 'output_tokens')} output tokens; {_cost(cost)}"
+    )
+
+
+def _cost(cost: float | None) -> str:
+    return f"${cost:.6f}" if isinstance(cost, float) else "unpriced"
 
 
 def _inline(value: object) -> str:
