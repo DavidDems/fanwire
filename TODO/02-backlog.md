@@ -57,13 +57,21 @@ Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Sports data
 
-Historical NBA games from the Kaggle "NBA games" dataset (the human's choice,
-2026-10-13). No live data in this pass. Live brief: `Prompts/05-nba-history.md`.
+NBA data from the Eoin Moore Kaggle dataset, 2003-04 onward (the human's
+choice, 2026-10-13; `EVENTS-001`, #139, loaded a first, thinner dataset).
+Live brief and unit order: `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Load historical games and box scores** into `Team`/`Game` with a re-runnable loader, proven on the dev database | `hand` | `EVENTS-001` | `business-rules.md` "Events" | The human downloads the dataset first (`Prompts/05` setup). Id design and regular-season/playoff storage are decisions for the human |
-| **Get the history into the live RDS** | `hand` | — | `EVENTS-001` | RDS is private; needs an infra design (one-off Lambda from S3, SSM port forward, or a container task) and an IAM rollout before the deploy. `EVENTS-001`'s session proposes it; the spec is Director work |
+| **Retire API-SPORTS**: adapter, ingestion, live-score proxy, the feed's ticker, `api_sports_*` columns, the ingestion function and its schedule | `hand` | `EVENTS-003` | the human, 2026-10-13 | Keeps the Data/Messaging resources exported (the export-in-use trap); the next item deletes them |
+| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` | Only after `EVENTS-003` is deployed. Two are `RETAIN`: the human deletes them by hand afterwards |
+| **Players and box scores**: `Player`, `PlayerGameStats`, line scores, the new loader; `Game.player_stats` goes | `hand` | `EVENTS-004` | the human, 2026-10-13 | Replaces `EVENTS-001`'s loader |
+| **Game detail API** and a paginated, filterable game list | `hand` | `EVENTS-005` | `business-rules.md` "Events" | Spec after `EVENTS-004` merges |
+| **Player API**: search, detail with career and season stats, game log | `hand` | `EVENTS-006` | the human, 2026-10-13 | Spec after `EVENTS-004` merges |
+| **Stats API**: standings, champions, leaders, a team's season | `hand` | `EVENTS-007` | `business-rules.md` "Events" | Spec after `EVENTS-004` merges |
+| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | Any time after `EVENTS-004`. The human uploads the files and invokes it |
+| **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
+| **Frontend pass for sports data**: game page with box score, player page, standings and leaders, `#GameId` links, a narrower compose picker | `hand` | — | the human, 2026-10-13 | Its own thread, after `EVENTS-005`–`007` |
 
 ## Backend and infra
 
