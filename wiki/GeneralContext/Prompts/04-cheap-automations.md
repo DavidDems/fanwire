@@ -139,13 +139,23 @@ record per call), and bring it to the human.
   tokens, release `jev-1.13.0`, **$0.0000184**. The TypeSafe console showed
   no usage: at this size the run's own figure is the record. `jev` may be
   asked in shadow from automation 2 on.
-- **Automation 1, CI failure summary: built, not yet proven live**
-  (`director/ci-failure-summary`). `ci-summary.yml`, `.ai/bin/ci_summary.py`,
-  `agentlib/cisummary.py`, `.ai/prompts/ci-summary.md`, and
-  `config.json` `automations.ci_summary`. The job also has **`actions:
-  read`**, which downloading a run's failed-job log needs (approved, above).
-  Its first live run is a real red `agent/*` PR, not a dispatch:
-  `workflow_run` cannot be started by hand.
+- **Automation 1, CI failure summary: merged (#141), half proven live.**
+  `ci-summary.yml`, `.ai/bin/ci_summary.py`, `agentlib/cisummary.py`,
+  `.ai/prompts/ci-summary.md`, and `config.json` `automations.ci_summary`.
+  The job also has **`actions: read`**, which downloading a run's failed-job
+  log needs (approved, above). It cannot be dispatched: it runs when a PR's
+  `test-agent` run fails.
+  - **First live run, 2026-10-13:** ci-summary run 38452309828, 3 s after
+    #142's (`agent/EVENTS-003`) test-first commit went red. Proven:
+    `workflow_run` fires for an `agent/*` PR run, the `if:` admits it,
+    `pull_requests[]` names the PR, and `actions: read` downloads the log.
+    **Not proven:** the model step got a 200 with no usable answer and, by
+    design, posted nothing, but recorded neither why nor what it cost.
+    `director/ci-summary-diagnostics` fixes that: the response's
+    `stop_reason`, block types, usage and cost now go to the job summary
+    and one job-log line on every call, and an empty block no longer hides
+    a later answer. The comment's posting, and its permission on a bot PR,
+    still wait on a run that gets an answer.
 - Next: 2 coverage (with `jev`), 3 drift (with `jev`), 4 wiki.
 
 ## The four, with design notes (starting points, not decisions)
