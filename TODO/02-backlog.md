@@ -42,10 +42,6 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
 
 11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. `director`: The CI half of bug 17.
-13. `director`: **Work modes in the wiki** (handoff §10.3 item 8): backlog Mode column
-    (`hand` / `auto` / `director`); hand runs recorded in `state.json`
-    (`agentctl hand start|finish`); a prompt template and one live prompt per
-    thread; `wiki/GeneralContext/Architecture/work-modes.md`. Brief: `Prompts/03-work-modes-structure.md`.
 14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
     PR; wiki update proposal after merge. Brief: `Prompts/04-cheap-automations.md`; after D4–D7.

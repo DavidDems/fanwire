@@ -118,16 +118,15 @@ One structure for every mode, so any session can start cold:
 - **How a hand run works: `Architecture/director-sessions.md`.** The loop, the
   gates, the verification and the standing limits.
 
-## Status (2026-10-09)
+## Status (2026-10-13)
 
 - Decided: everything above.
-- Built: the three modes exist (hand-run units have been done since
-  2026-09-23; the pipeline ran `MEDIA-002`).
-- **Not built yet**, and briefed:
-  - the Mode column, recording hand runs, and a prompt template →
-    `Prompts/03-work-modes-structure.md` (`TODO/02` item 13);
-  - the four automations → `Prompts/04-cheap-automations.md` (`TODO/02`
-    item 14).
-- The order the human chose: D4–D7 (the remaining review fixes) first, then
-  03, then 04. **D4–D7 merged by 2026-10-12** (#127–#130), so 03 can start;
-  04 starts once no other PR touching `.github/workflows/` is open.
+- Built: the three modes (hand-run units since 2026-09-23; the pipeline ran
+  `MEDIA-002`), and the handover structure (#132–#134 and this close-out):
+  the backlog's Mode column, `agentctl hand start|finish` (a hand run's
+  `state.json`, mode `hand`, which the orchestrator ignores; the 17 earlier
+  hand-run tasks backfilled), and `Prompts/_template.md` with the
+  one-live-prompt rule in `index.md` "Task prompts".
+- **Not built yet**, and briefed: the four automations →
+  `Prompts/04-cheap-automations.md` (`TODO/02` item 14). It starts once no
+  other PR touching `.github/workflows/` is open.
