@@ -763,7 +763,11 @@ affect (~6 min per frontend task) — safe only once D4 lands.
    recorded agreement. Unreachable or low-confidence → `ESCALATE`, as the
    branch already does. The Manager has been invoked **zero** times so far, so
    shadow mode needs a deliberately failing task (§6.3) to have anything to
-   compare. Flake forgiveness is **not** adopted: a deterministic single CI
+   compare. **2026-10-13:** the seam half is rebuilt as
+   `wiki/GeneralContext/Prompts/04-cheap-automations.md` Deliverable 0
+   (seam only, TypeSafe's documented response shape, which #41 had guessed
+   wrong); its first users are the cheap automations, in shadow beside Haiku.
+   Flake forgiveness is **not** adopted: a deterministic single CI
    re-run on an `infrastructure`-origin failure does that without loosening a
    budget on a model's confidence. Spec readiness: a deterministic validator
    first, `jev` advisory at most.

@@ -45,11 +45,14 @@ Nothing depends on an agent session staying alive.
 │   ├── orchestrator.py      "what happens next", as a pure function
 │   ├── ciresult.py          CI log -> bounded structured failure
 │   ├── promptbuild.py       prompt assembly, with untrusted content fenced
-│   ├── agentresult.py       the provider-agnostic result contract
+│   ├── agentresult.py       the provider-agnostic result contract (prose)
+│   ├── decision.py          the typed-decision contract (jev's answers)
 │   └── telemetry.py         append-only invocation records
 ├── bin/
 │   ├── agentctl.py          the only supported way to touch workflow state
-│   └── invoke_agent.sh      the ONE provider-specific file in the system
+│   ├── invoke_agent.sh      provider seam: run an agent, get prose
+│   └── ask_jev.py           provider seam: ask typed questions, get answers
+├── questions/             typed questions for jev (the smoke job's, so far)
 ├── prompts/               one per role, plus a shared preamble
 ├── skills/                reusable repo-specific know-how, loaded on demand
 ├── tasks/<TASK-ID>/       task.json (contract) + brief.md (prose) + state.json

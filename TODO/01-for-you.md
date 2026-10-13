@@ -22,7 +22,7 @@ Work an agent can do is not here; it is `02-backlog.md`.
 Done 2026-10-08: `TYPESAFE_API_KEY` is a repository secret; the TypeSafe and
 Claude Console accounts each hold about CAD $10–11 of credit.
 
-- [ ] **Delete the unused gateway key.** Nothing on `main` reads it, and a
+- [x] **Delete the unused gateway key** (gone from `gh secret list`, checked 2026-10-13). Nothing on `main` reads it, and a
       gateway key reaches every model in its catalogue:
       `gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire`
 - [ ] **Require approval for every fork PR** (handoff §10, D1):

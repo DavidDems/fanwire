@@ -81,9 +81,10 @@ diff.
    `jev-latest`, `TYPESAFE_API_KEY`). Drop the gateway route.
 3. Remove its `${{ steps.decide.outputs.reason }}` shell interpolation
    (D2's pattern: pass it through `env:`).
-4. **Merge gate:** a dispatch-only CI smoke job that the human starts returns
+4. **Gate:** a dispatch-only CI smoke job that the human starts returns
    one real 200 with a `confidence` field. Give the one-line command, and read
-   the cost back.
+   the cost back. *(2026-10-13: a gate on first use, not on merge; see
+   "Decided by the human".)*
 5. **Don't wire it beside the Manager** (02's shadow-Manager plan stays in
    02, and needs a failing auto task). Here `jev`'s first users are the
    automations below.
@@ -97,6 +98,34 @@ says whether `jev` agrees with Haiku and with the human's own reading, and
 what it costs. That is the evidence for keeping it, which the human asked for
 (2026-10-13). Propose where that record accumulates (e.g. a telemetry
 record per call), and bring it to the human.
+
+## Decided by the human, 2026-10-13
+
+- **Triggers: `main`'s copy of the workflow everywhere.** 1 CI summary:
+  `workflow_run` on `test-agent`, reading the failed log through the API, with
+  no checkout of PR code. 2 Coverage: `pull_request_target`, tools from the
+  base SHA, the PR fetched as data and never executed (`python -I`). 3 Drift:
+  `workflow_dispatch` only, reading `main` (automatic-on-push can come later).
+  4 Wiki: `pull_request_target`, closed and merged. In all of them: the head
+  repository must be this one, the key sits in one step, inputs pass through
+  `env:`, and the job has `contents: read` plus `pull-requests: write`.
+- **`jev` scope: the seam only.** #41's decision points, confidence gates,
+  `agentctl decide` and its Manager wiring in `agent-worker.yml` were left
+  behind; prompt 02 owns the Manager. The `${{ steps.decide.outputs.reason }}`
+  interpolation went with that wiring. **#41 guessed the response shape wrong:**
+  per docs.typesafe.ai a `score` is a number (the probability-weighted mean of
+  level indices, with `probabilities` keyed `"0"`, `"1"`…), and a `noul` has
+  no `confidence`. So a shadow yes/no question is a two-option `choice`, which
+  does carry `confidence`. `jev`'s context window is 32K tokens.
+- **The merge gate moves to first use.** GitHub dispatches only a workflow
+  that is already on `main`, so `jev-smoke.yml` cannot run before its PR
+  merges. The seam merges inert; the smoke runs on `main` (the job refuses
+  any other ref), and automations 2 and 3 wire `jev` in only after it returns
+  a 200 with `confidence`.
+- **The shadow record: hidden JSON in each automation comment**
+  (`<!-- fanwire-shadow {...} -->`) plus the job summary, collected later by
+  an `agentctl shadow report` over `gh api`. No new permission.
+- **Wiki proposal output: (a), a comment with a patch** on the merged PR.
 
 ## The four, with design notes (starting points, not decisions)
 

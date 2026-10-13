@@ -100,6 +100,11 @@ Nothing below is done by this repository's files; a human has to switch it on.
    true — so that test is load-bearing, not tidiness.
 4. **A runner with the provider CLI.** `agent-worker.yml` calls
    `.ai/bin/invoke_agent.sh`, which expects the provider's CLI on `PATH`.
+5. **`TYPESAFE_API_KEY`, for `jev`** (`.ai/bin/ask_jev.py`: stdlib, one POST,
+   no CLI). Nothing in the pipeline needs it. Check it works with the smoke
+   job, which bills one tiny call:
+   `gh workflow run jev-smoke.yml --ref main`, then read the run's job
+   summary for the answers and their cost.
 
 ## Starting a task
 
