@@ -5,7 +5,7 @@
 > `jev` in shadow mode, the model upgrade and CLI pin, and bug 17's CI half. **The project is now hybrid**
 > (`Architecture/work-modes.md`): code is hand-run, the pipeline is for small
 > cheap tasks, so "After the queue" item 3's backlog runs are mostly `hand`.
-> The structure and helper work that follow are `Prompts/03` and `04`. Treat
+> The work-modes structure is done (`Prompts/03`, deleted 2026-10-13); the helper work is `Prompts/04`. Treat
 > "Where things stand" below as history and verify it.
 
 **Handoff for the next Director session** (a high-tier model, driven turn by
