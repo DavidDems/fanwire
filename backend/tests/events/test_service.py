@@ -5,7 +5,8 @@ before app/events/service.py exists, per AGENTS.md TDD workflow.
 
 game_ids_for_team: games where the team played home OR away.
 games_by_ids: batch lookup of the narrow GameRef projection feed/ needs
-(id, api_sports_game_id, date) -- never the ORM row itself.
+(keyed by Game.id) -- never the ORM row itself. EVENTS-003 dropped GameRef's
+api_sports_game_id along with the live-score lookup that was its only reader.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ def session_factory(postgres_url):
 
 def _make_team(session, **overrides) -> Team:
     defaults = {
-        "api_sports_team_id": 1,
+        "nba_team_id": 1,
         "name": "Team",
         "abbreviation": "TM",
         "conference": "Eastern",
@@ -45,7 +46,7 @@ def _make_team(session, **overrides) -> Team:
 
 def _make_game(session, home, away, **overrides) -> Game:
     defaults = {
-        "api_sports_game_id": 5001,
+        "nba_game_id": 5001,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),
@@ -62,13 +63,13 @@ def _make_game(session, home, away, **overrides) -> Game:
 
 def test_game_ids_for_team_returns_home_and_away_games(session_factory):
     with session_factory() as session:
-        team_a = _make_team(session, api_sports_team_id=101)
-        team_b = _make_team(session, api_sports_team_id=102)
-        team_c = _make_team(session, api_sports_team_id=103)
+        team_a = _make_team(session, nba_team_id=101)
+        team_b = _make_team(session, nba_team_id=102)
+        team_c = _make_team(session, nba_team_id=103)
 
-        home_game = _make_game(session, team_a, team_b, api_sports_game_id=1)
-        away_game = _make_game(session, team_b, team_a, api_sports_game_id=2)
-        unrelated_game = _make_game(session, team_b, team_c, api_sports_game_id=3)
+        home_game = _make_game(session, team_a, team_b, nba_game_id=1)
+        away_game = _make_game(session, team_b, team_a, nba_game_id=2)
+        unrelated_game = _make_game(session, team_b, team_c, nba_game_id=3)
 
         result = game_ids_for_team(session, team_a.id)
 
@@ -78,7 +79,7 @@ def test_game_ids_for_team_returns_home_and_away_games(session_factory):
 
 def test_game_ids_for_team_returns_empty_list_when_no_games(session_factory):
     with session_factory() as session:
-        team = _make_team(session, api_sports_team_id=201)
+        team = _make_team(session, nba_team_id=201)
 
         result = game_ids_for_team(session, team.id)
 
@@ -87,25 +88,24 @@ def test_game_ids_for_team_returns_empty_list_when_no_games(session_factory):
 
 def test_games_by_ids_returns_game_ref_projection(session_factory):
     with session_factory() as session:
-        team_a = _make_team(session, api_sports_team_id=301)
-        team_b = _make_team(session, api_sports_team_id=302)
+        team_a = _make_team(session, nba_team_id=301)
+        team_b = _make_team(session, nba_team_id=302)
         game = _make_game(
             session,
             team_a,
             team_b,
-            api_sports_game_id=9001,
+            nba_game_id=9001,
             date=datetime(2026, 2, 1, 18, 0, tzinfo=UTC),
         )
 
         result = games_by_ids(session, [game.id])
 
-        assert result == {
-            game.id: GameRef(
-                id=game.id,
-                api_sports_game_id=9001,
-                date=datetime(2026, 2, 1, 18, 0, tzinfo=UTC),
-            )
-        }
+        assert set(result) == {game.id}
+        ref = result[game.id]
+        assert isinstance(ref, GameRef)
+        assert ref.id == game.id
+        # The API-SPORTS id went with the live-score lookup (EVENTS-003).
+        assert not hasattr(ref, "api_sports_game_id")
 
 
 def test_games_by_ids_empty_ids_returns_empty_dict(session_factory):

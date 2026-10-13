@@ -23,9 +23,11 @@ export class DataStack extends cdk.Stack {
   readonly key: kms.Key;
   readonly database: rds.DatabaseInstance;
   readonly databaseSecret: secretsmanager.ISecret;
+  /** No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
   readonly idempotencyTable: dynamodb.Table;
+  /** No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
   readonly liveScoreCacheTable: dynamodb.Table;
-  /** API-SPORTS key. Placeholder value; a human sets the real one. Ingestion role only. */
+  /** API-SPORTS key. No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
   readonly apiSportsSecret: secretsmanager.Secret;
   /** Shared secret CloudFront sends to the API origin; see AppStack's origin-verify authorizer. */
   readonly originVerifySecret: secretsmanager.Secret;
@@ -102,6 +104,20 @@ export class DataStack extends cdk.Stack {
       generateSecretString: { passwordLength: 32, excludePunctuation: true },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
+
+    // The export trap (EVENTS-003). The deployed Fanwire-App still imports
+    // these five values; the new App no longer does, so CDK would stop
+    // generating their exports, and the deploy would update this stack first
+    // and fail deleting an export that is still in use. Exporting the same
+    // tokens explicitly keeps each Output's logical id and export name
+    // identical (e.g. `Fanwire-Data:ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97`).
+    // A later infra unit removes the resources and these exports once the
+    // App stack without the imports is deployed.
+    this.exportValue(this.idempotencyTable.tableArn);
+    this.exportValue(this.liveScoreCacheTable.tableArn);
+    this.exportValue(this.apiSportsSecret.secretArn);
+    this.exportValue(this.idempotencyTable.tableName);
+    this.exportValue(this.liveScoreCacheTable.tableName);
 
     this.originVerifySecret = new secretsmanager.Secret(this, 'OriginVerify', {
       description:

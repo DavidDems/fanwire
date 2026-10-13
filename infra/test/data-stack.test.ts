@@ -133,3 +133,37 @@ describe('Data stack', () => {
     tpl().resourceCountIs('AWS::Lambda::Function', 0);
   });
 });
+
+/**
+ * EVENTS-003 removed every consumer of the API-SPORTS resources from the App
+ * stack, but the resources stay, and so do their exports: the deployed
+ * Fanwire-App still imports them, and CloudFormation refuses to update
+ * Fanwire-Data if an export in use disappears. Each export is pinned by the
+ * exact name the deployed App stack imports, with the value it carried. A
+ * later infra unit deletes the resources and these exports together.
+ */
+describe('Data stack: API-SPORTS resources stay, still exported (EVENTS-003)', () => {
+  const outputs = () => (raw().Outputs ?? {}) as Record<string, { Value?: unknown; Export?: { Name?: unknown } }>;
+
+  const EXPORTS = [
+    ['ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97', { 'Fn::GetAtt': ['IdempotencyTable22A5A209', 'Arn'] }],
+    ['ExportsOutputFnGetAttLiveScoreCacheTable277AE7C2Arn3F1E2DD3', { 'Fn::GetAtt': ['LiveScoreCacheTable277AE7C2', 'Arn'] }],
+    ['ExportsOutputRefApiSportsKey4432EB4A2C8D0DDC', { Ref: 'ApiSportsKey4432EB4A' }],
+    ['ExportsOutputRefIdempotencyTable22A5A209F6C0179A', { Ref: 'IdempotencyTable22A5A209' }],
+    ['ExportsOutputRefLiveScoreCacheTable277AE7C28479FE72', { Ref: 'LiveScoreCacheTable277AE7C2' }],
+  ] as const;
+
+  test.each(EXPORTS)('exports %s under the name the deployed App stack imports', (outputId, value) => {
+    const output = outputs()[outputId];
+    expect(Object.keys(outputs())).toContain(outputId);
+    expect(output?.Export?.Name).toBe(`${STACK_NAMES.data}:${outputId}`);
+    expect(output?.Value).toEqual(value);
+  });
+
+  test('the idempotency table, the live-score cache table and the API-SPORTS secret still synthesize', () => {
+    const resources = raw().Resources ?? {};
+    expect(resources.IdempotencyTable22A5A209?.Type).toBe('AWS::DynamoDB::Table');
+    expect(resources.LiveScoreCacheTable277AE7C2?.Type).toBe('AWS::DynamoDB::Table');
+    expect(resources.ApiSportsKey4432EB4A?.Type).toBe('AWS::SecretsManager::Secret');
+  });
+});

@@ -32,7 +32,7 @@ def session_factory(postgres_url):
 
 def _make_team(session, **overrides) -> Team:
     defaults = {
-        "api_sports_team_id": 1,
+        "nba_team_id": 1,
         "name": "Team",
         "abbreviation": "TM",
         "conference": "Eastern",
@@ -47,7 +47,7 @@ def _make_team(session, **overrides) -> Team:
 
 def _make_game(session, home, away, **overrides) -> Game:
     defaults = {
-        "api_sports_game_id": 1,
+        "nba_game_id": 1,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),
@@ -69,10 +69,10 @@ def test_allowed_positions_is_the_standard_basketball_set():
 
 def test_filter_games_by_season(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=1)
-        b = _make_team(session, api_sports_team_id=2)
-        this_season = _make_game(session, a, b, api_sports_game_id=1, season="2025-26")
-        _make_game(session, a, b, api_sports_game_id=2, season="2024-25")
+        a = _make_team(session, nba_team_id=1)
+        b = _make_team(session, nba_team_id=2)
+        this_season = _make_game(session, a, b, nba_game_id=1, season="2025-26")
+        _make_game(session, a, b, nba_game_id=2, season="2024-25")
 
         results = filter_games(
             session, season="2025-26", team_id=None, position=None, limit=20, offset=0
@@ -83,12 +83,12 @@ def test_filter_games_by_season(session_factory):
 
 def test_filter_games_by_team_id_matches_home_or_away(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=11)
-        b = _make_team(session, api_sports_team_id=12)
-        c = _make_team(session, api_sports_team_id=13)
-        home_game = _make_game(session, a, b, api_sports_game_id=11)
-        away_game = _make_game(session, b, a, api_sports_game_id=12)
-        unrelated = _make_game(session, b, c, api_sports_game_id=13)
+        a = _make_team(session, nba_team_id=11)
+        b = _make_team(session, nba_team_id=12)
+        c = _make_team(session, nba_team_id=13)
+        home_game = _make_game(session, a, b, nba_game_id=11)
+        away_game = _make_game(session, b, a, nba_game_id=12)
+        unrelated = _make_game(session, b, c, nba_game_id=13)
 
         results = filter_games(
             session, season=None, team_id=a.id, position=None, limit=20, offset=0
@@ -100,20 +100,20 @@ def test_filter_games_by_team_id_matches_home_or_away(session_factory):
 
 def test_filter_games_by_position(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=21)
-        b = _make_team(session, api_sports_team_id=22)
+        a = _make_team(session, nba_team_id=21)
+        b = _make_team(session, nba_team_id=22)
         with_sf = _make_game(
             session,
             a,
             b,
-            api_sports_game_id=21,
+            nba_game_id=21,
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "SF"}],
         )
         _make_game(
             session,
             a,
             b,
-            api_sports_game_id=22,
+            nba_game_id=22,
             player_stats=[{"player_name": "Y", "team_id": a.id, "position": "PG"}],
         )
 
@@ -126,13 +126,13 @@ def test_filter_games_by_position(session_factory):
 
 def test_filter_games_combined_filters(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=31)
-        b = _make_team(session, api_sports_team_id=32)
+        a = _make_team(session, nba_team_id=31)
+        b = _make_team(session, nba_team_id=32)
         target = _make_game(
             session,
             a,
             b,
-            api_sports_game_id=31,
+            nba_game_id=31,
             season="2025-26",
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
         )
@@ -141,7 +141,7 @@ def test_filter_games_combined_filters(session_factory):
             session,
             a,
             b,
-            api_sports_game_id=32,
+            nba_game_id=32,
             season="2024-25",
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
         )
@@ -155,14 +155,10 @@ def test_filter_games_combined_filters(session_factory):
 
 def test_filter_games_no_filters_returns_all_ordered_by_date_desc(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=41)
-        b = _make_team(session, api_sports_team_id=42)
-        older = _make_game(
-            session, a, b, api_sports_game_id=41, date=datetime(2025, 1, 1, tzinfo=UTC)
-        )
-        newer = _make_game(
-            session, a, b, api_sports_game_id=42, date=datetime(2026, 1, 1, tzinfo=UTC)
-        )
+        a = _make_team(session, nba_team_id=41)
+        b = _make_team(session, nba_team_id=42)
+        older = _make_game(session, a, b, nba_game_id=41, date=datetime(2025, 1, 1, tzinfo=UTC))
+        newer = _make_game(session, a, b, nba_game_id=42, date=datetime(2026, 1, 1, tzinfo=UTC))
 
         results = filter_games(
             session, season=None, team_id=None, position=None, limit=20, offset=0
@@ -173,11 +169,11 @@ def test_filter_games_no_filters_returns_all_ordered_by_date_desc(session_factor
 
 def test_distinct_seasons(session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=51)
-        b = _make_team(session, api_sports_team_id=52)
-        _make_game(session, a, b, api_sports_game_id=51, season="2025-26")
-        _make_game(session, a, b, api_sports_game_id=52, season="2025-26")
-        _make_game(session, a, b, api_sports_game_id=53, season="2024-25")
+        a = _make_team(session, nba_team_id=51)
+        b = _make_team(session, nba_team_id=52)
+        _make_game(session, a, b, nba_game_id=51, season="2025-26")
+        _make_game(session, a, b, nba_game_id=52, season="2025-26")
+        _make_game(session, a, b, nba_game_id=53, season="2024-25")
 
         result = distinct_seasons(session)
 

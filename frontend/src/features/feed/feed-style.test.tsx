@@ -1,6 +1,6 @@
 /**
- * UI-005 — the feed's stream template, the `PostNode` card and thread, the
- * `LiveScoreTickerDecorator` score block and the like control
+ * UI-005 — the feed's stream template, the `PostNode` card and thread and the
+ * like control
  * (`wiki/CodeContext/FrontendUI/layout.md` §3–§4, `components.md` §4 and the
  * `features/feed/*` rows of §5).
  *
@@ -11,11 +11,9 @@
  * module in `src/components/ui/`; that those rules exist on disk, and that the
  * feed's own module CSS is clean, is `feed-css.test.ts`.
  *
- * **The decorator adds a block and never restyles what it wraps.** So it is
- * rendered directly here with a bare `<p>` child, and the child must come out
- * exactly as it went in, as a direct child of the render container: the
- * decorator returns a fragment, and a styled wrapper around the children is the
- * thing the pattern forbids.
+ * The live-score ticker (`LiveScoreTickerDecorator`) and its score block went
+ * with the API-SPORTS live scores (EVENTS-003); a post card carries no score
+ * block.
  *
  * Every `<header>` has the banner role, each post's included, so nothing here
  * asks for the banner page-wide. Nothing here branches on who the reader is
@@ -30,25 +28,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import buttonStyles from "../../components/ui/Button.module.css";
 import cardStyles from "../../components/ui/Card.module.css";
 import emptyStyles from "../../components/ui/EmptyState.module.css";
-import gameScoreStyles from "../../components/ui/GameScore.module.css";
 import messageStyles from "../../components/ui/message.module.css";
 import skeletonStyles from "../../components/ui/Skeleton.module.css";
 import { renderWithAuth } from "../../test/auth";
 import {
   feedPage,
   feedStub,
-  testLiveScore,
   testPostView,
   threadStub,
   threadView,
   type FeedPageBody,
-  type LiveScoreView,
   type PostView,
 } from "../../test/feed";
-import { renderWithProviders } from "../../test/render";
 import { server } from "../../test/server";
 import { FeedPage } from "./FeedPage";
-import { LiveScoreTickerDecorator } from "./LiveScoreTickerDecorator";
 import { PostNode } from "./PostNode";
 
 const ROOT_TEXT = "Game thread, tip-off in ten";
@@ -66,8 +59,6 @@ const LOADING = "Loading the feed…";
 const LOAD_FAILED = "We could not load the feed just now. Please try again.";
 const NOTHING_HERE = "There is nothing here yet.";
 const NO_REPLIES = "No replies yet.";
-
-const LIVE_CODES = ["Q1", "Q2", "Q3", "Q4", "OT", "BT", "HT"] as const;
 
 /** The text a reader gets from `element`, ignoring any icon's empty SVG. */
 function textOf(element: Element): string {
@@ -135,23 +126,6 @@ afterEach(() => {
   releaseFeed = null;
 });
 
-/** Renders the decorator on its own, with a bare paragraph as the decorated view. */
-function renderTicker(scores: LiveScoreView[]) {
-  const post = testPostView({
-    mentioned_game_ids: scores.map((score) => score.game_id),
-    live_scores: scores,
-  });
-  return renderWithProviders(
-    <LiveScoreTickerDecorator post={post}>
-      <p>Decorated view</p>
-    </LiveScoreTickerDecorator>,
-  );
-}
-
-function liveScoreRegion(): HTMLElement {
-  return screen.getByRole("status", { name: "Live score" });
-}
-
 describe("PostNode as a card (criterion 1)", () => {
   it("renders a top-level post as an <article> Card", () => {
     renderNode(ROOT);
@@ -181,68 +155,13 @@ describe("PostNode as a card (criterion 1)", () => {
   });
 });
 
-describe("LiveScoreTickerDecorator (criterion 2)", () => {
-  it("renders its children first, unwrapped and unchanged", () => {
-    const { container } = renderTicker([testLiveScore()]);
+describe("no live-score block on a post card (EVENTS-003)", () => {
+  it("renders a post that mentions games with no Live score region", () => {
+    renderNode(testPostView({ id: 304, text: ROOT_TEXT, mentioned_game_ids: [1, 2] }));
 
-    const child = screen.getByText("Decorated view");
-    expect(child.tagName).toBe("P");
-    expect(child.parentElement).toBe(container);
-    expect(container.firstElementChild).toBe(child);
-    expect(child.outerHTML).toBe("<p>Decorated view</p>");
-  });
-
-  it("follows the children with the Live score status region", () => {
-    renderTicker([testLiveScore()]);
-
-    const child = screen.getByText("Decorated view");
-    const region = liveScoreRegion();
-    expect(region.contains(child)).toBe(false);
-    expect(
-      child.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
-  it("renders one GameScore per live_scores entry, inside the region", () => {
-    renderTicker([
-      testLiveScore({
-        game_id: 1,
-        home_score: 101,
-        away_score: 99,
-        status: "Q3",
-      }),
-      testLiveScore({
-        game_id: 2,
-        home_score: 88,
-        away_score: 90,
-        status: "FT",
-      }),
-      testLiveScore({
-        game_id: 3,
-        home_score: 12,
-        away_score: 10,
-        status: "Q1",
-      }),
-    ]);
-
-    expect(withClass(liveScoreRegion(), gameScoreStyles.score)).toHaveLength(3);
-  });
-
-  it.each(LIVE_CODES)("shows a Live badge for status %s", (status) => {
-    renderTicker([testLiveScore({ status })]);
-
-    const region = liveScoreRegion();
-    expect(within(region).getByText("Live")).toBeInTheDocument();
-    expect(within(region).getByText(status)).toBeInTheDocument();
-  });
-
-  it("shows an unknown status as given, with no Live badge", () => {
-    renderTicker([testLiveScore({ status: "ZZ" })]);
-
-    const region = liveScoreRegion();
-    expect(withClass(region, gameScoreStyles.score)).toHaveLength(1);
-    expect(within(region).getByText("ZZ")).toBeInTheDocument();
-    expect(within(region).queryByText("Live")).toBeNull();
+    const article = articleFor(ROOT_TEXT);
+    expect(within(article).queryByRole("status", { name: "Live score" })).toBeNull();
+    expect(within(article).queryAllByRole("status")).toHaveLength(0);
   });
 });
 

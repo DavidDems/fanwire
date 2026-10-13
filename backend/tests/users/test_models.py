@@ -85,7 +85,7 @@ def test_user_preferred_team_id_requires_existing_team(session_factory):
 def test_user_preferred_team_id_resolves_to_a_real_team(session_factory):
     with session_factory() as session:
         team = Team(
-            api_sports_team_id=12,
+            nba_team_id=12,
             name="Boston Celtics",
             abbreviation="BOS",
             conference="Eastern",

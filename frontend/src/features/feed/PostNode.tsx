@@ -15,7 +15,6 @@ import {
   Repeat2Icon,
 } from "../../components/ui/icons";
 import { LikeButton } from "./LikeButton";
-import { LiveScoreTickerDecorator } from "./LiveScoreTickerDecorator";
 import { PostMedia } from "./PostMedia";
 import styles from "./PostNode.module.css";
 import { fetchThread, threadKey, type PostView } from "./api";
@@ -71,9 +70,8 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
   const replies = thread.data?.replies;
 
   /**
-   * The post itself: who wrote it, when, what it says and what it carries. This
-   * is what the decorator wraps — the controls and the replies below are the
-   * reader's, not the post's.
+   * The post itself: who wrote it, when, what it says and what it carries. The
+   * controls and the replies below are the reader's, not the post's.
    */
   const view = (
     <>
@@ -95,11 +93,7 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
 
   const body = (
     <>
-      {post.live_scores.length === 0 ? (
-        view
-      ) : (
-        <LiveScoreTickerDecorator post={post}>{view}</LiveScoreTickerDecorator>
-      )}
+      {view}
 
       <footer className={styles.footer}>
         <LikeButton post={post} />

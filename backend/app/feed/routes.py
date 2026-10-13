@@ -19,8 +19,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
-from app.events.dependencies import get_live_score_proxy
-from app.events.proxy import CachedEventProxy
 from app.feed.schemas import FeedPage, ThreadView
 from app.feed.strategies import strategy_for
 from app.feed.views import assemble_post_views
@@ -41,7 +39,6 @@ def get_feed(
     limit: int = Query(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT),
     viewer: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
-    live_score_proxy: CachedEventProxy | None = Depends(get_live_score_proxy),
 ) -> FeedPage:
     strategy = strategy_for(viewer)
     posts = strategy.select_posts(session, before_id=before_id, limit=limit)
@@ -49,7 +46,6 @@ def get_feed(
         session,
         posts,
         viewer_id=viewer.id if viewer is not None else None,
-        live_scores=live_score_proxy,
     )
     # A full page (by the underlying query, not by however many views came
     # back after assemble_post_views' defensive author-soft-delete-race
@@ -65,7 +61,6 @@ def get_thread(
     post_id: int,
     viewer: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
-    live_score_proxy: CachedEventProxy | None = Depends(get_live_score_proxy),
 ) -> ThreadView:
     root_post = session.get(Post, post_id)
     if root_post is None:
@@ -76,7 +71,6 @@ def get_thread(
         session,
         [root_post, *replies],
         viewer_id=viewer.id if viewer is not None else None,
-        live_scores=live_score_proxy,
     )
     views_by_id = {view.id: view for view in views}
 

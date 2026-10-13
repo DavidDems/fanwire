@@ -4,7 +4,9 @@ app/feed/routes.py exists.
 Router isn't wired into app.main in this test -- a throwaway local
 FastAPI() app includes just the feed router, same pattern as
 backend/tests/posts/test_routes.py. Overrides get_session/
-get_optional_current_user/get_live_score_proxy.
+get_optional_current_user. Since EVENTS-003 neither route reads a live score:
+an item carries no `live_scores` field and no route depends on a live-score
+proxy.
 
 GET /feed uses get_optional_current_user: no token -> guest feed, a valid
 token -> the personalized feed, an invalid token -> 401 (inherited,
@@ -27,12 +29,9 @@ from fastapi.testclient import TestClient
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
-from app.events.dependencies import get_live_score_proxy
-from app.events.interfaces import NormalizedLiveScore, SportsDataSource
 from app.events.models import Game, Team
-from app.events.proxy import CachedEventProxy, InMemoryLiveScoreCache
 from app.feed.routes import router
-from app.posts.models import Post
+from app.posts.models import EventMention, Post
 from app.users.auth import FakeTokenVerifier
 from app.users.dependencies import get_optional_current_user, get_token_verifier
 from app.users.models import Follow, User
@@ -61,7 +60,6 @@ def app(session_factory):
 
     app.dependency_overrides[get_session] = _get_session_override
     app.dependency_overrides[get_optional_current_user] = lambda: None
-    app.dependency_overrides[get_live_score_proxy] = lambda: None
     return app
 
 
@@ -96,18 +94,66 @@ def _make_post(session, author, **overrides) -> Post:
     return post
 
 
-class _FixedScoreSource(SportsDataSource):
-    def __init__(self, score: NormalizedLiveScore | None) -> None:
-        self._score = score
+_POST_VIEW_FIELDS = {
+    "id",
+    "text",
+    "is_reply",
+    "parent_post_id",
+    "is_repost",
+    "original_post_id",
+    "created_at",
+    "author",
+    "like_count",
+    "liked_by_viewer",
+    "media",
+    "mentioned_game_ids",
+}
 
-    def fetch_teams(self):
-        return []
 
-    def fetch_games(self, *, since=None):
-        return []
+def _dependency_names(dependant) -> set[str]:
+    names = set()
+    for sub in dependant.dependencies:
+        if sub.call is not None:
+            names.add(getattr(sub.call, "__name__", repr(sub.call)))
+        names |= _dependency_names(sub)
+    return names
 
-    def fetch_live_score(self, api_sports_game_id: int):
-        return self._score
+
+def _post_mentioning_a_live_window_game(session, author) -> tuple[Post, Game]:
+    """A post mentioning a game dated now: the shape that used to trigger a
+    live-score lookup (a game inside the old 4-hour window)."""
+    home = Team(
+        nba_team_id=1610612901,
+        name="Home",
+        abbreviation="HOM",
+        conference="Eastern",
+        division="Atlantic",
+    )
+    away = Team(
+        nba_team_id=1610612902,
+        name="Away",
+        abbreviation="AWY",
+        conference="Western",
+        division="Pacific",
+    )
+    session.add_all([home, away])
+    session.commit()
+    game = Game(
+        nba_game_id=22500777,
+        home_team_id=home.id,
+        away_team_id=away.id,
+        date=datetime.now(UTC),
+        season="2025-26",
+        home_score=0,
+        away_score=0,
+    )
+    session.add(game)
+    session.commit()
+
+    post = _make_post(session, author, text="live game post")
+    session.add(EventMention(post_id=post.id, game_id=game.id, raw_token="#GameId"))
+    session.commit()
+    return post, game
 
 
 # --- GET /feed --------------------------------------------------------
@@ -206,56 +252,25 @@ def test_get_feed_invalid_token_returns_401(app, client, session_factory):
     assert response.status_code == 401
 
 
-def test_get_feed_includes_live_scores_from_the_injected_proxy(app, client, session_factory):
+def test_get_feed_item_carries_no_live_scores_and_every_other_field(client, session_factory):
     with session_factory() as session:
         author = _make_user(session, username="live_feed_author")
-        home = Team(
-            api_sports_team_id=901,
-            name="Home",
-            abbreviation="HOM",
-            conference="Eastern",
-            division="Atlantic",
-        )
-        away = Team(
-            api_sports_team_id=902,
-            name="Away",
-            abbreviation="AWY",
-            conference="Western",
-            division="Pacific",
-        )
-        session.add_all([home, away])
-        session.commit()
-        game = Game(
-            api_sports_game_id=7777,
-            home_team_id=home.id,
-            away_team_id=away.id,
-            date=datetime.now(UTC),
-            season="2025-26",
-            home_score=0,
-            away_score=0,
-        )
-        session.add(game)
-        session.commit()
-
-        from app.posts.models import EventMention
-
-        post = _make_post(session, author, text="live game post")
-        session.add(EventMention(post_id=post.id, game_id=game.id, raw_token="#GameId"))
-        session.commit()
-
-    score = NormalizedLiveScore(
-        api_sports_game_id=7777, home_score=12, away_score=10, status="in_progress"
-    )
-    proxy = CachedEventProxy(_FixedScoreSource(score), InMemoryLiveScoreCache())
-    app.dependency_overrides[get_live_score_proxy] = lambda: proxy
+        post, game = _post_mentioning_a_live_window_game(session, author)
 
     response = client.get("/feed")
 
     assert response.status_code == 200
-    item = response.json()["items"][0]
-    assert item["live_scores"] == [
-        {"game_id": game.id, "home_score": 12, "away_score": 10, "status": "in_progress"}
-    ]
+    [item] = response.json()["items"]
+    assert "live_scores" not in item
+    assert set(item) == _POST_VIEW_FIELDS
+    assert item["id"] == post.id
+    assert item["mentioned_game_ids"] == [game.id]
+
+
+def test_no_feed_route_depends_on_a_live_score_proxy():
+    for route in router.routes:
+        names = _dependency_names(route.dependant)
+        assert not any("live_score" in name for name in names), (route.path, names)
 
 
 # --- GET /feed/thread/{post_id} -----------------------------------------
@@ -308,3 +323,24 @@ def test_get_thread_replies_is_empty_list_when_no_replies(client, session_factor
 
     assert response.status_code == 200
     assert response.json()["replies"] == []
+
+
+def test_get_thread_root_and_replies_carry_no_live_scores(client, session_factory):
+    with session_factory() as session:
+        author = _make_user(session, username="live_thread_author")
+        root, game = _post_mentioning_a_live_window_game(session, author)
+        reply = Post(author_id=author.id, text="reply", is_reply=True, parent_post_id=root.id)
+        session.add(reply)
+        session.commit()
+        session.add(EventMention(post_id=reply.id, game_id=game.id, raw_token="#GameId"))
+        session.commit()
+        root_id = root.id
+
+    response = client.get(f"/feed/thread/{root_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["root"]) == _POST_VIEW_FIELDS
+    assert body["root"]["mentioned_game_ids"] == [game.id]
+    [reply_view] = body["replies"]
+    assert set(reply_view) == _POST_VIEW_FIELDS

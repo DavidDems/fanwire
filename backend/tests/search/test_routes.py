@@ -4,7 +4,8 @@ before app/search/routes.py exists.
 Router isn't wired into app.main in this test -- a throwaway local
 FastAPI() app includes just the search router, same pattern as
 backend/tests/feed/test_routes.py. Overrides get_session/
-get_optional_current_user/get_live_score_proxy.
+get_optional_current_user. Since EVENTS-003 no search route depends on a
+live-score proxy, and a post item carries no `live_scores` field.
 
 Covers wiki/CodeContext/Modules/0x07-search.md's contract:
 - GET /search/accounts and GET /search/posts are two independently
@@ -26,9 +27,8 @@ from fastapi.testclient import TestClient
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
-from app.events.dependencies import get_live_score_proxy
 from app.events.models import Game, Team
-from app.posts.models import Post
+from app.posts.models import EventMention, Post
 from app.search.routes import router
 from app.users.dependencies import get_optional_current_user
 from app.users.models import User
@@ -57,7 +57,6 @@ def app(session_factory):
 
     app.dependency_overrides[get_session] = _get_session_override
     app.dependency_overrides[get_optional_current_user] = lambda: None
-    app.dependency_overrides[get_live_score_proxy] = lambda: None
     return app
 
 
@@ -90,7 +89,7 @@ def _make_post(session, author, **overrides) -> Post:
 
 def _make_team(session, **overrides) -> Team:
     defaults = {
-        "api_sports_team_id": 1,
+        "nba_team_id": 1,
         "name": "Team",
         "abbreviation": "TM",
         "conference": "Eastern",
@@ -105,7 +104,7 @@ def _make_team(session, **overrides) -> Team:
 
 def _make_game(session, home, away, **overrides) -> Game:
     defaults = {
-        "api_sports_game_id": 1,
+        "nba_game_id": 1,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),
@@ -183,6 +182,39 @@ def test_search_posts_returns_matching_posts(client, session_factory):
     assert [item["id"] for item in body["items"]] == [match.id]
 
 
+def test_search_posts_items_carry_no_live_scores(client, session_factory):
+    with session_factory() as session:
+        author = _make_user(session, cognito_sub="sub-live-author", username="live_author")
+        home = _make_team(session, nba_team_id=61)
+        away = _make_team(session, nba_team_id=62)
+        game = _make_game(session, home, away, nba_game_id=61, date=datetime.now(UTC))
+        post = _make_post(session, author, text="courtside tonight")
+        session.add(EventMention(post_id=post.id, game_id=game.id, raw_token="#GameId"))
+        session.commit()
+
+    response = client.get("/search/posts", params={"q": "courtside"})
+
+    assert response.status_code == 200
+    [item] = response.json()["items"]
+    assert "live_scores" not in item
+    assert item["mentioned_game_ids"] == [game.id]
+
+
+def _dependency_names(dependant) -> set[str]:
+    names = set()
+    for sub in dependant.dependencies:
+        if sub.call is not None:
+            names.add(getattr(sub.call, "__name__", repr(sub.call)))
+        names |= _dependency_names(sub)
+    return names
+
+
+def test_no_search_route_depends_on_a_live_score_proxy():
+    for route in router.routes:
+        names = _dependency_names(route.dependant)
+        assert not any("live_score" in name for name in names), (route.path, names)
+
+
 def test_search_posts_and_accounts_are_independently_paginated(client, session_factory):
     with session_factory() as session:
         author = _make_user(session, cognito_sub="sub-shared", username="shared_hooper")
@@ -219,10 +251,10 @@ def test_search_posts_is_injection_safe(client, dangerous_query):
 
 def test_search_games_filters_by_season_alone(client, session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=1)
-        b = _make_team(session, api_sports_team_id=2)
-        target = _make_game(session, a, b, api_sports_game_id=1, season="2025-26")
-        _make_game(session, a, b, api_sports_game_id=2, season="2024-25")
+        a = _make_team(session, nba_team_id=1)
+        b = _make_team(session, nba_team_id=2)
+        target = _make_game(session, a, b, nba_game_id=1, season="2025-26")
+        _make_game(session, a, b, nba_game_id=2, season="2024-25")
 
     response = client.get("/search/games", params={"season": "2025-26"})
 
@@ -232,12 +264,12 @@ def test_search_games_filters_by_season_alone(client, session_factory):
 
 def test_search_games_filters_by_team_alone(client, session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=11)
-        b = _make_team(session, api_sports_team_id=12)
-        c = _make_team(session, api_sports_team_id=13)
-        home_game = _make_game(session, a, b, api_sports_game_id=11)
-        away_game = _make_game(session, b, a, api_sports_game_id=12)
-        _make_game(session, b, c, api_sports_game_id=13)
+        a = _make_team(session, nba_team_id=11)
+        b = _make_team(session, nba_team_id=12)
+        c = _make_team(session, nba_team_id=13)
+        home_game = _make_game(session, a, b, nba_game_id=11)
+        away_game = _make_game(session, b, a, nba_game_id=12)
+        _make_game(session, b, c, nba_game_id=13)
         team_a_id = a.id
 
     response = client.get("/search/games", params={"team_id": team_a_id})
@@ -248,20 +280,20 @@ def test_search_games_filters_by_team_alone(client, session_factory):
 
 def test_search_games_filters_by_position_alone(client, session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=21)
-        b = _make_team(session, api_sports_team_id=22)
+        a = _make_team(session, nba_team_id=21)
+        b = _make_team(session, nba_team_id=22)
         target = _make_game(
             session,
             a,
             b,
-            api_sports_game_id=21,
+            nba_game_id=21,
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "SF"}],
         )
         _make_game(
             session,
             a,
             b,
-            api_sports_game_id=22,
+            nba_game_id=22,
             player_stats=[{"player_name": "Y", "team_id": a.id, "position": "PG"}],
         )
 
@@ -273,13 +305,13 @@ def test_search_games_filters_by_position_alone(client, session_factory):
 
 def test_search_games_filters_combined(client, session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=31)
-        b = _make_team(session, api_sports_team_id=32)
+        a = _make_team(session, nba_team_id=31)
+        b = _make_team(session, nba_team_id=32)
         target = _make_game(
             session,
             a,
             b,
-            api_sports_game_id=31,
+            nba_game_id=31,
             season="2025-26",
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
         )
@@ -287,7 +319,7 @@ def test_search_games_filters_combined(client, session_factory):
             session,
             a,
             b,
-            api_sports_game_id=32,
+            nba_game_id=32,
             season="2024-25",
             player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
         )
@@ -309,10 +341,10 @@ def test_search_games_unknown_position_returns_422(client):
 
 def test_search_games_filters_endpoint(client, session_factory):
     with session_factory() as session:
-        a = _make_team(session, api_sports_team_id=41)
-        b = _make_team(session, api_sports_team_id=42)
-        _make_game(session, a, b, api_sports_game_id=41, season="2025-26")
-        _make_game(session, a, b, api_sports_game_id=42, season="2024-25")
+        a = _make_team(session, nba_team_id=41)
+        b = _make_team(session, nba_team_id=42)
+        _make_game(session, a, b, nba_game_id=41, season="2025-26")
+        _make_game(session, a, b, nba_game_id=42, season="2024-25")
 
     response = client.get("/search/games/filters")
 

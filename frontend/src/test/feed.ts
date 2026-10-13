@@ -29,7 +29,6 @@ import type { components } from "../api/schema";
  */
 export type AuthorView = components["schemas"]["AuthorView"];
 export type FeedPageBody = components["schemas"]["FeedPage"];
-export type LiveScoreView = components["schemas"]["LiveScoreView"];
 export type MediaItemView = components["schemas"]["MediaItemView"];
 export type PostView = components["schemas"]["PostView"];
 export type ThreadView = components["schemas"]["ThreadView"];
@@ -69,22 +68,10 @@ export function testMediaItem(overrides: Partial<MediaItemView> = {}): MediaItem
   };
 }
 
-/** A live score for a mentioned game — only ever present inside the 4h window. */
-export function testLiveScore(overrides: Partial<LiveScoreView> = {}): LiveScoreView {
-  return {
-    game_id: 123,
-    home_score: 112,
-    away_score: 108,
-    status: "Q4",
-    ...overrides,
-  };
-}
-
 /**
  * A feed item.
  *
- * The defaults are the plainest possible post: no media, no live scores, no
- * mentions, not a reply and not a repost. `like_count` is 3 rather than 0 or 1
+ * The defaults are the plainest possible post: no media, no mentions, not a reply and not a repost. `like_count` is 3 rather than 0 or 1
  * so that a test which likes and unlikes stays on plural counts in both
  * directions and never accidentally pins a singular label.
  */
@@ -102,7 +89,6 @@ export function testPostView(overrides: Partial<PostView> = {}): PostView {
     liked_by_viewer: false,
     media: [],
     mentioned_game_ids: [],
-    live_scores: [],
     ...overrides,
   };
 }

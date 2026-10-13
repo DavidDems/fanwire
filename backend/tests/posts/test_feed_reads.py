@@ -67,7 +67,7 @@ def _make_post(session, author, **overrides) -> Post:
 
 def _make_team(session, **overrides) -> Team:
     defaults = {
-        "api_sports_team_id": overrides.pop("api_sports_team_id", 1),
+        "nba_team_id": overrides.pop("nba_team_id", 1),
         "name": "Team",
         "abbreviation": "TM",
         "conference": "Eastern",
@@ -82,7 +82,7 @@ def _make_team(session, **overrides) -> Team:
 
 def _make_game(session, home, away, **overrides) -> Game:
     defaults = {
-        "api_sports_game_id": 5001,
+        "nba_game_id": 5001,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),
@@ -165,10 +165,10 @@ def test_query_feed_posts_filters_by_author_ids(session_factory):
 def test_query_feed_posts_filters_by_mentioned_game_ids(session_factory):
     with session_factory() as session:
         author = _make_user(session, username="qfp_mention_author")
-        home = _make_team(session, api_sports_team_id=101)
-        away = _make_team(session, api_sports_team_id=102)
-        game = _make_game(session, home, away, api_sports_game_id=6001)
-        other_game = _make_game(session, home, away, api_sports_game_id=6002)
+        home = _make_team(session, nba_team_id=101)
+        away = _make_team(session, nba_team_id=102)
+        game = _make_game(session, home, away, nba_game_id=6001)
+        other_game = _make_game(session, home, away, nba_game_id=6002)
 
         mentioning = _make_post(session, author, text="mentions the game")
         session.add(EventMention(post_id=mentioning.id, game_id=game.id, raw_token="#GameId"))
@@ -200,9 +200,9 @@ def test_query_feed_posts_ors_author_and_mention_filters_without_duplicates(sess
     with session_factory() as session:
         followed_author = _make_user(session, username="qfp_or_followed")
         other_author = _make_user(session, username="qfp_or_other")
-        home = _make_team(session, api_sports_team_id=201)
-        away = _make_team(session, api_sports_team_id=202)
-        game = _make_game(session, home, away, api_sports_game_id=7001)
+        home = _make_team(session, nba_team_id=201)
+        away = _make_team(session, nba_team_id=202)
+        game = _make_game(session, home, away, nba_game_id=7001)
 
         # Satisfies BOTH conditions -- must appear exactly once.
         both = _make_post(session, followed_author, text="both")
@@ -318,10 +318,10 @@ def test_liked_post_ids_returns_only_posts_liked_by_given_user(session_factory):
 def test_mentioned_game_ids_by_post_groups_by_post(session_factory):
     with session_factory() as session:
         author = _make_user(session, username="mgibp_author")
-        home = _make_team(session, api_sports_team_id=301)
-        away = _make_team(session, api_sports_team_id=302)
-        game1 = _make_game(session, home, away, api_sports_game_id=8001)
-        game2 = _make_game(session, home, away, api_sports_game_id=8002)
+        home = _make_team(session, nba_team_id=301)
+        away = _make_team(session, nba_team_id=302)
+        game1 = _make_game(session, home, away, nba_game_id=8001)
+        game2 = _make_game(session, home, away, nba_game_id=8002)
 
         post = _make_post(session, author, text="mentions two games")
         session.add_all(
