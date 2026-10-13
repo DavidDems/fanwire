@@ -95,8 +95,8 @@ def get_session() -> Iterator[Session]:
 
 
 def open_session() -> Session:
-    """Plain, caller-closed Session for non-FastAPI callers — the three
-    Lambda handlers (app.events/app.media/app.notifications.lambda_handler),
+    """Plain, caller-closed Session for non-FastAPI callers — the two
+    Lambda handlers (app.media/app.notifications.lambda_handler),
     which have no request/response lifecycle for get_session's generator
     dependency to hook into. Callers are responsible for closing it (a
     `try/finally` around the handler body, same shape as get_session's own

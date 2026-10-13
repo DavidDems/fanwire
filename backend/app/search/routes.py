@@ -15,8 +15,7 @@ Two distinct mechanisms, per 0x07-search.md:
 
 GET /search/posts reuses app.feed.views.assemble_post_views (the same
 cross-module view-assembly feed/ uses) -- viewer via
-get_optional_current_user, live scores via get_live_score_proxy, exactly
-like app.feed.routes.
+get_optional_current_user, exactly like app.feed.routes.
 """
 
 from __future__ import annotations
@@ -25,8 +24,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
-from app.events.dependencies import get_live_score_proxy
-from app.events.proxy import CachedEventProxy
 from app.events.schemas import GameOut
 from app.events.service import ALLOWED_POSITIONS, distinct_seasons, filter_games
 from app.feed.views import assemble_post_views
@@ -73,14 +70,12 @@ def search_posts(
     offset: int = Query(default=0, ge=0),
     viewer: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
-    live_score_proxy: CachedEventProxy | None = Depends(get_live_score_proxy),
 ) -> PostsPage:
     posts = search_post_rows(session, q.strip(), limit=limit, offset=offset)
     items = assemble_post_views(
         session,
         posts,
         viewer_id=viewer.id if viewer is not None else None,
-        live_scores=live_score_proxy,
     )
     return PostsPage(items=items, next_offset=_next_offset(offset, limit, len(posts)))
 

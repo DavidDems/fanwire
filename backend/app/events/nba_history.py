@@ -3,9 +3,7 @@ Lauga: teams.csv, games.csv, games_details.csv) into Team and Game.
 
 This is the "existing database of NBA game results" the events module
 imports (wiki/CodeContext/Modules/0x02-events.md). The dataset's ids are
-nba.com's, so rows are keyed by `Team.nba_team_id`/`Game.nba_game_id` and
-`api_sports_*_id` stays null: storing nba.com ids in the API-SPORTS columns
-would collide with a real API-SPORTS import later.
+nba.com's, so rows are keyed by `Team.nba_team_id`/`Game.nba_game_id`.
 
 Rules, and why:
 
@@ -15,8 +13,8 @@ Rules, and why:
   is what 0x02-events.md's fail-fast rule asks of an import.
 - **Fail fast on an unknown team.** A game, or a box-score row of a game
   being loaded, that names a team absent from teams.csv raises
-  app.events.ingestion.UnrecognizedTeamError, the same error the API-SPORTS
-  pipeline raises. No Team is ever invented from a game row.
+  app.events.errors.UnrecognizedTeamError. No Team is ever invented from a
+  game row.
 - **Only real, finished games.** The GAME_ID's first digit is nba.com's game
   type: preseason and All-Star games are skipped and counted, regular season,
   playoffs and play-in are stored with `Game.game_type` set. A game without
@@ -44,7 +42,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.events.ingestion import UnrecognizedTeamError
+from app.events.errors import UnrecognizedTeamError
 from app.events.models import Game, Team
 
 _BATCH_SIZE = 1000
@@ -484,7 +482,6 @@ def _insert_games(
         new_games.append(
             Game(
                 nba_game_id=nba_game_id,
-                api_sports_game_id=None,
                 game_type=game.game_type,
                 home_team_id=team_ids[row.home_nba_team_id],
                 away_team_id=team_ids[row.away_nba_team_id],

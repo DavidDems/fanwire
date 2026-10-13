@@ -14,6 +14,7 @@ export interface MessagingStackProps extends cdk.StackProps {
 /** Visibility timeouts are 6x the consuming Lambda's timeout (AWS's SQS-trigger guidance). */
 export const CONSUMER_TIMEOUTS = {
   notifications: cdk.Duration.seconds(30),
+  // No consumer since EVENTS-003; still sets the kept ingestion-retry queue's visibility timeout.
   ingestion: cdk.Duration.minutes(5),
   media: cdk.Duration.seconds(60),
 } as const;
@@ -53,12 +54,18 @@ export class MessagingStack extends cdk.Stack {
     });
     this.routeRuleToQueue(notificationRule, this.notificationQueue);
 
-    // --- ingestion retries: failed async ingestion invocations land here (Lambda
-    // on-failure destination) and are retried by the same Lambda; the DLQ also
-    // receives schedules the Scheduler itself could not deliver.
+    // --- ingestion retries: no producer or consumer since EVENTS-003 retired
+    // the API-SPORTS ingestion Lambda. The queue and its DLQ stay, and stay
+    // exported: the deployed Fanwire-App still imports both ARNs, and without
+    // these explicit exports the deploy would update this stack first and fail
+    // deleting an export in use. Same tokens as App used to import, so the
+    // Output logical ids and export names are unchanged. A later infra unit
+    // removes the queues and the exports once the new App is deployed.
     const ingestion = this.queueWithDlq('IngestionRetry', 'ingestion-retry', CONSUMER_TIMEOUTS.ingestion, 3);
     this.ingestionRetryQueue = ingestion.queue;
     this.ingestionDeadLetterQueue = ingestion.dlq;
+    this.exportValue(this.ingestionRetryQueue.queueArn);
+    this.exportValue(this.ingestionDeadLetterQueue.queueArn);
 
     // --- media: GuardDuty scan result for a quarantine object -> queue -> media Lambda.
     // Triggered by the scan RESULT, not raw ObjectCreated, so processing can't

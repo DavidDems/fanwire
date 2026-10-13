@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -23,11 +22,9 @@ from app.events.models import Game
 # Allow-list for search/'s position filter (wiki/CodeContext/Modules/
 # 0x07-search.md), validated at the API boundary (unknown -> 422) --
 # never interpolated into a query, only ever compared against this fixed
-# set. Standard basketball position set; the fixture data this codebase
-# has seen so far only uses "SF" (see ApiSportsAdapter, 0x02-events.md
-# "Resolved decisions"), and this set is unverified against a live
-# API-SPORTS payload, same caveat as the rest of that adapter's
-# vendor-shape parsing.
+# set. Standard basketball position set; the NBA dataset's box scores carry
+# a starter's START_POSITION (app.events.nba_history), so its rows use the
+# G/F/C subset.
 ALLOWED_POSITIONS: tuple[str, ...] = ("PG", "SG", "SF", "PF", "C", "G", "F")
 
 
@@ -49,25 +46,15 @@ class GameRef:
     app.media.service.MediaView."""
 
     id: int
-    # None for a game loaded from the NBA history dataset (nba_game_id only):
-    # CachedEventProxy is keyed by the API-SPORTS id, so such a game has no
-    # live score to ask for.
-    api_sports_game_id: int | None
-    date: datetime
 
 
 def games_by_ids(session: Session, ids: Collection[int]) -> dict[int, GameRef]:
-    """Batch lookup of the narrow GameRef projection, keyed by id -- feed/
-    needs api_sports_game_id (to query CachedEventProxy) and date (for its
-    live-score-window heuristic), nothing else about the Game row."""
+    """Batch lookup of the narrow GameRef projection, keyed by id."""
     if not ids:
         return {}
 
-    rows = session.scalars(select(Game).where(Game.id.in_(ids))).all()
-    return {
-        row.id: GameRef(id=row.id, api_sports_game_id=row.api_sports_game_id, date=row.date)
-        for row in rows
-    }
+    found = session.scalars(select(Game.id).where(Game.id.in_(ids))).all()
+    return {game_id: GameRef(id=game_id) for game_id in found}
 
 
 def filter_games(

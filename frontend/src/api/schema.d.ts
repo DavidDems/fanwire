@@ -596,8 +596,6 @@ export interface components {
         };
         /** GameOut */
         GameOut: {
-            /** Api Sports Game Id */
-            api_sports_game_id: number | null;
             /** Away Score */
             away_score: number;
             /** Away Team Id */
@@ -616,7 +614,7 @@ export interface components {
             /** Id */
             id: number;
             /** Nba Game Id */
-            nba_game_id: number | null;
+            nba_game_id: number;
             /** Player Stats */
             player_stats: {
                 [key: string]: unknown;
@@ -637,17 +635,6 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
-        };
-        /** LiveScoreView */
-        LiveScoreView: {
-            /** Away Score */
-            away_score: number;
-            /** Game Id */
-            game_id: number;
-            /** Home Score */
-            home_score: number;
-            /** Status */
-            status: string;
         };
         /**
          * MeOut
@@ -775,9 +762,9 @@ export interface components {
          * PostView
          * @description feed/'s (and, per this unit's brief, search/'s) response shape for a
          *     single post. Deliberately its own schema, not app.posts.schemas.PostOut
-         *     -- it carries fields (author, like_count, media, mentioned_game_ids,
-         *     live_scores) PostOut doesn't, assembled from other modules' read
-         *     interfaces rather than the Post row alone.
+         *     -- it carries fields (author, like_count, media, mentioned_game_ids)
+         *     PostOut doesn't, assembled from other modules' read interfaces rather
+         *     than the Post row alone.
          */
         PostView: {
             author: components["schemas"]["AuthorView"];
@@ -796,8 +783,6 @@ export interface components {
             like_count: number;
             /** Liked By Viewer */
             liked_by_viewer: boolean;
-            /** Live Scores */
-            live_scores: components["schemas"]["LiveScoreView"][];
             /** Media */
             media: components["schemas"]["MediaItemView"][];
             /** Mentioned Game Ids */
@@ -848,8 +833,6 @@ export interface components {
         TeamOut: {
             /** Abbreviation */
             abbreviation: string;
-            /** Api Sports Team Id */
-            api_sports_team_id: number | null;
             /** Conference */
             conference: string;
             /** Division */
@@ -861,7 +844,7 @@ export interface components {
             /** Name */
             name: string;
             /** Nba Team Id */
-            nba_team_id: number | null;
+            nba_team_id: number;
         };
         /** ThreadView */
         ThreadView: {

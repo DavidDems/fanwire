@@ -5,7 +5,7 @@
  * tokens.css by name only.
  */
 
-/* Tight inside a post: header, text, media, ticker, footer, thread. */
+/* Tight inside a post: header, text, media, footer, thread. */
 .post {
   display: flex;
   flex-direction: column;

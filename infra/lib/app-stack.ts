@@ -9,7 +9,6 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
@@ -37,10 +36,16 @@ export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
- * five functions, the HTTP API in front of the API function, and every
- * trigger (Scheduler, SQS event source mappings, async-failure destination).
- * The fifth function -- the migration runner -- is deliberately the target of
- * no trigger at all; see `migrationRunner()` below.
+ * four functions, the HTTP API in front of the API function, and every
+ * trigger (SQS event source mappings). The fourth function -- the migration
+ * runner -- is deliberately the target of no trigger at all; see
+ * `migrationRunner()` below.
+ *
+ * The API-SPORTS ingestion function, its schedule, retry trigger and async
+ * destination, and the API's live-score cache grant are gone (EVENTS-003).
+ * The resources they used (Data's idempotency table, live-score cache table
+ * and API-SPORTS secret; Messaging's ingestion-retry queue and DLQ) stay,
+ * still exported by their own stacks, until a later infra unit removes them.
  * Every function has its own role with explicit, enumerated statements --
  * no grant*() helpers, no managed policies (see test/iam-policy.test.ts).
  */
@@ -121,7 +126,6 @@ export class AppStack extends cdk.Stack {
         MEDIA_QUARANTINE_BUCKET: storage.quarantineBucket.bucketName,
         MEDIA_PUBLIC_BUCKET: storage.publicMediaBucket.bucketName,
         POST_EVENT_BUS_NAME: messaging.postEventBus.eventBusName,
-        LIVE_SCORE_CACHE_TABLE_NAME: data.liveScoreCacheTable.tableName,
       },
       statements: [
         // presigned PUT (app.media.routes signs with this role's credentials)
@@ -131,65 +135,9 @@ export class AppStack extends cdk.Stack {
           resources: [storage.quarantineBucket.arnForObjects(`${StorageStack.UPLOAD_PREFIX}*`)],
         }),
         this.kmsStatement('SseKmsForUploads', ['kms:GenerateDataKey']),
-        new iam.PolicyStatement({
-          sid: 'LiveScoreCache',
-          actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem'],
-          resources: [data.liveScoreCacheTable.tableArn],
-        }),
         this.putEventsStatement(),
       ],
     });
-
-    // --- ingestion (EventBridge Scheduler + retry queue)
-    const ingestion = this.backendFunction('Ingestion', {
-      command: 'app.events.lambda_handler.handler',
-      timeout: CONSUMER_TIMEOUTS.ingestion,
-      memorySize: 512,
-      image,
-      keyRef,
-      environment: {
-        ...common,
-        API_SPORTS_SECRET_ARN: data.apiSportsSecret.secretArn,
-        IDEMPOTENCY_TABLE_NAME: data.idempotencyTable.tableName,
-        LIVE_SCORE_CACHE_TABLE_NAME: data.liveScoreCacheTable.tableName,
-        POST_EVENT_BUS_NAME: messaging.postEventBus.eventBusName,
-      },
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'ReadApiSportsKey',
-          actions: ['secretsmanager:GetSecretValue'],
-          resources: [data.apiSportsSecret.secretArn],
-        }),
-        new iam.PolicyStatement({
-          // aws-lambda-powertools Idempotency's calls
-          sid: 'IdempotencyTable',
-          actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem'],
-          resources: [data.idempotencyTable.tableArn],
-        }),
-        new iam.PolicyStatement({
-          sid: 'LiveScoreCache',
-          actions: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem'],
-          resources: [data.liveScoreCacheTable.tableArn],
-        }),
-        this.putEventsStatement(),
-        ...this.consumeQueueStatements('IngestionRetry', messaging.ingestionRetryQueue),
-        new iam.PolicyStatement({
-          // Lambda's async on-failure destination is sent with the function's role
-          sid: 'SendToIngestionRetryQueue',
-          actions: ['sqs:SendMessage'],
-          resources: [messaging.ingestionRetryQueue.queueArn],
-        }),
-        this.kmsStatement('SqsSend', ['kms:GenerateDataKey']),
-      ],
-    });
-    new lambda.CfnEventInvokeConfig(this, 'IngestionAsyncConfig', {
-      functionName: ingestion.functionName,
-      qualifier: '$LATEST',
-      maximumRetryAttempts: 2,
-      destinationConfig: { onFailure: { destination: messaging.ingestionRetryQueue.queueArn } },
-    });
-    this.sqsTrigger('IngestionRetryTrigger', ingestion, messaging.ingestionRetryQueue, 1);
-    this.ingestionSchedule(ingestion, messaging.ingestionDeadLetterQueue);
 
     // --- media processing (GuardDuty scan result -> SQS -> here)
     const media = this.backendFunction('Media', {
@@ -299,7 +247,7 @@ export class AppStack extends cdk.Stack {
   /**
    * The on-demand schema migration runner (`app.migrate.handler`).
    *
-   * The same `DockerImageAsset` as the other four functions with a different
+   * The same `DockerImageAsset` as the other three functions with a different
    * `cmd` override -- the `lambda` stage copies `alembic/` and `alembic.ini`,
    * so the code that migrates the schema is byte-for-byte the code that runs
    * against it. A second image would double the build, the ECR footprint and
@@ -381,7 +329,7 @@ export class AppStack extends cdk.Stack {
     });
   }
 
-  /** One of the five functions running the shared image, with its own role and log group. */
+  /** One of the four functions running the shared image, with its own role and log group. */
   private backendFunction(
     id: string,
     opts: {
@@ -489,44 +437,6 @@ export class AppStack extends cdk.Stack {
       batchSize,
       reportBatchItemFailures: true,
     });
-  }
-
-  private ingestionSchedule(ingestion: lambda.Function, dlq: sqs.IQueue): void {
-    const role = new iam.Role(this, 'IngestionScheduleRole', {
-      description: 'EventBridge Scheduler: invoke the fanwire ingestion Lambda',
-      assumedBy: new iam.PrincipalWithConditions(new iam.ServicePrincipal('scheduler.amazonaws.com'), {
-        StringEquals: { 'aws:SourceAccount': this.account },
-      }),
-    });
-    const policy = new iam.Policy(this, 'IngestionSchedulePolicy', {
-      roles: [role],
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'InvokeIngestion',
-          actions: ['lambda:InvokeFunction'],
-          resources: [ingestion.functionArn],
-        }),
-        new iam.PolicyStatement({
-          sid: 'DeadLetter',
-          actions: ['sqs:SendMessage'],
-          resources: [dlq.queueArn],
-        }),
-        this.kmsStatement('EncryptDeadLetter', ['kms:GenerateDataKey', 'kms:Decrypt']),
-      ],
-    });
-    const schedule = new scheduler.CfnSchedule(this, 'IngestionSchedule', {
-      description: 'Baseline hourly sports-data ingestion (aws-stack.md: hourly outside live-game windows)',
-      scheduleExpression: 'rate(1 hour)',
-      flexibleTimeWindow: { mode: 'OFF' },
-      target: {
-        arn: ingestion.functionArn,
-        roleArn: role.roleArn,
-        input: JSON.stringify({ trigger: 'schedule', mode: 'baseline' }),
-        retryPolicy: { maximumRetryAttempts: 2, maximumEventAgeInSeconds: 3600 },
-        deadLetterConfig: { arn: dlq.queueArn },
-      },
-    });
-    schedule.node.addDependency(policy);
   }
 
   /**

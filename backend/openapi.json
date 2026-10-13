@@ -302,17 +302,6 @@
       },
       "GameOut": {
         "properties": {
-          "api_sports_game_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Sports Game Id"
-          },
           "away_score": {
             "title": "Away Score",
             "type": "integer"
@@ -350,15 +339,8 @@
             "type": "integer"
           },
           "nba_game_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nba Game Id"
+            "title": "Nba Game Id",
+            "type": "integer"
           },
           "player_stats": {
             "items": {
@@ -386,7 +368,6 @@
         },
         "required": [
           "id",
-          "api_sports_game_id",
           "nba_game_id",
           "home_team_id",
           "away_team_id",
@@ -440,34 +421,6 @@
           }
         },
         "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "LiveScoreView": {
-        "properties": {
-          "away_score": {
-            "title": "Away Score",
-            "type": "integer"
-          },
-          "game_id": {
-            "title": "Game Id",
-            "type": "integer"
-          },
-          "home_score": {
-            "title": "Home Score",
-            "type": "integer"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "game_id",
-          "home_score",
-          "away_score",
-          "status"
-        ],
-        "title": "LiveScoreView",
         "type": "object"
       },
       "MeOut": {
@@ -810,7 +763,7 @@
         "type": "object"
       },
       "PostView": {
-        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids,\nlive_scores) PostOut doesn't, assembled from other modules' read\ninterfaces rather than the Post row alone.",
+        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.",
         "properties": {
           "author": {
             "$ref": "#/components/schemas/AuthorView"
@@ -839,13 +792,6 @@
           "liked_by_viewer": {
             "title": "Liked By Viewer",
             "type": "boolean"
-          },
-          "live_scores": {
-            "items": {
-              "$ref": "#/components/schemas/LiveScoreView"
-            },
-            "title": "Live Scores",
-            "type": "array"
           },
           "media": {
             "items": {
@@ -907,8 +853,7 @@
           "like_count",
           "liked_by_viewer",
           "media",
-          "mentioned_game_ids",
-          "live_scores"
+          "mentioned_game_ids"
         ],
         "title": "PostView",
         "type": "object"
@@ -1018,17 +963,6 @@
             "title": "Abbreviation",
             "type": "string"
           },
-          "api_sports_team_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Sports Team Id"
-          },
           "conference": {
             "title": "Conference",
             "type": "string"
@@ -1057,20 +991,12 @@
             "type": "string"
           },
           "nba_team_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nba Team Id"
+            "title": "Nba Team Id",
+            "type": "integer"
           }
         },
         "required": [
           "id",
-          "api_sports_team_id",
           "nba_team_id",
           "name",
           "abbreviation",
