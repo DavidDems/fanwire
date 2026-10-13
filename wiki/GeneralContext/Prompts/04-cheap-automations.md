@@ -124,6 +124,12 @@ record per call), and bring it to the human.
   (`<!-- fanwire-shadow {...} -->`) plus the job summary, collected later by
   an `agentctl shadow report` over `gh api`. No new permission.
 - **Wiki proposal output: (a), a comment with a patch** on the merged PR.
+- **`actions: read` is allowed** where an automation reads a run's log
+  (approved for automation 1, #141). Read-only; `actions: write` stays
+  forbidden.
+- **Automation 1's first live run is a deliberate red** on a hand-run
+  `agent/*` PR the human's code session is already working on, pushed after
+  #141 merges.
 
 ## Progress
 
@@ -136,10 +142,10 @@ record per call), and bring it to the human.
 - **Automation 1, CI failure summary: built, not yet proven live**
   (`director/ci-failure-summary`). `ci-summary.yml`, `.ai/bin/ci_summary.py`,
   `agentlib/cisummary.py`, `.ai/prompts/ci-summary.md`, and
-  `config.json` `automations.ci_summary`. One deviation from the decided
-  permissions: the job also has **`actions: read`**, which downloading a
-  run's failed-job log needs. Its first live run is a real red `agent/*` PR,
-  not a dispatch: `workflow_run` cannot be started by hand.
+  `config.json` `automations.ci_summary`. The job also has **`actions:
+  read`**, which downloading a run's failed-job log needs (approved, above).
+  Its first live run is a real red `agent/*` PR, not a dispatch:
+  `workflow_run` cannot be started by hand.
 - Next: 2 coverage (with `jev`), 3 drift (with `jev`), 4 wiki.
 
 ## The four, with design notes (starting points, not decisions)
