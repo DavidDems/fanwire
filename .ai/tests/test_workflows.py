@@ -2220,6 +2220,12 @@ class TestTheJevSmokeIsDispatchOnly:
         for other in ("pull_request", "push", "workflow_run", "schedule", "issue"):
             assert other not in triggers, f"jev-smoke.yml must not run on {other}"
 
+    def test_it_runs_only_on_main(self, smoke):
+        """A dispatch names a ref, and that ref's `ask_jev.py` is what runs with
+        the key. The job refuses any ref but `main`, so a slip in the
+        dispatching command cannot hand a branch's code the key."""
+        assert "if: github.ref == 'refs/heads/main'" in job_block(smoke, "smoke")
+
     def test_it_can_write_nothing(self, smoke):
         assert re.search(r"^permissions:\n  contents: read\n", smoke, re.MULTILINE)
         assert not re.search(r"^\s+[a-z-]+:\s*write\b", smoke, re.MULTILINE)
