@@ -25,7 +25,7 @@ What is real:
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
 | `src/features/search/` | `/search` — the free-text bar, the Accounts and Posts sections paged apart, and the dropdown-only game filter |
-| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the live-score decorator, the optimistic like and the media |
+| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the optimistic like and the media |
 | `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts` and `search.ts` (the per-unit network fixtures) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
@@ -505,8 +505,8 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
 
 - **`PinnedPostDecorator` is deliberately not built, and this is the record of
   why.** [[wiki/CodeContext/Standards/gof-patterns|GoF patterns]] names it
-  alongside `LiveScoreTickerDecorator`, so the next reader of that document will
-  reasonably ask where it went. **No backend field marks a post as pinned** —
+  alongside `LiveScoreTickerDecorator` (itself removed by `EVENTS-003`, below),
+  so the next reader of that document will reasonably ask where it went. **No backend field marks a post as pinned** —
   [[0x03-posts]] has no such column — so it would decorate a condition that
   cannot occur. YAGNI, and the acceptance criterion is written as an absence
   precisely so a test can pin it: `feed-isolation.test.ts` sweeps the whole of
@@ -585,13 +585,11 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   recursion passes to every reply: a top-level post is a `Card as="article"`,
   a reply a plain `<article>` on its parent card's surface. Still one
   component; the prop changes the box, never what is rendered inside it.
-- **The score block names no teams.** `LiveScoreView` carries `game_id`, two
-  scores and `status` only, so the decorator renders `GameScore` (Home and
-  Away as words, the game-state mapping that never calls an unknown code Live)
-  under a "Game {id}" label. Naming teams needs the backend to add home and
-  away abbreviations to `LiveScoreView` ([[0x06-feed]]): a follow-up, and not a
-  teams fetch from here. The decorator still renders its children first and
-  bare, as a fragment, and adds its block after them.
+- **No live-score ticker since `EVENTS-003` (2026-10-13).** `PostView` lost
+  `live_scores` when the API-SPORTS path was retired ([[0x06-feed]]), so
+  `LiveScoreTickerDecorator` and its styles are gone and `PostNode` renders its
+  view directly. `GameScore`'s `compact` variant, which only the ticker used, is
+  left in `components/ui/` (outside that unit's paths) with no caller.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
