@@ -54,8 +54,7 @@ export function testAccount(
 export function testGame(overrides: Partial<GameOut> = {}): GameOut {
   return {
     id: 501,
-    api_sports_game_id: 9501,
-    nba_game_id: null,
+    nba_game_id: 22300417,
     game_type: null,
     season: "2023",
     date: "2024-01-15T00:30:00Z",

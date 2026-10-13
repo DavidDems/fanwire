@@ -21,6 +21,9 @@
  *   folder can offer another without being imported by it
  *   ([[0x00-architecture]] Connection rule) — and `features/compose/**` is in
  *   this unit's `forbidden_paths` besides.
+ * - **EVENTS-003 — the live-score ticker is gone.** The API no longer sends
+ *   `live_scores`, so `LiveScoreTickerDecorator` and its stylesheet are deleted
+ *   and nothing under `src/` imports them.
  *
  * Same shape, and the same reason, as `src/auth/sdk-isolation.test.ts`,
  * `src/test/env-usage.test.ts` and `src/features/compose/component-isolation.test.ts`:
@@ -47,8 +50,8 @@ function findSrcDir(): string {
 const SRC_DIR = findSrcDir();
 const FEED_DIR = join(SRC_DIR, "features", "feed");
 
-/** The three modules this unit's decisions name. */
-const MODULES = ["FeedPage.tsx", "PostNode.tsx", "LiveScoreTickerDecorator.tsx"] as const;
+/** The modules this unit's decisions name. */
+const MODULES = ["FeedPage.tsx", "PostNode.tsx"] as const;
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
 const SKIP_DIRECTORIES = new Set(["node_modules", "dist", "coverage", ".vite"]);
@@ -145,7 +148,7 @@ describe("no pinned-post decorator is built", () => {
 
     expect(
       offenders,
-      "the one decorator this unit builds is LiveScoreTickerDecorator; a pinned-post decorator has no condition to decorate",
+      "a pinned-post decorator has no condition to decorate",
     ).toEqual([]);
   });
 
@@ -190,15 +193,33 @@ describe("a thread is the same node as a post", () => {
   });
 });
 
-describe("the live-score ticker is applied as a decorator", () => {
-  it("has PostNode wrap through LiveScoreTickerDecorator", () => {
-    // The behavioural half — a ticker for a post with scores, none for a post
-    // without — is equally satisfied by an inline badge. The pattern is assigned
-    // by [[wiki/CodeContext/Standards/gof-patterns|GoF patterns]], so the module
-    // doing the wrapping is part of the criterion.
+describe("the live-score ticker is gone (EVENTS-003)", () => {
+  const TICKER = "LiveScoreTickerDecorator";
+
+  it.each([`${TICKER}.tsx`, `${TICKER}.module.css`])("has no %s in features/feed", (file) => {
+    expect(existsSync(join(FEED_DIR, file)), `${file} must be deleted`).toBe(false);
+  });
+
+  it("is imported by no module under src", () => {
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles(SRC_DIR)) {
+      for (const specifier of importSpecifiers(read(file))) {
+        if (moduleName(specifier).startsWith(TICKER)) {
+          offenders.push(`${posix(file)} imports ${specifier}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("checks imports it actually parsed", () => {
+    // Guards the sweep above against passing on an empty walk or a regex that
+    // parsed nothing: PostNode's own imports must be visible to it.
     const imported = importSpecifiers(read(join(FEED_DIR, "PostNode.tsx"))).map(moduleName);
 
-    expect(imported).toContain("LiveScoreTickerDecorator");
+    expect(imported).toContain("LikeButton");
   });
 });
 

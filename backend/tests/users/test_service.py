@@ -265,7 +265,7 @@ def test_update_profile_accepts_valid_preferred_team_id(session_factory):
     with session_factory() as session:
         user = _create(session, "sub-up-9", "up_user_9")
         team = Team(
-            api_sports_team_id=401,
+            nba_team_id=401,
             name="Valid Team",
             abbreviation="VLD",
             conference="Eastern",

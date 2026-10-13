@@ -89,3 +89,31 @@ describe('Messaging stack', () => {
     tpl().resourceCountIs('AWS::Lambda::Function', 0);
   });
 });
+
+/**
+ * EVENTS-003: the ingestion function is gone from the App stack, but the
+ * ingestion-retry queue and its DLQ stay, still exported under the names the
+ * deployed Fanwire-App imports, so the deploy does not fail on an export in
+ * use. A later infra unit deletes them.
+ */
+describe('Messaging stack: ingestion-retry queue and DLQ stay, still exported (EVENTS-003)', () => {
+  const outputs = () => (raw().Outputs ?? {}) as Record<string, { Value?: unknown; Export?: { Name?: unknown } }>;
+
+  const EXPORTS = [
+    ['ExportsOutputFnGetAttIngestionRetryDlqAD1363B6Arn3F8A5660', { 'Fn::GetAtt': ['IngestionRetryDlqAD1363B6', 'Arn'] }],
+    ['ExportsOutputFnGetAttIngestionRetryQueueD528F9A2Arn07FDF528', { 'Fn::GetAtt': ['IngestionRetryQueueD528F9A2', 'Arn'] }],
+  ] as const;
+
+  test.each(EXPORTS)('exports %s under the name the deployed App stack imports', (outputId, value) => {
+    const output = outputs()[outputId];
+    expect(Object.keys(outputs())).toContain(outputId);
+    expect(output?.Export?.Name).toBe(`${STACK_NAMES.messaging}:${outputId}`);
+    expect(output?.Value).toEqual(value);
+  });
+
+  test('the ingestion-retry queue and its DLQ still synthesize', () => {
+    const resources = raw().Resources ?? {};
+    expect(resources.IngestionRetryQueueD528F9A2?.Type).toBe('AWS::SQS::Queue');
+    expect(resources.IngestionRetryDlqAD1363B6?.Type).toBe('AWS::SQS::Queue');
+  });
+});

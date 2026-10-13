@@ -36,8 +36,16 @@ from sqlalchemy import func, select
 
 from app.db import Base, make_engine, make_session_factory
 from app.events import nba_history
-from app.events.ingestion import UnrecognizedTeamError
 from app.events.models import Game, Team
+
+
+def _unrecognized_team_error() -> type[Exception]:
+    # Imported per test, not at module level, so that before EVENTS-003's
+    # implementation this module still collects and its other tests run.
+    from app.events.errors import UnrecognizedTeamError
+
+    return UnrecognizedTeamError
+
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "nba_history"
 
@@ -163,7 +171,6 @@ def test_load_creates_every_team_from_teams_csv(session_factory):
         assert tor.conference == "Eastern"
         assert tor.division == "Atlantic"
         assert tor.logo_url is None
-        assert tor.api_sports_team_id is None
 
         bos = _team_by_nba_id(session, BOS)
         assert (bos.name, bos.conference, bos.division) == ("Boston Celtics", "Eastern", "Atlantic")
@@ -226,7 +233,6 @@ def test_regular_season_game_fields(session_factory):
         tor = _team_by_nba_id(session, TOR)
         bos = _team_by_nba_id(session, BOS)
 
-        assert game.api_sports_game_id is None
         assert game.home_team_id == tor.id
         assert game.away_team_id == bos.id
         assert _naive(game.date) == datetime(2019, 10, 22, 0, 0)
@@ -475,7 +481,7 @@ def test_unknown_team_in_games_csv_stops_the_load_naming_it(session_factory, tmp
         **_game_row("21900099", "2019-11-01", "2019", NYK, BOS, "100.0", "99.0"),
     )
 
-    with session_factory() as session, pytest.raises(UnrecognizedTeamError) as excinfo:
+    with session_factory() as session, pytest.raises(_unrecognized_team_error()) as excinfo:
         nba_history.load_nba_history(session, data_dir)
 
     assert str(NYK) in str(excinfo.value)
@@ -502,7 +508,7 @@ def test_unknown_team_in_games_details_csv_stops_the_load_naming_it(session_fact
         PTS="20.0",
     )
 
-    with session_factory() as session, pytest.raises(UnrecognizedTeamError) as excinfo:
+    with session_factory() as session, pytest.raises(_unrecognized_team_error()) as excinfo:
         nba_history.load_nba_history(session, data_dir)
 
     assert str(NYK) in str(excinfo.value)
@@ -545,7 +551,7 @@ def test_failed_run_leaves_the_database_exactly_as_before(session_factory, tmp_p
         **_game_row("22000099", "2021-01-06", "2020", NYK, BOS, "100.0", "99.0"),
     )
 
-    with session_factory() as session, pytest.raises(UnrecognizedTeamError):
+    with session_factory() as session, pytest.raises(_unrecognized_team_error()):
         nba_history.load_nba_history(session, data_dir)
 
     with session_factory() as session:

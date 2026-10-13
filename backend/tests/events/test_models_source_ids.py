@@ -1,12 +1,11 @@
-"""Tests for EVENTS-001's schema change to Team and Game, per AGENTS.md TDD
-workflow. Written before the change exists.
+"""Tests for how Team and Game are keyed, per AGENTS.md TDD workflow.
 
-A Team or Game can now be keyed by its nba.com id (`nba_team_id` /
-`nba_game_id`, from the Kaggle "NBA games" dataset), its API-SPORTS id, or
-both -- but never neither (a CHECK constraint). Each id is unique. Game also
-gains a nullable `game_type` ("regular" / "playoffs" / "play-in"). Every
-API-SPORTS-only row keeps working exactly as before, and the response schemas
-expose the new fields.
+EVENTS-001 let a row be keyed by its nba.com id, its API-SPORTS id, or both,
+with a CHECK requiring at least one. EVENTS-003 retires API-SPORTS: the
+nba.com id (`nba_team_id` / `nba_game_id`, from the Kaggle "NBA games"
+dataset) is now the only source id, required on every row and unique, and
+neither the models nor the response schemas carry an `api_sports_*` field.
+Game keeps its nullable `game_type` ("regular" / "playoffs" / "play-in").
 """
 
 from __future__ import annotations
@@ -16,13 +15,15 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from psycopg.errors import CheckViolation
+from psycopg.errors import NotNullViolation
+from sqlalchemy import CheckConstraint, UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
 from app.events.models import Game, Team
 from app.events.routes import router
+from app.events.schemas import GameOut, TeamOut
 
 
 @pytest.fixture()
@@ -83,10 +84,42 @@ def _two_teams(session) -> tuple[int, int]:
     return home.id, away.id
 
 
+def _api_sports_keys(body) -> set[str]:
+    return {key for key in body if key.startswith("api_sports")}
+
+
+# --------------------------------------------------------------------- models
+
+
+def test_models_carry_no_api_sports_id():
+    assert not hasattr(Team, "api_sports_team_id")
+    assert not hasattr(Game, "api_sports_game_id")
+    assert "api_sports_team_id" not in Team.__table__.c
+    assert "api_sports_game_id" not in Game.__table__.c
+
+
+def test_models_declare_nba_ids_required_and_unique():
+    for column in (Team.__table__.c.nba_team_id, Game.__table__.c.nba_game_id):
+        assert column.nullable is False, column
+        single_column_uniques = {
+            tuple(c.columns.keys())
+            for c in column.table.constraints
+            if isinstance(c, UniqueConstraint)
+        }
+        assert column.unique or (column.name,) in single_column_uniques, column
+
+
+def test_models_declare_no_has_source_id_check():
+    for table in (Team.__table__, Game.__table__):
+        names = {c.name for c in table.constraints if isinstance(c, CheckConstraint)}
+        assert "ck_teams_has_source_id" not in names
+        assert "ck_games_has_source_id" not in names
+
+
 # --------------------------------------------------------------------- Team
 
 
-def test_team_can_be_stored_with_only_an_nba_id(session_factory):
+def test_team_is_stored_with_its_nba_id(session_factory):
     with session_factory() as session:
         team = _team(nba_team_id=1610612761)
         session.add(team)
@@ -96,30 +129,16 @@ def test_team_can_be_stored_with_only_an_nba_id(session_factory):
     with session_factory() as session:
         stored = session.get(Team, team_id)
         assert stored.nba_team_id == 1610612761
-        assert stored.api_sports_team_id is None
 
 
-def test_team_with_only_an_api_sports_id_still_works(session_factory):
-    with session_factory() as session:
-        team = _team(api_sports_team_id=12)
-        session.add(team)
-        session.commit()
-        team_id = team.id
-
-    with session_factory() as session:
-        stored = session.get(Team, team_id)
-        assert stored.api_sports_team_id == 12
-        assert stored.nba_team_id is None
-
-
-def test_team_with_neither_id_is_rejected(session_factory):
+def test_team_without_an_nba_id_is_rejected_by_not_null(session_factory):
     with session_factory() as session:
         session.add(_team())
         with pytest.raises(IntegrityError) as excinfo:
             session.commit()
 
-    # Rejected by the at-least-one-id CHECK, not by a NOT NULL on one column.
-    assert isinstance(excinfo.value.orig, CheckViolation)
+    # A NOT NULL on nba_team_id, no longer the at-least-one-id CHECK.
+    assert isinstance(excinfo.value.orig, NotNullViolation)
 
 
 def test_nba_team_id_is_unique(session_factory):
@@ -141,7 +160,7 @@ def test_nba_team_id_holds_a_real_nba_com_id(session_factory):
 # --------------------------------------------------------------------- Game
 
 
-def test_game_can_be_stored_with_only_an_nba_id_and_a_game_type(session_factory):
+def test_game_is_stored_with_its_nba_id_and_a_game_type(session_factory):
     with session_factory() as session:
         home_id, away_id = _two_teams(session)
         game = _game(home_id, away_id, nba_game_id=22200477, game_type="regular")
@@ -152,36 +171,17 @@ def test_game_can_be_stored_with_only_an_nba_id_and_a_game_type(session_factory)
     with session_factory() as session:
         stored = session.get(Game, game_id)
         assert stored.nba_game_id == 22200477
-        assert stored.api_sports_game_id is None
         assert stored.game_type == "regular"
 
 
-def test_game_with_only_an_api_sports_id_still_works(session_factory):
-    with session_factory() as session:
-        home = _team(api_sports_team_id=12)
-        away = _team(api_sports_team_id=17, abbreviation="LAL")
-        session.add_all([home, away])
-        session.commit()
-        game = _game(home.id, away.id, api_sports_game_id=5001)
-        session.add(game)
-        session.commit()
-        game_id = game.id
-
-    with session_factory() as session:
-        stored = session.get(Game, game_id)
-        assert stored.api_sports_game_id == 5001
-        assert stored.nba_game_id is None
-        assert stored.game_type is None
-
-
-def test_game_with_neither_id_is_rejected(session_factory):
+def test_game_without_an_nba_id_is_rejected_by_not_null(session_factory):
     with session_factory() as session:
         home_id, away_id = _two_teams(session)
         session.add(_game(home_id, away_id))
         with pytest.raises(IntegrityError) as excinfo:
             session.commit()
 
-    assert isinstance(excinfo.value.orig, CheckViolation)
+    assert isinstance(excinfo.value.orig, NotNullViolation)
 
 
 def test_nba_game_id_is_unique(session_factory):
@@ -194,10 +194,23 @@ def test_nba_game_id_is_unique(session_factory):
             session.commit()
 
 
+# --------------------------------------------------------------------- schemas
+
+
+def test_response_schemas_expose_no_api_sports_field():
+    assert _api_sports_keys(TeamOut.model_fields) == set()
+    assert _api_sports_keys(GameOut.model_fields) == set()
+
+
+def test_response_schemas_make_nba_ids_required_ints():
+    assert TeamOut.model_fields["nba_team_id"].annotation is int
+    assert GameOut.model_fields["nba_game_id"].annotation is int
+
+
 # --------------------------------------------------------------------- routes
 
 
-def test_get_game_exposes_the_new_fields(client, session_factory):
+def test_get_game_exposes_nba_fields_and_no_api_sports_id(client, session_factory):
     with session_factory() as session:
         home_id, away_id = _two_teams(session)
         game = _game(home_id, away_id, nba_game_id=41900001, game_type="playoffs")
@@ -211,10 +224,10 @@ def test_get_game_exposes_the_new_fields(client, session_factory):
     body = response.json()
     assert body["nba_game_id"] == 41900001
     assert body["game_type"] == "playoffs"
-    assert body["api_sports_game_id"] is None
+    assert _api_sports_keys(body) == set()
 
 
-def test_get_team_exposes_the_new_fields(client, session_factory):
+def test_get_team_exposes_nba_id_and_no_api_sports_id(client, session_factory):
     with session_factory() as session:
         team = _team(nba_team_id=1610612761)
         session.add(team)
@@ -226,25 +239,22 @@ def test_get_team_exposes_the_new_fields(client, session_factory):
     assert response.status_code == 200
     body = response.json()
     assert body["nba_team_id"] == 1610612761
-    assert body["api_sports_team_id"] is None
+    assert _api_sports_keys(body) == set()
 
 
-def test_list_routes_serve_api_sports_only_rows_with_null_nba_ids(client, session_factory):
+def test_list_routes_expose_no_api_sports_ids(client, session_factory):
     with session_factory() as session:
-        home = _team(api_sports_team_id=12)
-        away = _team(api_sports_team_id=17, abbreviation="LAL")
-        session.add_all([home, away])
-        session.commit()
-        session.add(_game(home.id, away.id, api_sports_game_id=5001))
+        home_id, away_id = _two_teams(session)
+        session.add(_game(home_id, away_id, nba_game_id=22200477))
         session.commit()
 
     teams = client.get("/events/teams")
     games = client.get("/events/games")
 
     assert teams.status_code == 200
-    assert {t["nba_team_id"] for t in teams.json()} == {None}
+    assert {t["nba_team_id"] for t in teams.json()} == {1610612761, 1610612738}
+    assert all(_api_sports_keys(t) == set() for t in teams.json())
     assert games.status_code == 200
     [game] = games.json()
-    assert game["api_sports_game_id"] == 5001
-    assert game["nba_game_id"] is None
-    assert game["game_type"] is None
+    assert game["nba_game_id"] == 22200477
+    assert _api_sports_keys(game) == set()

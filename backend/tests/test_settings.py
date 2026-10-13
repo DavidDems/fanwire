@@ -1,4 +1,13 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
 from app.settings import Settings
+
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
 def test_settings_reads_database_url_from_env(monkeypatch):
@@ -98,51 +107,6 @@ def test_settings_reads_moderation_banned_words_from_env(monkeypatch):
     assert settings.moderation_banned_words == "badword, worseword,thirdword"
 
 
-def test_settings_defaults_api_sports_key_empty(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.delenv("API_SPORTS_KEY", raising=False)
-    settings = Settings()
-    assert settings.api_sports_key == ""
-
-
-def test_settings_reads_api_sports_key_from_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("API_SPORTS_KEY", "test-key")
-    settings = Settings()
-    assert settings.api_sports_key == "test-key"
-
-
-def test_settings_defaults_api_sports_base_url_to_the_v1_basketball_endpoint(monkeypatch):
-    # infra/lib/app-stack.ts never sets API_SPORTS_BASE_URL (only
-    # API_SPORTS_SECRET_ARN) -- this is non-secret config, defaulted here
-    # rather than in infra. See app.events.dependencies.
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.delenv("API_SPORTS_BASE_URL", raising=False)
-    settings = Settings()
-    assert settings.api_sports_base_url == "https://v1.basketball.api-sports.io"
-
-
-def test_settings_reads_api_sports_base_url_from_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("API_SPORTS_BASE_URL", "https://api-sports.example.com")
-    settings = Settings()
-    assert settings.api_sports_base_url == "https://api-sports.example.com"
-
-
-def test_settings_defaults_api_sports_secret_arn_empty(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.delenv("API_SPORTS_SECRET_ARN", raising=False)
-    settings = Settings()
-    assert settings.api_sports_secret_arn == ""
-
-
-def test_settings_reads_api_sports_secret_arn_from_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("API_SPORTS_SECRET_ARN", "arn:aws:secretsmanager:ca-central-1:1:secret:x")
-    settings = Settings()
-    assert settings.api_sports_secret_arn == "arn:aws:secretsmanager:ca-central-1:1:secret:x"
-
-
 def test_settings_defaults_post_event_bus_name_empty(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
     monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
@@ -155,34 +119,6 @@ def test_settings_reads_post_event_bus_name_from_env(monkeypatch):
     monkeypatch.setenv("POST_EVENT_BUS_NAME", "PostEventBus")
     settings = Settings()
     assert settings.post_event_bus_name == "PostEventBus"
-
-
-def test_settings_defaults_live_score_cache_table_name_empty(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.delenv("LIVE_SCORE_CACHE_TABLE_NAME", raising=False)
-    settings = Settings()
-    assert settings.live_score_cache_table_name == ""
-
-
-def test_settings_reads_live_score_cache_table_name_from_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("LIVE_SCORE_CACHE_TABLE_NAME", "fanwire-live-score-cache")
-    settings = Settings()
-    assert settings.live_score_cache_table_name == "fanwire-live-score-cache"
-
-
-def test_settings_defaults_idempotency_table_name_empty(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.delenv("IDEMPOTENCY_TABLE_NAME", raising=False)
-    settings = Settings()
-    assert settings.idempotency_table_name == ""
-
-
-def test_settings_reads_idempotency_table_name_from_env(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
-    monkeypatch.setenv("IDEMPOTENCY_TABLE_NAME", "fanwire-idempotency")
-    settings = Settings()
-    assert settings.idempotency_table_name == "fanwire-idempotency"
 
 
 def test_settings_defaults_notification_from_address_empty(monkeypatch):
@@ -201,3 +137,59 @@ def test_settings_reads_notification_from_address_from_env(monkeypatch):
     monkeypatch.setenv("NOTIFICATION_FROM_ADDRESS", "notifications@fanwire.daviddems.com")
     settings = Settings()
     assert settings.notification_from_address == "notifications@fanwire.daviddems.com"
+
+
+# EVENTS-003 retired API-SPORTS: none of its settings survive, and the app
+# starts without any of their environment variables.
+_RETIRED_SETTINGS = (
+    "api_sports_key",
+    "api_sports_secret_arn",
+    "api_sports_base_url",
+    "idempotency_table_name",
+    "live_score_cache_table_name",
+)
+
+
+@pytest.mark.parametrize("name", _RETIRED_SETTINGS)
+def test_settings_has_no_retired_api_sports_setting(monkeypatch, name):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    assert name not in Settings.model_fields
+    assert not hasattr(Settings(), name)
+
+
+@pytest.mark.parametrize("name", _RETIRED_SETTINGS)
+def test_settings_ignores_a_leftover_retired_env_var(monkeypatch, name):
+    # A stale variable left in a deployed environment must not break startup.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(name.upper(), "leftover")
+    settings = Settings()
+    assert not hasattr(settings, name)
+
+
+def test_app_starts_and_serves_health_with_no_retired_env_vars_set():
+    """A fresh interpreter, so app.main is imported (and every module-level
+    dependency built) with none of the variables present."""
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() not in {name.upper() for name in _RETIRED_SETTINGS}
+    }
+    env.setdefault("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/db")
+    script = (
+        "from fastapi.testclient import TestClient\n"
+        "from app.main import app\n"
+        "r = TestClient(app).get('/health')\n"
+        "assert r.status_code == 200, r.status_code\n"
+        "print(r.json())\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        cwd=_BACKEND_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "'status': 'ok'" in result.stdout

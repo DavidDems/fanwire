@@ -38,14 +38,14 @@ def _make_user(**overrides):
 
 def _make_game(**overrides):
     home = Team(
-        api_sports_team_id=overrides.pop("home_api_sports_team_id", 101),
+        nba_team_id=overrides.pop("home_nba_team_id", 101),
         name="Boston Celtics",
         abbreviation="BOS",
         conference="Eastern",
         division="Atlantic",
     )
     away = Team(
-        api_sports_team_id=overrides.pop("away_api_sports_team_id", 102),
+        nba_team_id=overrides.pop("away_nba_team_id", 102),
         name="Los Angeles Lakers",
         abbreviation="LAL",
         conference="Western",
@@ -238,7 +238,7 @@ def test_event_mention_round_trip(session_factory):
         session.commit()
 
         game = Game(
-            api_sports_game_id=555,
+            nba_game_id=555,
             home_team_id=home.id,
             away_team_id=away.id,
             date=datetime(2026, 1, 1, tzinfo=UTC),

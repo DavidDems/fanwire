@@ -25,7 +25,7 @@ def session_factory(postgres_url):
 
 def _make_team(**overrides):
     defaults = {
-        "api_sports_team_id": 12,
+        "nba_team_id": 12,
         "name": "Boston Celtics",
         "abbreviation": "BOS",
         "conference": "Eastern",
@@ -37,9 +37,9 @@ def _make_team(**overrides):
 
 def test_team_and_game_round_trip(session_factory):
     with session_factory() as session:
-        home = _make_team(api_sports_team_id=12, name="Boston Celtics", abbreviation="BOS")
+        home = _make_team(nba_team_id=12, name="Boston Celtics", abbreviation="BOS")
         away = _make_team(
-            api_sports_team_id=17,
+            nba_team_id=17,
             name="Los Angeles Lakers",
             abbreviation="LAL",
             conference="Western",
@@ -49,7 +49,7 @@ def test_team_and_game_round_trip(session_factory):
         session.commit()
 
         game = Game(
-            api_sports_game_id=5001,
+            nba_game_id=5001,
             home_team_id=home.id,
             away_team_id=away.id,
             date=datetime(2025, 11, 1, 19, 30, tzinfo=UTC),
@@ -62,7 +62,7 @@ def test_team_and_game_round_trip(session_factory):
         session.add(game)
         session.commit()
 
-        fetched = session.scalar(select(Game).where(Game.api_sports_game_id == 5001))
+        fetched = session.scalar(select(Game).where(Game.nba_game_id == 5001))
         assert fetched is not None
         assert fetched.home_team_id == home.id
         assert fetched.away_team_id == away.id
@@ -70,12 +70,12 @@ def test_team_and_game_round_trip(session_factory):
         assert fetched.player_stats[0]["player_name"] == "Jayson Tatum"
 
 
-def test_team_api_sports_team_id_is_unique(session_factory):
+def test_team_nba_team_id_is_unique(session_factory):
     with session_factory() as session:
-        session.add(_make_team(api_sports_team_id=99))
+        session.add(_make_team(nba_team_id=99))
         session.commit()
 
-        session.add(_make_team(api_sports_team_id=99, name="Duplicate"))
+        session.add(_make_team(nba_team_id=99, name="Duplicate"))
         with pytest.raises(IntegrityError):
             session.commit()
 
@@ -84,7 +84,7 @@ def test_game_home_team_id_requires_existing_team(session_factory):
     with session_factory() as session:
         session.add(
             Game(
-                api_sports_game_id=1,
+                nba_game_id=1,
                 home_team_id=999_999,
                 away_team_id=999_998,
                 date=datetime(2025, 11, 1, tzinfo=UTC),
@@ -104,7 +104,7 @@ def test_game_player_stats_defaults_to_empty_list(session_factory):
         session.commit()
 
         game = Game(
-            api_sports_game_id=2,
+            nba_game_id=2,
             home_team_id=team.id,
             away_team_id=team.id,
             date=datetime(2025, 11, 1, tzinfo=UTC),

@@ -71,14 +71,14 @@ def session_factory(postgres_url):
 
 def _seed_game(session, **overrides) -> Game:
     home = Team(
-        api_sports_team_id=101,
+        nba_team_id=101,
         name="Boston Celtics",
         abbreviation="BOS",
         conference="Eastern",
         division="Atlantic",
     )
     away = Team(
-        api_sports_team_id=102,
+        nba_team_id=102,
         name="Los Angeles Lakers",
         abbreviation="LAL",
         conference="Western",
@@ -88,7 +88,7 @@ def _seed_game(session, **overrides) -> Game:
     session.commit()
 
     defaults = {
-        "api_sports_game_id": 555,
+        "nba_game_id": 555,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),

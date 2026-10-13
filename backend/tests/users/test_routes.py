@@ -320,7 +320,7 @@ def test_patch_me_sets_valid_preferred_team_id(app, client, session_factory):
     with session_factory() as session:
         user = _create(session, "sub-patch-team-ok", "patch_team_ok_user")
         team = Team(
-            api_sports_team_id=301,
+            nba_team_id=301,
             name="Test Team",
             abbreviation="TST",
             conference="Eastern",

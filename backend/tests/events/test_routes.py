@@ -51,7 +51,7 @@ def client(session_factory):
 
 def _make_team(**overrides):
     defaults = {
-        "api_sports_team_id": 12,
+        "nba_team_id": 12,
         "name": "Boston Celtics",
         "abbreviation": "BOS",
         "conference": "Eastern",
@@ -64,7 +64,7 @@ def _make_team(**overrides):
 
 def _make_game(*, home_team_id, away_team_id, **overrides):
     defaults = {
-        "api_sports_game_id": 5001,
+        "nba_game_id": 5001,
         "home_team_id": home_team_id,
         "away_team_id": away_team_id,
         "date": datetime(2025, 11, 1, 19, 30, tzinfo=UTC),
@@ -89,9 +89,9 @@ def test_list_teams_returns_all_teams(client, session_factory):
     with session_factory() as session:
         session.add_all(
             [
-                _make_team(api_sports_team_id=12, name="Boston Celtics", abbreviation="BOS"),
+                _make_team(nba_team_id=12, name="Boston Celtics", abbreviation="BOS"),
                 _make_team(
-                    api_sports_team_id=17,
+                    nba_team_id=17,
                     name="Los Angeles Lakers",
                     abbreviation="LAL",
                     conference="Western",
@@ -141,9 +141,9 @@ def test_list_games_returns_empty_list_when_no_games(client):
 
 def test_list_games_returns_all_games_unfiltered(client, session_factory):
     with session_factory() as session:
-        home = _make_team(api_sports_team_id=12, name="Boston Celtics", abbreviation="BOS")
+        home = _make_team(nba_team_id=12, name="Boston Celtics", abbreviation="BOS")
         away = _make_team(
-            api_sports_team_id=17,
+            nba_team_id=17,
             name="Los Angeles Lakers",
             abbreviation="LAL",
             conference="Western",
@@ -155,13 +155,13 @@ def test_list_games_returns_all_games_unfiltered(client, session_factory):
         session.add_all(
             [
                 _make_game(
-                    api_sports_game_id=5001,
+                    nba_game_id=5001,
                     home_team_id=home.id,
                     away_team_id=away.id,
                     date=datetime(2025, 11, 1, tzinfo=UTC),
                 ),
                 _make_game(
-                    api_sports_game_id=5002,
+                    nba_game_id=5002,
                     home_team_id=away.id,
                     away_team_id=home.id,
                     date=datetime(2025, 11, 3, tzinfo=UTC),
@@ -186,19 +186,19 @@ def test_list_games_orders_by_date_descending(client, session_factory):
         session.add_all(
             [
                 _make_game(
-                    api_sports_game_id=1,
+                    nba_game_id=1,
                     home_team_id=home.id,
                     away_team_id=home.id,
                     date=datetime(2025, 11, 1, tzinfo=UTC),
                 ),
                 _make_game(
-                    api_sports_game_id=2,
+                    nba_game_id=2,
                     home_team_id=home.id,
                     away_team_id=home.id,
                     date=datetime(2025, 11, 5, tzinfo=UTC),
                 ),
                 _make_game(
-                    api_sports_game_id=3,
+                    nba_game_id=3,
                     home_team_id=home.id,
                     away_team_id=home.id,
                     date=datetime(2025, 11, 3, tzinfo=UTC),
@@ -211,22 +211,22 @@ def test_list_games_orders_by_date_descending(client, session_factory):
 
     assert response.status_code == 200
     body = response.json()
-    ids = [game["api_sports_game_id"] for game in body]
+    ids = [game["nba_game_id"] for game in body]
     assert ids == [2, 3, 1]
 
 
 def test_list_games_filters_by_team_id_home_or_away(client, session_factory):
     with session_factory() as session:
-        team_a = _make_team(api_sports_team_id=12, name="Boston Celtics", abbreviation="BOS")
+        team_a = _make_team(nba_team_id=12, name="Boston Celtics", abbreviation="BOS")
         team_b = _make_team(
-            api_sports_team_id=17,
+            nba_team_id=17,
             name="Los Angeles Lakers",
             abbreviation="LAL",
             conference="Western",
             division="Pacific",
         )
         team_c = _make_team(
-            api_sports_team_id=20,
+            nba_team_id=20,
             name="Miami Heat",
             abbreviation="MIA",
             conference="Eastern",
@@ -239,21 +239,21 @@ def test_list_games_filters_by_team_id_home_or_away(client, session_factory):
             [
                 # team_a home
                 _make_game(
-                    api_sports_game_id=1,
+                    nba_game_id=1,
                     home_team_id=team_a.id,
                     away_team_id=team_b.id,
                     date=datetime(2025, 11, 1, tzinfo=UTC),
                 ),
                 # team_a away
                 _make_game(
-                    api_sports_game_id=2,
+                    nba_game_id=2,
                     home_team_id=team_b.id,
                     away_team_id=team_a.id,
                     date=datetime(2025, 11, 2, tzinfo=UTC),
                 ),
                 # no team_a involvement
                 _make_game(
-                    api_sports_game_id=3,
+                    nba_game_id=3,
                     home_team_id=team_b.id,
                     away_team_id=team_c.id,
                     date=datetime(2025, 11, 3, tzinfo=UTC),
@@ -267,7 +267,7 @@ def test_list_games_filters_by_team_id_home_or_away(client, session_factory):
 
     assert response.status_code == 200
     body = response.json()
-    ids = {game["api_sports_game_id"] for game in body}
+    ids = {game["nba_game_id"] for game in body}
     assert ids == {1, 2}
 
 
@@ -280,14 +280,14 @@ def test_list_games_filters_by_season(client, session_factory):
         session.add_all(
             [
                 _make_game(
-                    api_sports_game_id=1,
+                    nba_game_id=1,
                     home_team_id=home.id,
                     away_team_id=home.id,
                     date=datetime(2025, 11, 1, tzinfo=UTC),
                     season="2025-26",
                 ),
                 _make_game(
-                    api_sports_game_id=2,
+                    nba_game_id=2,
                     home_team_id=home.id,
                     away_team_id=home.id,
                     date=datetime(2024, 11, 1, tzinfo=UTC),
@@ -302,7 +302,7 @@ def test_list_games_filters_by_season(client, session_factory):
     assert response.status_code == 200
     body = response.json()
     assert len(body) == 1
-    assert body[0]["api_sports_game_id"] == 2
+    assert body[0]["nba_game_id"] == 2
 
 
 def test_get_game_by_id_returns_game_when_found(client, session_factory):

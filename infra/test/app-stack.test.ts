@@ -13,13 +13,30 @@ const imageFunctions = () =>
 
 const HANDLERS = {
   api: 'app.main.handler',
-  ingestion: 'app.events.lambda_handler.handler',
   media: 'app.media.lambda_handler.handler',
   notifications: 'app.notifications.lambda_handler.handler',
-  // INFRA-003: the migration runner is a fifth command override on the same
-  // image, not a fifth image. See `App stack: migration runner` below.
+  // INFRA-003: the migration runner is one more command override on the same
+  // image, not another image. See `App stack: migration runner` below.
   migration: 'app.migrate.handler',
 } as const;
+
+/**
+ * EVENTS-003 retired API-SPORTS: the ingestion function is gone, and with it
+ * every consumer of the resources below. The resources themselves stay in the
+ * Data and Messaging stacks, still exported (see data-stack.test.ts and
+ * messaging-stack.test.ts), for a later unit to delete once the App stack no
+ * longer imports them. Matched as fragments of their logical ids, which is how
+ * both a same-stack Ref and a cross-stack Fn::ImportValue name them.
+ */
+const RETIRED_INGESTION_HANDLER = 'app.events.lambda_handler.handler';
+const RETIRED_RESOURCE_IDS = ['ApiSportsKey', 'LiveScoreCacheTable', 'IdempotencyTable', 'IngestionRetry'] as const;
+const RETIRED_ENV_VARS = [
+  'API_SPORTS_KEY',
+  'API_SPORTS_SECRET_ARN',
+  'API_SPORTS_BASE_URL',
+  'IDEMPOTENCY_TABLE_NAME',
+  'LIVE_SCORE_CACHE_TABLE_NAME',
+] as const;
 
 function fn(kind: keyof typeof HANDLERS): [string, CfnResource] {
   const hit = imageFunctions().find(([, f]) =>
@@ -79,8 +96,8 @@ describe('App stack: one shared Lambda image', () => {
     for (const banned of ['node_modules', '.git', '__pycache__', '.venv', 'cdk.out']) expect(names).not.toContain(banned);
   });
 
-  test('five image functions share one image URI; each overrides only its command', () => {
-    expect(imageFunctions()).toHaveLength(5);
+  test('four image functions share one image URI; each overrides only its command', () => {
+    expect(imageFunctions()).toHaveLength(4);
     const uris = new Set(imageFunctions().map(([, f]) => JSON.stringify((f.Properties?.Code as { ImageUri: unknown }).ImageUri)));
     expect(uris.size).toBe(1);
     for (const kind of Object.keys(HANDLERS) as (keyof typeof HANDLERS)[]) expect(fn(kind)).toBeDefined();
@@ -144,19 +161,36 @@ describe('App stack: functions', () => {
 });
 
 describe('App stack: least privilege', () => {
-  test('API-SPORTS secret is readable by the ingestion role only', () => {
-    const readers = Object.values(resourcesOfType(raw(), 'AWS::IAM::Policy')).filter((p) =>
-      JSON.stringify(p.Properties?.PolicyDocument).includes('ApiSportsKey'),
-    );
-    expect(readers).toHaveLength(1);
-    expect(JSON.stringify(readers[0]?.Properties?.Roles)).toContain(roleOf(fn('ingestion')[1]));
+  test.each(RETIRED_RESOURCE_IDS)('no IAM policy or role in this stack references %s (EVENTS-003)', (id) => {
+    const iam = [
+      ...Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy')),
+      ...Object.entries(resourcesOfType(raw(), 'AWS::IAM::Role')),
+    ];
+    // Guard against a vacuous pass: the stack does have policies to look through.
+    expect(iam.length).toBeGreaterThan(0);
+    const offenders = iam.filter(([, r]) => JSON.stringify(r.Properties).includes(id)).map(([logicalId]) => logicalId);
+    expect(offenders).toEqual([]);
   });
 
-  test('API role: presign quarantine uploads, cache table, PutEvents; nothing from the media pipeline', () => {
+  test.each(RETIRED_RESOURCE_IDS)('nothing in the App stack template names %s any more (EVENTS-003)', (id) => {
+    expect(JSON.stringify(raw())).not.toContain(id);
+  });
+
+  test('API role: presign quarantine uploads, PutEvents; no live-score cache, nothing from the media pipeline', () => {
     const actions = actionsForRole(roleOf(fn('api')[1]));
-    expect(actions).toEqual(expect.arrayContaining(['s3:PutObject', 'events:PutEvents', 'dynamodb:GetItem']));
+    expect(actions).toEqual(expect.arrayContaining(['s3:PutObject', 'events:PutEvents']));
+    expect(actions.filter((a) => a.startsWith('dynamodb:'))).toEqual([]);
+    expect(statementsForRole(roleOf(fn('api')[1])).map((st) => st.Sid)).not.toContain('LiveScoreCache');
     expect(actions).not.toContain('s3:DeleteObject');
     expect(actions).not.toContain('secretsmanager:GetSecretValue');
+  });
+
+  test('no function sets an API-SPORTS, idempotency or live-score-cache variable (EVENTS-003)', () => {
+    expect(envOf(fn('api')[1])).not.toHaveProperty('LIVE_SCORE_CACHE_TABLE_NAME');
+    for (const [id, f] of imageFunctions()) {
+      const names = Object.keys(envOf(f));
+      expect({ id, names }).toEqual({ id, names: names.filter((n) => !(RETIRED_ENV_VARS as readonly string[]).includes(n)) });
+    }
   });
 
   test('media role: read/delete quarantine, write public media, consume the scan-result queue', () => {
@@ -204,42 +238,37 @@ describe('App stack: triggers', () => {
     for (const r of routes) expect(r.Properties?.AuthorizationType).toBe('CUSTOM');
   });
 
-  test('EventBridge Scheduler runs ingestion hourly with retries, a DLQ, and its own scoped role', () => {
-    tpl().hasResourceProperties('AWS::Scheduler::Schedule', {
-      ScheduleExpression: 'rate(1 hour)',
-      FlexibleTimeWindow: { Mode: 'OFF' },
-      Target: Match.objectLike({
-        Arn: { 'Fn::GetAtt': [fn('ingestion')[0], 'Arn'] },
-        RoleArn: Match.anyValue(),
-        DeadLetterConfig: { Arn: Match.anyValue() },
-        RetryPolicy: Match.objectLike({ MaximumRetryAttempts: Match.anyValue() }),
-      }),
-    });
-    tpl().hasResourceProperties('AWS::IAM::Role', {
-      AssumeRolePolicyDocument: {
-        Statement: [
-          Match.objectLike({
-            Principal: { Service: 'scheduler.amazonaws.com' },
-            Condition: { StringEquals: { 'aws:SourceAccount': '294321867941' } },
-          }),
-        ],
-      },
-    });
+  test('no ingestion function: nothing runs app.events.lambda_handler (EVENTS-003)', () => {
+    const commands = imageFunctions().map(([, f]) => JSON.stringify(f.Properties?.ImageConfig));
+    expect(commands.length).toBeGreaterThan(0);
+    for (const command of commands) expect(command).not.toContain(RETIRED_INGESTION_HANDLER);
+    expect(Object.keys(functions()).filter((id) => id.startsWith('Ingestion'))).toEqual([]);
   });
 
-  test('failed async ingestion runs go to the ingestion retry queue', () => {
-    tpl().hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
-      FunctionName: { Ref: fn('ingestion')[0] },
-      DestinationConfig: { OnFailure: { Destination: Match.anyValue() } },
-    });
+  test('no ingestion schedule, and no role or policy for one (EVENTS-003)', () => {
+    tpl().resourceCountIs('AWS::Scheduler::Schedule', 0);
+    const schedulerRoles = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Role'))
+      .filter(([, r]) => JSON.stringify(r.Properties?.AssumeRolePolicyDocument).includes('scheduler.amazonaws.com'))
+      .map(([id]) => id);
+    expect(schedulerRoles).toEqual([]);
+    const scheduleIam = [
+      ...Object.keys(resourcesOfType(raw(), 'AWS::IAM::Role')),
+      ...Object.keys(resourcesOfType(raw(), 'AWS::IAM::Policy')),
+    ].filter((id) => id.startsWith('IngestionSchedule'));
+    expect(scheduleIam).toEqual([]);
   });
 
-  test('SQS event source mappings: notifications, ingestion retries, media scan results', () => {
-    const esms = Object.values(resourcesOfType(raw(), 'AWS::Lambda::EventSourceMapping'));
-    expect(esms).toHaveLength(3);
-    const targets = esms.map((e) => (e.Properties?.FunctionName as { Ref: string }).Ref).sort();
-    expect(targets).toEqual([fn('ingestion')[0], fn('media')[0], fn('notifications')[0]].sort());
-    for (const e of esms) expect(e.Properties?.FunctionResponseTypes).toEqual(['ReportBatchItemFailures']);
+  test('no async invoke config: nothing sends failed runs to the ingestion retry queue (EVENTS-003)', () => {
+    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+  });
+
+  test('SQS event source mappings: notifications and media scan results only', () => {
+    const esms = Object.entries(resourcesOfType(raw(), 'AWS::Lambda::EventSourceMapping'));
+    expect(esms).toHaveLength(2);
+    const targets = esms.map(([, e]) => (e.Properties?.FunctionName as { Ref: string }).Ref).sort();
+    expect(targets).toEqual([fn('media')[0], fn('notifications')[0]].sort());
+    for (const [, e] of esms) expect(e.Properties?.FunctionResponseTypes).toEqual(['ReportBatchItemFailures']);
+    expect(esms.map(([id]) => id).filter((id) => id.startsWith('IngestionRetry'))).toEqual([]);
   });
 });
 
@@ -328,10 +357,10 @@ describe('App stack: migration runner', () => {
   test('nothing in any stack invokes it: no rule, mapping, schedule, permission or custom resource', () => {
     // Positive control FIRST: a negative sweep that cannot see a real invoker
     // proves nothing, so prove it can before trusting the empty result below.
-    // Ingestion is invoked by a schedule and an event source mapping.
-    const ingestionInvokers = invokersOf(fn('ingestion')[0]);
-    expect(ingestionInvokers.join('\n')).toContain('AWS::Scheduler::Schedule');
-    expect(ingestionInvokers.join('\n')).toContain('AWS::Lambda::EventSourceMapping');
+    // Media is invoked by an event source mapping. (Ingestion, which a schedule
+    // invoked as well, went with API-SPORTS in EVENTS-003.)
+    const mediaInvokers = invokersOf(fn('media')[0]);
+    expect(mediaInvokers.join('\n')).toContain('AWS::Lambda::EventSourceMapping');
     // ...and that it does not match a function that simply is not there
     expect(invokersOf('NoSuchFunctionLogicalId')).toEqual([]);
 

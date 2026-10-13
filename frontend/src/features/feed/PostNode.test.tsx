@@ -16,34 +16,22 @@
  * whole thread and the shape exists to stop a client trying, so the requested
  * ids are asserted exactly: each reply's own id, once, and never the root again.
  *
- * **Decorator.** `LiveScoreTickerDecorator` wraps a post view when `live_scores`
- * is non-empty, and the pinned-post decorator that `gof-patterns.md` also names
- * must not be built at all — no backend field marks a post as pinned, so it
- * would decorate a condition that cannot occur. Criterion 9 is written as an
- * absence and is pinned from disk in `feed-isolation.test.ts`, which sweeps for
- * that name and therefore does not spell it; so neither does this file. That
- * sweep also pins the other half of criterion 5: that the wrapping here is done
- * by the decorator module rather than by an inline conditional which happens to
- * render the same badge.
- *
- * The ticker is the decorator's one observable contribution, so its absence from
- * the tree is the decorator's absence from the tree — which is the half of
- * criterion 5 that is otherwise unassertable.
+ * **No live-score ticker.** EVENTS-003 retired the API-SPORTS live scores: a
+ * post view no longer carries `live_scores`, and `LiveScoreTickerDecorator` is
+ * gone. A post that mentions games renders with no "Live score" status region.
+ * The pinned-post decorator that `gof-patterns.md` also names must still not be
+ * built — no backend field marks a post as pinned. That absence, and the
+ * decorator module's absence, are pinned from disk in `feed-isolation.test.ts`,
+ * which sweeps for the pinned name and therefore does not spell it; so neither
+ * does this file.
  */
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { renderWithAuth } from "../../test/auth";
-import {
-  testLiveScore,
-  testPostView,
-  threadStub,
-  threadView,
-  type PostView,
-} from "../../test/feed";
+import { testPostView, threadStub, threadView, type PostView } from "../../test/feed";
 import { server } from "../../test/server";
-import { LiveScoreTickerDecorator } from "./LiveScoreTickerDecorator";
 import { PostNode } from "./PostNode";
 
 const ROOT_TEXT = "Game thread, tip-off in ten";
@@ -211,77 +199,31 @@ describe("expanding a reply asks for that reply's thread", () => {
   });
 });
 
-describe("a post carrying live scores is wrapped in the decorator", () => {
-  const WITH_SCORES = testPostView({
+describe("a post renders without a live-score ticker", () => {
+  const MENTIONS_GAMES = testPostView({
     id: 301,
     text: "Down to the wire",
-    mentioned_game_ids: [123],
-    live_scores: [testLiveScore()],
+    mentioned_game_ids: [123, 789],
   });
 
-  it("renders the live-score ticker for a post whose live_scores is non-empty", async () => {
+  it("renders a post that mentions games with no Live score status region", async () => {
     const thread = threeLevels();
     server.use(thread.handler);
 
-    renderNode(WITH_SCORES);
+    renderNode(MENTIONS_GAMES);
 
     expect(await screen.findByText("Down to the wire")).toBeInTheDocument();
-    const ticker = screen.getByRole("status", { name: /live score/i });
-    expect(ticker).toHaveTextContent("112");
-    expect(ticker).toHaveTextContent("108");
+    expect(screen.queryByRole("status", { name: /live score/i })).toBeNull();
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
   });
 
-  it("renders a post with an empty live_scores unwrapped, with no ticker in the tree", async () => {
+  it("renders a plain post with no Live score status region", async () => {
     const thread = threeLevels();
     server.use(thread.handler);
 
     renderNode(ROOT);
 
     expect(await screen.findByText(ROOT_TEXT)).toBeInTheDocument();
-    // The ticker is the only thing the decorator contributes, so no ticker is no
-    // decorator. `feed-isolation.test.ts` pins the other half — that the wrap is
-    // the decorator module and not an inline badge that looks the same.
     expect(screen.queryByRole("status", { name: /live score/i })).toBeNull();
-  });
-});
-
-describe("the decorator decorates rather than replaces", () => {
-  const DECORATED_TEXT = "the post this decorator wraps";
-
-  it("renders the view it wraps, and the ticker beside it", () => {
-    const post = testPostView({ id: 302, live_scores: [testLiveScore()] });
-
-    renderWithAuth(
-      <LiveScoreTickerDecorator post={post}>
-        <p>{DECORATED_TEXT}</p>
-      </LiveScoreTickerDecorator>,
-    );
-
-    // A decorator that swallowed its children would be a replacement, not a
-    // decoration, and would pass a test that only looked for the score.
-    expect(screen.getByText(DECORATED_TEXT)).toBeInTheDocument();
-    expect(screen.getByRole("status", { name: /live score/i })).toHaveTextContent("112");
-  });
-
-  it("renders a line per mentioned game when a post carries several", () => {
-    const post = testPostView({
-      id: 303,
-      mentioned_game_ids: [123, 789],
-      live_scores: [
-        testLiveScore({ game_id: 123, home_score: 112, away_score: 108 }),
-        testLiveScore({ game_id: 789, home_score: 95, away_score: 99, status: "Q3" }),
-      ],
-    });
-
-    renderWithAuth(
-      <LiveScoreTickerDecorator post={post}>
-        <p>{DECORATED_TEXT}</p>
-      </LiveScoreTickerDecorator>,
-    );
-
-    const ticker = screen.getByRole("status", { name: /live score/i });
-    for (const score of ["112", "108", "95", "99"]) {
-      expect(ticker).toHaveTextContent(score);
-    }
   });
 });

@@ -93,14 +93,14 @@ def _as_user(app, user: User) -> None:
 
 def _seed_game(session, **overrides) -> Game:
     home = Team(
-        api_sports_team_id=301,
+        nba_team_id=301,
         name="Miami Heat",
         abbreviation="MIA",
         conference="Eastern",
         division="Southeast",
     )
     away = Team(
-        api_sports_team_id=302,
+        nba_team_id=302,
         name="Golden State Warriors",
         abbreviation="GSW",
         conference="Western",
@@ -110,7 +110,7 @@ def _seed_game(session, **overrides) -> Game:
     session.commit()
 
     defaults = {
-        "api_sports_game_id": 888,
+        "nba_game_id": 888,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),

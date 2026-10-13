@@ -206,8 +206,7 @@ export function testTeams(): TeamOut[] {
   return [
     {
       id: 1,
-      api_sports_team_id: 141,
-      nba_team_id: null,
+      nba_team_id: 1610612761,
       name: "Toronto Raptors",
       abbreviation: "TOR",
       conference: "Eastern",
@@ -216,8 +215,7 @@ export function testTeams(): TeamOut[] {
     },
     {
       id: 2,
-      api_sports_team_id: 139,
-      nba_team_id: null,
+      nba_team_id: 1610612756,
       name: "Phoenix Suns",
       abbreviation: "PHX",
       conference: "Western",

@@ -65,7 +65,7 @@ def _make_post(session, author, **overrides) -> Post:
 
 def _make_team(session, **overrides) -> Team:
     defaults = {
-        "api_sports_team_id": 1,
+        "nba_team_id": 1,
         "name": "Team",
         "abbreviation": "TM",
         "conference": "Eastern",
@@ -80,7 +80,7 @@ def _make_team(session, **overrides) -> Team:
 
 def _make_game(session, home, away, **overrides) -> Game:
     defaults = {
-        "api_sports_game_id": 5001,
+        "nba_game_id": 5001,
         "home_team_id": home.id,
         "away_team_id": away.id,
         "date": datetime(2026, 1, 1, tzinfo=UTC),
@@ -128,9 +128,9 @@ def test_follows_and_preferred_team_strategy_includes_preferred_team_mentions(se
     with session_factory() as session:
         viewer = _make_user(session, username="fpts_v2")
         stranger = _make_user(session, username="fpts_stranger2")
-        home = _make_team(session, api_sports_team_id=201)
-        away = _make_team(session, api_sports_team_id=202)
-        game = _make_game(session, home, away, api_sports_game_id=6001)
+        home = _make_team(session, nba_team_id=201)
+        away = _make_team(session, nba_team_id=202)
+        game = _make_game(session, home, away, nba_game_id=6001)
 
         mentioning_post = _make_post(session, stranger, text="mentions preferred team's game")
         session.add(EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId"))
@@ -152,9 +152,9 @@ def test_follows_and_preferred_team_strategy_without_preferred_team_ignores_ment
     with session_factory() as session:
         viewer = _make_user(session, username="fpts_v3")
         stranger = _make_user(session, username="fpts_stranger3")
-        home = _make_team(session, api_sports_team_id=301)
-        away = _make_team(session, api_sports_team_id=302)
-        game = _make_game(session, home, away, api_sports_game_id=7001)
+        home = _make_team(session, nba_team_id=301)
+        away = _make_team(session, nba_team_id=302)
+        game = _make_game(session, home, away, nba_game_id=7001)
 
         mentioning_post = _make_post(session, stranger, text="mentions a game")
         session.add(EventMention(post_id=mentioning_post.id, game_id=game.id, raw_token="#GameId"))
