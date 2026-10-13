@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-001",
+  "objective": "Load historical NBA games, with each game's player box score, from the Kaggle 'NBA games' CSV dataset into the Team and Game tables, through a re-runnable backend script, so that the site has real game data without any live feed. First pass: proven against the local dev database; loading the live database is a separate task.",
+  "acceptance_criteria": [
+    "A Team and a Game can be stored with the dataset's own ids and without an API-SPORTS id; each dataset id is unique; every existing row and the API-SPORTS ingestion path keep working.",
+    "Running the loader against a directory holding the dataset's teams, games and game-details CSVs stores every NBA team, then every regular-season and playoff game in the chosen seasons, with home and away teams, date, season, both final scores and the box score in the player_stats shape 0x02-events.md documents (player_name, team_id as the internal Team.id, points, rebounds, assists, position).",
+    "Preseason and All-Star games are not loaded, and the loader reports how many it skipped.",
+    "A game with no final score is skipped and reported, never stored with an invented score.",
+    "Season is stored as 'YYYY-YY' (the dataset's start year 2019 becomes '2019-20').",
+    "A game or box-score row naming a team the loader does not know stops the load with a message naming it, and leaves the database as it was before that run (fail fast, as 0x02-events.md requires).",
+    "Running the loader twice over the same data leaves the same rows: no duplicates, and the second run reports nothing new.",
+    "The loader can be limited to named seasons, and says per season how many games it loaded and skipped.",
+    "Tests run against a small synthetic CSV fixture with the dataset's column names; the dataset itself is never committed.",
+    "A game without an API-SPORTS id never asks the live-score proxy for a score."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/app/feed/views.py",
+    "backend/alembic/versions/**",
+    "backend/scripts/load_nba_history.py",
+    "backend/scripts/seed_dev.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
