@@ -853,3 +853,99 @@ class TestTheBaselineIsClassifiedBeforeItIsApplied:
         result = advance_ci(data_root, sha, "CI_FAILED")
         assert result.returncode == 0, result.stderr
         assert self._state(path)["state"] == "DISTILLING"
+
+
+# --------------------------------------------------------------------------- hand runs
+
+
+class TestAHandRunIsRecorded:
+    """A task a human runs in a Claude Code session on `agent/<ID>` used to
+    leave no state file, so the board showed it as DRAFT however far along it
+    was. `agentctl hand start` and `hand finish` record it, as a `hand` task
+    the orchestrator does not drive."""
+
+    def _path(self, data_root: Path) -> Path:
+        return data_root / ".ai" / "tasks" / DATA_TASK / "state.json"
+
+    def _state(self, data_root: Path) -> dict:
+        return json.loads(self._path(data_root).read_text(encoding="utf-8"))
+
+    def test_start_writes_a_running_hand_state(self, data_root):
+        result = run_in(data_root, "hand", "start", DATA_TASK)
+        assert result.returncode == 0, result.stderr
+        s = self._state(data_root)
+        assert s["mode"] == "hand"
+        assert s["state"] == "HAND_RUNNING"
+        assert s["branch"] == f"agent/{DATA_TASK}"
+        assert f".ai/tasks/{DATA_TASK}/state.json" in result.stdout
+
+    def test_start_refuses_a_second_time(self, data_root):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        before = self._path(data_root).read_text(encoding="utf-8")
+        result = run_in(data_root, "hand", "start", DATA_TASK)
+        assert result.returncode == 1
+        assert self._path(data_root).read_text(encoding="utf-8") == before
+
+    def test_start_refuses_a_task_the_orchestrator_already_has(self, data_root):
+        _write_state(data_root)
+        result = run_in(data_root, "hand", "start", DATA_TASK)
+        assert result.returncode == 1
+        assert self._state(data_root).get("mode", "auto") == "auto"
+
+    def test_start_refuses_an_invalid_spec(self, data_root):
+        task = data_root / ".ai" / "tasks" / DATA_TASK / "task.json"
+        spec = json.loads(task.read_text(encoding="utf-8"))
+        spec["acceptance_criteria"] = []
+        task.write_text(json.dumps(spec), encoding="utf-8")
+        result = run_in(data_root, "hand", "start", DATA_TASK)
+        assert result.returncode == 1
+        assert not self._path(data_root).exists()
+
+    def test_finish_records_the_pr(self, data_root):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        result = run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "140")
+        assert result.returncode == 0, result.stderr
+        s = self._state(data_root)
+        assert s["state"] == "COMPLETE"
+        assert s["pr"] == 140
+        assert s["mode"] == "hand"
+
+    def test_finish_needs_the_pr(self, data_root):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        assert run_in(data_root, "hand", "finish", DATA_TASK).returncode == 2
+        assert run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "x").returncode == 2
+        assert run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "0").returncode == 1
+        assert self._state(data_root)["state"] == "HAND_RUNNING"
+
+    def test_finish_without_a_start_fails(self, data_root):
+        result = run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "140")
+        assert result.returncode != 0
+        assert not self._path(data_root).exists()
+
+    def test_finish_on_an_orchestrated_task_fails(self, data_root):
+        _write_state(data_root)
+        result = run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "140")
+        assert result.returncode == 1
+        assert "hand" in result.stderr
+        assert self._state(data_root)["state"] == "READY"
+
+    def test_status_shows_the_hand_run(self, data_root):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        result = run_in(data_root, "status")
+        assert result.returncode == 0, result.stderr
+        assert "MODE" in result.stdout.splitlines()[0]
+        row = _row(result.stdout, DATA_TASK).split()
+        assert row[1:3] == ["HAND_RUNNING", "hand"]
+        assert row[-1] == "halt", "the orchestrator has nothing to do for a hand run"
+
+    def test_status_shows_an_orchestrated_task_as_auto(self, data_root):
+        _write_state(data_root)
+        result = run_in(data_root, "status")
+        assert result.returncode == 0, result.stderr
+        assert _row(result.stdout, DATA_TASK).split()[1:3] == ["READY", "auto"]
+
+    def test_status_shows_a_finished_hand_run(self, data_root):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        assert run_in(data_root, "hand", "finish", DATA_TASK, "--pr", "140").returncode == 0
+        result = run_in(data_root, "status")
+        assert _row(result.stdout, DATA_TASK).split()[1:3] == ["COMPLETE", "hand"]

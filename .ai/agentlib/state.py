@@ -72,6 +72,7 @@ STATES: frozenset[str] = frozenset(
         "ESCALATED",  # needs Director/human; recoverable by human action
         "CANCELLED",
         "FAILED",  # unrecoverable infrastructure failure
+        "HAND_RUNNING",  # a human is running the task by hand; see MODES
     }
 )
 
@@ -84,6 +85,17 @@ _CLEARS_ESCALATION: frozenset[str] = frozenset(
 )
 
 CONTROLS: frozenset[str] = frozenset({"RUN", "PAUSE", "CANCEL"})
+
+# Who runs a task. `auto` is the orchestrator's state machine. `hand` is a
+# human running it in a Claude Code session on `agent/<ID>`: it records only
+# HAND_STARTED and HAND_FINISHED, so `agentctl status` tells the truth about
+# it, and the orchestrator never drives it. A state file written before modes
+# existed has none, and is `auto` (task_mode).
+MODES: frozenset[str] = frozenset({"auto", "hand"})
+
+# The only events a hand-run task accepts: its own two, and a human's way out.
+_HAND_EVENTS: frozenset[str] = frozenset({"HAND_STARTED", "HAND_FINISHED"})
+_HAND_ACCEPTS: frozenset[str] = _HAND_EVENTS | {"CANCEL", "ESCALATE"}
 
 EVENTS: frozenset[str] = frozenset(
     {
@@ -109,6 +121,9 @@ EVENTS: frozenset[str] = frozenset(
         "CANCEL",
         "INFRA_FAILED",
         "DISPATCH_MANAGER",
+        # A hand run (MODES): DRAFT -> HAND_RUNNING -> COMPLETE.
+        "HAND_STARTED",
+        "HAND_FINISHED",
     }
 )
 
@@ -151,11 +166,16 @@ class Paused(Exception):
     """A workflow event arrived while a human had the task paused."""
 
 
-def new_state(task_id: str, branch: str = "", max_attempts: int = 3) -> dict[str, Any]:
+def new_state(
+    task_id: str, branch: str = "", max_attempts: int = 3, mode: str = "auto"
+) -> dict[str, Any]:
+    if mode not in MODES:
+        raise StateError(f"unknown mode {mode!r}")
     return {
         "schema": SCHEMA_VERSION,
         "task_id": task_id,
         "branch": branch,
+        "mode": mode,
         "state": "DRAFT",
         "control": "RUN",
         "attempt": 0,
@@ -175,6 +195,11 @@ def new_state(task_id: str, branch: str = "", max_attempts: int = 3) -> dict[str
         "escalation_reason": None,
         "updated_at": None,
     }
+
+
+def task_mode(state: dict) -> str:
+    """`auto` or `hand`. A state file from before modes existed is `auto`."""
+    return state.get("mode", "auto")
 
 
 def is_terminal(state: dict) -> bool:
@@ -297,6 +322,17 @@ def advance(state: dict, event: str, **ctx: Any) -> dict[str, Any]:
     if control == "PAUSE" and event not in ("CANCEL", "ESCALATE"):
         raise Paused(f"task {state['task_id']} is paused in {current}")
 
+    # A hand run and the orchestrator's state machine share no events but a
+    # human's CANCEL and ESCALATE. Checked before the transition table, which
+    # is the orchestrator's and is left exactly as it was.
+    if task_mode(state) == "hand":
+        if event not in _HAND_ACCEPTS:
+            raise StateError(
+                f"{state['task_id']} is a hand-run task; the orchestrator's {event} does not apply"
+            )
+    elif event in _HAND_EVENTS:
+        raise StateError(f"{state['task_id']} is not a hand-run task; {event} does not apply")
+
     out = dict(state)
     out["history"] = list(state.get("history", []))
     out["sessions"] = dict(state.get("sessions", {}))
@@ -371,6 +407,18 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
 
         out["escalation_reason"] = reason
         return "MANAGER_REVIEW", reason
+
+    # --- a hand run (MODES); advance has already checked the mode ------------
+    if event == "HAND_STARTED" and current == "DRAFT":
+        return "HAND_RUNNING", "hand run started"
+
+    if event == "HAND_FINISHED" and current == "HAND_RUNNING":
+        pr = ctx.get("pr")
+        # bool is an int to Python, and True is not a pull request.
+        if isinstance(pr, bool) or not isinstance(pr, int) or pr < 1:
+            raise StateError(f"HAND_FINISHED needs the PR number, a positive int; got {pr!r}")
+        out["pr"] = pr
+        return "COMPLETE", f"hand run finished, PR #{pr}"
 
     # --- ordinary workflow ----------------------------------------------------
     if event == "VALIDATED" and current in ("DRAFT", "MANAGER_REVIEW"):
@@ -489,6 +537,8 @@ def load_state(path: str | Path) -> dict[str, Any]:
         raise StateError(f"state file has unknown state {data.get('state')!r}")
     if data.get("control", "RUN") not in CONTROLS:
         raise StateError(f"state file has unknown control {data.get('control')!r}")
+    if "mode" in data and data["mode"] not in MODES:
+        raise StateError(f"state file has unknown mode {data['mode']!r}")
     return data
 
 

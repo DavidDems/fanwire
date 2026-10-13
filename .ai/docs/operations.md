@@ -19,11 +19,15 @@ wrong — without opening an agent session.
 `agentctl status` is the board:
 
 ```
-TASK          STATE                     CTRL   ATT    NEXT / REASON
-DEMO-001      IMPL_CI                   RUN    2/3    await_ci
-AUTH-017      MANAGER_REVIEW            RUN    3/3    max_attempts_exhausted
-FEED-002      READY_FOR_IMPLEMENTATION  PAUSE  0/3    dispatch_agent:code_agent
+TASK          STATE                     MODE  CTRL   ATT    NEXT / REASON
+DEMO-001      IMPL_CI                   auto  RUN    2/3    await_ci
+AUTH-017      MANAGER_REVIEW            auto  RUN    3/3    max_attempts_exhausted
+FEED-002      READY_FOR_IMPLEMENTATION  auto  PAUSE  0/3    dispatch_agent:code_agent
+UI-009        HAND_RUNNING              hand  RUN    0/3    halt
 ```
+
+`MODE` is who runs the task: `auto` is the orchestrator, `hand` is a human in
+a Claude Code session (`state-machine.md` "Hand runs").
 
 ## One-time setup
 

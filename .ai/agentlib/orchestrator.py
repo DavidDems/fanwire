@@ -87,11 +87,16 @@ def next_action(state: dict, spec: dict | None = None) -> dict[str, Any]:
     current = state["state"]
     if current in st.TERMINAL:
         return {"kind": "halt", "reason": current.lower()}
+    # A hand-run task (state.MODES) is a human's, in a Claude Code session. Its
+    # state file is a record for the board, not work for this machine, so no
+    # state of it maps to an action, and HAND_RUNNING is not in _ACTIONS.
+    if st.task_mode(state) == "hand":
+        return {"kind": "halt", "reason": "hand run; not driven by the orchestrator"}
     if current == "ESCALATED":
         return {"kind": "halt", "reason": state.get("escalation_reason") or "escalated"}
 
     action = _ACTIONS.get(current)
-    if action is None:  # pragma: no cover - every non-terminal state is mapped
+    if action is None:  # pragma: no cover - every auto task's live state is mapped
         return {"kind": "halt", "reason": f"no action defined for {current}"}
     return dict(action)
 

@@ -156,11 +156,37 @@ jobs:
           # state file, commit it onto somebody's open PR, and go on to
           # dispatch a paid worker for work a human had already done by hand.
           #
-          # It must NOT extend to workflow_dispatch. A person naming a task id
-          # is how a new task is bootstrapped, and a new task has no state file
-          # either — answering "not mine" there would mean nothing could ever
-          # start.
-          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
+          # A missing state file must NOT mean "not mine" on a
+          # workflow_dispatch. A person naming a task id is how a new task is
+          # bootstrapped, and a new task has no state file either — answering
+          # "not mine" there would mean nothing could ever start.
+          #
+          # A state file, though, no longer means "mine". A hand-run task
+          # records itself too (`agentctl hand start`, mode "hand"), so the
+          # board shows it as running instead of DRAFT. So the rule is the
+          # state's `mode`: only "auto" is driven, whatever the event. That
+          # includes a dispatch: a hand-run task is a human's in a Claude Code
+          # session, and the orchestrator's events are illegal on it anyway
+          # (agentlib/state.py), so a dispatch naming one has nothing to do.
+          # A file from before modes existed has none, and is auto. Any other
+          # value is not driven: fail closed, spend nothing. The value is
+          # never echoed: it is the branch's to choose, and a newline in it
+          # would be read as a workflow command.
+          #
+          # Bash and jq only (jq is on ubuntu-latest): this runs before the
+          # .ai gate below, so no python may.
+          if [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
+            MODE="$(jq -r 'if has("mode") then .mode else "auto" end' ".ai/tasks/$TASK_ID/state.json")"
+            if [ "$MODE" = "auto" ]; then
+              echo "drive=true" >> "$GITHUB_OUTPUT"
+            elif [ "$MODE" = "hand" ]; then
+              echo "drive=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$TASK_ID is a hand-run task; a human runs it, so there is nothing to drive"
+            else
+              echo "drive=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::$TASK_ID has a state file with an unknown mode; not driving it"
+            fi
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "drive=true" >> "$GITHUB_OUTPUT"
           else
             echo "drive=false" >> "$GITHUB_OUTPUT"

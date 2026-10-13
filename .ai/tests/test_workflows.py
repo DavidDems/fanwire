@@ -465,6 +465,139 @@ class TestAHandAuthoredBranchDoesNotDriveTheOrchestrator:
         )
 
 
+DRIVE = "Is this a task this orchestrator drives?"
+GUARD_STATE = "The task must not have been left in a failed or paused state"
+HAND_TASK = "UI-009"
+
+
+class TestAHandRunIsNotTheOrchestratorsToDrive:
+    """A hand-run task now leaves a state file (`agentctl hand start`), so the
+    file's presence no longer means "the orchestrator dispatched this". The
+    drive step reads the state's `mode` instead, and drives only `auto`,
+    whatever woke it: a dispatch naming a hand task has nothing to drive
+    either. A missing file keeps its old meaning, so a dispatch still
+    bootstraps a new task. Bash only: it runs before the .ai gate, and no
+    python may (TestModelWrittenCodeNeverRunsWithAToken)."""
+
+    @pytest.fixture
+    def drive_body(self, orchestrator) -> str:
+        return run_bodies(step(job_block(orchestrator, "orchestrate"), DRIVE))[0]
+
+    @staticmethod
+    def _live(body: str) -> list[str]:
+        stripped = (ln.strip() for ln in body.splitlines())
+        return [ln for ln in stripped if ln and not ln.startswith("#")]
+
+    def test_the_mode_is_read_with_jq_defaulting_to_auto(self, drive_body):
+        # `has`, not `//`: `.mode // "auto"` would read a null mode as auto and
+        # drive it, where load_state rejects it. Only a missing key is auto.
+        lines = self._live(drive_body)
+        reads = [ln for ln in lines if "jq" in ln]
+        assert reads, "the drive step must read the state's mode"
+        assert any('if has("mode") then .mode else "auto" end' in ln for ln in reads), reads
+        assert any(".ai/tasks/$TASK_ID/state.json" in ln for ln in reads), reads
+
+    def test_only_auto_is_driven(self, drive_body):
+        lines = self._live(drive_body)
+        assert any(re.search(r'"\$MODE" = "auto"', ln) for ln in lines), lines
+        assert sum('echo "drive=true"' in ln for ln in lines) == 2, (
+            "drive=true exactly twice: an auto state file, and a dispatch with no file"
+        )
+
+    def test_the_bootstrap_dispatch_survives(self, drive_body):
+        assert "workflow_dispatch" in drive_body
+
+    def test_the_drive_step_runs_no_python(self, orchestrator):
+        chunk = step(job_block(orchestrator, "orchestrate"), DRIVE)
+        assert not step_runs_python(chunk)
+
+    def test_the_guard_reports_the_mode(self):
+        body = run_bodies(step(GUARD_WF.read_text(encoding="utf-8"), GUARD_STATE))[0]
+        assert "task_mode" in body
+
+    # --- behaviour -------------------------------------------------------------
+
+    def _state_file(self, root: Path, **fields) -> None:
+        d = root / ".ai" / "tasks" / HAND_TASK
+        d.mkdir(parents=True, exist_ok=True)
+        s = {"task_id": HAND_TASK, "state": "HAND_RUNNING", "control": "RUN", **fields}
+        (d / "state.json").write_text(json.dumps(s), encoding="utf-8")
+
+    @pytest.mark.parametrize(
+        "mode,event,drive",
+        [
+            ("hand", "workflow_run", "false"),
+            ("hand", "workflow_dispatch", "false"),
+            ("auto", "workflow_run", "true"),
+            ("auto", "workflow_dispatch", "true"),
+            ("legacy", "workflow_run", "true"),  # a state file from before modes
+            ("weird", "workflow_run", "false"),
+            ("weird", "workflow_dispatch", "false"),
+            ("null", "workflow_run", "false"),  # load_state rejects it too
+            (None, "workflow_run", "false"),  # no state file: hand-authored
+            (None, "workflow_dispatch", "true"),  # no state file: bootstrap
+        ],
+    )
+    def test_the_drive_decision(self, drive_body, tmp_path, mode, event, drive):
+        if shutil.which("jq") is None:
+            pytest.skip("jq is not on PATH here (it is on ubuntu-latest)")
+        if mode == "legacy":
+            self._state_file(tmp_path, state="IMPL_CI")
+        elif mode == "null":
+            self._state_file(tmp_path, mode=None)
+        elif mode is not None:
+            self._state_file(tmp_path, mode=mode)
+        code, output = run_step_body(
+            drive_body, {"TASK_ID": HAND_TASK, "EVENT_NAME": event}, tmp_path
+        )
+        assert code == 0
+        assert output.splitlines() == [f"drive={drive}"]
+
+    @pytest.mark.parametrize(
+        "state,code",
+        [("HAND_RUNNING", 0), ("COMPLETE", 0), ("ESCALATED", 1), ("FAILED", 1)],
+    )
+    def test_the_guard_passes_a_live_or_finished_hand_run(self, tmp_path, state, code):
+        from agentlib import state as st
+
+        body = run_bodies(step(GUARD_WF.read_text(encoding="utf-8"), GUARD_STATE))[0]
+        s = dict(st.new_state(HAND_TASK, branch=f"agent/{HAND_TASK}"), mode="hand", state=state)
+        d = tmp_path / ".ai" / "tasks" / HAND_TASK
+        d.mkdir(parents=True)
+        (d / "state.json").write_text(json.dumps(s), encoding="utf-8")
+        env = {
+            "TASK_ID": HAND_TASK,
+            "TOOLS": Path(__file__).resolve().parents[2].as_posix(),
+            # The step's `python` is the runner's; here it is this interpreter.
+            "PATH": os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", ""),
+        }
+        got, _ = run_step_body(body, env, tmp_path)
+        assert got == code
+
+    def test_the_guard_prints_the_mode(self, tmp_path):
+        from agentlib import state as st
+
+        bash = _posix_bash()
+        if bash is None:
+            pytest.skip("no POSIX bash on this machine")
+        body = run_bodies(step(GUARD_WF.read_text(encoding="utf-8"), GUARD_STATE))[0]
+        s = dict(st.new_state(HAND_TASK), mode="hand", state="HAND_RUNNING")
+        d = tmp_path / ".ai" / "tasks" / HAND_TASK
+        d.mkdir(parents=True)
+        (d / "state.json").write_text(json.dumps(s), encoding="utf-8")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        env.update(
+            TASK_ID=HAND_TASK,
+            TOOLS=Path(__file__).resolve().parents[2].as_posix(),
+            PATH=os.path.dirname(sys.executable) + os.pathsep + os.environ.get("PATH", ""),
+        )
+        proc = subprocess.run(
+            [bash, "-c", body], env=env, cwd=tmp_path, capture_output=True, text=True, check=False
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert f"{HAND_TASK}: HAND_RUNNING (hand run" in proc.stdout
+
+
 class TestOnlyTheOrchestratorsOwnCiRunIsTrusted:
     """handoff.md §10, D1. `workflow_run` fires for every completed
     `test-agent` run, and `head_branch` is just a name: a fork PR from a branch

@@ -178,6 +178,11 @@ class TestOrchestratorBookkeeping:
     def test_a_tasks_own_state_file_is_bookkeeping(self):
         assert guard.is_orchestrator_bookkeeping(".ai/tasks/DEMO-001/state.json", "DEMO-001")
 
+    def test_a_hand_runs_state_file_is_bookkeeping_too(self):
+        # `agentctl hand start` writes it, and the human commits it on
+        # `agent/<ID>`: the same path, so the PR-level guard already admits it.
+        assert guard.is_orchestrator_bookkeeping(".ai/tasks/UI-009/state.json", "UI-009")
+
     def test_a_tasks_own_telemetry_is_bookkeeping(self):
         assert guard.is_orchestrator_bookkeeping(
             ".ai/telemetry/runs/DEMO-001/123-code_agent-a1.json", "DEMO-001"
