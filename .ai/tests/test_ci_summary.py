@@ -134,6 +134,41 @@ class TestReadingTheAnswer:
         body = {"content": [{"type": "text", "text": "word " * 500}]}
         assert len(cisummary.read_cause(body)) <= cisummary.MAX_CAUSE_CHARS
 
+    def test_an_empty_block_does_not_hide_a_later_answer(self):
+        body = {
+            "content": [
+                {"type": "thinking", "thinking": "..."},
+                {"type": "text", "text": "  "},
+                {"type": "text", "text": CAUSE},
+            ]
+        }
+        assert cisummary.read_cause(body) == CAUSE
+
+
+class TestAnUnusableAnswerIsDescribed:
+    """The first live run (2026-10-13, ci-summary run 38452309828 on #142)
+    got a 200 with no usable answer and recorded nothing about it, so the
+    reason could not be read back. The shape of the response says why: its
+    `stop_reason` and the types of its content blocks. Never the text, which
+    is the model's and is not to be printed raw."""
+
+    def test_the_stop_reason_and_the_block_types_are_named(self):
+        body = {
+            "stop_reason": "max_tokens",
+            "content": [{"type": "thinking", "thinking": "SECRET-ISH TEXT"}],
+        }
+        described = cisummary.describe_response(body)
+        assert "max_tokens" in described and "thinking" in described
+        assert "SECRET-ISH TEXT" not in described
+
+    @pytest.mark.parametrize("body", [{}, {"content": "x"}, None, {"stop_reason": 7}])
+    def test_any_shape_is_described_without_raising(self, body):
+        assert isinstance(cisummary.describe_response(body), str)
+
+    def test_a_hostile_stop_reason_is_flattened(self):
+        described = cisummary.describe_response({"stop_reason": "a\nb `c`" + "x" * 500})
+        assert "\n" not in described and "`" not in described and len(described) <= 300
+
 
 class TestTheCostIsTheProvidersUsagePriced:
     def test_input_and_output_are_priced(self):
@@ -350,6 +385,28 @@ class TestBoundedSpendAndFailingQuiet:
         wire = Wire(answered(text="   "))
         assert run(ci_summary, paths, monkeypatch, wire) == ci_summary.FAILED
         assert not paths["comment"].exists()
+
+    @pytest.mark.parametrize(
+        "stop, blocks",
+        [("refusal", []), ("max_tokens", [{"type": "thinking", "thinking": "..."}])],
+    )
+    def test_an_unusable_answer_still_records_why_and_what_it_cost(
+        self, ci_summary, paths, monkeypatch, capsys, stop, blocks
+    ):
+        """It was billed, so its usage and cost are recorded like any other
+        call's, and its shape goes to the job log too, where `gh run view
+        --log` can read it back (a step summary cannot be read by the API)."""
+        body = {"model": "claude-haiku-5-5", "stop_reason": stop, "content": blocks, "usage": USAGE}
+        wire = Wire(FakeResponse(body))
+        assert run(ci_summary, paths, monkeypatch, wire) == ci_summary.FAILED
+        assert not paths["comment"].exists()
+        summary = paths["summary"].read_text(encoding="utf-8")
+        assert stop in summary and "3000" in summary and "$0.000" in summary
+        printed = capsys.readouterr()
+        log = printed.out + printed.err
+        assert stop in log and "3000" in log
+        for block in blocks:
+            assert block["type"] in summary and block["type"] in log
 
     def test_no_key_means_no_request(self, ci_summary, paths, monkeypatch):
         wire = Wire(answered())
