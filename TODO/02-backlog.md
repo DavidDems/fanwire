@@ -37,8 +37,11 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
 
 9. `director`: **`jev`, shadow mode**: rebuild `jev-decision-layer` onto
    `main`, direct route (`TYPESAFE_API_KEY`, `TODO/01-for-you.md` §1), merge
-   gate one 200 with `confidence`, then record it beside the Manager without
-   applying it. Needs a deliberately failing task (handoff §6.3).
+   gate one 200 with `confidence`. **Folded into `Prompts/04` as its
+   Deliverable 0 (2026-10-13)**, with its first use: shadow answers beside
+   Haiku in the coverage and spec-drift checks. Shadow beside the Manager
+   stays in `Prompts/02` and still needs a deliberately failing task
+   (handoff §6.3).
 
 11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
 12. `director`: The CI half of bug 17.

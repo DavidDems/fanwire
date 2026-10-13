@@ -181,7 +181,8 @@ Verify each of these with `gh pr list`, `git log origin/main` and
    its PR opens, the checks wait in `action_required` for the human to
    approve the run: expected, and decided. Afterwards the balance difference
    is the task's real cost. Record it in handoff §10.
-2. **`jev`, in shadow mode** (§10.3 item 2):
+2. **`jev`, in shadow mode** (§10.3 item 2). *Steps 1–4 moved to
+   `Prompts/04` Deliverable 0 on 2026-10-13. Only step 5 stays here.*
    1. Rebuild `jev-decision-layer` onto `main` (one conflict, in
       `test_workflows.py`).
    2. Switch it to the direct route and `TYPESAFE_API_KEY`.

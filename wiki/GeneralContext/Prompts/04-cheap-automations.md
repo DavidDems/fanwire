@@ -1,5 +1,12 @@
 # 04 — Cheap automations: four narrow model calls around the hand-run workflow
 
+> **Update, 2026-10-13: `jev` comes first, here.** The human decided to fold
+> `TODO/02` item 9 (bringing `jev` back from #41) into this thread, so that
+> `jev` gets a cheap, real use case instead of waiting for a deliberately
+> failing auto task. **Deliverable 0** below rebuilds the seam. Automations 2
+> and 3 then ask `jev` in shadow beside Haiku. `jev` has never made a call in
+> this project; proving it is worth its cost is part of the objective.
+
 **Brief for a Director session** (a high-tier model, driven turn by turn by the
 human). Self-contained: read this file, then what it names.
 
@@ -9,7 +16,8 @@ They are a **spec drift check**, a **CI failure summary**, a **criteria
 coverage check** and a **wiki update proposal**. Each is one narrow model call
 on `claude-haiku-5-5`, or a typed `jev` decision, costing fractions of a cent,
 that saves the human time around hand-run work. None of them writes code,
-moves task state, approves or merges. This is `TODO/02-backlog.md` item 14.
+moves task state, approves or merges. This is `TODO/02-backlog.md` item 14,
+and item 9's first half (`jev` back on `main`, Deliverable 0).
 
 You are a **Director** (`AGENTS.md` "Agent system"). This work adds workflows
 under `.github/` and code under `.ai/`, so it lands as PRs on human-named
@@ -50,18 +58,50 @@ than trusting this.
 - Secrets: `ANTHROPIC_API_KEY` (metered; the Console has a USD $40 monthly
   limit), `TYPESAFE_API_KEY` (for `jev`), `AGENT_DISPATCH_TOKEN`.
 - **`jev`'s typed-decision seam is not on `main`.** It sits on the stale
-  `jev-decision-layer` branch, and bringing it back is `TODO/02` item 9. Build
-  on Haiku 5.5 unless item 9 has landed; then a yes/no question (spec ready?
-  every criterion covered?) may also ask `jev` **in shadow**, recording both
-  answers and acting on neither.
+  `jev-decision-layer` branch (#41, parked, `[BLOCKED]`), which still points at
+  the Vercel gateway route. Deliverable 0 brings it back. `jev` has **never
+  made a call** in this project: the TypeSafe account holds about CAD $10 of
+  credit, untouched.
 - `.ai/` is stdlib-only, with no SDK. A Messages API call from `agentlib` uses
   `urllib`.
 - The repository is public, and forks are allowed. Bot-authored PRs wait in
   `action_required`, and fork PRs from any external contributor need approval.
 
+## Deliverable 0: `jev` back on `main` (before the four)
+
+`TODO/02` item 9's first half, as `02-agent-workflow-continue.md` "After the
+queue" item 2 and handoff §10.3 item 2 describe it. Read both, and #41's
+diff.
+
+1. Rebuild `jev-decision-layer` onto `main` as a **new** Director branch, not
+   by force-pushing #41. Expect a conflict in `test_workflows.py`, and more:
+   `main` has moved a long way since (D1–D7, `agentctl hand`). Close #41 with
+   a link once the new PR is open; that is the human's click.
+2. Switch it to the direct route (`api.typesafe.ai/v1/systemone`, model
+   `jev-latest`, `TYPESAFE_API_KEY`). Drop the gateway route.
+3. Remove its `${{ steps.decide.outputs.reason }}` shell interpolation
+   (D2's pattern: pass it through `env:`).
+4. **Merge gate:** a dispatch-only CI smoke job that the human starts returns
+   one real 200 with a `confidence` field. Give the one-line command, and read
+   the cost back.
+5. **Don't wire it beside the Manager** (02's shadow-Manager plan stays in
+   02, and needs a failing auto task). Here `jev`'s first users are the
+   automations below.
+
+**`jev`'s use case, to prove:** automations 2 (criteria coverage) and 3 (spec
+drift) each end in a yes/no ("every criterion pinned?", "spec still matches
+the code?"). Ask `jev` that typed question **in shadow** beside Haiku's
+answer. Record both, with `confidence` and cost, in the comment footer and the
+job summary, and act on neither. After a handful of real task PRs, the record
+says whether `jev` agrees with Haiku and with the human's own reading, and
+what it costs. That is the evidence for keeping it, which the human asked for
+(2026-10-13). Propose where that record accumulates (e.g. a telemetry
+record per call), and bring it to the human.
+
 ## The four, with design notes (starting points, not decisions)
 
-Build them as **separate PRs, in this order**. Each is useful alone.
+Build them as **separate PRs, in this order**, after Deliverable 0. Each is
+useful alone.
 
 1. **CI failure summary.**
    - **Trigger:** test-agent finishes red on a PR whose head branch is
@@ -168,7 +208,11 @@ shape the design:
 - **The pre-commit hook runs the `.ai` suite with `GIT_*` set**, which
   corrupted `.git/config` once (2026-10-08). `conftest.py` now strips those
   variables. Keep any git-invoking test under it, hash `.git/config` before and
-  after each commit, and stop if it changes.
+  after each commit, and stop if it changes. **Expected changes** (seen
+  2026-10-12): `git switch -c … origin/main` and `git push -u` add
+  `[branch "…"]` sections, and VS Code adds `vscode-merge-base` keys. Those
+  aren't corruption. Check that `git config --get core.bare` is still `false`
+  and look at the diff before you stop.
 - **Run the `.ai` suite from Git Bash.** Under PowerShell, about 41 tests skip
   themselves.
 - **Lint from inside `.ai/`** with the main checkout's
