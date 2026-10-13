@@ -1,0 +1,139 @@
+name: ci-summary
+
+# Prompts/04-cheap-automations.md automation 1: when test-agent fails on an
+# agent/* PR, one PR comment saying what failed, where, and the likely cause,
+# updated in place on later runs. .ai/agentlib/cisummary.py parses and renders
+# (ciresult's deterministic parse); .ai/bin/ci_summary.py makes the one model
+# call, which writes only the "likely cause" sentence.
+#
+# It holds ANTHROPIC_API_KEY, so it is shaped to give that key nothing to
+# reach (work-modes.md "Constraints every automation must keep"):
+#   - workflow_run, not pull_request. A workflow_run job runs the workflow
+#     file and the code of main, never the branch's: the checkout below names
+#     no ref, so it is main's .ai/ that runs with the key. The failed run's
+#     log and job list are read through the API; the PR's code is never
+#     checked out.
+#   - the job's if: admits only a failed run (green needs no comment), of the
+#     pull_request event (never main's push run, and never the orchestrator's
+#     dispatched baseline runs, which carry no PR), on an agent/* branch, from
+#     this repository (a fork's PR gets nothing). ci_summary.py then checks
+#     the rest of the branch name against the guard's task-id pattern.
+#   - the token can read the repository, read Actions (downloading a run's
+#     log needs actions: read; it is read-only) and write PR comments, and
+#     nothing else. No checkout keeps a credential.
+#   - the key is in one step's env, the one that makes the call, and that
+#     step holds no GitHub token. The steps that hold the token never see the
+#     key.
+#   - no event value is pasted into a script: each reaches the shell through
+#     env:, as data. python -I keeps the working directory off sys.path.
+#   - the model's answer and the log are text a branch wrote. ci_summary.py
+#     fences them as data in the request and escapes them in the comment, so
+#     the comment cannot mention, link, or close the marker it is found by.
+#   - one call, no retry, and on any error no comment at all: ci_summary.py
+#     deletes any old comment file first and writes a new one only on
+#     success. A wrong or half summary on a PR is worse than none.
+#
+# What the tests cannot show, and only a live run proves: that workflow_run
+# fires for a test-agent run on an agent/* PR; that the event's
+# pull_requests[] is populated for it (a same-repository PR); and that this
+# token, with pull-requests: write, may comment on a PR the bot opened.
+
+on:
+  workflow_run:
+    workflows: [test-agent]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  summarize:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'agent/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One summary per branch at a time, so two runs cannot both create a
+    # comment. Never cancelled: the later run simply updates it.
+    concurrency:
+      group: ci-summary-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # main's copy: a workflow_run job checks out the default branch, and
+      # naming the run's head here would hand the key a branch's code.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: .ai
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # The failed run's evidence, through the API. No key in this step.
+      - name: Fetch the failed run's log and job list
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*)
+              echo "::notice::this run names no pull request; nothing to comment on"
+              exit 0 ;;
+          esac
+          case "$RUN_ID" in
+            ''|*[!0-9]*)
+              echo "::error::the run id is not a number"
+              exit 1 ;;
+          esac
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > "$RUNNER_TEMP/failed.log"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs > "$RUNNER_TEMP/jobs.json"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      # The only step with the key, and it holds no GitHub token. One call,
+      # no retry; on any error it writes no comment file and fails the job.
+      - name: Write the summary
+        if: steps.fetch.outputs.ready == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: >-
+          python -I .ai/bin/ci_summary.py
+          --log "$RUNNER_TEMP/failed.log"
+          --jobs "$RUNNER_TEMP/jobs.json"
+          --head-branch "$HEAD_BRANCH"
+          --run-url "$RUN_URL"
+          --comment-out "$RUNNER_TEMP/comment.md"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR: the bot's own comment that starts with the marker
+      # is edited in place, or a new one is made. The body is read from the
+      # file the script wrote, never from an expression.
+      - name: Post or update the PR comment
+        if: steps.fetch.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/comment.md" ]; then
+            echo "::notice::no summary was written; nothing to post"
+            exit 0
+          fi
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-ci-summary -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          fi
