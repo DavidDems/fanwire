@@ -23,6 +23,7 @@ WORKER = WORKFLOWS / "agent-worker.yml"
 ORCHESTRATOR = WORKFLOWS / "agent-orchestrator.yml"
 GUARD_WF = WORKFLOWS / "agent-guard.yml"
 JEV_SMOKE = WORKFLOWS / "jev-smoke.yml"
+CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -335,7 +336,7 @@ class TestAWorkerCannotEscapeItsOwnBranch:
 class TestNoWorkflowCanMerge:
     """Nothing in the system may merge its own work."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE, CI_SUMMARY])
     def test_no_workflow_calls_pr_merge(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -349,7 +350,7 @@ class TestNoWorkflowCanApprove:
     requests", which also grants approval. Nothing here may use it: a workflow
     that can approve could satisfy the 1-approval rule on an agent's own PR."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE, CI_SUMMARY])
     def test_no_workflow_approves_a_pull_request(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -644,7 +645,7 @@ class TestEveryJobIsBounded:
     GitHub keeps only one pending run per group — so one hung orchestrator
     drops transitions and stalls the task for the rest of the day."""
 
-    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE])
+    @pytest.mark.parametrize("path", [WORKER, ORCHESTRATOR, JEV_SMOKE, CI_SUMMARY])
     def test_the_job_declares_a_timeout(self, path):
         if not path.exists():
             pytest.skip(f"{path.name} not present")
@@ -922,7 +923,7 @@ class TestNoDispatchInputReachesTheShellAsCode:
     # agent-guard.yml joined in D2b: it pasted the PR's branch name, which a
     # fork chooses, into three scripts.
     @pytest.mark.parametrize(
-        "path", [WORKER, ORCHESTRATOR, GUARD_WF, JEV_SMOKE], ids=lambda p: p.name
+        "path", [WORKER, ORCHESTRATOR, GUARD_WF, JEV_SMOKE, CI_SUMMARY], ids=lambda p: p.name
     )
     def test_no_run_script_interpolates_attacker_influenced_context(self, path):
         if not path.exists():
@@ -2248,3 +2249,89 @@ class TestTheJevSmokeIsDispatchOnly:
         assert "--require-confidence" in body
         assert '--summary "$GITHUB_STEP_SUMMARY"' in body
         assert ".ai/questions/smoke.json" in body
+
+
+class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
+    """Prompts/04-cheap-automations.md automation 1, and the trigger the human
+    decided on 2026-10-13: `workflow_run` on `test-agent`, so the workflow and
+    the code that run are `main`'s, and the failed run's log is read through
+    the API, never by checking out the PR. It holds `ANTHROPIC_API_KEY`, so
+    work-modes.md "Constraints every automation must keep" apply: a fork's PR
+    gets nothing, nothing from a branch runs where the key is, the key is in
+    one step, no event value is pasted into a script, and the job may write a
+    comment and nothing else."""
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert CI_SUMMARY.exists(), "ci-summary.yml is missing"
+        return CI_SUMMARY.read_text(encoding="utf-8")
+
+    def triggers(self, wf: str) -> str:
+        return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_only_a_finished_test_agent_run_starts_it(self, wf):
+        on = self.triggers(wf)
+        assert "workflow_run:" in on
+        assert re.search(r"workflows:\s*\[\s*test-agent\s*\]", on)
+        assert re.search(r"types:\s*\[\s*completed\s*\]", on)
+        for other in ("pull_request", "push", "workflow_dispatch", "schedule", "issue"):
+            assert other not in on, f"ci-summary.yml must not run on {other}"
+
+    def test_it_runs_only_for_a_failed_pr_run_on_this_repositorys_task_branch(self, wf):
+        """Never on `main` (a push run), never for a fork, never for green."""
+        cond = " ".join(job_block(wf, "summarize").split("    runs-on:", 1)[0].split())
+        for clause in (
+            "github.event.workflow_run.conclusion == 'failure'",
+            "github.event.workflow_run.event == 'pull_request'",
+            "startsWith(github.event.workflow_run.head_branch, 'agent/')",
+            "github.event.workflow_run.head_repository.full_name == github.repository",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+        assert "||" not in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, "summarize")
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        # actions: read is what reading a run's failed-job log needs.
+        assert granted == {"contents": "read", "actions": "read", "pull-requests": "write"}
+
+    def test_no_pr_code_is_checked_out(self, wf):
+        """A `workflow_run` job checks out the default branch unless told
+        otherwise; naming the run's head would hand the key a branch's code."""
+        for chunk in steps_in(job_block(wf, "summarize")):
+            if "actions/checkout@" in chunk:
+                assert "ref:" not in chunk and "repository:" not in chunk
+                assert "persist-credentials: false" in chunk
+        assert "head_sha" not in "\n".join(live_lines(wf))
+
+    def test_the_key_is_held_by_one_step_only_and_that_step_has_no_token(self, wf):
+        assert wf.count("secrets.ANTHROPIC_API_KEY") == 1
+        assert "secrets." not in wf.replace("secrets.ANTHROPIC_API_KEY", "")
+        steps = steps_in(job_block(wf, "summarize"))
+        holder = [s for s in steps if "ANTHROPIC_API_KEY" in s]
+        assert len(holder) == 1
+        assert "ci_summary.py" in holder[0]
+        assert "GH_TOKEN" not in holder[0] and "github.token" not in holder[0]
+
+    def test_python_runs_isolated_from_mains_checkout(self, wf):
+        for line in live_lines(wf):
+            if re.search(r"\bpython3?\b", line):
+                assert line.startswith("python -I "), line
+
+    def test_the_comment_is_updated_in_place_from_a_file(self, wf):
+        """One comment per PR, found by its marker and by its author, and its
+        body read from the file the script wrote, never from an expression."""
+        body = "\n".join(live_lines(wf))
+        assert "fanwire-ci-summary" in body
+        assert "github-actions[bot]" in body
+        assert "--method PATCH" in body
+        assert "body=@" in body
+
+    def test_the_comment_is_posted_only_if_the_script_wrote_one(self, wf):
+        steps = titled(job_block(wf, "summarize"))
+        poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
+        assert "hashFiles(" in step_if(poster) or "-s " in poster

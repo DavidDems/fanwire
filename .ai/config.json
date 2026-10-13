@@ -16,7 +16,11 @@
   "providers": {
     "anthropic": {
       "api_key_secret": "ANTHROPIC_API_KEY",
-      "invoke": "claude"
+      "invoke": "claude",
+      "_api_note": "api_key_env, endpoint and api_version are for the direct Messages API calls the cheap automations make (automations below), stdlib urllib, no SDK. The roles above go through the claude CLI instead.",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "api_version": "2023-06-01"
     },
     "jev": {
       "_note": "TypeSafe's System One typed-decision model, asked narrow questions in shadow by the cheap automations (wiki/GeneralContext/Architecture/work-modes.md). Called only through .ai/bin/ask_jev.py, never via invoke_agent.sh: it answers typed questions, it does not run as an agent.",
@@ -53,6 +57,17 @@
       "provider": "anthropic",
       "model": "claude-sonnet-5",
       "_why": "Small targeted wiki edits against a known diff."
+    }
+  },
+
+  "automations": {
+    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS).",
+    "ci_summary": {
+      "_why": "Prompts/04 automation 1: one sentence naming the likely cause of a red agent/* PR run, beside ciresult's deterministic parse. .ai/bin/ci_summary.py, run by .github/workflows/ci-summary.yml.",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "max_tokens": 300,
+      "max_log_chars": 20000
     }
   },
 

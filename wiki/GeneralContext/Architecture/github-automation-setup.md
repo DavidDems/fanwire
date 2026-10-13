@@ -41,6 +41,11 @@ branch. A skipped job costs nothing. Once D1 is merged it also skips every
 pull-request CI on an `agent/*` branch included — because only the run the
 orchestrator dispatched is a task's verdict.
 
+**`ci-summary` runs are marked "skipped" too**, for the same reason: it
+listens on `workflow_run` for every `test-agent` completion and acts only on a
+*failed* `pull_request` run of an `agent/*` branch in this repository. Only
+those runs spend an Anthropic call (one Haiku 5.5 call, a fraction of a cent).
+
 ### Fork pull requests need approval from every outside contributor
 
 `approval_policy: all_external_contributors` (set 2026-10-08; it was
@@ -57,7 +62,7 @@ gh api repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval
 
 | Secret | For |
 |---|---|
-| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. |
+| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1). |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
 | `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: today `jev-smoke.yml` (dispatch-only), later the cheap automations (`work-modes.md`). Never pasted into a session. |
 
