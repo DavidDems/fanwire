@@ -14,8 +14,9 @@ name: jev-smoke
 #   - the key is in one step's env, the one that makes the call, and no other
 #     step can see it.
 #   - it runs main's own copy. A dispatch picks a ref, and that ref's code is
-#     what runs, so dispatch it on main: a branch's ask_jev.py must never be
-#     handed the key. python -I keeps the working directory off sys.path.
+#     what runs, so the job refuses every ref but main: a branch's ask_jev.py
+#     must never be handed the key. python -I keeps the working directory off
+#     sys.path.
 #
 # The questions and the state are committed files, fixed and harmless. No
 # untrusted input reaches this job.
@@ -28,6 +29,9 @@ permissions:
 
 jobs:
   smoke:
+    # Main's copy only: on any other ref this job does not run, and the key
+    # is never handed to a branch's code.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
