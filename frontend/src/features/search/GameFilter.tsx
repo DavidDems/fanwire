@@ -193,8 +193,9 @@ export function GameFilter() {
 
 /**
  * One game: both teams by abbreviation, home first as `GameScore` orders its
- * figures, then the score block itself. Text only — no logo and no team colour
- * (`components.md` §4, Team identity).
+ * figures, then the score block itself, which links to the game's page by
+ * address (`/games/<id>`), never by importing the games feature. Text only —
+ * no logo and no team colour (`components.md` §4, Team identity).
  */
 function GameRow({
   game,
@@ -225,6 +226,9 @@ function GameRow({
           homeScore={game.home_score}
           awayScore={game.away_score}
           status={FINAL}
+          to={`/games/${game.id}`}
+          homeTeam={teamName(game.home_team_id, teamsById)}
+          awayTeam={teamName(game.away_team_id, teamsById)}
         />
       </div>
     </li>
@@ -240,6 +244,14 @@ function teamLabel(
   teamsById: ReadonlyMap<number, TeamOut>,
 ): string {
   return teamsById.get(teamId)?.abbreviation ?? `Team ${teamId}`;
+}
+
+/** A team's full name, for the score link's accessible name. */
+function teamName(
+  teamId: number,
+  teamsById: ReadonlyMap<number, TeamOut>,
+): string {
+  return teamsById.get(teamId)?.name ?? `Team ${teamId}`;
 }
 
 /** The filters that were set, in words, for the no-results line. */
