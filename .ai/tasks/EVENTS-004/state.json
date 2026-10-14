@@ -1,0 +1,29 @@
+{
+  "attempt": 0,
+  "branch": "agent/EVENTS-004",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-10-14T02:20:10Z",
+      "event": "HAND_STARTED",
+      "from": "DRAFT",
+      "note": "hand run started",
+      "to": "HAND_RUNNING"
+    }
+  ],
+  "last_ci": null,
+  "last_ci_run": null,
+  "last_dispatch": null,
+  "manager_invocations": 0,
+  "max_attempts": 3,
+  "mode": "hand",
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "HAND_RUNNING",
+  "task_id": "EVENTS-004",
+  "updated_at": "2026-10-14T02:20:10Z"
+}
