@@ -19,11 +19,24 @@ would turn a failing test into a way to write on the PR.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
-from agentlib import ciresult, telemetry
-from agentlib.promptbuild import FENCE
+from agentlib import ciresult
+
+# The call, its price and inert text are every automation's, so they live in
+# `automation`. Imported under the names this module has always had: callers
+# and tests use `cisummary.escape`, `cost_usd` and `describe_response`.
+from agentlib.automation import code as _code
+from agentlib.automation import (  # noqa: F401
+    cost_text,
+    cost_usd,
+    describe_response,
+    escape,
+    first_text,
+    is_safe_url,
+    tokens_text,
+)
+from agentlib.automation import fenced as _fenced
 
 # How the workflow finds the comment it posted last time, to update it in
 # place. An HTML comment, so it is invisible on the rendered PR.
@@ -43,20 +56,7 @@ MAX_CAUSE_CHARS = 400
 
 # The comment is a glance, not a report: the run link has the rest.
 MAX_LISTED = 5
-_MAX_CODE_CHARS = 200
 _MAX_SUMMARY_CHARS = 200
-# A response's shape is a stop reason and a few block types: tens of chars.
-_MAX_DESCRIBED_CHARS = 200
-
-# Markdown punctuation that could start emphasis, a link, a heading, a table
-# or a code span. Backslash-escaped, so it renders as itself.
-_MARKDOWN = re.compile(r"([\\`*_\[\]()#+!|~{}])")
-# A bare URL or `www.` host is autolinked by GitHub even with no markdown.
-_AUTOLINK = re.compile(r"(?i)(://|\bwww\.)")
-# The run link is the one link the comment makes, and it comes from the
-# workflow, not the branch. Anything that could break out of `(...)` is
-# refused and shown as text instead.
-_SAFE_URL = re.compile(r"https://[^\s()<>\[\]`\"'\\]+")
 
 _SYSTEM_FRAMING = (
     "CI failed on an agent branch. Below, as data, are the names of the failed "
@@ -144,116 +144,20 @@ def request_body(
     }
 
 
-def _fenced(label: str, body: str) -> str:
-    # As promptbuild's: the marker is stripped from the body so the log cannot
-    # close its own fence and present the rest of itself as instruction.
-    safe = body.replace(FENCE, "[fence marker removed]")
-    return f"## {label}\n\n{FENCE}\n{safe}\n{FENCE}"
-
-
 def read_cause(body: Any) -> str | None:
     """The first non-empty text block of a Messages API response, flattened
-    to one line and cut to `MAX_CAUSE_CHARS`, or None when there is none.
-
-    Blocks of any other type, and text blocks with nothing but whitespace,
-    are passed over rather than ending the search: an empty block ahead of
-    the answer must not hide the answer.
-    """
-    blocks = body.get("content") if isinstance(body, dict) else None
-    if not isinstance(blocks, list):
+    to one line and cut to `MAX_CAUSE_CHARS`, or None when there is none
+    (`automation.first_text`: an empty block never hides a later answer)."""
+    found = first_text(body)
+    if found is None:
         return None
-    for block in blocks:
-        if not isinstance(block, dict) or block.get("type") != "text":
-            continue
-        text = " ".join(str(block.get("text") or "").split())
-        if not text:
-            continue
-        if len(text) > MAX_CAUSE_CHARS:
-            text = text[: MAX_CAUSE_CHARS - 3].rstrip() + "..."
-        return text
-    return None
-
-
-def describe_response(body: Any) -> str:
-    """Why a response gave no cause, as one short line: its `stop_reason` and
-    the types of its content blocks, in order, e.g.
-    `stop_reason=max_tokens; content=[thinking]`.
-
-    Only the shape, never a block's text: that is the model's, and this line
-    goes to the job log and summary unescaped. Never raises, whatever `body`
-    is, because it is only ever called once something has already gone wrong.
-    """
-    data = body if isinstance(body, dict) else {}
-    stop = data.get("stop_reason")
-    stop_text = stop if isinstance(stop, str) and stop.strip() else "none"
-    blocks = data.get("content")
-    types = []
-    if isinstance(blocks, list):
-        for block in blocks:
-            kind = block.get("type") if isinstance(block, dict) else None
-            types.append(kind if isinstance(kind, str) and kind.strip() else "?")
-    described = f"stop_reason={stop_text}; content=[{', '.join(types) or 'none'}]"
-    flat = " ".join(described.split()).replace("`", "'")
-    return flat if len(flat) <= _MAX_DESCRIBED_CHARS else flat[: _MAX_DESCRIBED_CHARS - 3] + "..."
-
-
-def cost_usd(usage: Any, price: dict[str, float] | None) -> float | None:
-    """The call's cost from the usage the response reports (D6: cache tokens
-    included), or None when it cannot be priced honestly.
-
-    Anthropic's usage is mapped onto telemetry's record fields so the pricing
-    rules live in one place. Cache writes whose 5-minute/1-hour split the
-    response did not give are not guessed at: telemetry returns None.
-    """
-    if not isinstance(usage, dict) or not isinstance(price, dict):
-        return None
-    if "input_tokens" not in usage and "output_tokens" not in usage:
-        return None
-    split = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else {}
-    rec = {
-        "provider": "anthropic",
-        "model": "priced",
-        "input_tokens": _count(usage.get("input_tokens")),
-        "output_tokens": _count(usage.get("output_tokens")),
-        "cache_read_input_tokens": _count(usage.get("cache_read_input_tokens")),
-        "cache_creation_input_tokens": _count(usage.get("cache_creation_input_tokens")),
-        "cache_creation_5m_input_tokens": _count(split.get("ephemeral_5m_input_tokens")),
-        "cache_creation_1h_input_tokens": _count(split.get("ephemeral_1h_input_tokens")),
-    }
-    return telemetry.estimate(rec, {"anthropic/priced": price})
-
-
-def _count(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return 0
-    return value
+    text = " ".join(found.split())
+    if len(text) > MAX_CAUSE_CHARS:
+        text = text[: MAX_CAUSE_CHARS - 3].rstrip() + "..."
+    return text
 
 
 # --------------------------------------------------------------------------- the comment
-
-
-def escape(text: Any, limit: int = MAX_CAUSE_CHARS) -> str:
-    """Untrusted text as one line of inert markdown.
-
-    HTML is entity-escaped (so no tag and no `<!--`), markdown punctuation is
-    backslash-escaped (no emphasis, link or code span), and `@` and URLs get
-    a zero-width space (no mention, no autolink). Cut to `limit` first, so the
-    cut can never split an escape in half.
-    """
-    flat = " ".join(str(text).split())
-    if len(flat) > limit:
-        flat = flat[: limit - 3].rstrip() + "..."
-    flat = flat.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    flat = _MARKDOWN.sub(r"\\\1", flat)
-    flat = flat.replace("@", "@\u200b")
-    return _AUTOLINK.sub(lambda m: m.group(1)[:-1] + "\u200b" + m.group(1)[-1], flat)
-
-
-def _code(text: Any) -> str:
-    """A path or test id as an inline code span: rendered literally, so only
-    a backtick (which would end the span) has to go."""
-    flat = " ".join(str(text).split()).replace("`", "'")[:_MAX_CODE_CHARS]
-    return f"`{flat.replace('<!--', '<!-\u200b-')}`" if flat else "`?`"
 
 
 def render(
@@ -302,20 +206,8 @@ def render(
 
 
 def _footer(usage: dict[str, Any] | None, cost: float | None, model: str | None, url: str) -> str:
-    link = f"[the run]({url})" if _SAFE_URL.fullmatch(url or "") else escape(url, 200)
+    link = f"[the run]({url})" if is_safe_url(url) else escape(url, 200)
     tail = f"{link} · updated in place on each run"
     if model is None:
         return f"No model was asked; this was read from the log alone. {tail}"
-    used = usage if isinstance(usage, dict) else {}
-    tokens = (
-        f"{_count(used.get('input_tokens'))} input / "
-        f"{_count(used.get('output_tokens'))} output tokens"
-    )
-    cached = _count(used.get("cache_read_input_tokens")) + _count(
-        used.get("cache_creation_input_tokens")
-    )
-    if cached:
-        tokens += f" (+{cached} cache)"
-    priceable = isinstance(cost, (int, float)) and not isinstance(cost, bool)
-    priced = f"${cost:.6f}" if priceable else "unpriced"
-    return f"Cause by {_code(model)} · {tokens} · {priced} · {tail}"
+    return f"Cause by {_code(model)} · {tokens_text(usage)} · {cost_text(cost)} · {tail}"

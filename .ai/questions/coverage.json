@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "_comment": [
+    "The question coverage-check.yml asks jev, in shadow, beside Haiku's",
+    "per-criterion answer (Prompts/04-cheap-automations.md automation 2 and",
+    "'Decided by the human'). A two-option choice, because a choice carries a",
+    "confidence and a noul does not. The state is the task's acceptance",
+    "criteria and the test files the PR changes (agentlib.coverage.jev_state).",
+    "Nothing acts on the answer. Keys starting with _ stay local."
+  ],
+  "questions": {
+    "all_pinned": {
+      "type": "choice",
+      "instructions": "Is every acceptance criterion in the state pinned by at least one of the tests shown, meaning a test that would fail were that behaviour missing or wrong?",
+      "criteria": {
+        "yes": "Every acceptance criterion has at least one test that would fail if its behaviour were missing or wrong.",
+        "no": "At least one acceptance criterion has no test that would fail if its behaviour were missing or wrong."
+      },
+      "_why": "The yes/no that Haiku's per-criterion answer also implies, so the two can be compared run by run."
+    }
+  }
+}
