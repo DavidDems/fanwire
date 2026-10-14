@@ -18,6 +18,8 @@ const HANDLERS = {
   // INFRA-003: the migration runner is one more command override on the same
   // image, not another image. See `App stack: migration runner` below.
   migration: 'app.migrate.handler',
+  // EVENTS-002: the hand-invoked NBA dataset load, the same pattern again.
+  sportsDataLoad: 'app.events.load_handler.handler',
 } as const;
 
 /**
@@ -96,8 +98,8 @@ describe('App stack: one shared Lambda image', () => {
     for (const banned of ['node_modules', '.git', '__pycache__', '.venv', 'cdk.out']) expect(names).not.toContain(banned);
   });
 
-  test('four image functions share one image URI; each overrides only its command', () => {
-    expect(imageFunctions()).toHaveLength(4);
+  test('five image functions share one image URI; each overrides only its command', () => {
+    expect(imageFunctions()).toHaveLength(5);
     const uris = new Set(imageFunctions().map(([, f]) => JSON.stringify((f.Properties?.Code as { ImageUri: unknown }).ImageUri)));
     expect(uris.size).toBe(1);
     for (const kind of Object.keys(HANDLERS) as (keyof typeof HANDLERS)[]) expect(fn(kind)).toBeDefined();
@@ -370,6 +372,13 @@ describe('App stack: migration runner', () => {
     expect(Object.values(raw().Resources ?? {}).filter((r) => r.Type.startsWith('Custom::'))).toEqual([]);
   });
 
+  test('nothing in any stack invokes the sports data load either (EVENTS-002)', () => {
+    // Same positive control as above, so an empty result means something.
+    expect(invokersOf(fn('media')[0]).join('\n')).toContain('AWS::Lambda::EventSourceMapping');
+    expect(invokersOf(fn('sportsDataLoad')[0])).toEqual([]);
+    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+  });
+
   test('same VPC, app subnets and Lambda security group as the api function (so it can reach RDS)', () => {
     const [, migration] = fn('migration');
     const [, api] = fn('api');
@@ -485,5 +494,73 @@ describe.each(Object.entries(DOMAIN_MODES))('App stack SES email sending (%s)', 
         expect(Object.keys(env)).not.toContain('NOTIFICATION_FROM_ADDRESS');
       }
     });
+  });
+});
+
+/**
+ * EVENTS-002: the hand-invoked NBA dataset load. The same shape as the
+ * migration runner (one more command on the one image, nothing invokes it;
+ * the sweep is in `App stack: migration runner` above), sized for the
+ * dataset, and with one grant beyond what every function has: reading the
+ * four CSVs under the sports-data bucket's nba-eoin/ prefix.
+ */
+describe('App stack: sports data load (EVENTS-002)', () => {
+  const load = () => fn('sportsDataLoad')[1];
+
+  test('15-minute timeout, 2048 MB of memory, 1024 MB of ephemeral storage', () => {
+    expect(load().Properties?.Timeout).toBe(900);
+    expect(load().Properties?.MemorySize).toBe(2048);
+    expect(load().Properties?.EphemeralStorage).toEqual({ Size: 1024 });
+  });
+
+  test('same VPC, app subnets and security group as the api function (so it can reach RDS)', () => {
+    expect(load().Properties?.VpcConfig).toEqual(fn('api')[1].Properties?.VpcConfig);
+  });
+
+  test('environment: the common variables plus SPORTS_DATA_BUCKET, the sports-data bucket', () => {
+    const env = envOf(load());
+    expect(JSON.stringify(env.SPORTS_DATA_BUCKET)).toContain('SportsDataBucket');
+    const rest = { ...env };
+    delete rest.SPORTS_DATA_BUCKET;
+    // The migration runner gets exactly the common variables.
+    expect(rest).toEqual(envOf(fn('migration')[1]));
+  });
+
+  test('no other function is told about the bucket', () => {
+    for (const [id, f] of imageFunctions()) {
+      if (id === fn('sportsDataLoad')[0]) continue;
+      expect({ id, env: JSON.stringify(envOf(f)) }).toEqual({ id, env: expect.not.stringContaining('SportsDataBucket') });
+    }
+  });
+
+  test('its policy is the three every function has plus s3:GetObject on nba-eoin/* of the bucket', () => {
+    const statements = statementsForRole(roleOf(load()));
+    const common = statementsForRole(roleOf(fn('migration')[1]));
+    expect(common).toHaveLength(3);
+    expect(statements).toHaveLength(4);
+    expect(statements.slice(0, 3).map((st) => st.Sid)).toEqual(common.map((st) => st.Sid));
+
+    const extra = statements[3]!;
+    expect(extra.Effect).toBe('Allow');
+    expect(extra.Action).toBe('s3:GetObject');
+    const resource = JSON.stringify(extra.Resource);
+    expect(resource).toContain('SportsDataBucket');
+    expect(resource).toContain('/nba-eoin/*');
+    expect(Array.isArray(extra.Resource)).toBe(false);
+  });
+
+  test('it cannot list, write or delete anything', () => {
+    const actions = actionsForRole(roleOf(load()));
+    expect(actions.filter((a) => a.startsWith('s3:'))).toEqual(['s3:GetObject']);
+    expect(actions.filter((a) => a.includes('*'))).toEqual([]);
+  });
+
+  test('no other role in the App stack is granted anything on the bucket', () => {
+    const loadRole = roleOf(load());
+    const offenders = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy'))
+      .filter(([, p]) => !JSON.stringify(p.Properties?.Roles).includes(`"${loadRole}"`))
+      .filter(([, p]) => JSON.stringify(p.Properties?.PolicyDocument).includes('SportsDataBucket'))
+      .map(([id]) => id);
+    expect(offenders).toEqual([]);
   });
 });

@@ -134,6 +134,16 @@ A DNP row is stored (its stats are the source's zeros) so a box score can list w
 - **Report per season:** games loaded / updated / already present; skipped preseason / All-Star / no score; box-score rows loaded / already present / skipped; duplicates; and the named games above.
 - **Measured** (local Docker Postgres, Windows host, 2026-10-13): the whole 2003-04 to 2025-26 range in **one run in 133 s** (29,646 games, 745,466 box-score rows, 2,426 players); one season in about 28 s, almost all of it reading `PlayerStatistics.csv` (390 MB) once; a second full run in 36 s, writing nothing. Box-score rows go in with `COPY` on the session's connection: an ORM/executemany insert sent one statement per row and took 7 minutes for one season.
 
+## The load function — `app.events.load_handler` (`EVENTS-002`)
+
+The loader above, run against the live database as the `SportsDataLoad` Lambda: the shared image with command `app.events.load_handler.handler`, 15 min, 2048 MB, 1024 MB of `/tmp`. **Nothing invokes it.** The human uploads the four CSVs to `SportsDataBucket` (`Fanwire-Storage`, private, CMK, SSL only, no events) under `nba-eoin/`, and invokes it by hand. The step-by-step runbook is `build-deployment.md` "Load sports data", added by a Director PR because no unit role may write `Standards/`. Its one grant beyond what every function has is `s3:GetObject` on `nba-eoin/*`.
+
+- **Event:** `{"seasons": ["2025-26", ...]}`, exactly that key, a non-empty list of distinct seasons, checked by `nba_history.validate_seasons`. **Required** (the human, 2026-10-14): a full reload lists every season. A bad event raises `InvalidLoadEvent` before any S3 call or connection.
+- **Order:** event → settings (`SPORTS_DATA_BUCKET`, `DATABASE_URL`; unset fails fast) → advisory lock `LOAD_LOCK_KEY` (not `app.migrate`'s) → download `Games.csv`, `PlayerStatistics.csv`, `TeamStatistics.csv`, `Players.csv` to a new temporary directory → `load_nba_history` (one transaction) → remove the directory, success or not → return `teams_created`, `players_created`, `seasons` (each `SeasonReport` as data) and `lines`, the per-season lines also logged.
+- **The lock** exists because the AWS CLI retries an invoke when its read timeout fires (60 s by default): without it the retry is a second load running beside the first. With it, the second fails fast (`SportsDataLoadLocked`, "already running") and writes nothing.
+- **Failures raise** `SportsDataLoadFailed`, never return an error value, with the message passed through `app.migrate.redact` and the cause chain broken (`from None`), so `DATABASE_URL` never reaches CloudWatch. A missing object names its key.
+- **Sizing** (2026-10-14, local Postgres): one season 18 s at a 99 MB peak; all 23 seasons 73–139 s at 709 MB. The four files are ~440 MB, over the default 512 MB of `/tmp`.
+
 ## API routes (Phase 2a)
 "Create an API to serve the data of these game from the database to the website" (`wiki/GeneralContext/Architecture/business-rules.md` "Events") was unimplemented through Phase 1 — Phase 2a (`wiki/GeneralContext/Prompts/phase-2-manager-agent.md`) closed it. Routes live in `app.events.routes` (`APIRouter(prefix="/events")`), public, no auth (sports data is public read, matching the guest-feed requirement):
 - `GET /events/teams`, `GET /events/teams/{team_id}`
