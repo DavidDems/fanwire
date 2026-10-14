@@ -13,8 +13,9 @@ export interface paths {
         };
         /**
          * List Games
-         * @description No pagination (YAGNI, same reasoning as list_teams) — revisit if the
-         *     games table grows large enough that this becomes a real concern.
+         * @description One page, newest first (date, then id). Paged because a full load is
+         *     ~30,000 games, over a Lambda response's 6 MB as one list (EVENTS-005).
+         *     Still a list, so the compose picker reads the 50 newest unchanged.
          */
         get: operations["list_games_events_games_get"];
         put?: never;
@@ -34,8 +35,8 @@ export interface paths {
         };
         /**
          * Get Game
-         * @description The read endpoint posts/'s EventMention.game_id will point to once
-         *     posts/ exists (Phase 2 proper, not this unit).
+         * @description The game page: both teams, line scores and the box score per team.
+         *     posts/'s EventMention.game_id points here.
          */
         get: operations["get_game_events_games__game_id__get"];
         put?: never;
@@ -522,6 +523,62 @@ export interface components {
             /** Username */
             username: string;
         };
+        /**
+         * BoxScorePlayerOut
+         * @description One player who played: has minutes, possibly zero seconds.
+         */
+        BoxScorePlayerOut: {
+            /** Assists */
+            assists: number;
+            /** Blocks */
+            blocks: number;
+            /** Defensive Rebounds */
+            defensive_rebounds: number;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** First Name */
+            first_name: string | null;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /** Last Name */
+            last_name: string | null;
+            /** Offensive Rebounds */
+            offensive_rebounds: number;
+            /** Personal Fouls */
+            personal_fouls: number;
+            /** Player Id */
+            player_id: number;
+            /** Plus Minus */
+            plus_minus: number;
+            /** Points */
+            points: number;
+            /** Rebounds */
+            rebounds: number;
+            /** Seconds Played */
+            seconds_played: number;
+            /** Starter */
+            starter: boolean;
+            /** Starting Position */
+            starting_position: string | null;
+            /** Steals */
+            steals: number;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Turnovers */
+            turnovers: number;
+        };
         /** CreatePostRequest */
         CreatePostRequest: {
             /**
@@ -580,12 +637,63 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** DidNotPlayOut */
+        DidNotPlayOut: {
+            /** Dnp Reason */
+            dnp_reason: string | null;
+            /** First Name */
+            first_name: string | null;
+            /** Last Name */
+            last_name: string | null;
+            /** Player Id */
+            player_id: number;
+        };
         /** FeedPage */
         FeedPage: {
             /** Items */
             items: components["schemas"]["PostView"][];
             /** Next Before Id */
             next_before_id: number | null;
+        };
+        /**
+         * GameDetailOut
+         * @description GET /events/games/{id}: a read model built by
+         *     app.events.service.game_detail, not the ORM row.
+         */
+        GameDetailOut: {
+            away_box_score: components["schemas"]["TeamBoxScoreOut"];
+            /** Away Line Score */
+            away_line_score: number[] | null;
+            /** Away Score */
+            away_score: number;
+            away_team: components["schemas"]["TeamRefOut"];
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Game Type */
+            game_type: string | null;
+            home_box_score: components["schemas"]["TeamBoxScoreOut"];
+            /** Home Line Score */
+            home_line_score: number[] | null;
+            /** Home Score */
+            home_score: number;
+            home_team: components["schemas"]["TeamRefOut"];
+            /** Id */
+            id: number;
+            /** Label */
+            label: string | null;
+            /** Nba Game Id */
+            nba_game_id: number;
+            /** Season */
+            season: string;
+            /** Series Game Number */
+            series_game_number: number | null;
+            /** Sub Label */
+            sub_label: string | null;
+            /** Venue */
+            venue: string | null;
         };
         /** GameFiltersOut */
         GameFiltersOut: {
@@ -825,6 +933,65 @@ export interface components {
             /** Username */
             username: string;
         };
+        /**
+         * ShootingOut
+         * @description Counting stats and shooting percentages, shared by a player's line
+         *     and a team's totals. Percentages are a fraction from 0 to 1, three
+         *     places, computed from made and attempted; null when none was attempted.
+         */
+        ShootingOut: {
+            /** Assists */
+            assists: number;
+            /** Blocks */
+            blocks: number;
+            /** Defensive Rebounds */
+            defensive_rebounds: number;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /** Offensive Rebounds */
+            offensive_rebounds: number;
+            /** Personal Fouls */
+            personal_fouls: number;
+            /** Points */
+            points: number;
+            /** Rebounds */
+            rebounds: number;
+            /** Seconds Played */
+            seconds_played: number;
+            /** Steals */
+            steals: number;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Turnovers */
+            turnovers: number;
+        };
+        /**
+         * TeamBoxScoreOut
+         * @description One team's side: played rows (starters first, then by seconds
+         *     played), the players who did not play, and totals summed from the
+         *     played rows, never adjusted to the final score.
+         */
+        TeamBoxScoreOut: {
+            /** Did Not Play */
+            did_not_play: components["schemas"]["DidNotPlayOut"][];
+            /** Players */
+            players: components["schemas"]["BoxScorePlayerOut"][];
+            totals: components["schemas"]["ShootingOut"];
+        };
         /** TeamOut */
         TeamOut: {
             /** Abbreviation */
@@ -841,6 +1008,18 @@ export interface components {
             name: string;
             /** Nba Team Id */
             nba_team_id: number;
+        };
+        /**
+         * TeamRefOut
+         * @description A team as a game detail embeds it.
+         */
+        TeamRefOut: {
+            /** Abbreviation */
+            abbreviation: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /** ThreadView */
         ThreadView: {
@@ -894,8 +1073,13 @@ export interface operations {
     list_games_events_games_get: {
         parameters: {
             query?: {
-                team_id?: number | null;
                 season?: string | null;
+                team_id?: number | null;
+                game_type?: ("regular" | "cup-final" | "play-in" | "playoffs") | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -940,7 +1124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GameOut"];
+                    "application/json": components["schemas"]["GameDetailOut"];
                 };
             };
             /** @description Validation Error */
