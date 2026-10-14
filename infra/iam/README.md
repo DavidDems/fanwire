@@ -145,16 +145,24 @@ aws iam list-policy-versions --profile fanwire-workload --policy-arn arn:aws:iam
 aws iam create-policy-version --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy --policy-document file://C:/Users/david/source/repos/fanwire/infra/iam/cdk-cfn-exec-role-policy.json --set-as-default
 ```
 
-(`aws iam delete-policy-version --profile fanwire-workload --policy-arn <arn> --version-id v1`
-removes an old one.) The full path works from any directory. A relative
-`file://infra/...` works only from the repo root.
+The full path works from any directory. A relative `file://infra/...`
+works only from the repo root. To remove an old version, put its id (from
+the list above) in place of `v1`:
+
+```powershell
+aws iam delete-policy-version --profile fanwire-workload --policy-arn arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy --version-id v1
+```
 
 **Escape hatch.** If a deploy fails for lack of a permission and its rollback
 fails for the same reason (`UPDATE_ROLLBACK_FAILED`), re-run the bootstrap
 command with `--cloudformation-execution-policies
-arn:aws:iam::aws:policy/AdministratorAccess`. Then run
-`aws cloudformation continue-update-rollback --stack-name <stack>`, add the
-missing action to this file, and switch back.
+arn:aws:iam::aws:policy/AdministratorAccess`. Then run this, with the
+failed stack's name in place of `Fanwire-App`, add the missing action to
+this file, and switch back:
+
+```powershell
+aws cloudformation continue-update-rollback --profile fanwire-workload --region ca-central-1 --stack-name Fanwire-App
+```
 
 ## `fanwire-role-boundary-policy.json`
 
