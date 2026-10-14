@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-008",
+  "objective": "Give every game a page of its own at /games/:gameId, built from GET /events/games/{id}: the two teams and the final score, the line score and the full box score of each team; and make games clickable wherever the app shows one, so a reader can open any game.",
+  "acceptance_criteria": [
+    "/games/:gameId is a public route under AppLayout that fetches GET /events/games/{gameId} and renders a level-one heading naming both teams (away at home, by name) with the final score, the game's date, its label and sub-label when present (for example NBA Finals, Game 5) and its venue when present.",
+    "The winning team is marked in text or with an icon carrying an accessible name, never by colour alone.",
+    "When both teams have a line score, the page renders it as a table with a caption, a row per team and a column per period headed Q1-Q4, then OT, 2OT and 3OT+ for the fifth, sixth and seventh figures, then the total; when either is null the table is absent and nothing else changes.",
+    "Each team's box score is a table with a caption naming the team, a header row with scope=col headers (Player, MIN, FG, 3P, FT, FG%, 3P%, FT%, OREB, DREB, REB, AST, STL, BLK, TO, PF, +/-, PTS), the starters first, then the bench, in the order the API returns them, a totals row, and minutes shown as m:ss from seconds_played; percentages from the API show as a three-place decimal without a leading zero (.462), and a null percentage shows as an en dash.",
+    "Players who did not play are listed under each team's table with their reason, or 'Did not play' when the reason is null.",
+    "A game with empty box scores renders the heading and line score and, in place of each table, an explicit empty state saying no box score is available.",
+    "An unknown game id renders a not-found message with a link back to the feed; any other failure renders an InlineAlert; neither throws.",
+    "The box-score tables scroll horizontally inside their own container at a 360 px viewport, and the page itself never scrolls horizontally.",
+    "GameScore accepts an optional link target, and every GameScore the app renders (the search page's game results) links to that game's page.",
+    "In a post's text, every #GameId<n> token whose n is in the post's mentioned_game_ids renders as a link to /games/<n> with the token as its text; a token that is not in mentioned_game_ids stays plain text; the post text is never parsed as HTML.",
+    "Every *.module.css file this unit adds or changes contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "Every link on the page and each box-score scroll container is reachable with Tab and shows a visible focus ring, and the PR carries the browser checklist of FrontendUI/verification.md for /games/:gameId (light and dark, 360 and 1280 wide), with the axe row left to the human."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/games/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/search/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/GameScore.tsx",
+    "frontend/src/components/ui/GameScore.module.css",
+    "frontend/src/components/ui/GameScore.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

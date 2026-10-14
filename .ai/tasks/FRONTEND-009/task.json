@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-009",
+  "objective": "Separate sports data from people and posts: a Stats page with a Seasons tab (a season's champion, standings, leaders and games, narrowed to one team by a small search bar) and a Players tab (a small player search), a page per player, and a Search page that searches accounts and posts only.",
+  "acceptance_criteria": [
+    "The navigation has a Stats item linking to /stats, between Search and the profile item, with an icon and a visible label, and it is marked current on every /stats and /players route; /stats redirects to /stats/seasons.",
+    "/stats/seasons and /stats/players are public and render one Stats heading above a tab list with two tabs, Seasons and Players; each tab is a link, the current one carries aria-current=page, the URL alone decides which tab shows, and the browser Back button moves between them.",
+    "The Seasons tab has a season picker filled from GET /events/seasons, newest first and selected by default, and the chosen season is kept in the URL (?season=), so a reload or a shared link shows the same season.",
+    "For the chosen season and no team, the tab shows the champion and the series result from GET /events/seasons/{season}/champion (or that the season has no champion yet), the standings from GET /events/seasons/{season}/standings as one table per conference with the API's tie-break note, the points, rebounds and assists leaders from GET /events/seasons/{season}/leaders with the qualifying rule the API names, and the season's games from GET /events/games?season= newest first in pages of 50 with a load-more control.",
+    "The Seasons tab's search bar matches teams by name or abbreviation as the user types (case-insensitive, over GET /events/teams), offers the matches as a listbox navigable with the arrow keys, and choosing one keeps it in the URL (?team=) and shows that team's record and games from GET /events/teams/{id}/seasons/{season} in place of the league view; clearing the bar returns to the league view.",
+    "Every game row and every team in a table links to its page or view: a game to /games/:gameId, a team to the Seasons tab filtered to it.",
+    "The Players tab's search bar calls GET /events/players?q= with the trimmed text, debounced, keeps q in the URL, shows each result's name, position and latest team, each linking to /players/:playerId, paginates with a load-more control, and shows an explicit no-results state naming the search.",
+    "/players/:playerId is public and shows the player's name as the level-one heading, their attributes (position, jersey, height in feet and inches, weight, birth date, country, school, draft), the regular-season and playoff career lines, a per-season table (season, teams, games, starts, minutes, points, rebounds, assists, steals, blocks, shooting percentages), and the game log from GET /events/players/{id}/games newest first with a load-more control, each game linking to /games/:gameId; an unknown player renders a not-found message.",
+    "On the game page, each box-score player's name links to /players/:playerId.",
+    "The Search page searches accounts and posts only: the sports-data filter and its game results are removed from it, the free-text bar is unchanged, and no file under src/ still imports GameFilter.",
+    "A new shared Tabs component under frontend/src/components/ui/ renders the tab list, and no existing file under frontend/src/components/ui/ is modified except icons/index.tsx (one icon added).",
+    "Every *.module.css file this unit adds or changes contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "Every table has a caption and header cells with scope, every table scrolls inside its own container at a 360 px viewport while the page does not, and the PR carries the browser checklist of FrontendUI/verification.md for /stats/seasons, /stats/players and /players/:playerId, with the axe row left to the human."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/stats/**",
+    "frontend/src/features/players/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/search/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/Tabs.tsx",
+    "frontend/src/components/ui/Tabs.module.css",
+    "frontend/src/components/ui/Tabs.test.tsx",
+    "frontend/src/components/ui/icons/index.tsx",
+    "frontend/src/components/ui/icons/icons.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/feed/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

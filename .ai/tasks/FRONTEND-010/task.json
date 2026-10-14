@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-010",
+  "objective": "Open a post's thread in a modal at /posts/:postId over whatever page the reader is on, and let a signed-in reader reply right there, below the original post, so replying no longer leaves the page and always shows what is being replied to.",
+  "acceptance_criteria": [
+    "Clicking a post card anywhere that is not a link or a button, or activating its timestamp (a link to /posts/:postId), opens the thread modal and changes the URL to /posts/:postId while the page underneath stays rendered and keeps its scroll position.",
+    "Back, Escape, the modal's close button and a click on the backdrop close the modal and return to the page underneath at the same scroll position; focus returns to the element that opened it.",
+    "Opening /posts/:postId directly (a reload or a shared link) shows the same modal over the feed, and closing it leaves the reader on the feed.",
+    "The modal is a dialog with an accessible name, keeps focus inside it while open, and shows the root post with its controls and counts, then the reply composer, then the direct replies oldest first, from GET /feed/thread/{postId}; each reply is a post card, and opening one shows its own thread in the same modal.",
+    "An unknown or unavailable post shows a not-found message inside the modal; a failed load shows an InlineAlert with a retry; neither throws.",
+    "Pressing reply on any post card opens that post's thread modal with the composer focused and labelled 'Replying to @username' with the author's username; nothing navigates to /compose.",
+    "The composer offers the same text box, # and $ mention suggestions and media attachment as /compose, through components exported by features/compose, and features/feed imports nothing from features/compose.",
+    "Posting a reply calls POST /posts with is_reply true and the parent's id; while it is in flight the submit is disabled; on success the composer clears, the new reply appears in the modal's list, and the parent's reply_count shown everywhere is refreshed from the server; on failure the draft is kept and an InlineAlert explains.",
+    "A signed-out reader sees the thread and, in place of the composer, a link to sign in that returns to /posts/:postId.",
+    "The post card no longer has a Show replies disclosure; the reply count next to the reply control opens the thread modal too.",
+    "A quote repost's embedded original links to /posts/:originalId.",
+    "/compose?reply_to= and /compose?repost_of= keep working as before for anyone who opens them.",
+    "A new shared Dialog component under frontend/src/components/ui/ is used for the modal, no existing file under frontend/src/components/ui/ is modified, and every *.module.css file this unit adds or changes contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "The PR carries the browser checklist of FrontendUI/verification.md for the modal opened from the feed, from search results and directly by URL, signed in and signed out, light and dark, 360 and 1280 wide, with the axe row left to the human."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/thread/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/search/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/Dialog.tsx",
+    "frontend/src/components/ui/Dialog.module.css",
+    "frontend/src/components/ui/Dialog.test.tsx",
+    "frontend/src/setupTests.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

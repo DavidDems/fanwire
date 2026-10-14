@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "task_id": "UI-009",
+  "objective": "Redesign the post card: icon-only like, reply and repost controls each followed by a live count ('x likes', 'x replies', 'x reposts', singular at one), a one-click repost toggle that updates at once, and reposts rendered as the post they repost, so a post reads as a post and every control shows what it did.",
+  "acceptance_criteria": [
+    "The like, reply and repost controls show an icon and no visible word; each has an accessible name (Like or Unlike, Reply, Repost or Undo repost) and the like and repost controls carry aria-pressed reflecting the viewer's state.",
+    "Next to each control is its count as text: '0 likes', '1 like', '2 likes'; '0 replies', '1 reply', '2 replies'; '0 reposts', '1 repost', '2 reposts', from like_count, reply_count and repost_count, with thousands separated in the viewer's locale.",
+    "Pressing like updates the icon state and the like count at once, before the server answers, and puts both back and shows an InlineAlert if the request fails; the same holds for repost, which calls POST /posts/{id}/repost or DELETE /posts/{id}/repost by the viewer's current state.",
+    "The optimistic like and repost change every cached copy of the post at once (the feed, a thread, search results, and the post shown inside a repost), so two cards of one post never disagree.",
+    "A signed-out viewer pressing like or repost is sent to sign-in with a return address, and nothing is called.",
+    "Pressing reply does not change the reply count; the count changes only when a reply is posted and the post's data is refetched.",
+    "A plain repost renders as a line naming who reposted it, with a repost icon, above the reposted post's own card (author, time, text, media, controls and counts of the original); its controls act on the original, and liking or reposting it updates the original everywhere.",
+    "A quote repost renders its own author, text and controls, with the reposted post shown inside it as a compact, bordered card that links to the original.",
+    "The card's states (default, hover, focus-visible, pressed, disabled while a request is in flight) are styled from tokens only, the pressed like and repost are distinguishable without colour (a filled icon), and every control keeps a hit area of at least 24 by 24 px (the post-footer rule of FrontendUI/components.md, WCAG 2.5.8).",
+    "Every *.module.css file this unit adds or changes contains no hex, rgb(), hsl() or named colour, no px font size, and no outline: none or outline: 0 without a :focus-visible rule in the same file (a static test reads the files from disk).",
+    "No existing file under frontend/src/components/ui/ is modified except icons/index.tsx (filled variants added), and the PR carries the browser checklist of FrontendUI/verification.md for the feed with a plain repost, a quote repost and a post with media, light and dark, 360 and 1280 wide, with the axe row left to the human."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/features/search/**",
+    "frontend/src/components/ui/icons/index.tsx",
+    "frontend/src/components/ui/icons/icons.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/routes/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

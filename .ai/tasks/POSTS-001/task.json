@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-001",
+  "objective": "Give every post view its reply and repost counts, whether the viewer has reposted it, and the post it reposts, and let a signed-in user repost and un-repost a post with one call each, so the redesigned post card can show live counters and a one-click repost toggle.",
+  "acceptance_criteria": [
+    "Every PostView (the feed, a thread, search results) carries reply_count (direct replies whose author is not soft-deleted), repost_count (reposts, plain and quote, whose author is not soft-deleted), and reposted_by_viewer (whether the signed-in viewer has a plain repost of it; false for an anonymous viewer).",
+    "A repost's PostView carries reposted_post: the PostView of the post it reposts, with its own counts and viewer flags, one level deep (its own reposted_post is always null); every other post has reposted_post null, and so does a repost whose original's author is soft-deleted.",
+    "Building the views for a page stays batched: the number of database queries for a page of posts is the same for 2 posts as for 20, reposts and their originals included (a test counts statements).",
+    "POST /posts/{post_id}/repost, signed in, creates the viewer's plain repost of the post (is_repost true, original_post_id set, no text, no media) through the same publish path as POST /posts, so the same domain event is published, and answers 201 with the new post; if the viewer already has a plain repost of that post it creates nothing and answers 200 with the existing one.",
+    "Reposting a plain repost reposts its original instead, so a repost never points at a plain repost; reposting a quote repost reposts the quote itself; an unknown post is a 404; an anonymous call is a 401.",
+    "Two concurrent POST /posts/{post_id}/repost calls by the same user create one repost, not two.",
+    "DELETE /posts/{post_id}/repost, signed in, removes every plain repost the viewer has of that post, together with the likes, reports and mentions that reference them, in one transaction, and answers 204; it answers 204 when there was nothing to remove; it never removes a quote repost or another user's repost.",
+    "DELETE /posts/{post_id}/repost answers 409 and removes nothing when one of those plain reposts has a reply.",
+    "After a repost or an un-repost, the original's repost_count and reposted_by_viewer in the next GET /feed, GET /feed/thread/{id} and GET /search/posts response reflect it.",
+    "POST /posts with is_repost (the /compose path) keeps working unchanged, quote reposts included.",
+    "openapi.json and schema.d.ts match the backend, and every frontend test that builds a PostView compiles and passes with the new fields."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "frontend/src/features/**/*.test.ts",
+    "frontend/src/features/**/*.test.tsx",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/events/**",
+    "backend/app/users/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/search/**",
+    "frontend/src/components/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
