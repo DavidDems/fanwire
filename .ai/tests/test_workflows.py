@@ -24,6 +24,7 @@ ORCHESTRATOR = WORKFLOWS / "agent-orchestrator.yml"
 GUARD_WF = WORKFLOWS / "agent-guard.yml"
 JEV_SMOKE = WORKFLOWS / "jev-smoke.yml"
 CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
+COVERAGE = WORKFLOWS / "coverage-check.yml"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -2333,5 +2334,115 @@ class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
 
     def test_the_comment_is_posted_only_if_the_script_wrote_one(self, wf):
         steps = titled(job_block(wf, "summarize"))
+        poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
+        assert "hashFiles(" in step_if(poster) or "-s " in poster
+
+
+class TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData:
+    """Prompts/04-cheap-automations.md automation 2, and the trigger the human
+    decided on 2026-10-13: `pull_request_target`, so the workflow file and the
+    code that run are `main`'s (checked out at the base SHA), and the PR is
+    checked out beside them as data that is read and never executed (`python
+    -I`, every script from `$TOOLS`). It holds `ANTHROPIC_API_KEY` and
+    `TYPESAFE_API_KEY`, so work-modes.md "Constraints every automation must
+    keep" apply: a fork's PR gets nothing, each key is in one step and that
+    step holds no GitHub token, no event value is pasted into a script, and
+    the job may write a comment and nothing else."""
+
+    JOB = "coverage"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert COVERAGE.exists(), "coverage-check.yml is missing"
+        return COVERAGE.read_text(encoding="utf-8")
+
+    def triggers(self, wf: str) -> str:
+        return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_only_an_opened_or_updated_pr_against_main_starts_it(self, wf):
+        on = self.triggers(wf)
+        assert "pull_request_target:" in on
+        assert re.search(r"types:\s*\[\s*opened,\s*synchronize,\s*reopened\s*\]", on)
+        assert re.search(r"branches:\s*\[\s*main\s*\]", on)
+        bare = on.replace("pull_request_target", "")
+        for other in ("pull_request", "push", "workflow_run", "workflow_dispatch", "schedule"):
+            assert other not in bare, f"coverage-check.yml must not run on {other}"
+
+    def test_it_runs_only_for_this_repositorys_task_branches(self, wf):
+        cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
+        for clause in (
+            "startsWith(github.event.pull_request.head.ref, 'agent/')",
+            "github.event.pull_request.head.repo.full_name == github.repository",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+        assert "||" not in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {"contents": "read", "pull-requests": "write"}
+
+    def test_the_tools_are_mains_and_the_pr_is_beside_them_as_data(self, wf):
+        """Two checkouts, neither keeping a credential: the base SHA at
+        `tools/`, the PR's head at `pr/`. Every script runs from `$TOOLS`."""
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 2
+        for chunk in checkouts:
+            assert "persist-credentials: false" in chunk
+        tools = next(c for c in checkouts if "path: tools" in c)
+        assert "ref: ${{ github.event.pull_request.base.sha }}" in tools
+        pr = next(c for c in checkouts if "path: pr" in c)
+        assert "ref: ${{ github.event.pull_request.head.sha }}" in pr
+        for line in live_lines(wf):
+            if re.search(r"\bpython3?\b", line):
+                assert line.startswith('python -I "$TOOLS/.ai/bin/'), line
+
+    def test_nothing_from_the_pr_is_executed(self, wf):
+        """Reading the PR's files is the whole point; running anything in it
+        is what `pull_request_target` must never do."""
+        body = "\n".join(live_lines(wf))
+        for runner in ("npm ", "npx ", "pip ", "pytest", "make ", "docker ", "bash pr/", "sh pr/"):
+            assert runner not in body, f"coverage-check.yml runs {runner.strip()}"
+        assert "working-directory: pr" not in wf
+
+    def test_each_key_is_held_by_one_step_and_that_step_has_no_token(self, wf):
+        steps = steps_in(job_block(wf, self.JOB))
+        rest = wf
+        for secret, script in (
+            ("ANTHROPIC_API_KEY", "coverage_check.py"),
+            ("TYPESAFE_API_KEY", "ask_jev.py"),
+        ):
+            assert wf.count(f"secrets.{secret}") == 1
+            rest = rest.replace(f"secrets.{secret}", "")
+            (holder,) = [s for s in steps if secret in s]
+            assert script in holder
+            assert "GH_TOKEN" not in holder and "github.token" not in holder
+        assert "secrets." not in rest
+        (both,) = [s for s in steps if "ANTHROPIC_API_KEY" in s]
+        assert "TYPESAFE_API_KEY" not in both
+
+    def test_jev_is_shadow_and_never_stops_the_comment(self, wf):
+        steps = titled(job_block(wf, self.JOB))
+        (jev,) = [c for c in steps.values() if "ask_jev.py" in c]
+        assert "continue-on-error: true" in jev
+        assert ".ai/questions/coverage.json" in jev
+
+    def test_the_task_id_is_checked_against_the_guards_pattern(self, wf):
+        assert f"TASK_ID_SAFE='{TASK_ID_SAFE.pattern}'" in wf
+        assert "HEAD_REF: ${{ github.event.pull_request.head.ref }}" in wf
+
+    def test_the_comment_is_updated_in_place_from_a_file(self, wf):
+        body = "\n".join(live_lines(wf))
+        assert "fanwire-coverage" in body
+        assert "github-actions[bot]" in body
+        assert "--method PATCH" in body
+        assert "body=@" in body
+
+    def test_the_comment_is_posted_only_if_the_script_wrote_one(self, wf):
+        steps = titled(job_block(wf, self.JOB))
         poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
         assert "hashFiles(" in step_if(poster) or "-s " in poster
