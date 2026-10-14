@@ -26,6 +26,7 @@ JEV_SMOKE = WORKFLOWS / "jev-smoke.yml"
 CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
 SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
+WIKI_PROPOSAL = WORKFLOWS / "wiki-proposal.yml"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -2537,3 +2538,98 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
         assert "github-actions[bot]" in body
         assert "--method PATCH" in body and "body=@" in body
         assert "agent/$TASK_ID" in body
+
+
+class TestTheWikiProposalRunsMainsCopyAfterAMerge:
+    """Prompts/04-cheap-automations.md automation 4, and the trigger and
+    output the human decided on 2026-10-13: `pull_request_target`, closed and
+    merged, and (a) a comment on the merged PR holding a patch the human
+    applies by hand. So the job writes a comment and nothing else: no
+    `contents: write`, no push, no branch. A model-written diff must never
+    land on a branch that is not `agent/*` (`permissions.md`), and here it
+    lands on no branch at all. The tools are `main`'s, the merged commit is
+    checked out beside them as data, and `ANTHROPIC_API_KEY` is in one
+    token-free step."""
+
+    JOB = "propose"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert WIKI_PROPOSAL.exists(), "wiki-proposal.yml is missing"
+        return WIKI_PROPOSAL.read_text(encoding="utf-8")
+
+    def triggers(self, wf: str) -> str:
+        return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_only_a_closed_pr_against_main_starts_it(self, wf):
+        on = self.triggers(wf)
+        assert "pull_request_target:" in on
+        assert re.search(r"types:\s*\[\s*closed\s*\]", on)
+        assert re.search(r"branches:\s*\[\s*main\s*\]", on)
+        bare = on.replace("pull_request_target", "")
+        for other in ("pull_request", "push", "workflow_run", "workflow_dispatch", "schedule"):
+            assert other not in bare, f"wiki-proposal.yml must not run on {other}"
+
+    def test_it_runs_only_for_a_merged_task_branch_of_this_repository(self, wf):
+        cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
+        for clause in (
+            "github.event.pull_request.merged == true",
+            "startsWith(github.event.pull_request.head.ref, 'agent/')",
+            "github.event.pull_request.head.repo.full_name == github.repository",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+        assert "||" not in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {"contents": "read", "pull-requests": "write"}
+        body = "\n".join(live_lines(wf))
+        for verb in ("git push", "git commit", "gh pr create", "git checkout -b", "git switch"):
+            assert verb not in body, f"wiki-proposal.yml must not {verb}"
+
+    def test_the_tools_are_mains_and_the_merge_is_beside_them_as_data(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 2
+        for chunk in checkouts:
+            assert "persist-credentials: false" in chunk
+        tools = next(c for c in checkouts if "path: tools" in c)
+        assert "ref: ${{ github.event.pull_request.base.sha }}" in tools
+        merged = next(c for c in checkouts if "path: merged" in c)
+        assert "ref: ${{ github.event.pull_request.merge_commit_sha }}" in merged
+        for line in live_lines(wf):
+            if re.search(r"\bpython3?\b", line):
+                assert line.startswith('python -I "$TOOLS/.ai/bin/'), line
+
+    def test_nothing_from_the_merge_is_executed(self, wf):
+        body = "\n".join(live_lines(wf))
+        for runner in ("npm ", "npx ", "pip ", "pytest", "make ", "docker ", "bash merged/"):
+            assert runner not in body, f"wiki-proposal.yml runs {runner.strip()}"
+        assert "working-directory: merged" not in wf
+
+    def test_the_key_is_held_by_one_step_only_and_that_step_has_no_token(self, wf):
+        assert wf.count("secrets.ANTHROPIC_API_KEY") == 1
+        assert "secrets." not in wf.replace("secrets.ANTHROPIC_API_KEY", "")
+        steps = steps_in(job_block(wf, self.JOB))
+        (holder,) = [s for s in steps if "ANTHROPIC_API_KEY" in s]
+        assert "wiki_proposal.py" in holder
+        assert "GH_TOKEN" not in holder and "github.token" not in holder
+
+    def test_the_task_id_is_checked_against_the_guards_pattern(self, wf):
+        assert f"TASK_ID_SAFE='{TASK_ID_SAFE.pattern}'" in wf
+        assert "HEAD_REF: ${{ github.event.pull_request.head.ref }}" in wf
+
+    def test_the_comment_is_updated_in_place_from_a_file(self, wf):
+        body = "\n".join(live_lines(wf))
+        assert "fanwire-wiki-proposal" in body
+        assert "github-actions[bot]" in body
+        assert "--method PATCH" in body and "body=@" in body
+
+    def test_the_comment_is_posted_only_if_the_script_wrote_one(self, wf):
+        steps = titled(job_block(wf, self.JOB))
+        poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
+        assert "hashFiles(" in step_if(poster) or "-s " in poster
