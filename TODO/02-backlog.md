@@ -63,13 +63,11 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Retire API-SPORTS**: adapter, ingestion, live-score proxy, the feed's ticker, `api_sports_*` columns, the ingestion function and its schedule | `hand` | `EVENTS-003` | the human, 2026-10-13 | Keeps the Data/Messaging resources exported (the export-in-use trap); the next item deletes them |
-| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` | Only after `EVENTS-003` is deployed. Two are `RETAIN`: the human deletes them by hand afterwards |
-| **Players and box scores**: `Player`, `PlayerGameStats`, line scores, the new loader; `Game.player_stats` goes | `hand` | `EVENTS-004` | the human, 2026-10-13 | Replaces `EVENTS-001`'s loader |
-| **Game detail API** and a paginated, filterable game list | `hand` | `EVENTS-005` | `business-rules.md` "Events" | Spec after `EVENTS-004` merges |
+| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (#142, deployed 2026-10-14) | Now unblocked; needs a spec. Two are `RETAIN`: the human deletes them by hand afterwards |
+| **Game detail API** and a paginated, filterable game list | `hand` | `EVENTS-005` | `business-rules.md` "Events" | Specced; runs before `EVENTS-002` (the human, 2026-10-14) |
 | **Player API**: search, detail with career and season stats, game log | `hand` | `EVENTS-006` | the human, 2026-10-13 | Spec after `EVENTS-004` merges |
 | **Stats API**: standings, champions, leaders, a team's season | `hand` | `EVENTS-007` | `business-rules.md` "Events" | Spec after `EVENTS-004` merges |
-| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | Any time after `EVENTS-004`. The human uploads the files and invokes it |
+| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | After `EVENTS-005` (an unpaginated list would exceed a Lambda response). The human uploads the files and invokes it |
 | **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
 | **Frontend pass for sports data**: game page with box score, player page, standings and leaders, `#GameId` links, a narrower compose picker | `hand` | — | the human, 2026-10-13 | Its own thread, after `EVENTS-005`–`007` |
 
