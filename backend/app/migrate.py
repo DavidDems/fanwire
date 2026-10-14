@@ -49,7 +49,7 @@ Lambda prints an unhandled exception's whole traceback including the
 `__cause__`/`__context__` chain, and SQLAlchemy/psycopg do put the connect
 string in their messages, so the original exception is **not** chained:
 `MigrationFailed` is raised `from None` carrying a redacted rendering of
-the original type and message instead (see `_redact`). Breaking the chain
+the original type and message instead (see `redact`). Breaking the chain
 is what keeps the credential out of CloudWatch; redacting rather than
 discarding the message is what leaves an operator something to act on.
 
@@ -153,7 +153,7 @@ def _sensitive_fragments(database_url: str) -> list[str]:
     return fragments
 
 
-def _redact(text: str, database_url: str) -> str:
+def redact(text: str, database_url: str) -> str:
     """`text` with every trace of `database_url`'s credentials removed.
 
     No length floor on the fragments: a one-character password would make
@@ -252,7 +252,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, str]:
         # the operator's next action is "wait and look again", not "diagnose
         # a broken migration". Still redacted -- a driver-level lock failure
         # can carry the connect string just as readily.
-        reason = _redact(str(exc), database_url)
+        reason = redact(str(exc), database_url)
         logger.error("migration did not run", extra={"reason": reason})
         raise MigrationLockUnavailable(reason) from None
     # Blind on purpose (hence the noqa): anything a migration script, the
@@ -260,7 +260,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, str]:
     # one of those has to be redacted before it escapes to CloudWatch. Nothing
     # is swallowed -- MigrationFailed is raised unconditionally below.
     except Exception as exc:  # noqa: BLE001
-        reason = f"{type(exc).__name__}: {_redact(str(exc), database_url)}"
+        reason = f"{type(exc).__name__}: {redact(str(exc), database_url)}"
         logger.error("migration failed", extra={"reason": reason})
         # `from None`, not `from exc`: Lambda renders the whole cause chain
         # to CloudWatch, and the original message is where the connect

@@ -440,7 +440,7 @@ def load_nba_history(
     once on success; on any exception rolls back the whole run and re-raises.
     """
     try:
-        wanted = _validate_seasons(seasons)
+        wanted = validate_seasons(seasons)
         data_dir = Path(data_dir)
         paths = {name: data_dir / name for name in _ALL_FILES}
         for name, path in paths.items():
@@ -474,7 +474,10 @@ def load_nba_history(
 # --------------------------------------------------------------------- values
 
 
-def _validate_seasons(seasons: Collection[str] | None) -> set[str] | None:
+def validate_seasons(seasons: Collection[str] | None) -> set[str] | None:
+    """The requested seasons as a set (None for "every season"), or a
+    DatasetError naming the first one that is not a "YYYY-YY" season from
+    2003-04 on. Also the SportsDataLoad handler's check (app.events.load_handler)."""
     if seasons is None:
         return None
     for season in seasons:

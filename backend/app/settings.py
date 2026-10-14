@@ -47,3 +47,9 @@ class Settings(BaseSettings):
     # empty is SesEmailSender's own signal to skip sending (log, no PII) and
     # let in-app notifications carry on alone, never an error.
     notification_from_address: str = ""
+
+    # The bucket app.events.load_handler (the SportsDataLoad Lambda) reads
+    # the NBA dataset's CSVs from, under nba-eoin/. Set by
+    # infra/lib/app-stack.ts on that function only. Empty means unset, and
+    # the handler fails fast on it.
+    sports_data_bucket: str = ""
