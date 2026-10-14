@@ -72,7 +72,6 @@ def _make_game(*, home_team_id, away_team_id, **overrides):
         "home_score": 112,
         "away_score": 108,
         "venue": "TD Garden",
-        "player_stats": [{"player_name": "Jayson Tatum", "team_id": home_team_id, "points": 28}],
     }
     defaults.update(overrides)
     return Game(**defaults)
@@ -322,9 +321,9 @@ def test_get_game_by_id_returns_game_when_found(client, session_factory):
     assert response.status_code == 200
     body = response.json()
     assert body["id"] == game_id
-    assert body["player_stats"] == [
-        {"player_name": "Jayson Tatum", "team_id": home_id, "points": 28}
-    ]
+    assert body["venue"] == "TD Garden"
+    # EVENTS-004: the box score is its own table, not a field of the game.
+    assert "player_stats" not in body
 
 
 def test_get_game_by_id_returns_404_when_not_found(client):

@@ -1,0 +1,13 @@
+gameId,gameDateTimeEst,hometeamCity,hometeamName,hometeamId,awayteamCity,awayteamName,awayteamId,homeScore,awayScore,winner,gameType,gameSubtype,gameLabel,gameSubLabel,seriesGameNumber,attendance,arenaId,arenaName,arenaCity,arenaState,officials,gameDate
+22400001,2024-10-22 19:30:00,Toronto,Raptors,1610612761,Boston,Celtics,1610612738,120,115,1610612761,Regular Season,,,,,18000,1000001,Scotiabank Arena,,,,2024-10-22 19:30:00
+22400001,2024-10-22 19:30:00,Toronto,Raptors,1610612761,Boston,Celtics,1610612738,120,115,1610612761,Regular Season,,,,,18000,1000001,Scotiabank Arena,,,,2024-10-22 19:30:00
+22400002,2024-11-12 19:00:00,Boston,Celtics,1610612738,New York,Knicks,1610612752,111,104,1610612738,Regular Season,,Emirates NBA Cup,East Group B,,,1000001,,,,,2024-11-12 19:00:00
+22400003,2024-11-20 22:00:00,Golden State,Warriors,1610612744,Los Angeles,Lakers,1610612747,101,99,1610612744,Regular Season,,,,,,1000001,,,,,2024-11-20 22:00:00
+22400004,2024-12-01 15:30:00,San Antonio,Spurs,1610612759,Los Angeles,Lakers,1610612747,0,0,1610612747,Regular Season,,,,0.0,,1000001,,,,,2024-12-01 15:30:00
+12400001,2024-10-06 19:00:00,Toronto,Raptors,1610612761,Boston,Celtics,1610612738,99,98,1610612761,Preseason,,Preseason,,,,1000001,,,,,2024-10-06 19:00:00
+32400001,2025-02-16 20:00:00,,Team East,1610616833,,Team West,1610616834,150,148,1610616833,All-Star Game,,All-Star,,,,1000001,,,,,2025-02-16 20:00:00
+62400001,2024-12-17 20:30:00,New York,Knicks,1610612752,San Antonio,Spurs,1610612759,97,81,1610612752,Emirates NBA Cup,,Emirates NBA Cup,Championship,,18000,1000001,T-Mobile Arena,,,,2024-12-17 20:30:00
+52400001,2025-04-16 22:00:00,Los Angeles,Lakers,1610612747,Golden State,Warriors,1610612744,103,100,1610612747,Play-in Tournament,,SoFi Play-In Tournament,West,,,1000001,,,,,2025-04-16 22:00:00
+42400405,2025-06-16 20:30:00,Boston,Celtics,1610612738,Golden State,Warriors,1610612744,110,108,1610612738,Playoffs,,NBA Finals,Game 5,5.0,18000,1000001,TD Garden,,,,2025-06-16 20:30:00
+22500001,2025-11-01 19:30:00,Toronto,Raptors,1610612761,Los Angeles,Lakers,1610612747,124,123,1610612761,Regular Season,,,,,,1000001,,,,,2025-11-01 19:30:00
+42500101,2026-06-03 20:30:00,San Antonio,Spurs,1610612759,New York,Knicks,1610612752,105,100,1610612759,Playoffs,,NBA Finals,Game 1,Game 1,18000,1000001,Frost Bank Center,,,,2026-06-03 20:30:00

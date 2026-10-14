@@ -342,14 +342,6 @@
             "title": "Nba Game Id",
             "type": "integer"
           },
-          "player_stats": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Player Stats",
-            "type": "array"
-          },
           "season": {
             "title": "Season",
             "type": "string"
@@ -376,7 +368,6 @@
           "home_score",
           "away_score",
           "venue",
-          "player_stats",
           "game_type"
         ],
         "title": "GameOut",

@@ -92,18 +92,12 @@ def test_events_dependencies_has_no_live_score_proxy():
     assert not hasattr(deps, "get_live_score_proxy")
 
 
-def test_ingestion_module_holds_nothing_but_the_error_re_export():
-    """app/events/ingestion.py may survive only as a re-export of
-    UnrecognizedTeamError for backend/scripts/load_nba_history.py."""
-    path = _APP_DIR / "events" / "ingestion.py"
-    if not path.exists():
-        return
-    from app.events import errors, ingestion
-
-    public = {name for name in vars(ingestion) if not name.startswith("_")}
-    public -= {"annotations"}  # `from __future__ import annotations`
-    assert public == {"UnrecognizedTeamError"}
-    assert ingestion.UnrecognizedTeamError is errors.UnrecognizedTeamError
+def test_ingestion_module_is_gone():
+    """EVENTS-003 kept app/events/ingestion.py as a re-export of
+    UnrecognizedTeamError for backend/scripts/load_nba_history.py; EVENTS-004
+    points the script at app.events.errors and removes the module."""
+    assert not (_APP_DIR / "events" / "ingestion.py").exists()
+    assert importlib.util.find_spec("app.events.ingestion") is None
 
 
 def test_unrecognized_team_error_lives_in_app_events_errors():

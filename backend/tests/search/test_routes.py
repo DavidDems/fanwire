@@ -19,6 +19,7 @@ Covers wiki/CodeContext/Modules/0x07-search.md's contract:
 
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, date, datetime
 
 import pytest
@@ -27,11 +28,35 @@ from fastapi.testclient import TestClient
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
-from app.events.models import Game, Team
+from app.events.models import Game, Player, PlayerGameStats, Team
 from app.posts.models import EventMention, Post
 from app.search.routes import router
 from app.users.dependencies import get_optional_current_user
 from app.users.models import User
+
+_person_ids = itertools.count(1)
+
+_ZERO_STATS = dict.fromkeys(
+    (
+        "field_goals_made",
+        "field_goals_attempted",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "free_throws_made",
+        "free_throws_attempted",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "plus_minus",
+    ),
+    0,
+)
 
 
 @pytest.fixture()
@@ -102,7 +127,9 @@ def _make_team(session, **overrides) -> Team:
     return team
 
 
-def _make_game(session, home, away, **overrides) -> Game:
+def _make_game(session, home, away, starting_positions=(), **overrides) -> Game:
+    """`starting_positions`: one box-score row per entry, for a new player on
+    the home team; None is a bench row (no starting position)."""
     defaults = {
         "nba_game_id": 1,
         "home_team_id": home.id,
@@ -111,11 +138,26 @@ def _make_game(session, home, away, **overrides) -> Game:
         "season": "2025-26",
         "home_score": 100,
         "away_score": 98,
-        "player_stats": [],
     }
     defaults.update(overrides)
     game = Game(**defaults)
     session.add(game)
+    session.flush()
+    for position in starting_positions:
+        player = Player(nba_person_id=next(_person_ids), last_name="Player")
+        session.add(player)
+        session.flush()
+        session.add(
+            PlayerGameStats(
+                game_id=game.id,
+                player_id=player.id,
+                team_id=home.id,
+                starter=position is not None,
+                starting_position=position,
+                seconds_played=600,
+                **_ZERO_STATS,
+            )
+        )
     session.commit()
     return game
 
@@ -287,14 +329,14 @@ def test_search_games_filters_by_position_alone(client, session_factory):
             a,
             b,
             nba_game_id=21,
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "SF"}],
+            starting_positions=["SF"],
         )
         _make_game(
             session,
             a,
             b,
             nba_game_id=22,
-            player_stats=[{"player_name": "Y", "team_id": a.id, "position": "PG"}],
+            starting_positions=["PG"],
         )
 
     response = client.get("/search/games", params={"position": "SF"})
@@ -313,7 +355,7 @@ def test_search_games_filters_combined(client, session_factory):
             b,
             nba_game_id=31,
             season="2025-26",
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
+            starting_positions=["C"],
         )
         _make_game(
             session,
@@ -321,7 +363,7 @@ def test_search_games_filters_combined(client, session_factory):
             b,
             nba_game_id=32,
             season="2024-25",
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
+            starting_positions=["C"],
         )
         team_a_id = a.id
 
@@ -331,6 +373,20 @@ def test_search_games_filters_combined(client, session_factory):
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [target.id]
+
+
+def test_search_games_items_carry_no_player_stats(client, session_factory):
+    with session_factory() as session:
+        a = _make_team(session, nba_team_id=51)
+        b = _make_team(session, nba_team_id=52)
+        _make_game(session, a, b, nba_game_id=51, starting_positions=["G"])
+
+    response = client.get("/search/games")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert "player_stats" not in items[0]
 
 
 def test_search_games_unknown_position_returns_422(client):

@@ -1,6 +1,7 @@
 """Tests for EVENTS-003's Alembic migration, per AGENTS.md TDD workflow.
-Written before that migration exists, so it is driven by "head"/"-1"; its
-parent, EVENTS-001's revision `b7d3e5a8c1f2`, is named.
+Written before that migration existed, so it was driven by "head"/"-1";
+since EVENTS-004's migration became head it is pinned by name to its own
+revision (`c5e8a2d4f9b1`) and its parent, EVENTS-001's `b7d3e5a8c1f2`.
 
 Upgrade: teams.nba_team_id and games.nba_game_id become NOT NULL (still
 unique), and the API-SPORTS columns (`api_sports_team_id`,
@@ -32,6 +33,7 @@ from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 
+_THIS_REVISION = "c5e8a2d4f9b1"
 _PARENT_REVISION = "b7d3e5a8c1f2"
 
 _TOR = 1610612761
@@ -52,8 +54,11 @@ def engine(postgres_url):
 
 
 @pytest.fixture()
-def at_head(alembic_config):
+def at_this_revision(alembic_config):
+    """The database at this migration's revision, whatever later revisions
+    exist; back at head afterwards."""
     command.upgrade(alembic_config, "head")
+    command.downgrade(alembic_config, _THIS_REVISION)
     yield
     command.upgrade(alembic_config, "head")
 
@@ -138,22 +143,22 @@ def _mentions_count(message: str, count: int) -> bool:
 # --------------------------------------------------------------------- upgrade
 
 
-def test_upgrade_drops_api_sports_columns(at_head, engine):
+def test_upgrade_drops_api_sports_columns(at_this_revision, engine):
     assert _column(engine, "teams", "api_sports_team_id") is None
     assert _column(engine, "games", "api_sports_game_id") is None
 
 
-def test_upgrade_drops_has_source_id_checks(at_head, engine):
+def test_upgrade_drops_has_source_id_checks(at_this_revision, engine):
     assert not _has_constraint(engine, "ck_teams_has_source_id")
     assert not _has_constraint(engine, "ck_games_has_source_id")
 
 
-def test_upgrade_makes_nba_ids_not_null_bigints(at_head, engine):
+def test_upgrade_makes_nba_ids_not_null_bigints(at_this_revision, engine):
     assert _column(engine, "teams", "nba_team_id") == {"is_nullable": "NO", "data_type": "bigint"}
     assert _column(engine, "games", "nba_game_id") == {"is_nullable": "NO", "data_type": "bigint"}
 
 
-def test_upgrade_rejects_a_team_without_an_nba_id(at_head, engine):
+def test_upgrade_rejects_a_team_without_an_nba_id(at_this_revision, engine):
     with engine.connect() as conn:
         with pytest.raises(IntegrityError) as excinfo:
             _insert_team(conn)
@@ -162,7 +167,7 @@ def test_upgrade_rejects_a_team_without_an_nba_id(at_head, engine):
     assert isinstance(excinfo.value.orig, NotNullViolation)
 
 
-def test_upgrade_rejects_a_game_without_an_nba_id(at_head, engine):
+def test_upgrade_rejects_a_game_without_an_nba_id(at_this_revision, engine):
     with engine.connect() as conn:
         home = _insert_team(conn, "TOR", nba_team_id=_TOR)
         away = _insert_team(conn, "BOS", nba_team_id=_BOS)
@@ -173,7 +178,7 @@ def test_upgrade_rejects_a_game_without_an_nba_id(at_head, engine):
     assert isinstance(excinfo.value.orig, NotNullViolation)
 
 
-def test_upgrade_keeps_nba_ids_unique(at_head, engine):
+def test_upgrade_keeps_nba_ids_unique(at_this_revision, engine):
     with engine.connect() as conn:
         _insert_team(conn, "TOR", nba_team_id=_TOR)
         with pytest.raises(IntegrityError) as team_dup:
@@ -196,11 +201,11 @@ def test_upgrade_keeps_nba_ids_unique(at_head, engine):
 
 
 def test_downgrade_restores_api_sports_columns_checks_and_nullable_nba_ids(
-    at_head, alembic_config, engine
+    at_this_revision, alembic_config, engine
 ):
-    # Guard against a vacuous pass: the columns must be gone before "-1".
+    # Guard against a vacuous pass: the columns must be gone before going down.
     assert _column(engine, "teams", "api_sports_team_id") is None
-    command.downgrade(alembic_config, "-1")
+    command.downgrade(alembic_config, _PARENT_REVISION)
 
     assert _current_revision(engine) == _PARENT_REVISION
     assert _column(engine, "teams", "api_sports_team_id")["is_nullable"] == "YES"
@@ -216,19 +221,19 @@ def test_downgrade_restores_api_sports_columns_checks_and_nullable_nba_ids(
             _insert_team(conn)
         conn.rollback()
     assert isinstance(excinfo.value.orig, CheckViolation)
-    # at_head's teardown returns the database to head.
+    # at_this_revision's teardown returns the database to head.
 
 
-def test_downgrade_keeps_rows_that_have_nba_ids(at_head, alembic_config, engine):
+def test_downgrade_keeps_rows_that_have_nba_ids(at_this_revision, alembic_config, engine):
     with engine.begin() as conn:
         home = _insert_team(conn, "TOR", nba_team_id=_TOR)
         away = _insert_team(conn, "BOS", nba_team_id=_BOS)
         _insert_game(conn, home, away, nba_game_id=21900001)
     try:
-        command.downgrade(alembic_config, "-1")
+        command.downgrade(alembic_config, _PARENT_REVISION)
         assert _count(engine, "teams") == 2
         assert _count(engine, "games") == 1
-        command.upgrade(alembic_config, "head")
+        command.upgrade(alembic_config, _THIS_REVISION)
         assert _count(engine, "teams") == 2
         assert _count(engine, "games") == 1
     finally:
