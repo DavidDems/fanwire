@@ -1,0 +1,37 @@
+{
+  "attempt": 0,
+  "branch": "agent/EVENTS-005",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-10-14T04:37:39Z",
+      "event": "HAND_STARTED",
+      "from": "DRAFT",
+      "note": "hand run started",
+      "to": "HAND_RUNNING"
+    },
+    {
+      "at": "2026-10-14T04:50:17Z",
+      "event": "HAND_FINISHED",
+      "from": "HAND_RUNNING",
+      "note": "hand run finished, PR #146",
+      "to": "COMPLETE"
+    }
+  ],
+  "last_ci": null,
+  "last_ci_run": null,
+  "last_dispatch": null,
+  "manager_invocations": 0,
+  "max_attempts": 3,
+  "mode": "hand",
+  "pr": 146,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "COMPLETE",
+  "task_id": "EVENTS-005",
+  "updated_at": "2026-10-14T04:50:17Z"
+}
