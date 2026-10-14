@@ -13,7 +13,7 @@
     "A missing object, an unset SPORTS_DATA_BUCKET or DATABASE_URL, a dataset error or an unknown team or player makes the invocation fail by raising, never by returning an error value, and leaves the database unchanged (the loader's one transaction).",
     "Only one load runs at a time: the handler holds a Postgres advisory lock, distinct from app.migrate's, for the whole load, and a second load that cannot take it fails fast with a message saying a load is already running, writing nothing.",
     "The database URL never leaves the function: not in a log line, the return value or the raised exception, whose cause is not chained to a database or loader exception that could carry it; a test with a password in DATABASE_URL and a failing connection proves it, using the same redaction as app.migrate.",
-    "wiki/CodeContext/Standards/build-deployment.md has a \"Load sports data\" runbook in single-line PowerShell steps: upload the four files to the bucket's nba-eoin/ prefix, find the function, write the event to a file, invoke it with a CLI read timeout above 15 minutes, and read the report."
+    "wiki/CodeContext/Modules/0x02-events.md documents the function and points to build-deployment.md \"Load sports data\", the runbook in single-line PowerShell steps (upload the four files to the bucket's nba-eoin/ prefix, find the function, write the event to a file, invoke it with a CLI read timeout above 15 minutes, read the report). The runbook itself is a Director PR: no unit role may write wiki/CodeContext/Standards/."
   ],
   "allowed_paths": [
     "backend/app/events/**",
@@ -24,8 +24,7 @@
     "infra/lib/app-stack.ts",
     "infra/test/**",
     "wiki/CodeContext/Modules/0x02-events.md",
-    "wiki/CodeContext/Modules/0x00-architecture.md",
-    "wiki/CodeContext/Standards/build-deployment.md"
+    "wiki/CodeContext/Modules/0x00-architecture.md"
   ],
   "forbidden_paths": [
     "infra/iam/**",
