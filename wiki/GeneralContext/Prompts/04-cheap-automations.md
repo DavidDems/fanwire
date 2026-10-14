@@ -235,9 +235,27 @@ record per call), and bring it to the human.
   - Proven only live: firing on the merge of a hand-opened `agent/*` PR,
     commenting on a closed PR. A rebase merge would read only its last
     commit (the repository merges with merge commits).
-- **Next: prove 2-4 live on the next hand-run units** (`Prompts/07`'s
-  queue), then build `agentctl shadow report` once a few shadow records
-  exist, and bring the record to the human.
+- **Automations 3 and 4 merged (#153, #154).**
+- **First live runs on #155 (`agent/FRONTEND-008`), 2026-10-14: Haiku 5.5
+  thinks by default.** No body set `thinking`, and thinking tokens count
+  toward `max_tokens`:
+  - Coverage: all four pushes (runs 38633144291 to 38635201703) ended
+    `stop_reason=max_tokens` on 2000 tokens, mostly `content=[thinking]`. No
+    comment, $0.003565 each. jev was not reached.
+  - CI summary (run 38633505452): the comment posted and its parsed failures
+    were right, but the cause sentence was cut mid-word at 300 tokens
+    ($0.001490).
+  - Spec drift (dispatch run 38629756035, before the PR existed): answered
+    within 2000 tokens with thinking (86,661 input / 802 output, $0.009067).
+    No PR to comment on.
+  - Fix (`director/no-thinking`): every body sends `thinking: {type:
+    "disabled"}` (`automation.no_thinking()`), which Haiku 5.5 accepts at
+    effort `high` or below; its default is medium.
+- **Next: re-prove 1-4 live after the fix merges.** Coverage needs a new
+  push to an open `agent/*` PR (a re-run keeps the old base's tools); drift
+  is dispatched with the PR open; the wiki proposal fires on the merge. Then
+  build `agentctl shadow report` once a few shadow records exist, and bring
+  the record to the human.
 
 ## The four, with design notes (starting points, not decisions)
 
@@ -363,6 +381,9 @@ shape the design:
 - **YAML can't prove GitHub's semantics.** `workflow_run`/`pull_request_target`
   behaviour, comment permissions on bot PRs, and `action_required` interplay
   are proven only by a live run. Say which properties are unproven in each PR.
+- **Haiku 5.5 thinks unless told not to**, and the thinking counts toward
+  `max_tokens` (#155). A new body sends `"thinking": no_thinking()` from
+  `agentlib/automation.py`; the tests assert it.
 
 ## Limits
 
