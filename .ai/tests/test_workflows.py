@@ -25,6 +25,7 @@ GUARD_WF = WORKFLOWS / "agent-guard.yml"
 JEV_SMOKE = WORKFLOWS / "jev-smoke.yml"
 CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
+SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -2446,3 +2447,93 @@ class TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData:
         steps = titled(job_block(wf, self.JOB))
         poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
         assert "hashFiles(" in step_if(poster) or "-s " in poster
+
+
+class TestTheSpecDriftCheckIsDispatchedOnMain:
+    """Prompts/04-cheap-automations.md automation 3, and the trigger the human
+    decided on 2026-10-13: `workflow_dispatch` only (`-f task_id=<ID>`),
+    reading `main`. A dispatch picks a ref and that ref's code runs with the
+    keys, so, as `jev-smoke.yml`, the job refuses every ref but `main`. The
+    task id is free text a person typed, so it is checked against the
+    guard's pattern before anything uses it. It comments on the task's open
+    PR if there is one, so the job may write a PR comment and nothing else."""
+
+    JOB = "drift"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert SPEC_DRIFT.exists(), "spec-drift.yml is missing"
+        return SPEC_DRIFT.read_text(encoding="utf-8")
+
+    def triggers(self, wf: str) -> str:
+        return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_only_a_dispatch_with_a_task_id_starts_it(self, wf):
+        on = self.triggers(wf)
+        assert "workflow_dispatch:" in on and "task_id:" in on
+        for other in ("pull_request", "push", "workflow_run", "schedule", "issue"):
+            assert other not in on, f"spec-drift.yml must not run on {other}"
+
+    def test_it_runs_only_on_main(self, wf):
+        cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
+        assert "github.ref == 'refs/heads/main'" in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {"contents": "read", "pull-requests": "write"}
+
+    def test_the_checkout_is_mains_and_keeps_no_credential(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 1
+        assert "ref:" not in checkouts[0] and "repository:" not in checkouts[0]
+        assert "persist-credentials: false" in checkouts[0]
+
+    def test_the_task_id_is_checked_and_never_pasted_into_a_script(self, wf):
+        assert f"TASK_ID_SAFE='{TASK_ID_SAFE.pattern}'" in wf
+        assert "${{ inputs.task_id }}" in wf or "${{ github.event.inputs.task_id }}" in wf
+        for body in run_bodies(wf):
+            assert "inputs.task_id" not in body
+
+    def test_each_key_is_held_by_one_step_and_that_step_has_no_token(self, wf):
+        steps = steps_in(job_block(wf, self.JOB))
+        rest = wf
+        for secret, script in (
+            ("ANTHROPIC_API_KEY", "spec_drift.py"),
+            ("TYPESAFE_API_KEY", "ask_jev.py"),
+        ):
+            assert wf.count(f"secrets.{secret}") == 1
+            rest = rest.replace(f"secrets.{secret}", "")
+            (holder,) = [s for s in steps if secret in s]
+            assert script in holder
+            assert "GH_TOKEN" not in holder and "github.token" not in holder
+        assert "secrets." not in rest
+
+    def test_python_runs_isolated(self, wf):
+        for line in live_lines(wf):
+            if re.search(r"\bpython3?\b", line):
+                assert line.startswith("python -I "), line
+
+    def test_jev_is_shadow_and_never_stops_the_report(self, wf):
+        steps = titled(job_block(wf, self.JOB))
+        (jev,) = [c for c in steps.values() if "ask_jev.py" in c]
+        assert "continue-on-error: true" in jev
+        assert ".ai/questions/drift.json" in jev
+
+    def test_the_report_is_rendered_even_when_the_model_failed(self, wf):
+        """The path and link findings are free and were made before the
+        call; a failed call must not hide them from the job summary."""
+        steps = titled(job_block(wf, self.JOB))
+        (renderer,) = [c for c in steps.values() if "spec_drift.py" in c and " render" in c]
+        assert "always()" in step_if(renderer)
+
+    def test_the_comment_goes_only_to_the_tasks_open_pr_updated_in_place(self, wf):
+        body = "\n".join(live_lines(wf))
+        assert "fanwire-spec-drift" in body
+        assert "github-actions[bot]" in body
+        assert "--method PATCH" in body and "body=@" in body
+        assert "agent/$TASK_ID" in body
