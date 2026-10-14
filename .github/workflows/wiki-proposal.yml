@@ -1,0 +1,163 @@
+name: wiki-proposal
+
+# Prompts/04-cheap-automations.md automation 4: when an agent/* PR merges into
+# main, one comment on the merged PR saying either that no documented
+# decision changed, or proposing edits to the wiki/CodeContext/Modules/ files
+# the task's spec names, as a patch. .ai/agentlib/wikiprop.py builds the
+# request, makes the patch from the real files and renders the comment;
+# .ai/bin/wiki_proposal.py makes the one model call. It fails nothing and
+# changes nothing: the human applies the patch by hand, or does not.
+#
+# It holds the Anthropic key, so it is shaped to give it nothing to reach
+# (work-modes.md "Constraints every automation must keep"):
+#   - pull_request_target, closed, and the job's if: requires merged (decided
+#     by the human, 2026-10-13). A pull_request_target job runs the workflow
+#     file of main, never the branch's, and the code that runs is main's too:
+#     the PR's base SHA is checked out at tools/, and every script runs from
+#     there with python -I. The merge commit is checked out beside it at
+#     merged/ as data: its diff and module files are read, nothing in it is
+#     run, and the spec is read from tools/.
+#   - output option (a), decided by the human on 2026-10-13: a comment on the
+#     merged PR holding the patch. So the token needs no contents: write, and
+#     nothing here commits, pushes or makes a branch. A model-written diff
+#     must never land on a branch that is not agent/* (.ai/docs/permissions.md);
+#     here it lands on no branch at all, only in a comment a human reads.
+#   - the job's if: admits only an agent/* branch of this repository (a
+#     fork's PR gets nothing). The rest of the branch name is checked in bash
+#     against the guard's task-id pattern before it is used for anything.
+#   - the token can read the repository and write PR comments, and nothing
+#     else. No checkout keeps a credential.
+#   - the key is in one step's env, the one that makes the call, and that
+#     step holds no GitHub token. The step that holds the token sees no key.
+#   - no event value is pasted into a script: each reaches the shell through
+#     env:, as data.
+#   - the diff and the model's answer are text a branch or a model wrote.
+#     wiki_proposal.py fences them as data in the request, builds the patch
+#     itself from passages it finds exactly once in a module file the model
+#     was shown, and escapes everything outside the patch's code block, so
+#     the comment cannot mention, link, or close the marker it is found by.
+#   - one call, no retry, and on any error no comment at all: the script
+#     deletes any old comment file first and writes a new one only on
+#     success. A task whose spec names no module file needs no model call.
+#
+# What the tests cannot show, and only a live run proves: that
+# pull_request_target fires on the merge of an agent/* PR opened by hand
+# (agentctl hand finish); that this token, with pull-requests: write, may
+# comment on a PR that is already closed; and what a rebase merge gives
+# (see the diff step: only its last commit's change is read).
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  propose:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One proposal per PR at a time, so two runs cannot both create a comment.
+    concurrency:
+      group: wiki-proposal-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      MERGED_ROOT: ${{ github.workspace }}/merged
+    steps:
+      # The branch name is the branch's to choose, so the id derived from it
+      # is validated against the guard's own TASK_ID_SAFE (a bash copy, pinned
+      # by test_workflows.py) and reaches later steps only as $TASK_ID.
+      - name: Derive the task id from the branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID="${HEAD_REF#agent/}"
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::the task id in this branch name does not match $TASK_ID_SAFE"
+            exit 1
+          fi
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+
+      # main's copy before the merge: the code that runs with the key, and
+      # the spec as main held it.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: tools
+          persist-credentials: false
+
+      # The merge commit, as data, with its first parent for the diff.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          path: merged
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # What the merge changed. No key and no token here. For a merge commit
+      # or a squash commit, the first parent is main as it stood before the
+      # merge, so this is the whole PR. A rebase merge is different: the
+      # merge_commit_sha is the last rebased commit, and its first parent is
+      # the commit before it, so only that last commit's change is read.
+      - name: Take the merged diff
+        run: |
+          set -euo pipefail
+          git -C merged diff --no-renames HEAD^1 HEAD > "$RUNNER_TEMP/merged.diff"
+          echo "$(wc -c < "$RUNNER_TEMP/merged.diff") byte(s) of diff"
+
+      # The only step with the Anthropic key, and it holds no GitHub token.
+      # One call, no retry; on any error it writes no comment and fails the
+      # job.
+      - name: Ask whether a documented decision changed
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          python -I "$TOOLS/.ai/bin/wiki_proposal.py"
+          --task-id "$TASK_ID"
+          --spec-root "$TOOLS"
+          --repo-root "$MERGED_ROOT"
+          --diff "$RUNNER_TEMP/merged.diff"
+          --merge-sha "$MERGE_SHA"
+          --run-url "$RUN_URL"
+          --comment-out "$RUNNER_TEMP/comment.md"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR: the bot's own comment that starts with the marker
+      # is edited in place, or a new one is made. The body is read from the
+      # file the script wrote, never from an expression.
+      - name: Post or update the PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/comment.md" ]; then
+            echo "::notice::no comment was written; nothing to post"
+            exit 0
+          fi
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-wiki-proposal -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          fi

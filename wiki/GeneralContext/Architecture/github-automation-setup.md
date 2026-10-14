@@ -54,6 +54,10 @@ changes no test file, which needs no call. `pull_request_target` runs
 `main`'s copy of the workflow with secrets and needs no approval, which is
 why the job refuses forks and never executes the PR's files.
 
+**`wiki-proposal` runs when any pull request closes** and is skipped unless
+an `agent/*` branch of this repository merged. Then it spends one Haiku 5.5
+call, unless the task's spec names no module file.
+
 ### Fork pull requests need approval from every outside contributor
 
 `approval_policy: all_external_contributors` (set 2026-10-08; it was
@@ -70,7 +74,7 @@ gh api repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval
 
 | Secret | For |
 |---|---|
-| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1) `coverage-check.yml` (2026-10-14, automation 2) and `spec-drift.yml` (2026-10-14, automation 3). |
+| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1) `coverage-check.yml` (2026-10-14, automation 2) `spec-drift.yml` (2026-10-14, automation 3) and `wiki-proposal.yml` (2026-10-14, automation 4). |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
 | `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: `jev-smoke.yml` (dispatch-only) and, in shadow, `coverage-check.yml` and `spec-drift.yml` (2026-10-14). Never pasted into a session. |
 

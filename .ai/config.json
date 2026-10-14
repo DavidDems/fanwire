@@ -61,7 +61,7 @@
   },
 
   "automations": {
-    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS).",
+    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS; wikiprop.MAX_TOKENS, MAX_DIFF_CHARS).",
     "ci_summary": {
       "_why": "Prompts/04 automation 1: one sentence naming the likely cause of a red agent/* PR run, beside ciresult's deterministic parse. .ai/bin/ci_summary.py, run by .github/workflows/ci-summary.yml.",
       "provider": "anthropic",
@@ -82,6 +82,13 @@
       "model": "claude-haiku-5-5",
       "max_tokens": 2000,
       "max_context_chars": 200000
+    },
+    "wiki_proposal": {
+      "_why": "Prompts/04 automation 4: when an agent/* PR merges, whether the merged diff changed something the wiki/CodeContext/Modules/ files its spec names document; the answer is a comment on the merged PR holding a patch the human applies by hand (option (a), decided 2026-10-13). Nothing is committed. .ai/bin/wiki_proposal.py, run by .github/workflows/wiki-proposal.yml.",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "max_tokens": 4000,
+      "max_diff_chars": 150000
     }
   },
 
