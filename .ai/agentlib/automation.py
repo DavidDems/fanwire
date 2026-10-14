@@ -48,6 +48,8 @@ _AUTOLINK = re.compile(r"(?i)(://|\bwww\.)")
 # not the branch. Anything that could break out of `(...)` is refused and
 # shown as text instead.
 _SAFE_URL = re.compile(r"https://[^\s()<>\[\]`\"'\\]+")
+# A fenced block in a model's answer, with or without a language tag.
+_JSON_FENCE = re.compile(r"```[A-Za-z]*\s*\n(.*?)\n?\s*```", re.DOTALL)
 
 
 # --------------------------------------------------------------------------- the one call
@@ -141,6 +143,21 @@ def first_text(body: Any) -> str | None:
         text = str(block.get("text") or "").strip()
         if text:
             return text
+    return None
+
+
+def json_object(text: str) -> Any:
+    """The JSON in a model's answer: the whole text, or else the first code
+    fence whose content parses. None when neither does.
+
+    Asked for JSON alone, a model still sometimes wraps it in a ```json
+    fence; that is the same answer, and refusing it would waste the call.
+    """
+    for candidate in (text, *(m.group(1) for m in _JSON_FENCE.finditer(text))):
+        try:
+            return json.loads(candidate)
+        except ValueError:
+            continue
     return None
 
 

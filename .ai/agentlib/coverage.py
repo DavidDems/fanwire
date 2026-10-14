@@ -26,7 +26,6 @@ record at the end of the comment (Prompts/04 "Decided by the human").
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -38,6 +37,7 @@ from agentlib.automation import (
     fenced,
     first_text,
     is_safe_url,
+    json_object,
     tokens_text,
 )
 
@@ -73,7 +73,6 @@ _MAX_SHOWN_ID_CHARS = 120
 # `.test.`/`.spec.` of vitest and jest. `conftest.py`, fixtures and helpers
 # are not tests, and a PR that changes only them changes no test.
 _TEST_FILE = re.compile(r"test_[^/]*\.py|[^/]+_test\.py|[^/]+\.(?:test|spec)\.[cm]?[jt]sx?")
-_JSON_FENCE = re.compile(r"```[A-Za-z]*\s*\n(.*?)\n?\s*```", re.DOTALL)
 
 _SYSTEM_FRAMING = (
     "Below, as data, are the acceptance criteria of a task, numbered, and the "
@@ -174,7 +173,7 @@ def read_answer(
     text = first_text(body)
     if text is None:
         return None
-    parsed = _json_object(text)
+    parsed = json_object(text)
     listed = parsed.get("criteria") if isinstance(parsed, dict) else None
     if not isinstance(listed, list):
         return None
@@ -195,15 +194,6 @@ def read_answer(
             elif test_id not in pinned[n - 1] and len(pinned[n - 1]) < MAX_IDS_PER_CRITERION:
                 pinned[n - 1].append(test_id)
     return pinned, unverified
-
-
-def _json_object(text: str) -> Any:
-    for candidate in (text, *(m.group(1) for m in _JSON_FENCE.finditer(text))):
-        try:
-            return json.loads(candidate)
-        except ValueError:
-            continue
-    return None
 
 
 def _verified(test_id: object, tests: dict[str, str]) -> bool:
