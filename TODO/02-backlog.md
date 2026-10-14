@@ -53,7 +53,8 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
     **CI failure summary built** (`ci-summary.yml`, 2026-10-13, #141, #143) and
     proven live on #144 (2026-10-14, $0.001141). **Criteria coverage check
     built** (`coverage-check.yml`, 2026-10-14, `jev` in shadow); proven by the
-    next `agent/*` PR push. Next: drift, wiki.
+    next `agent/*` PR push (#151). **Spec drift check built** (`spec-drift.yml`,
+    2026-10-14, dispatch-only, `jev` in shadow). Next: wiki.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 

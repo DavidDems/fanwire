@@ -153,3 +153,11 @@ One structure for every mode, so any session can start cold:
   "every criterion pinned?" in shadow. One advisory comment, kept up to date,
   with both answers and their costs and a hidden `fanwire-shadow` record. Not
   yet proven live.
+- **Spec drift check built** (2026-10-14): `.github/workflows/spec-drift.yml`,
+  dispatched by the human before a unit (`gh workflow run spec-drift.yml -f
+  task_id=<ID>`), runs `main`'s copy against `main`. Paths and links in the
+  spec are checked without a model; Haiku 5.5 is asked only for names in the
+  prose, and a name it calls missing is kept only if no non-test source file
+  has it. `jev` answers "does the spec still match?" in shadow. The report
+  goes to the job summary, and to the task's open PR as a comment if there
+  is one. Not yet proven live.
