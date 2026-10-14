@@ -80,4 +80,14 @@ Then tell the manager session the two ids, or just create the files; the fronten
 - **Starting the stack:** `docker compose up -d --build backend-dev`, then wait for `http://localhost:8001/health` before `scripts/seed_dev.py` (the container migrates on start), then `npm run dev` in `frontend/`. The dev server renders since `#103`. The Cognito ids reach `backend-dev` only from `backend/.env` since `#104`.
 
 ## Teardown
-`aws cognito-idp update-user-pool --user-pool-id <POOL_ID> --deletion-protection INACTIVE` then `aws cognito-idp delete-user-pool --user-pool-id <POOL_ID>`.
+Put the dev pool's id in `$poolId`, then turn off deletion protection and delete the pool, in that order:
+
+```powershell
+$poolId = 'ca-central-1_XXXXXXXXX'
+```
+```powershell
+aws cognito-idp update-user-pool --user-pool-id $poolId --deletion-protection INACTIVE
+```
+```powershell
+aws cognito-idp delete-user-pool --user-pool-id $poolId
+```
