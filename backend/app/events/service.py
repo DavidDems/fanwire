@@ -14,17 +14,17 @@ from __future__ import annotations
 from collections.abc import Collection
 from dataclasses import dataclass
 
-from sqlalchemy import or_, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
 
-from app.events.models import Game
+from app.events.models import Game, PlayerGameStats
 
 # Allow-list for search/'s position filter (wiki/CodeContext/Modules/
 # 0x07-search.md), validated at the API boundary (unknown -> 422) --
 # never interpolated into a query, only ever compared against this fixed
-# set. Standard basketball position set; the NBA dataset's box scores carry
-# a starter's START_POSITION (app.events.nba_history), so its rows use the
-# G/F/C subset.
+# set. Standard basketball position set. The NBA dataset's box scores carry
+# a starter's position as G, F or C only (PlayerGameStats.starting_position,
+# loaded by app.events.nba_history), so PG/SG/SF/PF never match a loaded game.
 ALLOWED_POSITIONS: tuple[str, ...] = ("PG", "SG", "SF", "PF", "C", "G", "F")
 
 
@@ -69,18 +69,22 @@ def filter_games(
     """search/'s sports-data filter (wiki/CodeContext/Modules/
     0x07-search.md): plain WHERE-clause filtering, not full-text search.
     All filters are optional and AND'd together. `team_id` matches either
-    home or away. `position` filters via JSONB containment on
-    `player_stats` (`player_stats @> '[{"position": "<P>"}]'`), built here
-    with SQLAlchemy's JSONB `.contains()` comparator -- never string SQL,
-    the bound value is passed as a parameter like any other. Ordered by
-    date desc."""
+    home or away. `position` matches a game when any player in its box score
+    started at that position: an EXISTS on PlayerGameStats (bench rows have
+    no position, so only starters can match), with the position a bound
+    parameter, never string SQL. Ordered by date desc."""
     stmt = select(Game)
     if season is not None:
         stmt = stmt.where(Game.season == season)
     if team_id is not None:
         stmt = stmt.where(or_(Game.home_team_id == team_id, Game.away_team_id == team_id))
     if position is not None:
-        stmt = stmt.where(Game.player_stats.contains([{"position": position}]))
+        stmt = stmt.where(
+            exists().where(
+                PlayerGameStats.game_id == Game.id,
+                PlayerGameStats.starting_position == position,
+            )
+        )
     stmt = stmt.order_by(Game.date.desc()).limit(limit).offset(offset)
     return list(session.scalars(stmt).all())
 

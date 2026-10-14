@@ -615,10 +615,6 @@ export interface components {
             id: number;
             /** Nba Game Id */
             nba_game_id: number;
-            /** Player Stats */
-            player_stats: {
-                [key: string]: unknown;
-            }[];
             /** Season */
             season: string;
             /** Venue */

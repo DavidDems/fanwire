@@ -10,7 +10,6 @@ mirror.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -39,5 +38,4 @@ class GameOut(BaseModel):
     home_score: int
     away_score: int
     venue: str | None
-    player_stats: list[dict[str, Any]]
     game_type: str | None
