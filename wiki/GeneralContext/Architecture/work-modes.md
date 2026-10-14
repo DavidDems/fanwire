@@ -140,4 +140,16 @@ One structure for every mode, so any session can start cold:
   runs `main`'s copy on `workflow_run` when `test-agent` fails on an
   `agent/*` PR from this repository, parses the log with `ciresult`, asks
   Haiku 5.5 for one "likely cause" sentence, and keeps one comment on the PR
-  up to date, with the cost in its footer. Not yet proven live.
+  up to date, with the cost in its footer. **Proven live 2026-10-14** on #144
+  (`agent/EVENTS-004`'s test-first push): ci-summary run 38503764563 posted
+  its comment 15 s after the red run, 10,283 input / 226 output tokens,
+  **$0.001141**.
+- **Criteria coverage check built** (2026-10-14):
+  `.github/workflows/coverage-check.yml` runs `main`'s copy on
+  `pull_request_target` when an `agent/*` PR from this repository opens or is
+  pushed. The spec's `acceptance_criteria` (from `main`) and the test files
+  the PR changes go to Haiku 5.5, which names the test that pins each one; a
+  test it names must be in that file, or it does not count. `jev` answers
+  "every criterion pinned?" in shadow. One advisory comment, kept up to date,
+  with both answers and their costs and a hidden `fanwire-shadow` record. Not
+  yet proven live.

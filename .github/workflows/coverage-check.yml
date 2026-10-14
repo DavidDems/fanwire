@@ -1,0 +1,191 @@
+name: coverage-check
+
+# Prompts/04-cheap-automations.md automation 2: when an agent/* PR opens or
+# updates, one advisory PR comment listing each of the spec's acceptance
+# criteria with the test that pins it, or "not pinned", updated in place on
+# later pushes. It fails nothing. .ai/agentlib/coverage.py builds the request,
+# checks the answer and renders; .ai/bin/coverage_check.py makes the one model
+# call. jev is asked the same question in shadow (.ai/questions/coverage.json),
+# and both answers are recorded side by side in a hidden record at the end of
+# the comment and in the job summary. Nothing acts on either.
+#
+# It holds the Anthropic and TypeSafe keys, so it is shaped to give them
+# nothing to reach (work-modes.md "Constraints every automation must keep"):
+#   - pull_request_target, not pull_request (decided by the human,
+#     2026-10-13). A pull_request_target job runs the workflow file of main,
+#     never the branch's, and the code that runs is main's too: the base SHA
+#     is checked out at tools/, and every script runs from there with
+#     python -I. The PR's head is checked out beside it at pr/ as data: its
+#     test files are read, nothing in it is run, and the spec is read from
+#     tools/, never from the branch.
+#   - the job's if: admits only an agent/* branch of this repository (a
+#     fork's PR gets nothing). The rest of the branch name is checked in bash
+#     against the guard's task-id pattern before it is used for anything.
+#   - the token can read the repository and write PR comments, and nothing
+#     else. No checkout keeps a credential.
+#   - each key is in one step's env, the one that makes its call, and that
+#     step holds no GitHub token. The steps that hold the token see no key.
+#   - no event value is pasted into a script: each reaches the shell through
+#     env:, as data.
+#   - the test files and the model's answer are text a branch wrote.
+#     coverage_check.py fences them as data in the request, keeps a test id
+#     only if it is really in the file it names, and escapes everything in
+#     the comment, so the comment cannot mention, link, or close the marker
+#     it is found by.
+#   - one call, no retry, and on any error no comment at all: the script
+#     deletes any old result and comment file first and writes new ones only
+#     on success. A PR that changes no test needs no model call.
+#
+# What the tests cannot show, and only a live run proves: that
+# pull_request_target fires for an agent/* PR opened by hand (agentctl hand
+# finish); that this token, with pull-requests: write, may comment on it;
+# and what happens on a PR the orchestrator opens with its own token (GitHub
+# starts no workflow for events made with the default GITHUB_TOKEN, so
+# whether this runs there depends on which token opened the PR).
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  coverage:
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One check per PR at a time, so two pushes cannot both create a comment.
+    # Never cancelled: the later run simply updates it.
+    concurrency:
+      group: coverage-check-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      PR_ROOT: ${{ github.workspace }}/pr
+    steps:
+      # The branch name is the branch's to choose, so the id derived from it
+      # is validated against the guard's own TASK_ID_SAFE (a bash copy, pinned
+      # by test_workflows.py) and reaches later steps only as $TASK_ID.
+      - name: Derive the task id from the branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID="${HEAD_REF#agent/}"
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::the task id in this branch name does not match $TASK_ID_SAFE"
+            exit 1
+          fi
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+
+      # main's copy: the code that runs with the keys.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: tools
+          persist-credentials: false
+
+      # The PR, as data. Full history, so the diff against the base can be
+      # taken locally.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # What the PR changes, from the two SHAs. No key and no token here.
+      # --no-renames: with rename detection --name-only prints only a
+      # rename's destination. --diff-filter=d: a deleted file has nothing to
+      # read.
+      - name: List the paths the PR changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git -C pr diff --name-only --no-renames --diff-filter=d "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/changed.txt") changed path(s)"
+
+      # The only step with the Anthropic key, and it holds no GitHub token.
+      # One call, no retry; on any error it writes no result and fails the
+      # job.
+      - name: Ask which tests pin each criterion
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: >-
+          python -I "$TOOLS/.ai/bin/coverage_check.py" ask
+          --task-id "$TASK_ID"
+          --spec-root "$TOOLS"
+          --pr-root "$PR_ROOT"
+          --changed "$RUNNER_TEMP/changed.txt"
+          --work "$RUNNER_TEMP/coverage"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # In shadow: the only step with the TypeSafe key, and it holds no
+      # GitHub token. Its failure never stops the comment; the comment then
+      # says jev gave no answer.
+      - name: Ask jev the same question, in shadow
+        continue-on-error: true
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/coverage/jev-state.txt" ]; then
+            echo "::notice::no model was asked, so jev is not asked either"
+            exit 0
+          fi
+          python -I "$TOOLS/.ai/bin/ask_jev.py" \
+            --questions "$TOOLS/.ai/questions/coverage.json" \
+            --state-file "$RUNNER_TEMP/coverage/jev-state.txt" \
+            --out "$RUNNER_TEMP/coverage/jev.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      # No key and no token: the comment file, from the two answers.
+      - name: Write the comment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          python -I "$TOOLS/.ai/bin/coverage_check.py" render
+          --work "$RUNNER_TEMP/coverage"
+          --pr-number "$PR_NUMBER"
+          --head-sha "$HEAD_SHA"
+          --run-url "$RUN_URL"
+          --comment-out "$RUNNER_TEMP/comment.md"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR: the bot's own comment that starts with the marker
+      # is edited in place, or a new one is made. The body is read from the
+      # file the script wrote, never from an expression.
+      - name: Post or update the PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/comment.md" ]; then
+            echo "::notice::no comment was written; nothing to post"
+            exit 0
+          fi
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-coverage -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          fi

@@ -38,8 +38,7 @@ import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
+import urllib.request  # noqa: F401  (the tests fake `ci_summary.urllib.request.urlopen`)
 from pathlib import Path
 from typing import Any
 
@@ -48,13 +47,13 @@ from typing import Any
 AI_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AI_ROOT))
 
-from agentlib import ciresult, cisummary
+from agentlib import automation, ciresult, cisummary
 from agentlib.guard import TASK_ID_SAFE
 
 OK, FAILED, USAGE = 0, 1, 2
 PROVIDER = "anthropic"
 BRANCH_PREFIX = "agent/"
-REDACTED = "***"
+USER_AGENT = "fanwire-ci-summary/1.0"
 # The one request may take this long at most, whatever --timeout says: the
 # job's own timeout is five minutes.
 MAX_TIMEOUT = 60.0
@@ -91,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     if not TASK_ID_SAFE.fullmatch(task_id):
         # The workflow's `if:` already admits only `agent/*`; this is the
         # check that the rest is a task id, in the guard's own pattern.
-        return _give_up(summary, f"not a task branch: {_inline(branch)!r}", USAGE)
+        return _give_up(summary, f"not a task branch: {automation.inline(branch)!r}", USAGE)
 
     try:
         raw_log = Path(args.log).read_text(encoding="utf-8", errors="replace")
@@ -125,10 +124,11 @@ def main(argv: list[str] | None = None) -> int:
     if not all(isinstance(v, str) and v for v in (model, endpoint, version, key_var)):
         return _give_up(summary, "config.json has no usable automations.ci_summary", USAGE)
     max_tokens = min(
-        _positive(settings.get("max_tokens"), cisummary.MAX_TOKENS), cisummary.MAX_TOKENS
+        automation.positive(settings.get("max_tokens"), cisummary.MAX_TOKENS), cisummary.MAX_TOKENS
     )
     max_chars = min(
-        _positive(settings.get("max_log_chars"), cisummary.MAX_LOG_CHARS), cisummary.MAX_LOG_CHARS
+        automation.positive(settings.get("max_log_chars"), cisummary.MAX_LOG_CHARS),
+        cisummary.MAX_LOG_CHARS,
     )
 
     try:
@@ -149,92 +149,41 @@ def main(argv: list[str] | None = None) -> int:
         system=system,
     )
     timeout = min(max(args.timeout, 1.0), MAX_TIMEOUT)
-    body, error = _post(endpoint, version, api_key, payload, timeout)
+    body, error = automation.post(
+        endpoint, version, api_key, payload, timeout, user_agent=USER_AGENT
+    )
     if error is not None:
-        return _give_up(summary, _redact(error, api_key), FAILED, "model call failed")
+        return _give_up(summary, automation.redact(error, api_key), FAILED, "model call failed")
 
     # Billed whether or not the answer is usable, so priced before it is read.
-    usage, answered_by, cost = _priced(body, model, config)
-    described = _redact(cisummary.describe_response(body), api_key)
+    usage, answered_by, cost = automation.priced(body, model, config, PROVIDER)
+    described = automation.redact(automation.describe_response(body), api_key)
     cause = cisummary.read_cause(body)
     if cause is None:
         error = "the model gave no usable answer"
         _summarize(
             summary,
-            [f"- no comment: `{error}`", f"- response: `{_inline(described)}`"]
-            + _call_lines(answered_by, usage, cost),
+            [f"- no comment: `{error}`", f"- response: `{automation.inline(described)}`"]
+            + automation.call_lines(answered_by, usage, cost),
         )
-        print(f"no usable answer: {_log_line(described, usage, cost)}")
+        print(f"no usable answer: {automation.log_line(described, usage, cost)}")
         print(f"::error::{error}", file=sys.stderr)
         return FAILED
 
     comment = cisummary.render(
         distilled,
         jobs,
-        _redact(cause, api_key),
+        automation.redact(cause, api_key),
         usage=usage,
         cost=cost,
         model=answered_by,
         run_url=args.run_url,
     )
     _write(comment_out, comment)
-    _summarize(summary, _call_lines(answered_by, usage, cost))
-    print(f"answered: {_log_line(described, usage, cost)}")
+    _summarize(summary, automation.call_lines(answered_by, usage, cost))
+    print(f"answered: {automation.log_line(described, usage, cost)}")
     print(f"comment -> {comment_out}")
     return OK
-
-
-def _priced(
-    body: dict[str, Any], model: str, config: dict[str, Any]
-) -> tuple[dict[str, Any], str, float | None]:
-    """The response's usage, the model that answered, and the call's cost."""
-    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
-    answered_by = body.get("model") if isinstance(body.get("model"), str) else model
-    # Priced by the model requested, as config.json's prices are keyed.
-    price = config.get("telemetry", {}).get("prices", {}).get(f"{PROVIDER}/{model}")
-    return usage, answered_by, cisummary.cost_usd(usage, price)
-
-
-# --------------------------------------------------------------------------- the one call
-
-
-def _post(
-    endpoint: str, version: str, api_key: str, payload: dict[str, Any], timeout: float
-) -> tuple[dict[str, Any], str | None]:
-    """One POST, no retry. Returns `(body, None)` or `({}, reason)`.
-
-    Every failure is final, a 429 and a 529 included: the run's cost bound is
-    one call, and the next CI run is the retry.
-    """
-    request = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        method="POST",
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": version,
-            "content-type": "application/json",
-            "user-agent": "fanwire-ci-summary/1.0",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        # The body is remote text and can echo the request back, key header
-        # and all. It is redacted before it is cut, so a cut can never leave
-        # a fragment of the key behind.
-        detail = _redact(exc.read().decode("utf-8", "replace"), api_key)
-        return {}, f"HTTP {exc.code}: {detail[:300]}".replace("\n", " ")
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-        return {}, f"{type(exc).__name__}: {exc}"
-    if not isinstance(body, dict):
-        return {}, "the response is not a JSON object"
-    return body, None
-
-
-def _redact(text: str, secret: str) -> str:
-    return text.replace(secret, REDACTED) if secret else text
 
 
 # --------------------------------------------------------------------------- reporting
@@ -242,8 +191,8 @@ def _redact(text: str, secret: str) -> str:
 
 def _give_up(summary: Path | None, error: str, status: int, what: str = "") -> int:
     """Say why no comment was written, and return `status`."""
-    _summarize(summary, [f"- no comment: `{_inline(error)}`"])
-    print(f"::error::{what + ': ' if what else ''}{_inline(error)}", file=sys.stderr)
+    _summarize(summary, [f"- no comment: `{automation.inline(error)}`"])
+    print(f"::error::{what + ': ' if what else ''}{automation.inline(error)}", file=sys.stderr)
     return status
 
 
@@ -258,38 +207,6 @@ def _summarize(path: Path | None, lines: list[str]) -> None:
         print(f"::warning::cannot write the summary: {exc}", file=sys.stderr)
 
 
-def _call_lines(answered_by: str, usage: dict[str, Any], cost: float | None) -> list[str]:
-    """The job summary's account of a call that was made: model, usage, cost."""
-    return [
-        f"- model: `{_inline(answered_by)}`",
-        (
-            f"- usage: {_tokens(usage, 'input_tokens')} input tokens, "
-            f"{_tokens(usage, 'output_tokens')} output tokens, "
-            f"{_tokens(usage, 'cache_read_input_tokens')} cache read, "
-            f"{_tokens(usage, 'cache_creation_input_tokens')} cache write"
-        ),
-        f"- cost: {_cost(cost)}",
-    ]
-
-
-def _log_line(described: str, usage: dict[str, Any], cost: float | None) -> str:
-    """The same call as one job-log line. The step summary cannot be read
-    back through the API; `gh run view --log` can read this."""
-    return (
-        f"{_inline(described)}; {_tokens(usage, 'input_tokens')} input / "
-        f"{_tokens(usage, 'output_tokens')} output tokens; {_cost(cost)}"
-    )
-
-
-def _cost(cost: float | None) -> str:
-    return f"${cost:.6f}" if isinstance(cost, float) else "unpriced"
-
-
-def _inline(value: object) -> str:
-    """Remote or branch text flattened into one inline-code-safe line."""
-    return " ".join(str(value).split()).replace("`", "'")[:300]
-
-
 # --------------------------------------------------------------------------- plumbing
 
 
@@ -299,17 +216,6 @@ def _config() -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return loaded if isinstance(loaded, dict) else {}
-
-
-def _positive(value: object, default: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return default
-    return value
-
-
-def _tokens(usage: dict[str, Any], field: str) -> int:
-    value = usage.get(field)
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 def _write(path: Path, text: str) -> None:

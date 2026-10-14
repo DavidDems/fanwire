@@ -72,6 +72,7 @@ Nothing depends on an agent session staying alive.
 | `.github/workflows/agent-guard.yml` | Enforces the permission model on every agent PR, independently of the orchestrator. |
 | `.github/workflows/jev-smoke.yml` | Dispatch-only, `main` only: one typed call to `jev` to prove the route and read its cost. |
 | `.github/workflows/ci-summary.yml` | A cheap automation (`work-modes.md`): when `test-agent` fails on an `agent/*` PR, one comment saying what failed, where and the likely cause (Haiku 5.5), kept up to date. |
+| `.github/workflows/coverage-check.yml` | A cheap automation: when an `agent/*` PR opens or is pushed, one advisory comment listing each acceptance criterion with the test that pins it, or "not pinned" (Haiku 5.5), with `jev`'s yes/no in shadow. Fails nothing. |
 
 ## Commands worth knowing
 
