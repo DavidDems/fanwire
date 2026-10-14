@@ -28,8 +28,8 @@ Per [[wiki/GeneralContext/Architecture/business-rules|Projects]] "Search", these
 
 - **Not full-text search.** [[wiki/GeneralContext/Architecture/business-rules|Projects]] explicitly rejects a search bar for sports data ("that will be too complex") — this is plain `WHERE`-clause filtering on indexed columns of `Game`/`Team`, selected via UI filter controls (dropdowns/pickers), not a free-text query.
 - **Year** and **team** filter directly against `Game` columns (`date`/`season`, `home_team_id`/`away_team_id`) and `Team` columns, as documented in [[0x02-events]].
-- **Position** does **not** join to a `Player` table — [[0x02-events]] is explicit that no standalone `Player`/`PlayerSeasonStat` table exists for v1. A position filter queries into `Game.player_stats`, the embedded JSONB per-game box score, via a JSONB containment/path query (e.g. matching a `position` field inside each `player_stats` array entry, if API-SPORTS' box score payload carries one — confirm field name at ingestion-adapter implementation time). This is consistent with [[0x02-events]]'s existing open decision flagging that indexed-column queries over individual `player_stats` fields may eventually justify normalizing out of JSONB — that decision is not re-litigated here, just inherited.
-- `search/` may query `events/` data through the same `CachedEventProxy` that `feed/` uses for live-score reads ([[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] Proxy section: "`feed/` and `search/` query the proxy") when a filter result includes in-progress games; completed-game filtering reads `Game` directly since there's nothing live to cache.
+- **Position** reads the box score (`PlayerGameStats`, [[0x02-events]], since `EVENTS-004`): a game matches when any player in its box score **started** at that position — an `EXISTS` on `player_game_stats.starting_position`, served by its `(game_id, player_id)` index. Bench rows have no position and never match. **The data's starters only ever have `G`, `F` or `C`**, so `PG`, `SG`, `SF` and `PF`, which `ALLOWED_POSITIONS` still accepts, match no loaded game; narrowing the allow-list (and the frontend's position control) is a separate decision, not taken here.
+- `search/` reads `events/` data through `app.events.service` only. There is no live-game path since `EVENTS-003` retired API-SPORTS and its `CachedEventProxy`: every game is a stored, finished result.
 
 ## Design principles tie-ins
 
@@ -39,13 +39,13 @@ Per [[wiki/GeneralContext/Architecture/business-rules|Projects]] "Search", these
 
 ## GoF pattern tie-in
 
-No GoF pattern in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] cleanly describes a Postgres `tsvector` query layer or plain column filtering — say so plainly rather than forcing a fit. The one genuine, already-documented connection is **Proxy** (`CachedEventProxy`): that doc lists `search/` as a consumer of the same proxy `feed/` uses for live event data, which is why the sports-data filter section above routes in-progress-game reads through it. Beyond that, `search/` is plumbing, not a pattern participant.
+No GoF pattern in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] cleanly describes a Postgres `tsvector` query layer or plain column filtering — say so plainly rather than forcing a fit. That doc still lists `search/` as a consumer of the Proxy (`CachedEventProxy`), which `EVENTS-003` removed; the Standards file is updated by a Director PR. `search/` is plumbing, not a pattern participant.
 
 ## AWS mapping
 
 - **RDS Postgres** — `tsvector` full-text search and the plain `Game`/`Team` filters both run as SQL against the same Postgres instance that is the system of record for every table in this wiki ([[wiki/CodeContext/Standards/aws-stack|AWS Stack]], [[0x00-architecture]]).
 - Runs inside the same **Lambda (via Mangum-wrapped FastAPI)** behind **API Gateway HTTP API** as the rest of the app — no dedicated search infrastructure, no separate compute or datastore.
-- **DynamoDB** involvement is limited to `CachedEventProxy`'s existing short-TTL live-score cache (per [[0x00-architecture]]) — `search/` never gets its own DynamoDB table.
+- **DynamoDB**: none. `search/` never had its own table, and the live-score cache it once shared with `feed/` has had no caller since `EVENTS-003` (per [[0x00-architecture]]).
 
 ## Security
 
@@ -73,11 +73,11 @@ This is the concrete shape of "each owning module exposes a tested public search
 ### Resolved decisions
 - ~~Whether `User.description` is included in the indexed text alongside `username`~~ — **resolved: yes.** `User.search_vector` is `to_tsvector('simple', username || ' ' || coalesce(description, ''))`.
 - ~~`tsvector` index maintenance strategy~~ — **resolved: `GENERATED ALWAYS AS (...) STORED` + `GIN`, not a trigger.** Both `User.search_vector` and `Post.search_vector` are Postgres generated, persisted columns — kept current automatically on every `INSERT`/`UPDATE`, no application code or trigger needed to maintain them. `Post.search_vector` is `to_tsvector('english', coalesce(text, ''))`. Both are `GIN`-indexed (`ix_users_search_vector`, `ix_posts_search_vector`).
-- ~~Exact `player_stats` field name for "position"~~ — resolved as `"position"` in [[0x02-events]] (unchanged by this unit). `Game.player_stats` also now has a `GIN` index with the `jsonb_path_ops` opclass (`ix_games_player_stats_gin`), the right fit for the `@>` containment queries `filter_games`'s position filter runs.
+- ~~Where "position" lives~~ — **resolved by `EVENTS-004`:** `PlayerGameStats.starting_position`. `Game.player_stats` and its GIN index `ix_games_player_stats_gin` are gone.
 - ~~Pagination/result-count contract for "accounts first, posts second"~~ — **resolved: two independently paginated sections**, per the Routes section above. `GET /search/accounts` and `GET /search/posts` each have their own `limit`/`offset`/`next_offset` — "accounts first" is purely a frontend rendering order (it shows the accounts section before the posts section), not a combined backend cursor or a fixed top-N cutoff.
 
 ### Security — injection safety, concretely
 - `search_users` builds its tsquery by tokenizing the raw input (splitting on whitespace, keeping only `[A-Za-z0-9_]` per token, dropping empties) and joining survivors as `"tok1:* & tok2:* ..."` for prefix matching. That string is passed to `to_tsquery('simple', :q)` as a bound parameter (`func.to_tsquery("simple", tsquery_str)`), never string-interpolated into SQL text. If no token survives tokenization, `search_users` returns `[]` without ever querying the database.
 - `search_posts` queries with `websearch_to_tsquery('english', :q)`, `query` bound as a parameter — `websearch_to_tsquery` is designed to tolerate arbitrary user text (quotes, operators, punctuation) without raising, so no pre-tokenization is needed on the posts side.
-- `filter_games`'s position filter uses SQLAlchemy's JSONB `.contains()` comparator (`Game.player_stats.contains([{"position": position}])`), which compiles to `player_stats @> :param` with the value bound, never string-built SQL.
+- `filter_games`'s position filter is `exists().where(PlayerGameStats.game_id == Game.id, PlayerGameStats.starting_position == position)`, with the value bound, never string-built SQL.
 - Verified in `tests/users/test_search.py`, `tests/posts/test_search.py`, and `tests/search/test_routes.py`: queries containing `'`, `;`, `--`, `:*`, `&|!()`, and `%` all return normally (200, empty or unaffected results), never a 500 or a raised SQL error.
