@@ -139,7 +139,7 @@ record per call), and bring it to the human.
   tokens, release `jev-1.13.0`, **$0.0000184**. The TypeSafe console showed
   no usage: at this size the run's own figure is the record. `jev` may be
   asked in shadow from automation 2 on.
-- **Automation 1, CI failure summary: merged (#141), half proven live.**
+- **Automation 1, CI failure summary: merged (#141, #143), proven live.**
   `ci-summary.yml`, `.ai/bin/ci_summary.py`, `agentlib/cisummary.py`,
   `.ai/prompts/ci-summary.md`, and `config.json` `automations.ci_summary`.
   The job also has **`actions: read`**, which downloading a run's failed-job
@@ -154,9 +154,38 @@ record per call), and bring it to the human.
     `director/ci-summary-diagnostics` fixes that: the response's
     `stop_reason`, block types, usage and cost now go to the job summary
     and one job-log line on every call, and an empty block no longer hides
-    a later answer. The comment's posting, and its permission on a bot PR,
-    still wait on a run that gets an answer.
-- Next: 2 coverage (with `jev`), 3 drift (with `jev`), 4 wiki.
+    a later answer (#143).
+  - **Proven live, 2026-10-14:** #144 (`agent/EVENTS-004`, a hand-opened
+    PR) went red on its test-first push (test-agent run 38503603666,
+    `backend-test` and `frontend-typecheck`); ci-summary run 38503764563
+    posted the comment 15 s later. 10,283 input / 226 output tokens,
+    **$0.001141**. The cause sentence was right in substance; it said
+    `Player` was "no longer" exported where "not yet" was true on a
+    test-first commit. Not changed for one run. Still unproven: commenting
+    on a PR the orchestrator's bot opened.
+- **Automation 2, criteria coverage check: built** (`director/criteria-coverage`).
+  `coverage-check.yml` (`pull_request_target`: `main`'s tools at the base SHA
+  in `tools/`, the PR's head at `pr/` as data, never executed),
+  `.ai/bin/coverage_check.py` (`ask`, `render`), `agentlib/coverage.py`,
+  `.ai/prompts/coverage-check.md`, `.ai/questions/coverage.json`, and
+  `config.json` `automations.coverage` (Haiku 5.5, `max_tokens` 2000, 200K
+  characters of tests at most). The generic pieces automation 1 had
+  (escaping, pricing, the one Messages API POST) moved to
+  `agentlib/automation.py`, and the shadow record is `agentlib/shadow.py`.
+  - Input is the criteria and the changed **test** files only, whole files
+    up to the cap (a cut file is named, not sent). No test changed: no call,
+    every criterion "not pinned".
+  - A test the model names counts only if every part of its id occurs in
+    the file it names; others are dropped and counted in the comment.
+  - `jev` is asked `all_pinned` (a yes/no `choice`) in a
+    `continue-on-error` step; its failure never stops the comment. The
+    hidden `<!-- fanwire-shadow {...} -->` record holds both verdicts,
+    confidence, both costs and whether they agree. `agentctl shadow report`
+    is not built: it is worth building once a few records exist.
+  - Proven only live: `pull_request_target` firing for a hand-opened
+    `agent/*` PR, the comment permission there, and jev's state fitting its
+    32K-token window on a real test diff (it is capped at 80K characters).
+- Next: 3 drift (with `jev`), 4 wiki.
 
 ## The four, with design notes (starting points, not decisions)
 

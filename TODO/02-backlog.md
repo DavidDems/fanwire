@@ -50,8 +50,10 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
 14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
     PR; wiki update proposal after merge. Brief: `Prompts/04-cheap-automations.md`; after D4–D7.
-    **CI failure summary built** (`ci-summary.yml`, 2026-10-13, Director PR);
-    its first live run is the human's go. Next: coverage, drift, wiki.
+    **CI failure summary built** (`ci-summary.yml`, 2026-10-13, #141, #143) and
+    proven live on #144 (2026-10-14, $0.001141). **Criteria coverage check
+    built** (`coverage-check.yml`, 2026-10-14, `jev` in shadow); proven by the
+    next `agent/*` PR push. Next: drift, wiki.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 

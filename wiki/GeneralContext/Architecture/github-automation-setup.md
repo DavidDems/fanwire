@@ -46,6 +46,14 @@ listens on `workflow_run` for every `test-agent` completion and acts only on a
 *failed* `pull_request` run of an `agent/*` branch in this repository. Only
 those runs spend an Anthropic call (one Haiku 5.5 call, a fraction of a cent).
 
+**`coverage-check` runs on every pull request** (`pull_request_target`,
+2026-10-14, `Prompts/04` automation 2) and is skipped for anything but an
+`agent/*` branch of this repository. On a task PR it spends one Haiku 5.5
+call and one `jev` call each time the branch is pushed, unless the push
+changes no test file, which needs no call. `pull_request_target` runs
+`main`'s copy of the workflow with secrets and needs no approval, which is
+why the job refuses forks and never executes the PR's files.
+
 ### Fork pull requests need approval from every outside contributor
 
 `approval_policy: all_external_contributors` (set 2026-10-08; it was
@@ -62,9 +70,9 @@ gh api repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval
 
 | Secret | For |
 |---|---|
-| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1). |
+| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1) and `coverage-check.yml` (2026-10-14, automation 2). |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
-| `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: today `jev-smoke.yml` (dispatch-only), later the cheap automations (`work-modes.md`). Never pasted into a session. |
+| `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: `jev-smoke.yml` (dispatch-only) and, in shadow, `coverage-check.yml` (2026-10-14). Never pasted into a session. |
 
 `AI_GATEWAY_API_KEY` (the Vercel gateway route, which never returned a 200)
 was deleted 2026-10-08: nothing read it, and a gateway key reaches every model
