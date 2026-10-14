@@ -24,9 +24,13 @@ Claude Console accounts each hold about CAD $10–11 of credit.
 
 - [x] **Delete the unused gateway key** (gone from `gh secret list`, checked 2026-10-13). Nothing on `main` reads it, and a
       gateway key reaches every model in its catalogue:
-      `gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire`
+      ```powershell
+      gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire
+      ```
 - [ ] **Require approval for every fork PR** (handoff §10, D1):
-      `gh api -X PUT repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors`
+      ```powershell
+      gh api -X PUT repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
+      ```
 - [ ] **Set a monthly spend limit** in the Claude Console, so a loop cannot
       drain the credit.
 - [ ] **Record both balances right before and right after the first
@@ -48,22 +52,28 @@ its order.
       #139's deploy, `/api/events/teams` and `/api/events/games` answered
       500 because the `Migration` function had not been invoked.
       `wiki/CodeContext/Standards/build-deployment.md` "Run migrations" has
-      the two commands. Check with
-      `curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams`
-      (prints `200`). Do the same after every deploy whose PR adds a
-      migration.
-- [ ] **Before `EVENTS-003` deploys:** check that
-      `curl.exe -s https://fanwire.daviddems.com/api/events/teams` prints
-      `[]` (its migration refuses rows without an nba.com id). After the
-      deploy, run the migration. Then clear the dev database's fixture
-      teams and games: `docker compose -p fanwire down -v` (this drops dev
-      users and posts too).
+      the two commands. Check with this, which prints `200`. Do the same
+      after every deploy whose PR adds a migration.
+      ```powershell
+      curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams
+      ```
+- [ ] **Before `EVENTS-003` deploys:** check that this prints `[]` (its
+      migration refuses rows without an nba.com id):
+      ```powershell
+      curl.exe -s https://fanwire.daviddems.com/api/events/teams
+      ```
+      After the deploy, run the migration. Then clear the dev database's
+      fixture teams and games (this drops dev users and posts too):
+      ```powershell
+      docker compose -p fanwire down -v
+      ```
 - [ ] **After the API-SPORTS infra clean-up deploys:** the idempotency table
       and the API-SPORTS secret are `RETAIN`, so they stay in the account
       after leaving the template. Delete them by hand; that PR names them.
-- [ ] **When `EVENTS-002` is merged and deployed:** take an RDS snapshot,
-      upload the dataset files to the bucket it creates, and invoke the load
-      function. Its PR gives each command as one line.
+- [x] **When `EVENTS-002` is merged and deployed:** upload the dataset
+      files to the bucket it creates and invoke the load function
+      (`build-deployment.md` "Load sports data"). Done 2026-10-14: every
+      season from 2003-04 is live.
 - [ ] **For `EVENTS-008` only, later:** after about 2026-10-21, check that
       the Kaggle dataset shows versions newer than 2026-06-15. If it does,
       create a Kaggle API token (kaggle.com → Settings → API) and store it
@@ -72,8 +82,11 @@ its order.
 ## 3. Watching the live site
 
 The deploy path is finished and needs only watching. Each deploy: approve it
-when queued, read its `cdk diff` step, then check
-`gh run list --workflow deploy.yml --limit 1` shows `success`.
+when queued, read its `cdk diff` step, then check this shows `success`:
+
+```powershell
+gh run list --workflow deploy.yml --limit 1
+```
 
 - [x] **The first deploy that changed `backend/`** (#96, the PyJWT swap,
       2026-10-06) built and pushed the backend image from the CI container

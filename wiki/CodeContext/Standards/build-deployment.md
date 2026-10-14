@@ -112,13 +112,26 @@ Between steps 1 and 4 the site serves an S3 `403 AccessDenied` XML document rath
 
 Every frontend change reaches production this way. The human runs each line, from the repo root unless stated; the pool and client ids are `Fanwire-Auth`'s outputs and do not change unless that stack is replaced.
 
-1. `Remove-Item -Recurse -Force frontend\dist` — a stale `dist` is worse than none, because the deploy would upload it.
-2. Build **in Docker**, never with a bare `npm run build`: `frontend/.env.local` holds the *dev* pool and Vite reads it in production mode too, so one missing variable would silently ship the dev pool. `.dockerignore` excludes it, and the `build` stage fails on any empty value.
-   `docker build -f docker\frontend.Dockerfile --target export --output frontend --build-arg VITE_API_BASE_URL=/api --build-arg VITE_MEDIA_BASE_URL=https://fanwire.daviddems.com --build-arg VITE_COGNITO_REGION=ca-central-1 --build-arg VITE_COGNITO_USER_POOL_ID=ca-central-1_eSfPUMRq8 --build-arg VITE_COGNITO_CLIENT_ID=1vskugrl60gggpt0lmib4ka85j .`
-   `VITE_MEDIA_BASE_URL` is the **site origin**, not `/media`: public keys already start with `media/` and CloudFront forwards `/media/*` unchanged.
-3. Check the bundle before uploading it: each production id appears in `dist/assets/*.js`, and neither dev id (from `frontend/.env.local`) appears at all. Count each value separately — the bundle is one minified line, so a multi-pattern `Select-String` reports only the first match and looks like a false failure.
-4. From `infra/`: `npx cdk deploy Fanwire-Cdn --exclusively -c deployFrontend=true --profile fanwire-workload`. `--exclusively` skips the seven unchanged stacks (and rebuilding the backend image). A deploy that adds the `BucketDeployment` handler asks to approve its IAM; the set is pinned in `infra/test/iam-policy.test.ts`.
-5. `(Invoke-WebRequest https://fanwire.daviddems.com/ -UseBasicParsing).Content` names the new `index-*.js`.
+1. Remove the old build. A stale `dist` is worse than none, because the deploy would upload it.
+   ```powershell
+   Remove-Item -Recurse -Force frontend\dist
+   ```
+2. Build **in Docker**, never with a bare `npm run build`: `frontend/.env.local` holds the *dev* pool and Vite reads it in production mode too, so one missing variable would silently ship the dev pool. `.dockerignore` excludes it, and the `build` stage fails on any empty value. `VITE_MEDIA_BASE_URL` is the **site origin**, not `/media`: public keys already start with `media/` and CloudFront forwards `/media/*` unchanged.
+   ```powershell
+   docker build -f docker\frontend.Dockerfile --target export --output frontend --build-arg VITE_API_BASE_URL=/api --build-arg VITE_MEDIA_BASE_URL=https://fanwire.daviddems.com --build-arg VITE_COGNITO_REGION=ca-central-1 --build-arg VITE_COGNITO_USER_POOL_ID=ca-central-1_eSfPUMRq8 --build-arg VITE_COGNITO_CLIENT_ID=1vskugrl60gggpt0lmib4ka85j .
+   ```
+3. Check the bundle before uploading it: each production id appears in `dist/assets/*.js`, and neither dev id (from `frontend/.env.local`) appears at all. Count each value separately — the bundle is one minified line, so a multi-pattern `Select-String` reports only the first match and looks like a false failure. Run this once per id, changing the value; production ids print a number above 0, dev ids print 0.
+   ```powershell
+   [int](Get-ChildItem frontend\dist\assets\*.js | Select-String -AllMatches -Pattern ([regex]::Escape('ca-central-1_eSfPUMRq8')) | ForEach-Object { $_.Matches.Count } | Measure-Object -Sum).Sum
+   ```
+4. Deploy only the CDN stack, from `infra/`. `--exclusively` skips the seven unchanged stacks (and rebuilding the backend image). A deploy that adds the `BucketDeployment` handler asks to approve its IAM; the set is pinned in `infra/test/iam-policy.test.ts`.
+   ```powershell
+   npx cdk deploy Fanwire-Cdn --exclusively -c deployFrontend=true --profile fanwire-workload
+   ```
+5. Check the site serves the new bundle: the output names the new `index-*.js`.
+   ```powershell
+   (Invoke-WebRequest https://fanwire.daviddems.com/ -UseBasicParsing).Content
+   ```
 
 ### Upgrading the NAT instance's AMI
 
@@ -128,12 +141,30 @@ The NAT instance's AMI is pinned in `infra/cdk.json` as `natImageId`, and `loadC
 
 The human runs each line:
 
-1. Look up the current image: `aws ssm get-parameter --profile fanwire-workload --region ca-central-1 --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64 --query Parameter.Value --output text`
+1. Look up the current image:
+   ```powershell
+   aws ssm get-parameter --profile fanwire-workload --region ca-central-1 --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64 --query Parameter.Value --output text
+   ```
 2. In a PR, change `natImageId` in `infra/cdk.json`. Change the same literal in `infra/test/config.test.ts` ("cdk.json defaults") and `infra/test/network-stack.test.ts`, which pin it so that a change to the AMI is visible in review. Merge it.
-3. From `infra/`, on the merged `main`: `npx cdk diff Fanwire-Network --profile fanwire-workload`. Expect exactly three changes: the instance's `ImageId` (requires replacement) and the two app-subnet routes' `InstanceId`. Anything else means the branch is wrong or something else changed, so stop.
-4. At a quiet moment: `npx cdk deploy Fanwire-Network --exclusively --profile fanwire-workload`. It prints `WARNING ImageId: Hardcoded AMI ID ... CloudFormation-Validate::W9010`. That warning is about portability across regions, and the hardcoded id is deliberate here, so leave it unacknowledged. Without `--exclusively`, nothing else would deploy anyway, since Network has no dependencies. Pass it so the habit is the same for every stack.
-5. Confirm the new instance: `aws ec2 describe-instances --profile fanwire-workload --region ca-central-1 --filters Name=tag:aws:cloudformation:stack-name,Values=Fanwire-Network Name=instance-state-name,Values=running --query "Reservations[].Instances[].[InstanceId,ImageId]" --output text`, which shows the new AMI.
-6. Check egress with a logged-in `/api/users/me` on the site. `/api/health` proves nothing here, because it never leaves the VPC. If it fails, read the bootstrap's console log: `aws ec2 get-console-output --profile fanwire-workload --region ca-central-1 --instance-id <id> --latest --output text`.
+3. From `infra/`, on the merged `main`, diff the stack. Expect exactly three changes: the instance's `ImageId` (requires replacement) and the two app-subnet routes' `InstanceId`. Anything else means the branch is wrong or something else changed, so stop.
+   ```powershell
+   npx cdk diff Fanwire-Network --profile fanwire-workload
+   ```
+4. At a quiet moment, deploy it. It prints `WARNING ImageId: Hardcoded AMI ID ... CloudFormation-Validate::W9010`. That warning is about portability across regions, and the hardcoded id is deliberate here, so leave it unacknowledged. Without `--exclusively`, nothing else would deploy anyway, since Network has no dependencies. Pass it so the habit is the same for every stack.
+   ```powershell
+   npx cdk deploy Fanwire-Network --exclusively --profile fanwire-workload
+   ```
+5. Confirm the new instance, and keep its id for step 6. The second command prints the id and the new AMI.
+   ```powershell
+   $instanceId = aws ec2 describe-instances --profile fanwire-workload --region ca-central-1 --filters Name=tag:aws:cloudformation:stack-name,Values=Fanwire-Network Name=instance-state-name,Values=running --query "Reservations[0].Instances[0].InstanceId" --output text
+   ```
+   ```powershell
+   aws ec2 describe-instances --profile fanwire-workload --region ca-central-1 --instance-ids $instanceId --query "Reservations[].Instances[].[InstanceId,ImageId]" --output text
+   ```
+6. Check egress with a logged-in `/api/users/me` on the site. `/api/health` proves nothing here, because it never leaves the VPC. If it fails, read the bootstrap's console log:
+   ```powershell
+   aws ec2 get-console-output --profile fanwire-workload --region ca-central-1 --instance-id $instanceId --latest --output text
+   ```
 
 `cdk-hnb659fds-cfn-exec-role` must allow `iam:PassRole` to `ec2.amazonaws.com` for the new instance's profile. The policy simulator says it does. The first upgrade is the first real call. If it fails with `AccessDenied` and the rollback sticks, the escape hatch is in `infra/iam/README.md`.
 
@@ -156,16 +187,45 @@ A standalone workflow deploys all eight stacks as `GitHubActionsDeployRole`. It 
 **What it does not do:**
 
 - **Write `FanwireCdkCfnExecPolicy` or `FanwireRoleBoundary`.** The deploy role cannot, and the workflow makes no IAM write or bootstrap call. It only reads both, through the lookup role, to check they match the repo. A stack change that needs a new AWS service still needs the human to roll out a new policy version **before** dispatching (`infra/iam/README.md`).
-- **Run migrations.** Invoking the `Migration` function needs `lambda:InvokeFunction`, which the deploy role does not have. Human decision 2026-10-02: it stays manual, to be revisited with the permissions boundary. After a deploy that adds an Alembic revision, the human finds the function with `aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'Migration')].FunctionName" --output text`, then runs `aws lambda invoke --profile fanwire-workload --region ca-central-1 --function-name <name> $env:TEMP\migrate.json; Get-Content $env:TEMP\migrate.json` and checks that it returns the new head revision.
-- **Load sports data** (`EVENTS-002`). Nothing invokes `SportsDataLoad`, by design (like `Migration`). The human loads the live database after a deploy, from a PowerShell window in which each step's variables are still set. Run the steps in order, one line each:
-  1. Find the bucket: `$bucket = aws cloudformation describe-stacks --profile fanwire-workload --region ca-central-1 --stack-name Fanwire-Storage --query "Stacks[0].Outputs[?OutputKey=='SportsDataBucketName'].OutputValue" --output text`
-  2. Upload the four files the loader reads (about 440 MB) under `nba-eoin/`: `foreach ($f in 'Games.csv','PlayerStatistics.csv','TeamStatistics.csv','Players.csv') { aws s3 cp "C:\data\nba-eoin\$f" "s3://$bucket/nba-eoin/$f" --profile fanwire-workload --region ca-central-1 }`. The bucket encrypts with the CMK, so the upload needs `kms:GenerateDataKey` on it as well as `s3:PutObject`. An `AccessDenied` that names KMS means the profile lacks it.
-  3. Find the function: `$fn = aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'SportsDataLoad')].FunctionName" --output text`
-  4. Write the event to a file. PowerShell 5.1 strips the double quotes from a JSON argument passed to `aws`, so the event never goes on the command line. Start with one season: `Set-Content -Encoding ascii -Path "$env:TEMP\load.json" -Value '{"seasons":["2025-26"]}'`
-  5. Invoke it, with a read timeout above the function's 15 minutes. The CLI's default is 60 s, and on a timeout it retries the invoke. The function's advisory lock refuses that second load, but the first one's report is lost. `aws lambda invoke --profile fanwire-workload --region ca-central-1 --function-name $fn --payload "fileb://$env:TEMP\load.json" --cli-read-timeout 900 --cli-connect-timeout 60 "$env:TEMP\load-report.json"; Get-Content "$env:TEMP\load-report.json"`
+- **Run migrations.** Invoking the `Migration` function needs `lambda:InvokeFunction`, which the deploy role does not have. Human decision 2026-10-02: it stays manual, to be revisited with the permissions boundary. After a deploy that adds an Alembic revision, the human runs these in order, in one PowerShell window:
+  1. Find the function:
+     ```powershell
+     $migration = aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'Migration')].FunctionName" --output text
+     ```
+  2. Invoke it and print its answer, which must name the new head revision:
+     ```powershell
+     aws lambda invoke --profile fanwire-workload --region ca-central-1 --function-name $migration "$env:TEMP\migrate.json"; Get-Content "$env:TEMP\migrate.json"
+     ```
+- **Load sports data** (`EVENTS-002`). Nothing invokes `SportsDataLoad`, by design (like `Migration`). The human loads the live database after a deploy, from one PowerShell window, because later steps use the variables earlier ones set. Run the steps in order:
+  1. Find the bucket. `$bucket` then prints its name.
+     ```powershell
+     $bucket = aws cloudformation describe-stacks --profile fanwire-workload --region ca-central-1 --stack-name Fanwire-Storage --query "Stacks[0].Outputs[?OutputKey=='SportsDataBucketName'].OutputValue" --output text
+     ```
+  2. Upload the four files the loader reads (about 440 MB) under `nba-eoin/`. The bucket encrypts with the CMK, so the upload needs `kms:GenerateDataKey` on it as well as `s3:PutObject`. An `AccessDenied` that names KMS means the profile lacks it.
+     ```powershell
+     foreach ($f in 'Games.csv','PlayerStatistics.csv','TeamStatistics.csv','Players.csv') { aws s3 cp "C:\data\nba-eoin\$f" "s3://$bucket/nba-eoin/$f" --profile fanwire-workload --region ca-central-1 }
+     ```
+  3. Find the function. `$fn` then prints a name containing `SportsDataLoad`.
+     ```powershell
+     $fn = aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'SportsDataLoad')].FunctionName" --output text
+     ```
+  4. Write the event to a file. PowerShell 5.1 strips the double quotes from a JSON argument passed to `aws`, so the event never goes on the command line. Start with one season:
+     ```powershell
+     Set-Content -Encoding ascii -Path "$env:TEMP\load.json" -Value '{"seasons":["2025-26"]}'
+     ```
+  5. Invoke it, with a read timeout above the function's 15 minutes. The CLI's default is 60 s, and on a timeout it retries the invoke. The function's advisory lock refuses that second load, but the first one's report is lost.
+     ```powershell
+     aws lambda invoke --profile fanwire-workload --region ca-central-1 --function-name $fn --payload "fileb://$env:TEMP\load.json" --cli-read-timeout 900 --cli-connect-timeout 60 "$env:TEMP\load-report.json"; Get-Content "$env:TEMP\load-report.json"
+     ```
   6. Read the result. If the CLI's output shows `"FunctionError": "Unhandled"`, the load did not happen and the database is unchanged. The report file then holds the redacted reason. A `SportsDataLoadLocked` error means another load is still running; wait for it and look again. On success, the report's `lines` give one line per season (games loaded, skipped and named). Note how long the season took, from the function's log or the invoke's wall time.
-  7. Load the other 22 seasons in one invocation (measured locally at 73–139 s for all 23 seasons). Write the event: `Set-Content -Encoding ascii -Path "$env:TEMP\load.json" -Value (@{ seasons = @(2003..2024 | ForEach-Object { '{0}-{1:D2}' -f $_, (($_ + 1) % 100) }) } | ConvertTo-Json -Compress)`. Then repeat step 5.
-  8. Check the site: `curl.exe -s "https://fanwire.daviddems.com/api/events/games?limit=1"` returns the newest game.
+  7. Load the other 22 seasons in one invocation (measured locally at 73–139 s for all 23 seasons). Write the event, then repeat step 5.
+     ```powershell
+     Set-Content -Encoding ascii -Path "$env:TEMP\load.json" -Value (@{ seasons = @(2003..2024 | ForEach-Object { '{0}-{1:D2}' -f $_, (($_ + 1) % 100) }) } | ConvertTo-Json -Compress)
+     ```
+  8. Check the site. This prints the newest game.
+     ```powershell
+     curl.exe -s "https://fanwire.daviddems.com/api/events/games?limit=1"
+     ```
 
   The function is re-runnable. A season already loaded reports its games as "already present" and writes nothing again. A new dataset version is uploaded over the same keys (step 2) and loaded the same way.
 - **Deploy a merge that changes nothing AWS is built from.** Human decision 2026-10-05, after two clean dispatched runs: the workflow runs on `push` to `main`, filtered by `paths` to what a stack, the backend image or the bundle is built from: `backend/**`, `frontend/**`, `docker/**`, `.dockerignore`, `infra/bin/**`, `infra/lib/**`, `infra/cdk.json`, `infra/package.json`, `infra/package-lock.json` and `deploy.yml`. Markdown files and frontend test files are excluded. **`wiki/` and `.ai/` never trigger it.** The agent system runs in GitHub Actions and no stack reads it. Neither do `infra/test/` (tests change no template) or `infra/iam/` (applied by a human, never by CDK). `backend/tests/` does trigger it, because the image asset hashes it. A merge outside these paths deploys nothing. Dispatch by hand when needed, for instance after rolling out a new `FanwireCdkCfnExecPolicy` version. `.ai/tests/test_deploy_workflow.py` pins the list.
@@ -174,10 +234,43 @@ A standalone workflow deploys all eight stacks as `GitHubActionsDeployRole`. It 
 
 **Setup, once, by the human, before the first dispatch** (each a single line). **Done**: steps 1–3 on 2026-10-03 (step 1 re-applied 2026-10-05 with the immutable subject, PR #87), and the first successful dispatch on 2026-10-05 (run 37256951096; [[wiki/CodeContext/Modules/0x00-architecture|0x00]] → "AWS account state" records what it proved).
 
-1. Apply the trust: `aws iam update-assume-role-policy --profile fanwire-workload --role-name GitHubActionsDeployRole --policy-document file://infra/iam/github-actions-deploy-role-trust-policy.json`. Run it from the repo root with this file present. Nothing else assumes the role, so applying it before the merge breaks nothing. To undo it, apply the same JSON with `sub` set to `repo:DavidDems@71515505/fanwire@1373722771:ref:refs/heads/main`. If a login is refused, read the subject GitHub actually sent from CloudTrail: `aws cloudtrail lookup-events --profile fanwire-workload --region ca-central-1 --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity --max-results 3 --query "Events[].[EventTime,Username]" --output table`. Confirm it with `aws iam get-role --profile fanwire-workload --role-name GitHubActionsDeployRole --query Role.AssumeRolePolicyDocument`.
+1. Apply the trust, from the repo root with this file present. Nothing else assumes the role, so applying it before the merge breaks nothing. To undo it, apply the same JSON with `sub` set to `repo:DavidDems@71515505/fanwire@1373722771:ref:refs/heads/main`.
+   ```powershell
+   aws iam update-assume-role-policy --profile fanwire-workload --role-name GitHubActionsDeployRole --policy-document file://infra/iam/github-actions-deploy-role-trust-policy.json
+   ```
+   Confirm it:
+   ```powershell
+   aws iam get-role --profile fanwire-workload --role-name GitHubActionsDeployRole --query Role.AssumeRolePolicyDocument
+   ```
+   If a login is refused, read the subject GitHub actually sent from CloudTrail:
+   ```powershell
+   aws cloudtrail lookup-events --profile fanwire-workload --region ca-central-1 --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity --max-results 3 --query "Events[].[EventTime,Username]" --output table
+   ```
 2. Create the environment: repo Settings → Environments → New environment `production`. Under **Required reviewers**, add yourself. Under **Deployment branches and tags**, choose *Selected branches and tags* and add the rule `main`.
-3. Set the five environment variables on `production`, one line each: `gh variable set VITE_API_BASE_URL --env production --body /api`, `gh variable set VITE_MEDIA_BASE_URL --env production --body https://fanwire.daviddems.com`, `gh variable set VITE_COGNITO_REGION --env production --body ca-central-1`, `gh variable set VITE_COGNITO_USER_POOL_ID --env production --body ca-central-1_eSfPUMRq8`, `gh variable set VITE_COGNITO_CLIENT_ID --env production --body 1vskugrl60gggpt0lmib4ka85j`. Check the ids against `aws cloudformation describe-stacks --profile fanwire-workload --region ca-central-1 --stack-name Fanwire-Auth --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table`. `VITE_MEDIA_BASE_URL` is the site origin, with no `/media` and no trailing slash.
-4. Dispatch: `gh workflow run deploy.yml --ref main`. Approve it in the Actions tab, then **read the `cdk diff` step's log**. Expect `Fanwire-App` to change only when `backend/` or `docker/backend.Dockerfile` has changed, because the image asset hashes only those (its `exclude` list in `app-stack.ts`). Expect `Fanwire-Cdn` to show `FrontendDeployment` `SourceObjectKeys` changing whenever the bundle differs. A change to `Fanwire-Network`'s instance means something is wrong.
+3. Set the five environment variables on `production`, one command each. `VITE_MEDIA_BASE_URL` is the site origin, with no `/media` and no trailing slash.
+   ```powershell
+   gh variable set VITE_API_BASE_URL --env production --body /api
+   ```
+   ```powershell
+   gh variable set VITE_MEDIA_BASE_URL --env production --body https://fanwire.daviddems.com
+   ```
+   ```powershell
+   gh variable set VITE_COGNITO_REGION --env production --body ca-central-1
+   ```
+   ```powershell
+   gh variable set VITE_COGNITO_USER_POOL_ID --env production --body ca-central-1_eSfPUMRq8
+   ```
+   ```powershell
+   gh variable set VITE_COGNITO_CLIENT_ID --env production --body 1vskugrl60gggpt0lmib4ka85j
+   ```
+   Check the ids against the stack's outputs:
+   ```powershell
+   aws cloudformation describe-stacks --profile fanwire-workload --region ca-central-1 --stack-name Fanwire-Auth --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output table
+   ```
+4. Dispatch, then approve it in the Actions tab and **read the `cdk diff` step's log**.
+   ```powershell
+   gh workflow run deploy.yml --ref main
+   ``` Expect `Fanwire-App` to change only when `backend/` or `docker/backend.Dockerfile` has changed, because the image asset hashes only those (its `exclude` list in `app-stack.ts`). Expect `Fanwire-Cdn` to show `FrontendDeployment` `SourceObjectKeys` changing whenever the bundle differs. A change to `Fanwire-Network`'s instance means something is wrong.
 5. After the run, check `/api/users/me` **as the app calls it**: log in, open the browser's developer tools → Network, and find the `me` request. It should return 200 with your profile. Typing `/api/users/me` into the address bar returns `401 {"detail":"Missing Authorization header"}` by design, because the app sends its Cognito token as a `Bearer` header from JavaScript, not as a cookie. That 401 proves CloudFront → API Gateway → the api Lambda, but nothing past it.
 
 **The permissions boundary.** Every role the stacks create carries `FanwireRoleBoundary` (`infra/iam/README.md`), so a template that gives a role `*:*` no longer reaches admin through it. Getting a template deployed, which now means getting a PR merged and its deploy approved, can do no more than the boundary's actions allow.
