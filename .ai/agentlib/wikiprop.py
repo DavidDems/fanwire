@@ -40,6 +40,7 @@ from agentlib.automation import (
     first_text,
     is_safe_url,
     json_object,
+    no_thinking,
     tokens_text,
 )
 from agentlib.coverage import criteria as _criteria
@@ -191,6 +192,7 @@ def request_body(
         "model": model,
         "max_tokens": max_tokens,
         "system": system,
+        "thinking": no_thinking(),
         "messages": [{"role": "user", "content": "\n\n".join(parts)}],
     }
 
