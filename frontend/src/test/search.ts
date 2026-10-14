@@ -63,7 +63,6 @@ export function testGame(overrides: Partial<GameOut> = {}): GameOut {
     home_score: 117,
     away_score: 109,
     venue: null,
-    player_stats: [],
     ...overrides,
   };
 }

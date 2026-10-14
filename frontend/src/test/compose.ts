@@ -264,7 +264,6 @@ export function testGames(): GameOut[] {
       date: "2026-09-20T23:00:00Z",
       season: "2025-2026",
       venue: "Scotiabank Arena",
-      player_stats: [],
     },
     {
       id: 789,
@@ -277,7 +276,6 @@ export function testGames(): GameOut[] {
       date: "2026-09-22T23:00:00Z",
       season: "2025-2026",
       venue: "Footprint Center",
-      player_stats: [],
     },
   ];
 }
