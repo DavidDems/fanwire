@@ -161,3 +161,12 @@ One structure for every mode, so any session can start cold:
   has it. `jev` answers "does the spec still match?" in shadow. The report
   goes to the job summary, and to the task's open PR as a comment if there
   is one. Not yet proven live.
+- **Wiki update proposal built** (2026-10-14):
+  `.github/workflows/wiki-proposal.yml` runs `main`'s copy on
+  `pull_request_target` when an `agent/*` PR from this repository merges. The
+  merged diff (generated files left out) and the module files its spec names,
+  as they stand after the merge, go to Haiku 5.5, which names exact passages
+  and their replacements; the patch is made from the real files, so it
+  applies. One comment on the merged PR (the human's option (a)): "no
+  documented decision changed", or the patch and `git apply wiki.patch`.
+  Nothing is committed. Not yet proven live.

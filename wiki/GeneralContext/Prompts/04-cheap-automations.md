@@ -214,7 +214,30 @@ record per call), and bring it to the human.
     gitignored `frontend/.env.local` in `FRONTEND-002` (a false positive).
   - Proposed, the human's call: also run it automatically when an
     `agent/<ID>` branch is first pushed. Not built.
-- Next: 4 wiki.
+- **Automation 4, wiki update proposal: built** (`director/wiki-proposal`,
+  stacked on `director/spec-drift`). `wiki-proposal.yml`
+  (`pull_request_target` closed and merged: `main`'s tools at the base SHA,
+  the merge commit at `merged/` as data), `.ai/bin/wiki_proposal.py`,
+  `agentlib/wikiprop.py`, `.ai/prompts/wiki-proposal.md`, and `config.json`
+  `automations.wiki_proposal` (Haiku 5.5, `max_tokens` 4000, 150K characters
+  of diff at most). No `jev`: its question is not a yes/no.
+  - Input: the diff of the merge commit against its first parent, with
+    `openapi.json`, `schema.d.ts`, lock files and task bookkeeping left out,
+    capped by whole files; and the module files the spec's
+    `required_context` and `allowed_paths` name exactly, read from the merge
+    commit, so a unit that already updated its wiki gets no proposal for it.
+  - The model names `{file, find, replace}`; an edit is applied only to a
+    file it was shown, and only when `find` occurs there exactly once. The
+    patch is made with `difflib` from the real file and was checked with
+    `git apply --check`. Refused edits are counted in the comment.
+  - The patch sits in a code block whose fence is longer than any backtick
+    run inside it; a patch too large for a comment is in the job summary.
+  - Proven only live: firing on the merge of a hand-opened `agent/*` PR,
+    commenting on a closed PR. A rebase merge would read only its last
+    commit (the repository merges with merge commits).
+- **Next: prove 2-4 live on the next hand-run units** (`Prompts/07`'s
+  queue), then build `agentctl shadow report` once a few shadow records
+  exist, and bring the record to the human.
 
 ## The four, with design notes (starting points, not decisions)
 

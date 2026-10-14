@@ -74,6 +74,7 @@ Nothing depends on an agent session staying alive.
 | `.github/workflows/ci-summary.yml` | A cheap automation (`work-modes.md`): when `test-agent` fails on an `agent/*` PR, one comment saying what failed, where and the likely cause (Haiku 5.5), kept up to date. |
 | `.github/workflows/coverage-check.yml` | A cheap automation: when an `agent/*` PR opens or is pushed, one advisory comment listing each acceptance criterion with the test that pins it, or "not pinned" (Haiku 5.5), with `jev`'s yes/no in shadow. Fails nothing. |
 | `.github/workflows/spec-drift.yml` | A cheap automation, dispatch-only on `main` (`-f task_id=<ID>`): the paths, links and names a task spec relies on that the code no longer has, before a unit starts (Haiku 5.5 for names in prose; `jev` in shadow). Job summary, and a comment on the task's open PR. |
+| `.github/workflows/wiki-proposal.yml` | A cheap automation: when an `agent/*` PR merges, one comment on it saying no documented decision changed, or holding a patch to the `wiki/CodeContext/Modules/` files its spec names (Haiku 5.5). The human applies it by hand; nothing is committed. |
 
 ## Commands worth knowing
 

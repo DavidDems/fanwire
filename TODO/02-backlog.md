@@ -54,7 +54,10 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
     proven live on #144 (2026-10-14, $0.001141). **Criteria coverage check
     built** (`coverage-check.yml`, 2026-10-14, `jev` in shadow); proven by the
     next `agent/*` PR push (#151). **Spec drift check built** (`spec-drift.yml`,
-    2026-10-14, dispatch-only, `jev` in shadow). Next: wiki.
+    2026-10-14, dispatch-only, `jev` in shadow) and **wiki update proposal
+    built** (`wiki-proposal.yml`, 2026-10-14, a patch in a comment on the
+    merged PR). All four built; what is left is proving 2-4 live and
+    `agentctl shadow report`.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
