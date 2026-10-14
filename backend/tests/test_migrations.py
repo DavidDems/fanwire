@@ -52,8 +52,10 @@ def _has_index(engine, index_name: str) -> bool:
         return row is not None
 
 
-def test_upgrade_head_adds_search_columns_and_indexes(alembic_config, postgres_url):
-    command.upgrade(alembic_config, "head")
+def test_upgrade_adds_search_columns_and_indexes(alembic_config, postgres_url):
+    # The search migration itself, by name: at "head" the GIN index on
+    # games.player_stats is gone again, dropped by EVENTS-004's migration.
+    command.upgrade(alembic_config, "f4a1c9d2b6e7")
 
     engine = make_engine(postgres_url)
     try:

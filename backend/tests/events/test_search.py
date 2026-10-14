@@ -4,21 +4,49 @@ ALLOWED_POSITIONS, per AGENTS.md TDD workflow and this unit's task brief
 distinct_seasons/ALLOWED_POSITIONS exist.
 
 Plain WHERE-clause filtering (not full-text search) on season/team_id/
-position, all optional and AND'd; team_id matches home or away. Position
-filters via JSONB containment on Game.player_stats
-(`player_stats @> '[{"position": "<P>"}]'`), built with SQLAlchemy JSONB
-operators and bound values -- never string SQL. Ordered by date desc.
+position, all optional and AND'd; team_id matches home or away. Ordered by
+date desc.
+
+Since EVENTS-004 the position filter reads the box-score table: a game
+matches when any player in its box score started at that position
+(PlayerGameStats.starting_position). Bench rows have no position and never
+match. Written before filter_games reads player_game_stats.
 """
 
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 
 import pytest
 
 from app.db import Base, make_engine, make_session_factory
-from app.events.models import Game, Team
+from app.events.models import Game, Player, PlayerGameStats, Team
 from app.events.service import ALLOWED_POSITIONS, distinct_seasons, filter_games
+
+_person_ids = itertools.count(1)
+
+_ZERO_STATS = dict.fromkeys(
+    (
+        "field_goals_made",
+        "field_goals_attempted",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "free_throws_made",
+        "free_throws_attempted",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "plus_minus",
+    ),
+    0,
+)
 
 
 @pytest.fixture()
@@ -45,7 +73,9 @@ def _make_team(session, **overrides) -> Team:
     return team
 
 
-def _make_game(session, home, away, **overrides) -> Game:
+def _make_game(session, home, away, starting_positions=(), **overrides) -> Game:
+    """`starting_positions`: one box-score row per entry, for a new player on
+    the home team; None is a bench row (no starting position)."""
     defaults = {
         "nba_game_id": 1,
         "home_team_id": home.id,
@@ -54,11 +84,26 @@ def _make_game(session, home, away, **overrides) -> Game:
         "season": "2025-26",
         "home_score": 100,
         "away_score": 98,
-        "player_stats": [],
     }
     defaults.update(overrides)
     game = Game(**defaults)
     session.add(game)
+    session.flush()
+    for position in starting_positions:
+        player = Player(nba_person_id=next(_person_ids), last_name="Player")
+        session.add(player)
+        session.flush()
+        session.add(
+            PlayerGameStats(
+                game_id=game.id,
+                player_id=player.id,
+                team_id=home.id,
+                starter=position is not None,
+                starting_position=position,
+                seconds_played=600,
+                **_ZERO_STATS,
+            )
+        )
     session.commit()
     return game
 
@@ -107,14 +152,14 @@ def test_filter_games_by_position(session_factory):
             a,
             b,
             nba_game_id=21,
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "SF"}],
+            starting_positions=["SF"],
         )
         _make_game(
             session,
             a,
             b,
             nba_game_id=22,
-            player_stats=[{"player_name": "Y", "team_id": a.id, "position": "PG"}],
+            starting_positions=["PG"],
         )
 
         results = filter_games(
@@ -122,6 +167,51 @@ def test_filter_games_by_position(session_factory):
         )
 
         assert [g.id for g in results] == [with_sf.id]
+
+
+def test_filter_games_by_position_matches_any_starter_of_the_game(session_factory):
+    with session_factory() as session:
+        a = _make_team(session, nba_team_id=61)
+        b = _make_team(session, nba_team_id=62)
+        game = _make_game(session, a, b, nba_game_id=61, starting_positions=["G", "F", "C", None])
+
+        for position in ("G", "F", "C"):
+            results = filter_games(
+                session, season=None, team_id=None, position=position, limit=20, offset=0
+            )
+            assert [g.id for g in results] == [game.id], position
+
+        assert (
+            filter_games(session, season=None, team_id=None, position="PG", limit=20, offset=0)
+            == []
+        )
+
+
+def test_filter_games_by_position_ignores_bench_rows(session_factory):
+    with session_factory() as session:
+        a = _make_team(session, nba_team_id=71)
+        b = _make_team(session, nba_team_id=72)
+        _make_game(session, a, b, nba_game_id=71, starting_positions=[None, None])
+
+        results = filter_games(session, season=None, team_id=None, position="G", limit=20, offset=0)
+
+        assert results == []
+
+
+def test_filter_games_by_position_returns_each_game_once(session_factory):
+    """Two starters at the same position must not repeat the game."""
+    with session_factory() as session:
+        a = _make_team(session, nba_team_id=81)
+        b = _make_team(session, nba_team_id=82)
+        game = _make_game(session, a, b, nba_game_id=81, starting_positions=["G", "G"])
+
+        results = filter_games(session, season=None, team_id=None, position="G", limit=20, offset=0)
+
+        assert [g.id for g in results] == [game.id]
+
+
+def test_game_has_no_player_stats_column():
+    assert "player_stats" not in Game.__table__.c
 
 
 def test_filter_games_combined_filters(session_factory):
@@ -134,7 +224,7 @@ def test_filter_games_combined_filters(session_factory):
             b,
             nba_game_id=31,
             season="2025-26",
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
+            starting_positions=["C"],
         )
         # Wrong season, otherwise matches.
         _make_game(
@@ -143,7 +233,7 @@ def test_filter_games_combined_filters(session_factory):
             b,
             nba_game_id=32,
             season="2024-25",
-            player_stats=[{"player_name": "X", "team_id": a.id, "position": "C"}],
+            starting_positions=["C"],
         )
 
         results = filter_games(

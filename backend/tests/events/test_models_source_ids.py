@@ -70,7 +70,6 @@ def _game(home_team_id: int, away_team_id: int, **overrides) -> Game:
         "season": "2019-20",
         "home_score": 130,
         "away_score": 122,
-        "player_stats": [],
     }
     defaults.update(overrides)
     return Game(**defaults)
