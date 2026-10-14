@@ -65,11 +65,11 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 |---|---|---|---|---|
 | **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (#142, deployed 2026-10-14) | Now unblocked; needs a spec. Two are `RETAIN`: the human deletes them by hand afterwards |
 | **Game detail API** and a paginated, filterable game list | `hand` | `EVENTS-005` | `business-rules.md` "Events" | Done, #146 (2026-10-14) |
-| **Player API**: search, detail with career and season stats, game log | `hand` | `EVENTS-006` | the human, 2026-10-13 | Spec after `EVENTS-004` merges |
-| **Stats API**: standings, champions, leaders, a team's season | `hand` | `EVENTS-007` | `business-rules.md` "Events" | Spec after `EVENTS-004` merges |
-| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | Specced (`.ai/tasks/EVENTS-002/`, 2026-10-14). The human uploads the files and invokes it |
+| **Player API**: search, detail with career and season stats, game log | `hand` | `EVENTS-006` | the human, 2026-10-13 | Specced 2026-10-14; runs under `Prompts/07` |
+| **Stats API**: seasons, standings, champion, leaders, a team's season | `hand` | `EVENTS-007` | `business-rules.md` "Events" | Specced 2026-10-14; runs under `Prompts/07`, after `EVENTS-006` |
+| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | Done, #148; loaded by the human 2026-10-14 (runbook #149) |
 | **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
-| **Frontend pass for sports data**: game page with box score, player page, standings and leaders, `#GameId` links, a narrower compose picker | `hand` | — | the human, 2026-10-13 | Its own thread, after `EVENTS-005`–`007` |
+| **Frontend pass for sports data**: game page with box score, Stats page (Seasons, Players), player pages, `#GameId` links | `hand` | `FRONTEND-008`, `FRONTEND-009` | the human, 2026-10-13 and 2026-10-14 | Specced 2026-10-14; `Prompts/07`. A narrower compose picker is still unplanned |
 
 ## Backend and infra
 
@@ -84,10 +84,13 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
+| **Post counts and a one-click repost** (backend): `reply_count`, `repost_count`, `reposted_by_viewer`, `reposted_post`; `POST`/`DELETE /posts/{id}/repost` | `hand` | `POSTS-001` | the human, 2026-10-14 | Specced; `Prompts/07`. Un-repost is the first post delete (plain reposts only) |
+| **The post card**: icon-only like, reply and repost with "x likes"/"x replies"/"x reposts", live like and repost counts, reposts rendered as the original | `hand` | `UI-009` | the human, 2026-10-14 | Specced; after `POSTS-001` |
+| **Thread modal at `/posts/:id`** with the reply written in place, below the original | `hand` | `FRONTEND-010` | the human, 2026-10-14 | Specced; after `UI-009` |
 | **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
 | **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
 | **Compose: drop the separate *Attach* click.** Upload → wait for the scan → click *Attach* | `hand` | — | the human, 2026-09-30 ("a bit annoying") | The wait for `Processed` stays; only the click goes. `features/compose/` |
-| **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does |
+| **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
 | **`Badge neutral` is invisible on the score band**: both use `--color-surface-muted`, so "Final" loses its pill | `hand` | — | `UI-005` browser pass | `components/ui` (Badge or `GameScore`), so its own unit. Browser check: no unit test pins it |
 | **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `hand` | — | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**`. Browser check at 360 px |
 | **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |

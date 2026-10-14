@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-007",
+  "objective": "Give the events API a season view: the list of seasons, regular-season standings, the champion, per-game stat leaders with a named qualifying rule, and one team's season, computed at read time from the loaded games and box scores, so the frontend's Stats > Seasons tab can show them.",
+  "acceptance_criteria": [
+    "GET /events/seasons returns every season that has at least one stored game, newest first, as a JSON list of YYYY-YY strings.",
+    "GET /events/seasons/{season}/standings returns every team that played a regular-season game that season, grouped by conference and, within it, by division, each with wins, losses, win percentage (three places), games behind the conference leader (half games, the leader at 0), home record and away record, ordered within a conference by win percentage, then wins, then team name; only games typed `regular` count (play-in, playoffs and the NBA Cup final do not).",
+    "The standings response names its tie-break rule in a field, since it does not apply the NBA's own tie-breakers.",
+    "Against the synthetic fixture, every team's wins and losses equal the counts derived independently in the test from the fixture's Games.csv for that season.",
+    "GET /events/seasons/{season}/champion returns the season, the champion and the runner-up (each id, name and abbreviation) and the series result (for example 4-2) when one team has won four games labelled 'NBA Finals' in that season's playoffs; when no team has, it returns the same shape with champion, runner-up and result null, never a 404.",
+    "GET /events/seasons/{season}/leaders?stat=points|rebounds|assists|steals|blocks|threes returns the top `limit` (default 10, 1-50) players by per-game average of that stat (threes: three-pointers made), each with player id, names, the abbreviations of the teams played for, games played and the average rounded to one place, ordered by average then player id.",
+    "`game_type` is `regular` (the default) or `playoffs`. For the regular season, a player qualifies with at least 65 games from 2023-24 on and with at least 70 % (rounded up) of the most regular-season games any team played that season before 2023-24; the playoffs have no minimum; the response names the rule applied and the minimum number of games.",
+    "GET /events/teams/{team_id}/seasons/{season} returns the team (id, name, abbreviation, conference, division), its regular-season record with home and away splits, and every one of its games that season of every stored type, newest first, each with game id, date, game type, label, sub-label, opponent (id and abbreviation), home or away, both scores and win or loss.",
+    "A malformed season, a season with no stored games, an unknown stat or game type, or a limit out of range is answered 422 or 404 as the route's documentation says, never an empty 200; an unknown team is a 404.",
+    "Each route is built in a fixed number of database queries whatever the season's size, with the aggregation in Postgres (GROUP BY), not by loading every game or box-score row into Python.",
+    "openapi.json and schema.d.ts match the backend, and every existing events route and schema is unchanged."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
