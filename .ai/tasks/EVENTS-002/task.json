@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-002",
+  "objective": "Let the human load the NBA dataset into the live database: a private S3 bucket that holds the four CSVs, and a SportsDataLoad function on the shared backend image that downloads them and runs app.events.nba_history for the seasons it is given, invoked by hand only, with s3:GetObject on that bucket's nba-eoin/ prefix as its one grant beyond what every function has.",
+  "acceptance_criteria": [
+    "Fanwire-Storage has a new SportsDataBucket, exposed as StorageStack.sportsDataBucket with a SportsDataBucketName output: SSE-KMS with the stack's existing CMK, all public access blocked, bucket-owner-enforced ownership, SSL enforced, not versioned, no lifecycle rule, no event notifications and no EventBridge, and named by no CloudFront origin, GuardDuty plan or other function's policy.",
+    "Fanwire-App has a SportsDataLoad function built by backendFunction on the shared image with command app.events.load_handler.handler, a 15-minute timeout, 2048 MB of memory and 1024 MB of ephemeral storage, and an environment of the common variables plus SPORTS_DATA_BUCKET set to the bucket's name.",
+    "SportsDataLoad's policy holds exactly backendFunction's three statements plus one, s3:GetObject on the bucket's nba-eoin/* objects: no s3:ListBucket, no write or delete action, no other bucket or prefix, and no grant to any other function on the bucket.",
+    "Nothing invokes SportsDataLoad: app-stack.test.ts's invoker sweep (no rule, schedule, event source mapping, permission or custom resource, in any stack) covers it as it covers Migration, and it has no async invoke config.",
+    "The IAM wildcard gate, the permissions-boundary test and cfn-exec-policy.test.ts pass with infra/iam/** unchanged; the stacks add no resource type the CloudFormation execution policy does not already grant.",
+    "app.events.load_handler.handler takes an event {\"seasons\": [...]}: a non-empty list of distinct YYYY-YY seasons from 2003-04 on. A missing, empty, non-list or malformed seasons value, or any other key in the event, raises before any S3 call or database connection.",
+    "With a valid event the handler downloads exactly Games.csv, PlayerStatistics.csv, TeamStatistics.csv and Players.csv from s3://$SPORTS_DATA_BUCKET/nba-eoin/ into a new temporary directory under the system temp dir, runs load_nba_history for those seasons, and returns the LoadReport as a JSON-serialisable dict; the temporary directory is removed whether the load succeeds or fails.",
+    "A missing object, an unset SPORTS_DATA_BUCKET or DATABASE_URL, a dataset error or an unknown team or player makes the invocation fail by raising, never by returning an error value, and leaves the database unchanged (the loader's one transaction).",
+    "Only one load runs at a time: the handler holds a Postgres advisory lock, distinct from app.migrate's, for the whole load, and a second load that cannot take it fails fast with a message saying a load is already running, writing nothing.",
+    "The database URL never leaves the function: not in a log line, the return value or the raised exception, whose cause is not chained to a database or loader exception that could carry it; a test with a password in DATABASE_URL and a failing connection proves it, using the same redaction as app.migrate.",
+    "wiki/CodeContext/Standards/build-deployment.md has a \"Load sports data\" runbook in single-line PowerShell steps: upload the four files to the bucket's nba-eoin/ prefix, find the function, write the event to a file, invoke it with a CLI read timeout above 15 minutes, and read the report."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/app/settings.py",
+    "backend/app/migrate.py",
+    "backend/tests/**",
+    "infra/lib/storage-stack.ts",
+    "infra/lib/app-stack.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/build-deployment.md"
+  ],
+  "forbidden_paths": [
+    "infra/iam/**",
+    "infra/bin/**",
+    "frontend/**",
+    "docker/**",
+    "backend/alembic/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/build-deployment.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "infra-cdk",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
