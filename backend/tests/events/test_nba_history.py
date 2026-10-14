@@ -49,7 +49,7 @@ from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from alembic import command
 from app.db import Base, make_engine, make_session_factory
@@ -931,6 +931,15 @@ def migrated_url(postgres_url, monkeypatch):
     config = Config(str(_BACKEND_DIR / "alembic.ini"))
     command.upgrade(config, "head")
     yield postgres_url
+    # The rows the CLI wrote go first: EVENTS-001's downgrade cannot restore
+    # its NOT NULL API-SPORTS ids over games that never had one.
+    engine = make_engine(postgres_url)
+    try:
+        with engine.begin() as conn:
+            for table in ("player_game_stats", "players", "games", "teams"):
+                conn.execute(text(f"DELETE FROM {table}"))
+    finally:
+        engine.dispose()
     command.downgrade(config, "base")
 
 
