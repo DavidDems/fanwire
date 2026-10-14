@@ -9,6 +9,7 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
@@ -36,10 +37,10 @@ export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
 
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
- * four functions, the HTTP API in front of the API function, and every
- * trigger (SQS event source mappings). The fourth function -- the migration
- * runner -- is deliberately the target of no trigger at all; see
- * `migrationRunner()` below.
+ * five functions, the HTTP API in front of the API function, and every
+ * trigger (SQS event source mappings). Two functions -- the migration runner
+ * and the sports data load -- are deliberately the target of no trigger at
+ * all; see `migrationRunner()` and `sportsDataLoad()` below.
  *
  * The API-SPORTS ingestion function, its schedule, retry trigger and async
  * destination, and the API's live-score cache grant are gone (EVENTS-003).
@@ -212,6 +213,9 @@ export class AppStack extends cdk.Stack {
     // --- schema migrations, on demand only
     this.migrationRunner(image, keyRef, common);
 
+    // --- the NBA dataset load, on demand only (EVENTS-002)
+    this.sportsDataLoad(image, keyRef, common, storage.sportsDataBucket);
+
     // --- HTTP API, reachable only with CloudFront's origin-verify header.
     const authorizerFn = this.originVerifyAuthorizer(data);
     const accessLogs = new logs.LogGroup(this, 'HttpApiAccessLogs', {
@@ -299,6 +303,50 @@ export class AppStack extends cdk.Stack {
   }
 
   /**
+   * The hand-invoked NBA dataset load (`app.events.load_handler.handler`,
+   * EVENTS-002): downloads the four CSVs from the sports-data bucket and runs
+   * the same loader as `scripts/load_nba_history.py`.
+   *
+   * The migration runner's pattern: the same image with another `cmd`, and
+   * **nothing invokes it** -- the human does, after uploading the files
+   * (build-deployment.md "Load sports data"). The invoker sweep in
+   * `test/app-stack.test.ts` covers it. One load at a time is an advisory
+   * lock in Postgres, as for migrations, not a concurrency reservation.
+   *
+   * Sized from the Director's measurement (2026-10-14, local Postgres): all
+   * 23 seasons in 73-139 s at a 709 MB peak, one season in 18 s at 99 MB.
+   * 2048 MB is about three times that peak and buys CPU; the four files are
+   * ~440 MB, over the 512 MB of `/tmp` a function gets by default.
+   *
+   * One grant beyond backendFunction's three: `s3:GetObject` on the dataset
+   * prefix. It knows the four file names, so no `s3:ListBucket`. The bucket
+   * is encrypted with the CMK `DecryptEnvironmentAndData` already names.
+   */
+  private sportsDataLoad(
+    image: ecrAssets.DockerImageAsset,
+    keyRef: kms.IKey,
+    common: Record<string, string>,
+    bucket: s3.IBucket,
+  ): void {
+    this.backendFunction('SportsDataLoad', {
+      command: 'app.events.load_handler.handler',
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 2048,
+      ephemeralStorageSize: cdk.Size.mebibytes(1024),
+      image,
+      keyRef,
+      environment: { ...common, SPORTS_DATA_BUCKET: bucket.bucketName },
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'ReadSportsDataset',
+          actions: ['s3:GetObject'],
+          resources: [bucket.arnForObjects(`${StorageStack.SPORTS_DATA_PREFIX}*`)],
+        }),
+      ],
+    });
+  }
+
+  /**
    * The SES identity the notifications grant names, verified with Easy DKIM.
    * Only with a hosted zone: without one nothing could publish the DKIM
    * records, and an identity that never verifies sends nothing anyway.
@@ -329,13 +377,14 @@ export class AppStack extends cdk.Stack {
     });
   }
 
-  /** One of the four functions running the shared image, with its own role and log group. */
+  /** One of the five functions running the shared image, with its own role and log group. */
   private backendFunction(
     id: string,
     opts: {
       command: string;
       timeout: cdk.Duration;
       memorySize: number;
+      ephemeralStorageSize?: cdk.Size;
       image: ecrAssets.DockerImageAsset;
       keyRef: kms.IKey;
       environment: Record<string, string>;
@@ -387,6 +436,7 @@ export class AppStack extends cdk.Stack {
       logGroup,
       timeout: opts.timeout,
       memorySize: opts.memorySize,
+      ephemeralStorageSize: opts.ephemeralStorageSize,
       environment: opts.environment,
       environmentEncryption: opts.keyRef,
       vpc: network.vpc,

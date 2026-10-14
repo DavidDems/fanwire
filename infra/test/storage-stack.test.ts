@@ -13,8 +13,8 @@ function bucketByTag(purpose: string): [string, CfnResource] {
 }
 
 describe('Storage stack', () => {
-  test('exactly three buckets, all fully public-access-blocked and owner-enforced', () => {
-    tpl().resourceCountIs('AWS::S3::Bucket', 3);
+  test('exactly four buckets, all fully public-access-blocked and owner-enforced', () => {
+    tpl().resourceCountIs('AWS::S3::Bucket', 4);
     for (const b of Object.values(resourcesOfType(raw(), 'AWS::S3::Bucket'))) {
       expect(b.Properties?.PublicAccessBlockConfiguration).toEqual({
         BlockPublicAcls: true,
@@ -94,6 +94,67 @@ describe('Storage stack', () => {
     expect(policies.filter((p) => JSON.stringify(p.Properties?.Bucket) === JSON.stringify({ Ref: id }))).toEqual([]);
   });
 
+  /**
+   * EVENTS-002: the NBA dataset's four CSVs, uploaded by the human and read by
+   * SportsDataLoad only. Private, CMK-encrypted, TLS only, and nothing else
+   * about it: no versioning, no expiry, no events, no scanning, no origin.
+   */
+  describe('sports-data bucket (EVENTS-002)', () => {
+    test('SSE-KMS with the CMK, not versioned, no lifecycle rule, no event notifications', () => {
+      const [, b] = bucketByTag('sports-data');
+      expect(JSON.stringify(b.Properties?.BucketEncryption)).toContain('"SSEAlgorithm":"aws:kms"');
+      expect(JSON.stringify(b.Properties?.BucketEncryption)).toContain('KMSMasterKeyID');
+      expect(b.Properties?.VersioningConfiguration).toBeUndefined();
+      expect(b.Properties?.LifecycleConfiguration).toBeUndefined();
+      expect(b.Properties?.NotificationConfiguration).toBeUndefined();
+      expect(b.Properties?.CorsConfiguration).toBeUndefined();
+    });
+
+    test('same CMK as the quarantine bucket', () => {
+      const keyOf = (purpose: string) =>
+        JSON.stringify(
+          (
+            bucketByTag(purpose)[1].Properties?.BucketEncryption as {
+              ServerSideEncryptionConfiguration: { ServerSideEncryptionByDefault: { KMSMasterKeyID: unknown } }[];
+            }
+          ).ServerSideEncryptionConfiguration[0]?.ServerSideEncryptionByDefault.KMSMasterKeyID,
+        );
+      expect(keyOf('sports-data')).toBe(keyOf('media-quarantine'));
+    });
+
+    test('its bucket policy is the TLS-only deny and nothing else', () => {
+      const [id] = bucketByTag('sports-data');
+      const policies = Object.values(resourcesOfType(raw(), 'AWS::S3::BucketPolicy')).filter(
+        (p) => JSON.stringify(p.Properties?.Bucket) === JSON.stringify({ Ref: id }),
+      );
+      expect(policies).toHaveLength(1);
+      const statements = (policies[0]?.Properties?.PolicyDocument as { Statement: Record<string, unknown>[] }).Statement;
+      expect(statements).toEqual([
+        expect.objectContaining({
+          Effect: 'Deny',
+          Action: 's3:*',
+          Condition: { Bool: { 'aws:SecureTransport': 'false' } },
+        }),
+      ]);
+    });
+
+    test('no GuardDuty plan protects it', () => {
+      const [id] = bucketByTag('sports-data');
+      const plans = Object.values(resourcesOfType(raw(), 'AWS::GuardDuty::MalwareProtectionPlan'));
+      expect(plans.length).toBeGreaterThan(0);
+      for (const plan of plans) expect(JSON.stringify(plan)).not.toContain(`"${id}"`);
+    });
+
+    test('no other stack but App names it (no CloudFront origin, no deployment)', () => {
+      const [id] = bucketByTag('sports-data');
+      const s = synthFanwire();
+      const naming = s
+        .stackNames()
+        .filter((stack) => stack !== STACK_NAMES.storage && JSON.stringify(s.json(stack)).includes(id));
+      expect(naming).toEqual([STACK_NAMES.app]);
+    });
+  });
+
   describe('GuardDuty Malware Protection for S3', () => {
     test('one protection plan on the quarantine bucket uploads/ prefix, tagging scan results', () => {
       const [qid] = bucketByTag('media-quarantine');
@@ -143,7 +204,12 @@ describe('Storage stack', () => {
   test('outputs bucket names', () => {
     const outputs = synthFanwire().json(STACK_NAMES.storage).Outputs ?? {};
     expect(Object.keys(outputs)).toEqual(
-      expect.arrayContaining(['QuarantineBucketName', 'PublicMediaBucketName', 'FrontendBucketName']),
+      expect.arrayContaining([
+        'QuarantineBucketName',
+        'PublicMediaBucketName',
+        'FrontendBucketName',
+        'SportsDataBucketName',
+      ]),
     );
   });
 });

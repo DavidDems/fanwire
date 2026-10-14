@@ -12,7 +12,7 @@ export interface StorageStackProps extends cdk.StackProps {
 }
 
 /**
- * The three buckets and the GuardDuty Malware Protection plan on the
+ * The four buckets and the GuardDuty Malware Protection plan on the
  * quarantine bucket.
  *
  * The public-media and frontend buckets deliberately get NO bucket policy
@@ -25,10 +25,14 @@ export class StorageStack extends cdk.Stack {
   readonly quarantineBucket: s3.Bucket;
   readonly publicMediaBucket: s3.Bucket;
   readonly frontendBucket: s3.Bucket;
+  readonly sportsDataBucket: s3.Bucket;
   readonly malwareProtectionRole: iam.Role;
 
   /** Key prefix the backend presigns uploads under (app.media.routes: `uploads/{id}/original.{ext}`). */
   static readonly UPLOAD_PREFIX = 'uploads/';
+
+  /** Key prefix of the NBA dataset's CSVs (app.events.load_handler.DATASET_PREFIX). */
+  static readonly SPORTS_DATA_PREFIX = 'nba-eoin/';
 
   constructor(scope: Construct, id: string, props: StorageStackProps) {
     super(scope, id, props);
@@ -97,6 +101,23 @@ export class StorageStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     cdk.Tags.of(this.frontendBucket).add('purpose', 'frontend-static');
+
+    // --- sports data (EVENTS-002): the NBA dataset's CSVs, uploaded by the
+    // human and read only by the hand-invoked SportsDataLoad function. Never
+    // an origin, never scanned, no events, no expiry: a copy of a public
+    // dataset, replaced by uploading again. Its own bucket (the human's
+    // decision, 2026-10-14) so that no other function's grants, GuardDuty
+    // plan or lifecycle rule can reach it.
+    this.sportsDataBucket = new s3.Bucket(this, 'SportsDataBucket', {
+      ...common,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: key,
+      bucketKeyEnabled: true,
+      enforceSSL: true,
+      versioned: false,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    cdk.Tags.of(this.sportsDataBucket).add('purpose', 'sports-data');
 
     // --- GuardDuty Malware Protection for S3 on the quarantine bucket.
     this.malwareProtectionRole = new iam.Role(this, 'MalwareProtectionRole', {
@@ -205,6 +226,10 @@ export class StorageStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FrontendBucketName', {
       value: this.frontendBucket.bucketName,
       description: 'Target of `aws s3 sync dist/` for the SPA build',
+    });
+    new cdk.CfnOutput(this, 'SportsDataBucketName', {
+      value: this.sportsDataBucket.bucketName,
+      description: `Upload the NBA dataset's four CSVs under ${StorageStack.SPORTS_DATA_PREFIX} (build-deployment.md "Load sports data")`,
     });
   }
 }
