@@ -259,11 +259,11 @@ def test_a_dataset_error_fails_the_invocation_and_writes_nothing(
     broken.mkdir()
     for name in FILES:
         (broken / name).write_bytes((FIXTURE_DIR / name).read_bytes())
-    # Games.csv without its gameType column: a DatasetError in the loader.
+    # Games.csv without its homeScore column, which the loader requires: a DatasetError.
     with (FIXTURE_DIR / "Games.csv").open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        header = [c for c in reader.fieldnames or [] if c != "gameType"]
-        rows = [{k: v for k, v in row.items() if k != "gameType"} for row in reader]
+        header = [c for c in reader.fieldnames or [] if c != "homeScore"]
+        rows = [{k: v for k, v in row.items() if k != "homeScore"} for row in reader]
     with (broken / "Games.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=header, lineterminator="\n")
         writer.writeheader()
