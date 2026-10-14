@@ -37,6 +37,11 @@ Verify each: `git log origin/main`, `gh pr list`,
   migrated** (head `d9f3b6a1e2c4`, 2026-10-14). The live database has the
   `players`/`player_game_stats` tables and **no teams or games**: nothing
   can load it until `EVENTS-002`.
+- **`EVENTS-005` (#146) is merged and deployed** (2026-10-14, no migration):
+  `GET /events/games` is paged (50 by default, at most 200) and
+  `GET /events/games/{id}` is the full game detail with box scores.
+- **The `EVENTS-002` spec** is `.ai/tasks/EVENTS-002/` (Director PR, after
+  #146). Run it once that PR is merged.
 - `app.events.nba_history` loads the new dataset (`0x02-events.md` "The
   loader"): the whole 2003-04 to 2025-26 range in one run in 133 s against a
   local Postgres, 29,646 games and 745,466 box-score rows.
@@ -107,12 +112,16 @@ Verify each: `git log origin/main`, `gh pr list`,
 9. **`EVENTS-005` before `EVENTS-002`** (2026-10-14): a full load makes
    `GET /events/games` return about 6-7 MB, over a Lambda response's 6 MB, so
    the list is paginated before the live database is loaded.
+10. **`EVENTS-002`'s shape** (2026-10-14): the four CSVs go in a **new
+    private bucket** (`SportsDataBucket`), not a prefix of the quarantine or
+    public-media bucket; the load event **must list its seasons**, so a full
+    reload is deliberate.
 
 ## The units, in order
 
 Each is test-first, its own PR, `hand start` → tests → implementation → wiki
-→ PR → `hand finish`. Done: `EVENTS-003`, `EVENTS-004`. Specced now:
-`EVENTS-005`. Next: `EVENTS-002` (decision 9), then `EVENTS-006`, `007`. The
+→ PR → `hand finish`. Done: `EVENTS-003`, `EVENTS-004`, `EVENTS-005`.
+Specced now: `EVENTS-002` (decision 9). Next: `EVENTS-006`, `007`. The
 rest get a spec in a Director PR once the unit before them has merged,
 because each builds on the shapes the previous one lands.
 
@@ -178,22 +187,24 @@ season, stats leaders.
   name the rule in the response).
 - `GET /events/teams/{id}/seasons/{season}`: that team's record and games.
 
-### `EVENTS-002`: the live database (spec to write; proposed in #139)
+### `EVENTS-002`: the live database (specced, `.ai/tasks/EVENTS-002/`)
 
-- **Infra:** a private S3 bucket (or a prefix of an existing one) for the
-  dataset files, and a `SportsDataLoad` function on the shared image with
-  command `app.events.<loader>.handler`, timeout 15 min, memory and
-  ephemeral storage sized for `PlayerStatistics.csv` (390 MB). IAM:
-  `s3:GetObject` on that prefix only. **Nothing invokes it**, like
-  `Migration` (`infra/test/app-stack.test.ts`'s invoker sweep covers it).
-- **Handler:** event `{"seasons": ["2025-26", ...]}`; downloads the three
-  files it needs to `/tmp`, runs the same loader as the CLI, returns the
-  report. One invocation per few seasons stays inside 15 minutes (measure
-  on the dev DB first).
-- **CloudFormation exec policy:** S3 buckets and Lambda functions are
-  already granted; confirm with `infra/test/cfn-exec-policy.test.ts`. If a
-  new resource type appears, extend the policy and its test in the same PR,
-  and the human rolls it out before the deploy.
+The spec is the contract; in short:
+
+- **Infra:** `SportsDataBucket` in `Fanwire-Storage` (CMK, private, SSL
+  only, no events) and `SportsDataLoad` in `Fanwire-App` on the shared image
+  (`app.events.load_handler.handler`, 15 min, 2048 MB, 1024 MB `/tmp`). One
+  grant beyond the usual three: `s3:GetObject` on `nba-eoin/*`. **Nothing
+  invokes it** (the invoker sweep covers it). No `infra/iam/**` change.
+- **Handler:** event `{"seasons": [...]}`, required; downloads the four CSVs
+  to a temporary directory, runs `load_nba_history`, returns the report.
+  A Postgres advisory lock makes a second, concurrent load (the AWS CLI
+  retries an invoke on its 60 s read timeout) fail fast.
+- **Sized** (2026-10-14, local): one season 18 s / 99 MB peak; all 23
+  seasons 73-139 s / 709 MB peak; the four files 437 MB.
+- **After the deploy**, the human follows `build-deployment.md` "Load sports
+  data": upload the four files, load `2025-26` alone and read its time, then
+  the rest.
 
 ### `EVENTS-008`: scheduled refresh (later, gated)
 
