@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-006",
+  "objective": "Give the events API players: a case- and accent-insensitive name search, a player detail with attributes, career lines and one row per season, and a paged game log, all computed at read time from the EVENTS-004 tables, so the frontend can make players searchable and give each one a page.",
+  "acceptance_criteria": [
+    "GET /events/players returns a JSON list of players, at most `limit` (default 20, 1-100) after skipping `offset`, ordered by last name, then first name, then id; each item carries id, first_name, last_name, position, jersey, first_season, last_season and the abbreviation of the team of the player's most recent box-score row (null when the player has none).",
+    "`q` (optional, 1-100 characters after trimming) matches a player when every whitespace-separated word of it is a prefix of the first name or the last name, case- and accent-insensitively: 'doncic', 'DONČIĆ', 'luka don' and 'lu do' all find Luka Dončić, and 'uka' does not.",
+    "`season` (optional, YYYY-YY) keeps only players with at least one played box-score row (seconds_played not null) in that season; `q` and `season` combine with AND.",
+    "A malformed season, a `q` that is empty after trimming or longer than 100 characters, a limit outside 1-100 or a negative offset is answered 422, never an empty list.",
+    "GET /events/players/{player_id} returns the player's stored attributes (names, birth date, height, weight, country, school, jersey, position, draft year/round/number, first and last season) and an unknown id is a 404.",
+    "The detail carries a career line for the regular season and one for the playoffs, each with games played, games started, seconds played, totals of every counting stat, per-game averages of points, rebounds, assists, steals, blocks, turnovers, three-pointers made and minutes, and field-goal, three-point and free-throw percentages computed from the totals; a player with no playoff games has a playoff line of zeros with null averages and percentages.",
+    "Only played rows count towards a line, and only games typed `regular` count as regular season and `playoffs` as playoffs: play-in and NBA Cup final games are in no career or season line (the NBA's own rule) but are in the game log.",
+    "The detail carries one row per season and game type (regular, playoffs) the player played in, newest season first, each with the abbreviations of every team the player played for that season in the order first played, and the same games, starts, seconds, totals, averages and percentages as a career line.",
+    "Averages are rounded to one decimal place and percentages are a fraction from 0 to 1 rounded to three places, null when nothing was attempted, computed the same way as EVENTS-005's box score (shared code, not a second rule).",
+    "GET /events/players/{player_id}/games returns the player's box-score rows, played and did-not-play, newest first by game date then game id, at most `limit` (default 50, 1-200) after `offset`, optionally filtered by `season` and `game_type`; each row carries the game id, date, season, game type, label, the player's team and the opponent (id and abbreviation), whether the player's team was home, both scores, starter, seconds played, every counting stat, plus-minus, the three percentages and the DNP reason. Bad values are 422; an unknown player is a 404.",
+    "The detail and the game log are each built in a fixed number of database queries whatever the player's career length, and the career and season lines are computed with GROUP BY in Postgres, not by loading every row into Python.",
+    "openapi.json and schema.d.ts match the backend, and GameOut, GameDetailOut, GET /events/games and GET /search/games are unchanged."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

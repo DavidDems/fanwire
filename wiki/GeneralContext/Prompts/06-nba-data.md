@@ -1,5 +1,14 @@
 # 06 — NBA data: players, box scores and the stats API from the full dataset
 
+> **Update, 2026-10-14.** The data is live: every game since 2003-04 is in the
+> production database (`EVENTS-002`, #148, loaded by the human). `EVENTS-003`
+> to `EVENTS-005` and `EVENTS-002` are done. **`EVENTS-006` and `EVENTS-007`
+> are specced and now run as part of `Prompts/07-stats-and-posts-frontend.md`**,
+> in that brief's order, next to the frontend that needs them. What is left
+> to *this* thread: the API-SPORTS infra clean-up (needs a spec) and
+> `EVENTS-008` (gated; see "What's next" below). "Where things stand" and
+> "The units" below are updated; the rest is history and reference.
+
 **Brief for hand-run sessions** (Claude Code on the human's subscription,
 driven turn by turn by the human), one unit per session, in the order below.
 Self-contained: read this file, then what it names.
@@ -34,14 +43,17 @@ Verify each: `git log origin/main`, `gh pr list`,
 `python .ai/bin/agentctl.py status`, `ls C:\data\nba-eoin`.
 
 - **`EVENTS-003` (#142) and `EVENTS-004` (#144) are merged, deployed and
-  migrated** (head `d9f3b6a1e2c4`, 2026-10-14). The live database has the
-  `players`/`player_game_stats` tables and **no teams or games**: nothing
-  can load it until `EVENTS-002`.
+  migrated** (head `d9f3b6a1e2c4`, 2026-10-14).
 - **`EVENTS-005` (#146) is merged and deployed** (2026-10-14, no migration):
   `GET /events/games` is paged (50 by default, at most 200) and
   `GET /events/games/{id}` is the full game detail with box scores.
-- **The `EVENTS-002` spec** is `.ai/tasks/EVENTS-002/` (Director PR, after
-  #146). Run it once that PR is merged.
+- **`EVENTS-002` (#148) is merged and deployed, and the live database is
+  loaded** (2026-10-14): the human uploaded the four CSVs and invoked
+  `SportsDataLoad` for 2025-26, then for 2003-04 to 2024-25
+  (`build-deployment.md` "Load sports data", runbook #149). The site shows
+  the games.
+- **`EVENTS-006` and `EVENTS-007` are specced** (`.ai/tasks/`, Director PR of
+  2026-10-14) and run under `Prompts/07`.
 - `app.events.nba_history` loads the new dataset (`0x02-events.md` "The
   loader"): the whole 2003-04 to 2025-26 range in one run in 133 s against a
   local Postgres, 29,646 games and 745,466 box-score rows.
@@ -120,10 +132,30 @@ Verify each: `git log origin/main`, `gh pr list`,
 ## The units, in order
 
 Each is test-first, its own PR, `hand start` → tests → implementation → wiki
-→ PR → `hand finish`. Done: `EVENTS-003`, `EVENTS-004`, `EVENTS-005`.
-Specced now: `EVENTS-002` (decision 9). Next: `EVENTS-006`, `007`. The
-rest get a spec in a Director PR once the unit before them has merged,
-because each builds on the shapes the previous one lands.
+→ PR → `hand finish`. Done: `EVENTS-003`, `EVENTS-004`, `EVENTS-005`,
+`EVENTS-002`. Specced, and run under `Prompts/07`: `EVENTS-006`, `EVENTS-007`.
+Left here: `EVENTS-008` (gated) and the API-SPORTS infra clean-up.
+
+### What's next (2026-10-14)
+
+1. **`EVENTS-006`, `EVENTS-007`** under `Prompts/07`, one after the other
+   (both rewrite `routes.py`, `schemas.py` and the contract).
+2. **The API-SPORTS infra clean-up** (`TODO/02-backlog.md` "Sports data",
+   first row): delete the idempotency and live-score tables, the API-SPORTS
+   secret, the ingestion-retry queue and DLQ, and their exports. It needs a
+   spec (Director PR). Two resources are `RETAIN`, so the human deletes them
+   by hand after the deploy; that PR names them.
+3. **`EVENTS-008`, the scheduled refresh,** stays gated. After about
+   2026-10-21, check whether the Kaggle dataset shows a version newer than
+   2026-06-15. Only if it does, and the human has stored a Kaggle token in
+   Secrets Manager, write its spec. Until then a new season reaches the site
+   the manual way: the human re-uploads the files and runs "Load sports
+   data" for the current season (re-runnable; existing games are "already
+   present").
+4. **Later, not planned:** seasons before 2003-04 (needs historical teams),
+   player mentions in posts, following players or teams, and the NBA's
+   standings tie-breakers (`EVENTS-007` orders by win percentage, wins,
+   name, and says so).
 
 | # | Unit | What | Depends on |
 |---|---|---|---|
@@ -153,7 +185,7 @@ test the combination, `director-sessions.md` "Sibling PRs").
   from the rows, with shooting percentages computed, never stored.
 - A game with no box score (quirk 3) still returns, with empty player lists.
 
-### `EVENTS-006`: players (spec to write)
+### `EVENTS-006`: players (specced, `.ai/tasks/EVENTS-006/`; runs under `Prompts/07`)
 
 - `GET /events/players?q=&season=&limit=&offset=`: name search (case- and
   accent-insensitive prefix on first or last name), optionally only players
@@ -168,7 +200,7 @@ test the combination, `director-sessions.md` "Sibling PRs").
   `games`. No aggregate table (YAGNI): a career is at most ~1,600 rows. Add
   one only if a measured query is too slow on `db.t4g.micro`.
 
-### `EVENTS-007`: stats section (spec to write)
+### `EVENTS-007`: stats section (specced, `.ai/tasks/EVENTS-007/`; runs under `Prompts/07`)
 
 `business-rules.md` "Events": champions, team records during the regular
 season, stats leaders.
@@ -187,7 +219,7 @@ season, stats leaders.
   name the rule in the response).
 - `GET /events/teams/{id}/seasons/{season}`: that team's record and games.
 
-### `EVENTS-002`: the live database (specced, `.ai/tasks/EVENTS-002/`)
+### `EVENTS-002`: the live database (done, #148; loaded 2026-10-14)
 
 The spec is the contract; in short:
 
@@ -218,10 +250,10 @@ not applied silently.
 
 ## Not in this thread
 
-- **The frontend pass** (a separate thread, after `EVENTS-005`–`007`): game
-  page with box score, player page, standings, champions and leaders pages,
-  `#GameId` mentions linking to the game page, a narrower compose picker
-  (team and date instead of every game), team names in the picker.
+- **The frontend pass** is `Prompts/07-stats-and-posts-frontend.md`: the
+  game page, the Stats page (Seasons, Players), player pages and clickable
+  `#GameId` mentions. Still unplanned there: a narrower compose picker (team
+  and date instead of the 50 newest games) and team names in the picker.
 - Player mentions in posts, following players, seasons before 2003-04.
 
 ## How the human wants the work done
