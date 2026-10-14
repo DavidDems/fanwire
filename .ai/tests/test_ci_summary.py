@@ -97,7 +97,11 @@ class TestTheModelIsAskedForOneSentence:
         body = self.body()
         assert body["model"] == "claude-haiku-5-5"
         assert 0 < body["max_tokens"] <= 400
-        assert "tools" not in body and "thinking" not in body
+        assert "tools" not in body
+        # Haiku 5.5 thinks by default, and the thinking ate all of max_tokens
+        # on #155 (stop_reason=max_tokens; content=[thinking]).
+        assert body["thinking"] == {"type": "disabled"}
+        assert "output_config" not in body
         assert body["system"] == "SYSTEM RULES"
 
     def test_the_log_and_the_parse_are_fenced_as_data(self):
