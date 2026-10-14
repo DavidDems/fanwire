@@ -28,19 +28,23 @@ Specs for units not yet specced are Director work, merged before the unit runs
 3. `wiki/CodeContext/Modules/0x02-events.md` (whole file), and the module
    files the unit's spec lists in `required_context`.
 
-## Where things stand (2026-10-13)
+## Where things stand (2026-10-14)
 
 Verify each: `git log origin/main`, `gh pr list`,
 `python .ai/bin/agentctl.py status`, `ls C:\data\nba-eoin`.
 
-- `EVENTS-001` merged (#139) and deployed 2026-10-13: `Team`/`Game` carry
-  `nba_team_id`/`nba_game_id`/`game_type`; `app.events.nba_history` loads
-  the *old* dataset, which the human has since deleted from disk.
-- **The live API answered 500 on `/events/teams` and `/events/games`** after
-  that deploy, because the `Migration` Lambda had not been invoked for
-  `b7d3e5a8c1f2` (`build-deployment.md` "Run migrations"). Check it is fixed
+- **`EVENTS-003` (#142) and `EVENTS-004` (#144) are merged, deployed and
+  migrated** (head `d9f3b6a1e2c4`, 2026-10-14). The live database has the
+  `players`/`player_game_stats` tables and **no teams or games**: nothing
+  can load it until `EVENTS-002`.
+- `app.events.nba_history` loads the new dataset (`0x02-events.md` "The
+  loader"): the whole 2003-04 to 2025-26 range in one run in 133 s against a
+  local Postgres, 29,646 games and 745,466 box-score rows.
+- **Every deploy that adds a migration needs the `Migration` Lambda invoked
+  right after** (`build-deployment.md` "Run migrations"); until then the
+  routes on the changed tables answer 500. Check
   (`curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams`
-  prints `200`) before any unit that adds a migration is deployed.
+  prints `200`) before the next such deploy.
 - The new dataset is at `C:\data\nba-eoin` (version of 2026-06-15). Verified
   2026-10-13 against it:
   - **Same ids as `EVENTS-001`:** all 3,637 games loaded from the old dataset
@@ -94,13 +98,23 @@ Verify each: `git log origin/main`, `gh pr list`,
 6. Already settled by `EVENTS-001`: nba.com ids are the keys
    (`nba_*_id`), `game_type` is stored, play-in games are loaded, duplicate
    rows keep the first and are counted, one transaction per load run.
+7. **Minutes are stored as seconds** (2026-10-13, `EVENTS-004`): the source
+   writes minutes.seconds in most of 2024-25 and 2025-26 and decimals
+   elsewhere; the loader detects which per team-game.
+8. **A 0-0 game has no final score** (2026-10-13): 22400627 and 22400988 are
+   skipped and reported, not stored. So "every game has a final score" above
+   holds for every game but those two.
+9. **`EVENTS-005` before `EVENTS-002`** (2026-10-14): a full load makes
+   `GET /events/games` return about 6-7 MB, over a Lambda response's 6 MB, so
+   the list is paginated before the live database is loaded.
 
 ## The units, in order
 
 Each is test-first, its own PR, `hand start` → tests → implementation → wiki
-→ PR → `hand finish`. Specced now: `EVENTS-003`, `EVENTS-004`. The rest get a
-spec in a Director PR once the unit before them has merged, because each
-builds on the shapes the previous one lands.
+→ PR → `hand finish`. Done: `EVENTS-003`, `EVENTS-004`. Specced now:
+`EVENTS-005`. Next: `EVENTS-002` (decision 9), then `EVENTS-006`, `007`. The
+rest get a spec in a Director PR once the unit before them has merged,
+because each builds on the shapes the previous one lands.
 
 | # | Unit | What | Depends on |
 |---|---|---|---|

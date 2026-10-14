@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-005",
+  "objective": "Give the events API a paginated, filterable game list and a game detail with both teams, the line score and the full box score per team, built from the EVENTS-004 tables, so the live database can hold every season without GET /events/games returning all of them at once.",
+  "acceptance_criteria": [
+    "GET /events/games returns at most `limit` games (default 50, at most 200), after skipping `offset`, newest first, ordered by date then id descending so that consecutive pages never overlap or skip a game; the response is still a JSON list of GameOut.",
+    "GET /events/games filters by `season`, `team_id` (home or away), `game_type` and `date_from`/`date_to` (inclusive calendar dates of the game's stored date), each optional, all combined with AND.",
+    "A malformed season, an unknown game_type, a limit outside 1-200, a negative offset, or a date_from later than date_to is answered 422, never an empty list.",
+    "GET /events/games/{game_id} returns a GameDetailOut: id, nba_game_id, date, season, game_type, label, sub_label, series_game_number, venue, both final scores, and the home and away teams embedded with id, name and abbreviation; an unknown id is a 404.",
+    "The detail carries each team's line score as stored (quarters then overtimes, or null when the game has none), on that team's side.",
+    "The detail carries a box score per team: the players who played, starters first and then by seconds played, most first, each with player id, first and last name, starting position, seconds played, every counting stat, and field-goal, three-point and free-throw percentages computed from made and attempted (null when none were attempted); and the players who did not play, each with player id, names and the reason.",
+    "Each team's box score carries totals summed from its played rows, with percentages computed the same way; the totals are never adjusted to match the final score.",
+    "A game with no box-score rows is answered 200 with empty player lists, zero totals and null percentages.",
+    "The detail is built in a fixed number of database queries whatever the size of its box score, never one per player.",
+    "GameOut, GET /search/games and the frontend's existing GET /events/games call keep working unchanged, and openapi.json and schema.d.ts match the backend."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
