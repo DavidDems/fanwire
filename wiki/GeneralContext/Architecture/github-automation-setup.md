@@ -70,9 +70,9 @@ gh api repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval
 
 | Secret | For |
 |---|---|
-| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1) and `coverage-check.yml` (2026-10-14, automation 2). |
+| `ANTHROPIC_API_KEY` | The provider. Must be a **Claude Console** key — a Pro/Max plan does not grant API access, and an Organization-settings key is not the same thing. That mismatch caused the first four worker runs to fail. Also read, in one step that holds no GitHub token, by `ci-summary.yml` (2026-10-13, `Prompts/04` automation 1) `coverage-check.yml` (2026-10-14, automation 2) and `spec-drift.yml` (2026-10-14, automation 3). |
 | `AGENT_DISPATCH_TOKEN` | A fine-grained PAT, this repository only, **Actions: read+write** and **Contents: read+write**, nothing else. Every dispatch step prefers it. |
-| `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: `jev-smoke.yml` (dispatch-only) and, in shadow, `coverage-check.yml` (2026-10-14). Never pasted into a session. |
+| `TYPESAFE_API_KEY` | Set 2026-10-08: the direct TypeSafe key for `jev` (route `api.typesafe.ai/v1/systemone`, model `jev-latest`). Read only by `.ai/bin/ask_jev.py`, in one step of a job that holds no other credential: `jev-smoke.yml` (dispatch-only) and, in shadow, `coverage-check.yml` and `spec-drift.yml` (2026-10-14). Never pasted into a session. |
 
 `AI_GATEWAY_API_KEY` (the Vercel gateway route, which never returned a 200)
 was deleted 2026-10-08: nothing read it, and a gateway key reaches every model

@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "_comment": [
+    "The question spec-drift.yml asks jev, in shadow, beside Haiku's list of",
+    "missing names (Prompts/04-cheap-automations.md automation 3 and 'Decided",
+    "by the human'). A two-option choice, because a choice carries a",
+    "confidence and a noul does not. The state is the task's spec and brief,",
+    "the paths and links already found missing, and the source files the task",
+    "touches (agentlib.drift.jev_state). Nothing acts on the answer. Keys",
+    "starting with _ stay local."
+  ],
+  "questions": {
+    "spec_matches": {
+      "type": "choice",
+      "instructions": "Does the task's spec still match the code shown: does every path, link, status, function, field or other name it treats as already existing really exist?",
+      "criteria": {
+        "yes": "Everything the spec treats as already existing is in the code, and no path or link it names is missing.",
+        "no": "The spec names at least one path, link, status, function, field or other name as existing that the code does not have."
+      },
+      "_why": "The yes/no that Haiku's list and the path check together also imply (nothing found means yes), so the two can be compared run by run."
+    }
+  }
+}

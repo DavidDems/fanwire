@@ -61,7 +61,7 @@
   },
 
   "automations": {
-    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS).",
+    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS).",
     "ci_summary": {
       "_why": "Prompts/04 automation 1: one sentence naming the likely cause of a red agent/* PR run, beside ciresult's deterministic parse. .ai/bin/ci_summary.py, run by .github/workflows/ci-summary.yml.",
       "provider": "anthropic",
@@ -75,6 +75,13 @@
       "model": "claude-haiku-5-5",
       "max_tokens": 2000,
       "max_test_chars": 200000
+    },
+    "spec_drift": {
+      "_why": "Prompts/04 automation 3: which paths, links and names a task spec uses that the code on main does not have, dispatched by hand before a unit. Paths and links are checked without a model; Haiku is asked only for names in the prose, each re-checked against the code. jev is asked .ai/questions/drift.json in shadow. .ai/bin/spec_drift.py, run by .github/workflows/spec-drift.yml.",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "max_tokens": 2000,
+      "max_context_chars": 200000
     }
   },
 

@@ -185,7 +185,36 @@ record per call), and bring it to the human.
   - Proven only live: `pull_request_target` firing for a hand-opened
     `agent/*` PR, the comment permission there, and jev's state fitting its
     32K-token window on a real test diff (it is capped at 80K characters).
-- Next: 3 drift (with `jev`), 4 wiki.
+- **Automation 2 merged (#151).** Not yet run: no `agent/*` PR has been
+  pushed since.
+- **Automation 3, spec drift check: built** (`director/spec-drift`).
+  `spec-drift.yml` (`workflow_dispatch` with `task_id`, `main` only),
+  `.ai/bin/spec_drift.py` (`ask`, `render`), `agentlib/drift.py`,
+  `.ai/prompts/spec-drift.md`, `.ai/questions/drift.json`, and `config.json`
+  `automations.spec_drift` (Haiku 5.5, `max_tokens` 2000, 200K characters of
+  code at most).
+  - Free, no model: `required_context` files, the brief's links, backticked
+    repository paths, and `allowed_paths`/`forbidden_paths` globs whose
+    directory is gone. A file `allowed_paths` names that does not exist yet
+    is the unit's to create, not drift, and so is a new feature directory
+    whose parent exists.
+  - The model reads the spec and the non-test source its paths cover, and
+    lists names the spec assumes exist. A name the code has is dropped and
+    counted, so a wrong claim cannot stand.
+  - **Validated against `MEDIA-002`'s pre-#122 spec** (`fixtures/
+    media002-pre122/`, from `2f3cfed^`): the deleted TODO link is found for
+    free, and `Quarantined` survives the check against the code while
+    `Uploaded` is dropped. (The model's half is faked in the tests; the live
+    run is what shows Haiku names it.)
+  - A failed call still reports the free findings (the render step runs
+    `always()`). On 2026-10-14 the free half found nothing in the seven
+    specs queued next (`FRONTEND-008`–`010`, `EVENTS-006`/`007`,
+    `POSTS-001`, `UI-009`). In older, finished specs it finds deleted TODO
+    files named in `FRONTEND-001`/`006` and `INFRA-002`/`003`, and the
+    gitignored `frontend/.env.local` in `FRONTEND-002` (a false positive).
+  - Proposed, the human's call: also run it automatically when an
+    `agent/<ID>` branch is first pushed. Not built.
+- Next: 4 wiki.
 
 ## The four, with design notes (starting points, not decisions)
 

@@ -1,0 +1,188 @@
+name: spec-drift
+
+# Prompts/04-cheap-automations.md automation 3: before a unit, a person runs
+#   gh workflow run spec-drift.yml --ref main -f task_id=<ID>
+# and gets every path, link and name the task's spec uses that the code on
+# main no longer has, in the job summary and, if the task has an open
+# agent/<ID> PR, in one comment on it, updated in place on later runs. It
+# fails nothing and changes nothing. .ai/agentlib/drift.py checks the paths
+# and links without a model, builds the request, checks the answer and
+# renders; .ai/bin/spec_drift.py makes the one model call, about the names in
+# the prose only. jev is asked "does the spec still match the code?" in
+# shadow (.ai/questions/drift.json), and both answers are recorded side by
+# side in a hidden record at the end of the report. Nothing acts on either.
+#
+# It holds the Anthropic and TypeSafe keys, so it is shaped to give them
+# nothing to reach (work-modes.md "Constraints every automation must keep"):
+#   - workflow_dispatch only (decided by the human, 2026-10-13): nothing but a
+#     person's deliberate run spends a call. Running it automatically when an
+#     agent/<ID> branch is first pushed is a later option the human may
+#     choose; it is not wired here.
+#   - main's copy only. A dispatch picks a ref, and that ref's code is what
+#     runs, so the job refuses every ref but main, as jev-smoke.yml does: a
+#     branch's spec_drift.py must never be handed a key. The one checkout is
+#     that ref, so the spec and the code are read from main, never a branch.
+#   - the task id is text a person typed. It is checked in bash against the
+#     guard's task-id pattern before it is used for anything, and reaches the
+#     shell only through env:, as data.
+#   - the token can read the repository and write PR comments, and nothing
+#     else. The checkout keeps no credential.
+#   - each key is in one step's env, the one that makes its call, and that
+#     step holds no GitHub token. The steps that hold the token see no key.
+#   - the spec, the brief, the code and the model's answer are all text a
+#     branch wrote at some point. spec_drift.py fences them as data in the
+#     request, keeps a name only if the code really lacks it, and escapes
+#     everything in the report, so it cannot mention, link, or close the
+#     marker it is found by.
+#   - one call, no retry. The path and link findings are free and made before
+#     the call, so a failed call still reports them, marked as having no model
+#     answer; jev is then not asked.
+#
+# What the tests cannot show, and only a live run proves: that a dispatch on
+# main runs it at all (GitHub dispatches only a workflow already on main);
+# that gh pr list finds the task's open PR with this token; and that the
+# token, with pull-requests: write, may comment on it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "The task whose spec to check, e.g. MEDIA-002"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  drift:
+    # Main's copy only: on any other ref this job does not run, and no key is
+    # handed to a branch's code.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One check per task at a time, so two runs cannot both create a comment.
+    # Never cancelled: the later run simply updates it.
+    concurrency:
+      group: spec-drift-${{ inputs.task_id }}
+      cancel-in-progress: false
+    steps:
+      # The input is free text, so it is validated against the guard's own
+      # TASK_ID_SAFE (a bash copy, pinned by test_workflows.py) and reaches
+      # later steps only as $TASK_ID.
+      - name: Check the task id
+        env:
+          TASK_ID_INPUT: ${{ inputs.task_id }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID_INPUT" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::the task id does not match $TASK_ID_SAFE"
+            exit 1
+          fi
+          echo "TASK_ID=$TASK_ID_INPUT" >> "$GITHUB_ENV"
+
+      # main's copy: the spec, the code it is checked against, and the code
+      # that runs with the keys.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # The task's open PR, if there is one, to comment on. The token and no
+      # key. The number is checked to be digits before it is passed on.
+      - name: Find the task's open PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "agent/$TASK_ID" --state open --json number --jq '.[0].number // ""')
+          if [ -n "$NUMBER" ] && ! [[ "$NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::gh pr list returned something that is not a PR number"
+            exit 1
+          fi
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "open PR: ${NUMBER:-none}"
+
+      # The only step with the Anthropic key, and it holds no GitHub token.
+      # One call, no retry; on a failed call it still writes the path and
+      # link findings, and fails the job.
+      - name: Check the paths, then ask about the names
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: >-
+          python -I .ai/bin/spec_drift.py ask
+          --task-id "$TASK_ID"
+          --repo-root "$GITHUB_WORKSPACE"
+          --work "$RUNNER_TEMP/drift"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # In shadow: the only step with the TypeSafe key, and it holds no
+      # GitHub token. Its failure never stops the report; the report then
+      # says jev gave no answer.
+      - name: Ask jev whether the spec still matches, in shadow
+        continue-on-error: true
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/drift/jev-state.txt" ]; then
+            echo "::notice::the model gave no answer, so jev is not asked either"
+            exit 0
+          fi
+          python -I .ai/bin/ask_jev.py \
+            --questions .ai/questions/drift.json \
+            --state-file "$RUNNER_TEMP/drift/jev-state.txt" \
+            --out "$RUNNER_TEMP/drift/jev.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      # No key and no token: the report, into the job summary and a file.
+      # Always, so the free findings show even when the model call failed.
+      - name: Write the report
+        if: always()
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          PR_ARGS=()
+          if [ -n "${PR_NUMBER:-}" ]; then
+            PR_ARGS=(--pr-number "$PR_NUMBER")
+          fi
+          python -I .ai/bin/spec_drift.py render \
+            --work "$RUNNER_TEMP/drift" \
+            --run-url "$RUN_URL" \
+            --comment-out "$RUNNER_TEMP/comment.md" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            "${PR_ARGS[@]}"
+
+      # One comment per PR: the bot's own comment that starts with the marker
+      # is edited in place, or a new one is made. Only when the task has an
+      # open PR and a report was written. The body is read from the file the
+      # script wrote, never from an expression.
+      - name: Post or update the PR comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          if [ -z "${PR_NUMBER:-}" ] || [ ! -s "$RUNNER_TEMP/comment.md" ]; then
+            echo "::notice::no open PR for the task, or no report; nothing to post"
+            exit 0
+          fi
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-spec-drift -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          fi
