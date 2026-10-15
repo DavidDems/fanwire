@@ -53,7 +53,7 @@ MAX_TEST_CHARS = 200_000
 
 # A few lines of JSON per criterion. The cap bounds what a runaway answer can
 # cost, not what a good one needs.
-MAX_TOKENS = 2000
+MAX_TOKENS = 4000
 
 # The key of the one question in `.ai/questions/coverage.json`.
 JEV_QUESTION = "all_pinned"

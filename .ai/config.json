@@ -73,7 +73,7 @@
       "_why": "Prompts/04 automation 2: which acceptance criteria no test pins, from the spec on main and the test files an agent/* PR changes; advisory, fails nothing. jev is asked .ai/questions/coverage.json in shadow. .ai/bin/coverage_check.py, run by .github/workflows/coverage-check.yml.",
       "provider": "anthropic",
       "model": "claude-haiku-5-5",
-      "max_tokens": 2000,
+      "max_tokens": 4000,
       "max_test_chars": 200000
     },
     "spec_drift": {
