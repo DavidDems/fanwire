@@ -151,8 +151,8 @@ One structure for every mode, so any session can start cold:
   the PR changes go to Haiku 5.5, which names the test that pins each one; a
   test it names must be in that file, or it does not count. `jev` answers
   "every criterion pinned?" in shadow. One advisory comment, kept up to date,
-  with both answers and their costs and a hidden `fanwire-shadow` record. Not
-  yet proven live.
+  with both answers and their costs and a hidden `fanwire-shadow` record.
+  **Proven live 2026-10-15** on #155, $0.0035 a push.
 - **Spec drift check built** (2026-10-14): `.github/workflows/spec-drift.yml`,
   dispatched by the human before a unit (`gh workflow run spec-drift.yml -f
   task_id=<ID>`), runs `main`'s copy against `main`. Paths and links in the
@@ -160,7 +160,7 @@ One structure for every mode, so any session can start cold:
   prose, and a name it calls missing is kept only if no non-test source file
   has it. `jev` answers "does the spec still match?" in shadow. The report
   goes to the job summary, and to the task's open PR as a comment if there
-  is one. Not yet proven live.
+  is one. **Proven live 2026-10-14** on #155, $0.0087.
 - **Wiki update proposal built** (2026-10-14):
   `.github/workflows/wiki-proposal.yml` runs `main`'s copy on
   `pull_request_target` when an `agent/*` PR from this repository merges. The
@@ -169,4 +169,4 @@ One structure for every mode, so any session can start cold:
   and their replacements; the patch is made from the real files, so it
   applies. One comment on the merged PR (the human's option (a)): "no
   documented decision changed", or the patch and `git apply wiki.patch`.
-  Nothing is committed. Not yet proven live.
+  Nothing is committed. **Proven live 2026-10-15** on #155's merge, $0.0076.
