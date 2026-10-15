@@ -164,11 +164,12 @@ record per call), and bring it to the human.
     test-first commit. Not changed for one run. Still unproven: commenting
     on a PR the orchestrator's bot opened.
 - **Automation 2, criteria coverage check: built** (`director/criteria-coverage`).
-  `coverage-check.yml` (`pull_request_target`: `main`'s tools at the base SHA
-  in `tools/`, the PR's head at `pr/` as data, never executed),
+  `coverage-check.yml` (`pull_request_target`: `main`'s tools at `github.sha`
+  in `tools/` since #157, the PR's head at `pr/` as data, never executed),
   `.ai/bin/coverage_check.py` (`ask`, `render`), `agentlib/coverage.py`,
   `.ai/prompts/coverage-check.md`, `.ai/questions/coverage.json`, and
-  `config.json` `automations.coverage` (Haiku 5.5, `max_tokens` 2000, 200K
+  `config.json` `automations.coverage` (Haiku 5.5, `max_tokens` 4000 since
+  #155's long answer, 200K
   characters of tests at most). The generic pieces automation 1 had
   (escaping, pricing, the one Messages API POST) moved to
   `agentlib/automation.py`, and the shadow record is `agentlib/shadow.py`.
@@ -269,10 +270,41 @@ record per call), and bring it to the human.
     wiki-proposal load their tools at `github.sha`, as the worker and
     orchestrator already do. `agent-guard` still uses `base.sha`; that is
     its own decision (D2b) and was not changed.
-- **Next: re-prove coverage and the wiki proposal on #155 after that
-  merges** (close and reopen #155, then merge it). The CI summary's fix is
-  proven on the next red push. Then build `agentctl shadow report` once a
-  few shadow records exist, and bring the record to the human.
+- **#157 merged; coverage and the wiki proposal proven live on #155,
+  2026-10-15.** Automations 2, 3 and 4 are proven live. Automation 1's
+  thinking fix is proven only on its next red push.
+  - Coverage (run 38763123957, after a close and reopen): the comment
+    posted, "12 of 12 pinned", each criterion with the tests that pin it.
+    The mapping reads right, e.g. the OT, 2OT and 3OT+ headings go to
+    their own tests. Two test ids the model invented were dropped and
+    counted. 25,647 input / 1,824 output tokens, **$0.003477**. jev
+    answered `no` at confidence 0.34 ($0.000737): a disagreement.
+  - Coverage again, after "Update branch" (run 38765137281): `max_tokens`
+    with `content=[text]`, no thinking. Twelve criteria's answer ran past
+    2000 output tokens. The earlier comment stayed. `max_tokens` is now
+    4000 (`director/p04-live-results`); a token cap costs nothing unused.
+    Note that `main`'s ruleset requires an up-to-date branch, so every
+    hand-run PR gets that extra push, and an extra coverage run.
+  - Wiki proposal (run 38770494864, on the merge `03f84ef`): the comment
+    posted on the closed PR. 74,303 input / 278 output tokens,
+    **$0.007569**. The unit had already updated `0x08-frontend.md` (+43
+    lines), so "nothing to change" was right. Haiku proposed one edit
+    anyway; its `find` was not in the updated file, so it was refused and
+    nothing wrong was offered. The safeguard did its job; the model's
+    judgement here was poor.
+  - Cost for one hand-run unit: about $0.05 in model calls, $0.018 of it
+    five failed coverage runs. Once the fixes were in: drift
+    $0.0087, coverage $0.0035 a push, wiki proposal $0.0076, jev under
+    $0.001 a question.
+  - **jev in shadow: 2 records, 2 disagreements**, both `no` at confidence
+    0.34-0.36, against Haiku's "matches" and "all pinned". Too few to judge;
+    both low-confidence answers point the same way.
+- **Next:**
+  - Collect shadow records over the queued units (`EVENTS-006`, ...).
+  - Build `agentctl shadow report` once there are about five.
+  - Proposed, the human's call: drift reads the brief's files before
+    `forbidden_paths`. Also proposed: run drift automatically on an
+    `agent/<ID>` branch's first push.
 
 ## The four, with design notes (starting points, not decisions)
 
