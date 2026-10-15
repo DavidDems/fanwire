@@ -34,6 +34,7 @@ from agentlib.automation import (  # noqa: F401
     escape,
     first_text,
     is_safe_url,
+    no_thinking,
     tokens_text,
 )
 from agentlib.automation import fenced as _fenced
@@ -140,6 +141,7 @@ def request_body(
         "model": model,
         "max_tokens": max_tokens,
         "system": system,
+        "thinking": no_thinking(),
         "messages": [{"role": "user", "content": content}],
     }
 

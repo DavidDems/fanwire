@@ -235,9 +235,44 @@ record per call), and bring it to the human.
   - Proven only live: firing on the merge of a hand-opened `agent/*` PR,
     commenting on a closed PR. A rebase merge would read only its last
     commit (the repository merges with merge commits).
-- **Next: prove 2-4 live on the next hand-run units** (`Prompts/07`'s
-  queue), then build `agentctl shadow report` once a few shadow records
-  exist, and bring the record to the human.
+- **Automations 3 and 4 merged (#153, #154).**
+- **First live runs on #155 (`agent/FRONTEND-008`), 2026-10-14: Haiku 5.5
+  thinks by default.** No body set `thinking`, and thinking tokens count
+  toward `max_tokens`:
+  - Coverage: all four pushes (runs 38633144291 to 38635201703) ended
+    `stop_reason=max_tokens` on 2000 tokens, mostly `content=[thinking]`. No
+    comment, $0.003565 each. jev was not reached.
+  - CI summary (run 38633505452): the comment posted and its parsed failures
+    were right, but the cause sentence was cut mid-word at 300 tokens
+    ($0.001490).
+  - Spec drift (dispatch run 38629756035, before the PR existed): answered
+    within 2000 tokens with thinking (86,661 input / 802 output, $0.009067).
+    No PR to comment on.
+  - Fix (`director/no-thinking`): every body sends `thinking: {type:
+    "disabled"}` (`automation.no_thinking()`), which Haiku 5.5 accepts at
+    effort `high` or below; its default is medium.
+- **The fix merged (#156); the re-proof on #155, 2026-10-14/15:**
+  - Spec drift (dispatch run 38640333016, PR open): **proven live.** The
+    comment posted on #155, "no drift found", 86,660 input / 8 output
+    tokens, $0.008670. jev answered `no` at confidence 0.36 ($0.000906),
+    so the first shadow record disagrees. The input was capped with 103
+    files unread, mostly `backend/**`: the files are read in this order:
+    `allowed_paths`, then `forbidden_paths`, then the files the brief
+    names. A frontend unit that forbids `backend/**` fills the cap with
+    code it may not touch, ahead of the files its brief names. Proposed:
+    read the brief's files before `forbidden_paths`. Not built.
+  - Coverage (run 38639808272, after a close and reopen): still
+    `max_tokens` on thinking. GitHub did not refresh
+    `pull_request.base.sha` on the reopen, so `tools/` was checked out
+    at main from before #156, while the workflow file came from main's
+    tip. Fixed in `director/tools-at-github-sha`: coverage-check and
+    wiki-proposal load their tools at `github.sha`, as the worker and
+    orchestrator already do. `agent-guard` still uses `base.sha`; that is
+    its own decision (D2b) and was not changed.
+- **Next: re-prove coverage and the wiki proposal on #155 after that
+  merges** (close and reopen #155, then merge it). The CI summary's fix is
+  proven on the next red push. Then build `agentctl shadow report` once a
+  few shadow records exist, and bring the record to the human.
 
 ## The four, with design notes (starting points, not decisions)
 
@@ -363,6 +398,9 @@ shape the design:
 - **YAML can't prove GitHub's semantics.** `workflow_run`/`pull_request_target`
   behaviour, comment permissions on bot PRs, and `action_required` interplay
   are proven only by a live run. Say which properties are unproven in each PR.
+- **Haiku 5.5 thinks unless told not to**, and the thinking counts toward
+  `max_tokens` (#155). A new body sends `"thinking": no_thinking()` from
+  `agentlib/automation.py`; the tests assert it.
 
 ## Limits
 

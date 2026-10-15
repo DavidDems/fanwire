@@ -30,6 +30,17 @@ from agentlib.promptbuild import FENCE
 
 REDACTED = "***"
 
+
+def no_thinking() -> dict[str, str]:
+    """The `thinking` field of a request body, switched off.
+
+    Haiku 5.5 thinks by default and thinking tokens count toward `max_tokens`,
+    so a small cap can be spent before the answer starts. It accepts thinking
+    disabled at effort high or below, and its default effort is medium. A new
+    dict each call, so a caller changing one body cannot change another."""
+    return {"type": "disabled"}
+
+
 # Untrusted text is cut to this before it is escaped, unless a caller says
 # otherwise: a sentence, not an essay.
 MAX_ESCAPED_CHARS = 400
