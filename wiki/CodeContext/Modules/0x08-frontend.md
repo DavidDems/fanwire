@@ -8,7 +8,7 @@ what the frontend does with them, and nothing that belongs to a backend module.
 ## State
 
 **Foundation, authentication, the profile page, the composer, the notifications
-view, the feed and search** (`FRONTEND-001` … `FRONTEND-007`). No placeholder
+view, the feed, search and the game page** (`FRONTEND-001` … `FRONTEND-008`). No placeholder
 view is left.
 
 What is real:
@@ -24,10 +24,11 @@ What is real:
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
-| `src/features/search/` | `/search` — the free-text bar, the Accounts and Posts sections paged apart, and the dropdown-only game filter |
-| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the optimistic like and the media |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts` and `search.ts` (the per-unit network fixtures) |
+| `src/features/search/` | `/search` — the free-text bar, the Accounts and Posts sections paged apart, and the dropdown-only game filter, whose rows link to `/games/<id>` |
+| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the optimistic like, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
+| `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts` and `games.ts` (the per-unit network fixtures) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
 Each unit lifted its view out of `views.tsx` — they were in one file so that
@@ -657,6 +658,43 @@ like the feed: every search route is a read path ([[0x07-search]]).
   `Field`s in a row needs a rule on `Field`'s wrapper, which "Field owns its
   own layout" (`FrontendUI/components.md` §5) rules out. A row layout needs a
   `Field` layout option first.
+
+## Game page (`FRONTEND-008`)
+
+`src/features/games/`, wired at `/games/:gameId`. **Public**: a game is a read
+path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
+`features/games/api.ts`, typed by the schema's own `GameDetailOut`,
+`TeamBoxScoreOut` and `BoxScorePlayerOut` with no renamed client model.
+
+- **Reached by address only.** Search rows (`GameScore` with `to`) and post
+  text (`PostText`) link to `/games/<id>`; nothing imports `features/games/`,
+  and it imports no other feature (`games-isolation.test.ts`).
+- **A 404 is not-found, not an error.** `fetchGame` returns `null` on 404 and
+  the page says "Game not found" with a link back to the feed; any other
+  failure throws and shows `InlineAlert`. A non-numeric id is not-found
+  without a request.
+- **Every figure goes through `format.ts`**: `27:04` minutes from
+  `seconds_played`, `.462` percentages (null is an en dash), `+12`/`−3`/`0`
+  plus-minus, `8-13` made-attempted, and the line-score headers Q1–Q4, OT,
+  2OT, `3OT+` (the seventh stored figure is "third overtime and later",
+  [[0x02-events]] Game, never split or padded).
+- **Dates as stored.** The timestamp is naive US-Eastern; `parseISO` on the
+  string without `Z` shows the stored calendar date in every viewer's zone.
+- **The winner is said in words** ("Final: X won, 117–109"), never by colour.
+- **Real tables.** `<caption>`, `th scope="col"` headers, the player in a
+  `th scope="row"`, starters then bench in API order, the API's `totals` as
+  the last row. Each table sits in a labelled `role="region"` with
+  `tabIndex=0` and `overflow-x: auto`, so a keyboard user can scroll it and
+  the page itself never scrolls sideways. The line score is absent when either
+  side's is null; an empty box score is an `EmptyState` in place of the table.
+  Players who did not play are listed after their team's table, with the
+  reason or "Did not play".
+- **Mentions link only when the server resolved them.** `PostText` splits on
+  `#GameId(\d+)` and links a token only if its id is in
+  `mentioned_game_ids`; it builds React nodes, so post text is never parsed as
+  HTML. `\d+` is greedy: `#GameId5012` is 5012, never 501.
+- **Box-score names are not links yet**: `FRONTEND-009` links them once
+  `/players/:id` exists.
 
 ## Open decisions
 

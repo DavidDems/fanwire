@@ -44,3 +44,19 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
+
+/* With a target the whole block is one link: the text keeps its own colours. */
+.link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.link:hover .figure {
+  text-decoration: underline;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

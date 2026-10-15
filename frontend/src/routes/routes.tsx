@@ -6,6 +6,7 @@ import { ProfileSetupPage } from "../auth/ProfileSetupPage";
 import { SignInPage } from "../auth/SignInPage";
 import { SignUpPage } from "../auth/SignUpPage";
 import { ComposePage } from "../features/compose/ComposePage";
+import { GamePage } from "../features/games/GamePage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
@@ -57,6 +58,9 @@ export const routes: RouteObject[] = [
       // FRONTEND-003's page. Still public, and still one route: the id in the
       // path is what selects the own-profile variant from the public one.
       { path: "profile/:userId", element: <ProfilePage /> },
+      // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
+      // and every other feature reaches it by this address, never by import.
+      { path: "games/:gameId", element: <GamePage /> },
 
       // FRONTEND-002's pages.
       { path: "sign-in", element: <SignInPage /> },

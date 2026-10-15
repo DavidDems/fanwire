@@ -17,6 +17,7 @@ import {
 import { LikeButton } from "./LikeButton";
 import { PostMedia } from "./PostMedia";
 import styles from "./PostNode.module.css";
+import { PostText } from "./PostText";
 import { fetchThread, threadKey, type PostView } from "./api";
 
 /**
@@ -84,7 +85,13 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
           {postedOn(post.created_at)}
         </time>
       </header>
-      {post.text === null ? null : <p className={styles.text}>{post.text}</p>}
+      {post.text === null ? null : (
+        <PostText
+          className={styles.text}
+          text={post.text}
+          mentionedGameIds={post.mentioned_game_ids}
+        />
+      )}
       {post.media.map((item) => (
         <PostMedia key={item.id} item={item} author={post.author.username} />
       ))}

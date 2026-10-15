@@ -1,0 +1,163 @@
+/*
+ * The game page (/games/:gameId): the heading block, the line score, then each
+ * team's box score. Mobile-first and one column: the tables are wider than a
+ * phone, so each scrolls sideways inside its own focusable container and the
+ * page itself never does. Values come from tokens.css by name only.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.heading {
+  margin: 0;
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+/* A team and its score stay together; the two sides wrap apart on a phone. */
+.side {
+  white-space: nowrap;
+}
+
+.score {
+  font-variant-numeric: tabular-nums;
+}
+
+.at {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.label {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.result {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* One team: its heading, its table (or the empty state), who did not play. */
+.team {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.team h2 {
+  margin: 0;
+}
+
+/*
+ * The scroll container. Focusable (tabIndex 0) so a keyboard user can scroll
+ * it with the arrow keys; the ring below is what shows it has focus.
+ */
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.scroll:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caption {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+}
+
+.table thead th {
+  border-bottom: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--color-border);
+}
+
+.table abbr {
+  text-decoration: none;
+}
+
+/* The first column, player or team, reads left to right. */
+.table .name {
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+}
+
+.table tbody .name {
+  font-weight: var(--font-weight-regular);
+}
+
+.position {
+  color: var(--color-text-muted);
+}
+
+/* A heavier rule where the starters end and the bench begins. */
+.table tbody .benchStart {
+  border-top: 2px solid var(--color-border-strong);
+}
+
+.totals {
+  border-top: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+}
+
+.total {
+  font-weight: var(--font-weight-bold);
+}
+
+.dnp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+}
+
+.dnpName {
+  font-weight: var(--font-weight-semibold);
+}
