@@ -258,3 +258,131 @@ class PlayerGameOut(BaseModel):
     points: int
     plus_minus: int
     dnp_reason: str | None
+
+
+# ------------------------------------------------------------------ seasons
+# EVENTS-007: read models built in app.events.service, never the ORM rows.
+
+LeaderStat = Literal["points", "rebounds", "assists", "steals", "blocks", "threes"]
+
+
+class RecordOut(BaseModel):
+    """A team's regular-season record (only `regular` games count: NBA Cup
+    group and knockout games do; play-in, playoffs and the cup final do
+    not), with home and away splits."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    wins: int
+    losses: int
+    home_wins: int
+    home_losses: int
+    away_wins: int
+    away_losses: int
+
+
+class StandingRowOut(RecordOut):
+    """`win_pct` is wins / games, three places. `games_behind` is in half
+    games behind the first team of the conference's order:
+    ((leader_w - w) + (l - leader_l)) / 2."""
+
+    team: TeamRefOut
+    win_pct: float
+    games_behind: float
+
+
+class DivisionStandingsOut(BaseModel):
+    """A division's teams, in their conference's order."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    division: str
+    teams: list[StandingRowOut]
+
+
+class ConferenceStandingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    conference: str
+    divisions: list[DivisionStandingsOut]
+
+
+class StandingsOut(BaseModel):
+    """GET /events/seasons/{season}/standings. `tie_break` names the
+    ordering rule: the NBA's own tie-breakers are not applied."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: str
+    tie_break: str
+    conferences: list[ConferenceStandingsOut]
+
+
+class ChampionOut(BaseModel):
+    """GET /events/seasons/{season}/champion. `result` is the Finals score,
+    the champion's wins first ("4-2"). All three are null until a team has
+    won four Finals games."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: str
+    champion: TeamRefOut | None
+    runner_up: TeamRefOut | None
+    result: str | None
+
+
+class LeaderOut(BaseModel):
+    """`teams` are the abbreviations the player played for in the counted
+    games; `average` is per game, one place."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    teams: list[str]
+    games_played: int
+    average: float
+
+
+class LeadersOut(BaseModel):
+    """GET /events/seasons/{season}/leaders. `rule` names the qualifying
+    rule applied and `minimum_games` its minimum (0 for the playoffs)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: str
+    stat: LeaderStat
+    game_type: CareerGameType
+    rule: str
+    minimum_games: int
+    leaders: list[LeaderOut]
+
+
+class TeamSeasonGameOut(BaseModel):
+    """One of the team's games, from its side: `team_score` is its own."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    date: datetime
+    game_type: str | None
+    label: str | None
+    sub_label: str | None
+    opponent: TeamRefOut
+    is_home: bool
+    team_score: int
+    opponent_score: int
+    won: bool
+
+
+class TeamSeasonOut(BaseModel):
+    """GET /events/teams/{team_id}/seasons/{season}: the regular-season
+    record and every game of every type, newest first."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    season: str
+    team: TeamOut
+    record: RecordOut
+    games: list[TeamSeasonGameOut]

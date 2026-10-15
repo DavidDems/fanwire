@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,13 +19,19 @@ from app.dependencies import get_session
 from app.events import service
 from app.events.models import Game, Team
 from app.events.schemas import (
+    CareerGameType,
+    ChampionOut,
     GameDetailOut,
     GameOut,
     GameType,
+    LeadersOut,
+    LeaderStat,
     PlayerDetailOut,
     PlayerGameOut,
     PlayerListItemOut,
+    StandingsOut,
     TeamOut,
+    TeamSeasonOut,
 )
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -36,6 +42,11 @@ SEASON_PATTERN = r"^\d{4}-\d{2}$"
 # A player name search: measured after trimming, so "  " is a 422 rather
 # than an unfiltered list.
 NameQuery = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+# A season in a path: a malformed one is a 422.
+SeasonPath = Annotated[str, Path(pattern=SEASON_PATTERN)]
+
+SEASON_NOT_FOUND = "Season not found"
 
 
 @router.get("/teams", response_model=list[TeamOut])
@@ -131,3 +142,76 @@ def list_player_games(
     if games is None:
         raise HTTPException(status_code=404, detail="Player not found")
     return games
+
+
+@router.get("/seasons", response_model=list[str])
+def list_seasons(session: Session = Depends(get_session)) -> list[str]:
+    """Every season with at least one stored game, of any type, newest
+    first, as "YYYY-YY"."""
+    return service.distinct_seasons(session)
+
+
+@router.get("/seasons/{season}/standings", response_model=StandingsOut)
+def get_standings(season: SeasonPath, session: Session = Depends(get_session)) -> service.Standings:
+    """Regular-season standings by conference, then division. Within a
+    conference: win percentage, then wins, then team name (`tie_break`;
+    the NBA's own tie-breakers are not applied). Only `regular` games count.
+
+    422: a malformed season (not "YYYY-YY"). 404: a well-formed season with
+    no stored game."""
+    found = service.standings(session, season)
+    if found is None:
+        raise HTTPException(status_code=404, detail=SEASON_NOT_FOUND)
+    return found
+
+
+@router.get("/seasons/{season}/champion", response_model=ChampionOut)
+def get_champion(season: SeasonPath, session: Session = Depends(get_session)) -> service.Champion:
+    """The team that won four of the season's playoff games labelled "NBA
+    Finals", the runner-up and the series result. Until then all three are
+    null, in a 200.
+
+    422: a malformed season (not "YYYY-YY"). 404: a well-formed season with
+    no stored game."""
+    found = service.champion(session, season)
+    if found is None:
+        raise HTTPException(status_code=404, detail=SEASON_NOT_FOUND)
+    return found
+
+
+@router.get("/seasons/{season}/leaders", response_model=LeadersOut)
+def get_leaders(
+    season: SeasonPath,
+    stat: LeaderStat,
+    game_type: CareerGameType = "regular",
+    limit: int = Query(10, ge=1, le=50),
+    session: Session = Depends(get_session),
+) -> service.Leaders:
+    """The top players by per-game average of `stat` (`threes`: three-
+    pointers made) over their played games of `game_type`, then by player
+    id. Regular season: 65 games from 2023-24 on, before that 70 % of the
+    most games any team played, rounded up; the playoffs have no minimum.
+    The response names the rule and the minimum.
+
+    422: a malformed season, an unknown `stat` or `game_type`, or `limit`
+    outside 1-50. 404: a well-formed season with no stored game."""
+    found = service.leaders(session, season, stat=stat, game_type=game_type, limit=limit)
+    if found is None:
+        raise HTTPException(status_code=404, detail=SEASON_NOT_FOUND)
+    return found
+
+
+@router.get("/teams/{team_id}/seasons/{season}", response_model=TeamSeasonOut)
+def get_team_season(
+    team_id: int, season: SeasonPath, session: Session = Depends(get_session)
+) -> service.TeamSeason:
+    """One team's season: its regular-season record with home and away
+    splits, and every one of its games that season, of every type, newest
+    first.
+
+    422: a malformed season (not "YYYY-YY"). 404: an unknown team, or a
+    well-formed season with no stored game."""
+    found = service.team_season(session, team_id, season)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Team or season not found")
+    return found

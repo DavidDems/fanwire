@@ -110,6 +110,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/seasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Seasons
+         * @description Every season with at least one stored game, of any type, newest
+         *     first, as "YYYY-YY".
+         */
+        get: operations["list_seasons_events_seasons_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/seasons/{season}/champion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Champion
+         * @description The team that won four of the season's playoff games labelled "NBA
+         *     Finals", the runner-up and the series result. Until then all three are
+         *     null, in a 200.
+         *
+         *     422: a malformed season (not "YYYY-YY"). 404: a well-formed season with
+         *     no stored game.
+         */
+        get: operations["get_champion_events_seasons__season__champion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/seasons/{season}/leaders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Leaders
+         * @description The top players by per-game average of `stat` (`threes`: three-
+         *     pointers made) over their played games of `game_type`, then by player
+         *     id. Regular season: 65 games from 2023-24 on, before that 70 % of the
+         *     most games any team played, rounded up; the playoffs have no minimum.
+         *     The response names the rule and the minimum.
+         *
+         *     422: a malformed season, an unknown `stat` or `game_type`, or `limit`
+         *     outside 1-50. 404: a well-formed season with no stored game.
+         */
+        get: operations["get_leaders_events_seasons__season__leaders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/seasons/{season}/standings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Standings
+         * @description Regular-season standings by conference, then division. Within a
+         *     conference: win percentage, then wins, then team name (`tie_break`;
+         *     the NBA's own tie-breakers are not applied). Only `regular` games count.
+         *
+         *     422: a malformed season (not "YYYY-YY"). 404: a well-formed season with
+         *     no stored game.
+         */
+        get: operations["get_standings_events_seasons__season__standings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events/teams": {
         parameters: {
             query?: never;
@@ -140,6 +238,31 @@ export interface paths {
         };
         /** Get Team */
         get: operations["get_team_events_teams__team_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/teams/{team_id}/seasons/{season}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team Season
+         * @description One team's season: its regular-season record with home and away
+         *     splits, and every one of its games that season, of every type, newest
+         *     first.
+         *
+         *     422: a malformed season (not "YYYY-YY"). 404: an unknown team, or a
+         *     well-formed season with no stored game.
+         */
+        get: operations["get_team_season_events_teams__team_id__seasons__season__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -642,6 +765,27 @@ export interface components {
             /** Turnovers */
             turnovers: number;
         };
+        /**
+         * ChampionOut
+         * @description GET /events/seasons/{season}/champion. `result` is the Finals score,
+         *     the champion's wins first ("4-2"). All three are null until a team has
+         *     won four Finals games.
+         */
+        ChampionOut: {
+            champion: components["schemas"]["TeamRefOut"] | null;
+            /** Result */
+            result: string | null;
+            runner_up: components["schemas"]["TeamRefOut"] | null;
+            /** Season */
+            season: string;
+        };
+        /** ConferenceStandingsOut */
+        ConferenceStandingsOut: {
+            /** Conference */
+            conference: string;
+            /** Divisions */
+            divisions: components["schemas"]["DivisionStandingsOut"][];
+        };
         /** CreatePostRequest */
         CreatePostRequest: {
             /**
@@ -710,6 +854,16 @@ export interface components {
             last_name: string | null;
             /** Player Id */
             player_id: number;
+        };
+        /**
+         * DivisionStandingsOut
+         * @description A division's teams, in their conference's order.
+         */
+        DivisionStandingsOut: {
+            /** Division */
+            division: string;
+            /** Teams */
+            teams: components["schemas"]["StandingRowOut"][];
         };
         /** FeedPage */
         FeedPage: {
@@ -802,6 +956,50 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * LeaderOut
+         * @description `teams` are the abbreviations the player played for in the counted
+         *     games; `average` is per game, one place.
+         */
+        LeaderOut: {
+            /** Average */
+            average: number;
+            /** First Name */
+            first_name: string | null;
+            /** Games Played */
+            games_played: number;
+            /** Last Name */
+            last_name: string | null;
+            /** Player Id */
+            player_id: number;
+            /** Teams */
+            teams: string[];
+        };
+        /**
+         * LeadersOut
+         * @description GET /events/seasons/{season}/leaders. `rule` names the qualifying
+         *     rule applied and `minimum_games` its minimum (0 for the playoffs).
+         */
+        LeadersOut: {
+            /**
+             * Game Type
+             * @enum {string}
+             */
+            game_type: "regular" | "playoffs";
+            /** Leaders */
+            leaders: components["schemas"]["LeaderOut"][];
+            /** Minimum Games */
+            minimum_games: number;
+            /** Rule */
+            rule: string;
+            /** Season */
+            season: string;
+            /**
+             * Stat
+             * @enum {string}
+             */
+            stat: "points" | "rebounds" | "assists" | "steals" | "blocks" | "threes";
         };
         /**
          * MeOut
@@ -1136,6 +1334,26 @@ export interface components {
             username: string;
         };
         /**
+         * RecordOut
+         * @description A team's regular-season record (only `regular` games count: NBA Cup
+         *     group and knockout games do; play-in, playoffs and the cup final do
+         *     not), with home and away splits.
+         */
+        RecordOut: {
+            /** Away Losses */
+            away_losses: number;
+            /** Away Wins */
+            away_wins: number;
+            /** Home Losses */
+            home_losses: number;
+            /** Home Wins */
+            home_wins: number;
+            /** Losses */
+            losses: number;
+            /** Wins */
+            wins: number;
+        };
+        /**
          * SeasonLineOut
          * @description One season and game type the player played in. `teams` are
          *     abbreviations in the order first played; the stats are summed across
@@ -1257,6 +1475,44 @@ export interface components {
             turnovers: number;
         };
         /**
+         * StandingRowOut
+         * @description `win_pct` is wins / games, three places. `games_behind` is in half
+         *     games behind the first team of the conference's order:
+         *     ((leader_w - w) + (l - leader_l)) / 2.
+         */
+        StandingRowOut: {
+            /** Away Losses */
+            away_losses: number;
+            /** Away Wins */
+            away_wins: number;
+            /** Games Behind */
+            games_behind: number;
+            /** Home Losses */
+            home_losses: number;
+            /** Home Wins */
+            home_wins: number;
+            /** Losses */
+            losses: number;
+            team: components["schemas"]["TeamRefOut"];
+            /** Win Pct */
+            win_pct: number;
+            /** Wins */
+            wins: number;
+        };
+        /**
+         * StandingsOut
+         * @description GET /events/seasons/{season}/standings. `tie_break` names the
+         *     ordering rule: the NBA's own tie-breakers are not applied.
+         */
+        StandingsOut: {
+            /** Conferences */
+            conferences: components["schemas"]["ConferenceStandingsOut"][];
+            /** Season */
+            season: string;
+            /** Tie Break */
+            tie_break: string;
+        };
+        /**
          * StatLineOut
          * @description A career or season line: totals of the played rows, percentages
          *     computed from the totals (the box score's rule) and per-game averages
@@ -1363,6 +1619,47 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * TeamSeasonGameOut
+         * @description One of the team's games, from its side: `team_score` is its own.
+         */
+        TeamSeasonGameOut: {
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Game Id */
+            game_id: number;
+            /** Game Type */
+            game_type: string | null;
+            /** Is Home */
+            is_home: boolean;
+            /** Label */
+            label: string | null;
+            opponent: components["schemas"]["TeamRefOut"];
+            /** Opponent Score */
+            opponent_score: number;
+            /** Sub Label */
+            sub_label: string | null;
+            /** Team Score */
+            team_score: number;
+            /** Won */
+            won: boolean;
+        };
+        /**
+         * TeamSeasonOut
+         * @description GET /events/teams/{team_id}/seasons/{season}: the regular-season
+         *     record and every game of every type, newest first.
+         */
+        TeamSeasonOut: {
+            /** Games */
+            games: components["schemas"]["TeamSeasonGameOut"][];
+            record: components["schemas"]["RecordOut"];
+            /** Season */
+            season: string;
+            team: components["schemas"]["TeamOut"];
         };
         /** ThreadView */
         ThreadView: {
@@ -1582,6 +1879,123 @@ export interface operations {
             };
         };
     };
+    list_seasons_events_seasons_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    get_champion_events_seasons__season__champion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                season: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChampionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_leaders_events_seasons__season__leaders_get: {
+        parameters: {
+            query: {
+                stat: "points" | "rebounds" | "assists" | "steals" | "blocks" | "threes";
+                game_type?: "regular" | "playoffs";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                season: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeadersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_standings_events_seasons__season__standings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                season: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_teams_events_teams_get: {
         parameters: {
             query?: never;
@@ -1620,6 +2034,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeamOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_season_events_teams__team_id__seasons__season__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team_id: number;
+                season: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamSeasonOut"];
                 };
             };
             /** @description Validation Error */
