@@ -2396,7 +2396,10 @@ class TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData:
         for chunk in checkouts:
             assert "persist-credentials: false" in chunk
         tools = next(c for c in checkouts if "path: tools" in c)
-        assert "ref: ${{ github.event.pull_request.base.sha }}" in tools
+        # github.sha, main's tip when the event fired: the commit the workflow
+        # file itself comes from. base.sha is not refreshed on a reopen, so on
+        # #155 it loaded tools from before a fix the workflow already had.
+        assert "ref: ${{ github.sha }}" in tools
         pr = next(c for c in checkouts if "path: pr" in c)
         assert "ref: ${{ github.event.pull_request.head.sha }}" in pr
         for line in live_lines(wf):
@@ -2598,7 +2601,9 @@ class TestTheWikiProposalRunsMainsCopyAfterAMerge:
         for chunk in checkouts:
             assert "persist-credentials: false" in chunk
         tools = next(c for c in checkouts if "path: tools" in c)
-        assert "ref: ${{ github.event.pull_request.base.sha }}" in tools
+        # github.sha, main's tip when the merge event fired, as for coverage:
+        # base.sha can predate fixes the workflow file already has.
+        assert "ref: ${{ github.sha }}" in tools
         merged = next(c for c in checkouts if "path: merged" in c)
         assert "ref: ${{ github.event.pull_request.merge_commit_sha }}" in merged
         for line in live_lines(wf):

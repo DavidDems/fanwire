@@ -13,8 +13,8 @@ name: wiki-proposal
 #   - pull_request_target, closed, and the job's if: requires merged (decided
 #     by the human, 2026-10-13). A pull_request_target job runs the workflow
 #     file of main, never the branch's, and the code that runs is main's too:
-#     the PR's base SHA is checked out at tools/, and every script runs from
-#     there with python -I. The merge commit is checked out beside it at
+#     main's tip (github.sha) is checked out at tools/, and every script runs
+#     from there with python -I. The merge commit is checked out beside it at
 #     merged/ as data: its diff and module files are read, nothing in it is
 #     run, and the spec is read from tools/.
 #   - output option (a), decided by the human on 2026-10-13: a comment on the
@@ -89,11 +89,13 @@ jobs:
           fi
           echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
 
-      # main's copy before the merge: the code that runs with the key, and
-      # the spec as main held it.
+      # main's copy: the code that runs with the key, and the spec as main
+      # holds it after the merge (github.sha is normally the merge commit).
+      # Not the PR's base.sha: GitHub does not refresh it on a reopen, so it
+      # can predate fixes the workflow file (main's tip) already has.
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.sha }}
           path: tools
           persist-credentials: false
 
