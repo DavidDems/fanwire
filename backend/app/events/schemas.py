@@ -9,7 +9,7 @@ mirror.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -141,3 +141,120 @@ class GameDetailOut(BaseModel):
     away_line_score: list[int] | None
     home_box_score: TeamBoxScoreOut
     away_box_score: TeamBoxScoreOut
+
+
+class PlayerListItemOut(BaseModel):
+    """One player in GET /events/players' list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    first_name: str | None
+    last_name: str | None
+    position: str | None
+    jersey: str | None
+    first_season: str | None
+    last_season: str | None
+    # The team on the player's newest box-score row by game date (DNP rows
+    # included); null when the player has none.
+    latest_team_abbreviation: str | None
+
+
+class StatLineOut(ShootingOut):
+    """A career or season line: totals of the played rows, percentages
+    computed from the totals (the box score's rule) and per-game averages
+    to one place, null when no game was played."""
+
+    games_played: int
+    games_started: int
+    points_per_game: float | None
+    rebounds_per_game: float | None
+    assists_per_game: float | None
+    steals_per_game: float | None
+    blocks_per_game: float | None
+    turnovers_per_game: float | None
+    three_pointers_made_per_game: float | None
+    minutes_per_game: float | None
+
+
+CareerGameType = Literal["regular", "playoffs"]
+
+
+class SeasonLineOut(StatLineOut):
+    """One season and game type the player played in. `teams` are
+    abbreviations in the order first played; the stats are summed across
+    them, as nba.com's "TOT" row is."""
+
+    season: str
+    game_type: CareerGameType
+    teams: list[str]
+
+
+class PlayerDetailOut(BaseModel):
+    """GET /events/players/{id}: a read model built by
+    app.events.service.player_detail. Only played rows of `regular` and
+    `playoffs` games count towards a line."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    first_name: str | None
+    last_name: str | None
+    birth_date: date | None
+    height_inches: int | None
+    weight_lbs: int | None
+    country: str | None
+    school: str | None
+    jersey: str | None
+    position: str | None
+    draft_year: int | None
+    draft_round: int | None
+    draft_number: int | None
+    first_season: str | None
+    last_season: str | None
+    career_regular: StatLineOut
+    career_playoffs: StatLineOut
+    # Newest season first.
+    seasons: list[SeasonLineOut]
+
+
+class PlayerGameOut(BaseModel):
+    """One row of GET /events/players/{id}/games: the player's box-score
+    line in one game, played or not, with the game around it. A row
+    without minutes (`seconds_played` null) is a did-not-play."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    game_id: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    team: TeamRefOut
+    opponent: TeamRefOut
+    is_home: bool
+    team_score: int
+    opponent_score: int
+    starter: bool
+    starting_position: str | None
+    seconds_played: int | None
+    field_goals_made: int
+    field_goals_attempted: int
+    field_goal_pct: float | None
+    three_pointers_made: int
+    three_pointers_attempted: int
+    three_point_pct: float | None
+    free_throws_made: int
+    free_throws_attempted: int
+    free_throw_pct: float | None
+    offensive_rebounds: int
+    defensive_rebounds: int
+    rebounds: int
+    assists: int
+    steals: int
+    blocks: int
+    turnovers: int
+    personal_fouls: int
+    points: int
+    plus_minus: int
+    dnp_reason: str | None
