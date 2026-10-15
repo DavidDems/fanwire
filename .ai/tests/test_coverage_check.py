@@ -556,6 +556,9 @@ class TestTheOneCall:
         assert auto["provider"] == "anthropic"
         assert auto["model"] == "claude-haiku-5-5"
         assert 0 < auto["max_tokens"] <= coverage.MAX_TOKENS
+        # 12 criteria took 1824 output tokens on #155, and the next push ran
+        # past 2000 with no thinking at all: room for a long spec's answer.
+        assert auto["max_tokens"] >= 4000
         assert auto["max_test_chars"] <= coverage.MAX_TEST_CHARS
         assert f"anthropic/{auto['model']}" in config()["telemetry"]["prices"]
 
