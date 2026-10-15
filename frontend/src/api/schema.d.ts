@@ -47,6 +47,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/players": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Players
+         * @description One page of players by last name, first name, id. `q` matches when
+         *     every word of it is a prefix of the first or last name, case- and
+         *     accent-insensitively; `season` keeps players who played in it.
+         */
+        get: operations["list_players_events_players_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/players/{player_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Player
+         * @description The player page: attributes, regular-season and playoff career
+         *     lines, and one line per season and game type, newest first.
+         */
+        get: operations["get_player_events_players__player_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/players/{player_id}/games": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Player Games
+         * @description The player's game log, played and did-not-play, newest first.
+         */
+        get: operations["list_player_games_events_players__player_id__games_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events/teams": {
         parameters: {
             query?: never;
@@ -838,6 +901,145 @@ export interface components {
          * @enum {string}
          */
         NotificationType: "follow" | "reply" | "repost";
+        /**
+         * PlayerDetailOut
+         * @description GET /events/players/{id}: a read model built by
+         *     app.events.service.player_detail. Only played rows of `regular` and
+         *     `playoffs` games count towards a line.
+         */
+        PlayerDetailOut: {
+            /** Birth Date */
+            birth_date: string | null;
+            career_playoffs: components["schemas"]["StatLineOut"];
+            career_regular: components["schemas"]["StatLineOut"];
+            /** Country */
+            country: string | null;
+            /** Draft Number */
+            draft_number: number | null;
+            /** Draft Round */
+            draft_round: number | null;
+            /** Draft Year */
+            draft_year: number | null;
+            /** First Name */
+            first_name: string | null;
+            /** First Season */
+            first_season: string | null;
+            /** Height Inches */
+            height_inches: number | null;
+            /** Id */
+            id: number;
+            /** Jersey */
+            jersey: string | null;
+            /** Last Name */
+            last_name: string | null;
+            /** Last Season */
+            last_season: string | null;
+            /** Position */
+            position: string | null;
+            /** School */
+            school: string | null;
+            /** Seasons */
+            seasons: components["schemas"]["SeasonLineOut"][];
+            /** Weight Lbs */
+            weight_lbs: number | null;
+        };
+        /**
+         * PlayerGameOut
+         * @description One row of GET /events/players/{id}/games: the player's box-score
+         *     line in one game, played or not, with the game around it. A row
+         *     without minutes (`seconds_played` null) is a did-not-play.
+         */
+        PlayerGameOut: {
+            /** Assists */
+            assists: number;
+            /** Blocks */
+            blocks: number;
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Defensive Rebounds */
+            defensive_rebounds: number;
+            /** Dnp Reason */
+            dnp_reason: string | null;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /** Game Id */
+            game_id: number;
+            /** Game Type */
+            game_type: string | null;
+            /** Is Home */
+            is_home: boolean;
+            /** Label */
+            label: string | null;
+            /** Offensive Rebounds */
+            offensive_rebounds: number;
+            opponent: components["schemas"]["TeamRefOut"];
+            /** Opponent Score */
+            opponent_score: number;
+            /** Personal Fouls */
+            personal_fouls: number;
+            /** Plus Minus */
+            plus_minus: number;
+            /** Points */
+            points: number;
+            /** Rebounds */
+            rebounds: number;
+            /** Season */
+            season: string;
+            /** Seconds Played */
+            seconds_played: number | null;
+            /** Starter */
+            starter: boolean;
+            /** Starting Position */
+            starting_position: string | null;
+            /** Steals */
+            steals: number;
+            team: components["schemas"]["TeamRefOut"];
+            /** Team Score */
+            team_score: number;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Turnovers */
+            turnovers: number;
+        };
+        /**
+         * PlayerListItemOut
+         * @description One player in GET /events/players' list.
+         */
+        PlayerListItemOut: {
+            /** First Name */
+            first_name: string | null;
+            /** First Season */
+            first_season: string | null;
+            /** Id */
+            id: number;
+            /** Jersey */
+            jersey: string | null;
+            /** Last Name */
+            last_name: string | null;
+            /** Last Season */
+            last_season: string | null;
+            /** Latest Team Abbreviation */
+            latest_team_abbreviation: string | null;
+            /** Position */
+            position: string | null;
+        };
         /** PostOut */
         PostOut: {
             /** Author Id */
@@ -934,6 +1136,81 @@ export interface components {
             username: string;
         };
         /**
+         * SeasonLineOut
+         * @description One season and game type the player played in. `teams` are
+         *     abbreviations in the order first played; the stats are summed across
+         *     them, as nba.com's "TOT" row is.
+         */
+        SeasonLineOut: {
+            /** Assists */
+            assists: number;
+            /** Assists Per Game */
+            assists_per_game: number | null;
+            /** Blocks */
+            blocks: number;
+            /** Blocks Per Game */
+            blocks_per_game: number | null;
+            /** Defensive Rebounds */
+            defensive_rebounds: number;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /**
+             * Game Type
+             * @enum {string}
+             */
+            game_type: "regular" | "playoffs";
+            /** Games Played */
+            games_played: number;
+            /** Games Started */
+            games_started: number;
+            /** Minutes Per Game */
+            minutes_per_game: number | null;
+            /** Offensive Rebounds */
+            offensive_rebounds: number;
+            /** Personal Fouls */
+            personal_fouls: number;
+            /** Points */
+            points: number;
+            /** Points Per Game */
+            points_per_game: number | null;
+            /** Rebounds */
+            rebounds: number;
+            /** Rebounds Per Game */
+            rebounds_per_game: number | null;
+            /** Season */
+            season: string;
+            /** Seconds Played */
+            seconds_played: number;
+            /** Steals */
+            steals: number;
+            /** Steals Per Game */
+            steals_per_game: number | null;
+            /** Teams */
+            teams: string[];
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Three Pointers Made Per Game */
+            three_pointers_made_per_game: number | null;
+            /** Turnovers */
+            turnovers: number;
+            /** Turnovers Per Game */
+            turnovers_per_game: number | null;
+        };
+        /**
          * ShootingOut
          * @description Counting stats and shooting percentages, shared by a player's line
          *     and a team's totals. Percentages are a fraction from 0 to 1, three
@@ -978,6 +1255,72 @@ export interface components {
             three_pointers_made: number;
             /** Turnovers */
             turnovers: number;
+        };
+        /**
+         * StatLineOut
+         * @description A career or season line: totals of the played rows, percentages
+         *     computed from the totals (the box score's rule) and per-game averages
+         *     to one place, null when no game was played.
+         */
+        StatLineOut: {
+            /** Assists */
+            assists: number;
+            /** Assists Per Game */
+            assists_per_game: number | null;
+            /** Blocks */
+            blocks: number;
+            /** Blocks Per Game */
+            blocks_per_game: number | null;
+            /** Defensive Rebounds */
+            defensive_rebounds: number;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /** Games Played */
+            games_played: number;
+            /** Games Started */
+            games_started: number;
+            /** Minutes Per Game */
+            minutes_per_game: number | null;
+            /** Offensive Rebounds */
+            offensive_rebounds: number;
+            /** Personal Fouls */
+            personal_fouls: number;
+            /** Points */
+            points: number;
+            /** Points Per Game */
+            points_per_game: number | null;
+            /** Rebounds */
+            rebounds: number;
+            /** Rebounds Per Game */
+            rebounds_per_game: number | null;
+            /** Seconds Played */
+            seconds_played: number;
+            /** Steals */
+            steals: number;
+            /** Steals Per Game */
+            steals_per_game: number | null;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Three Pointers Made Per Game */
+            three_pointers_made_per_game: number | null;
+            /** Turnovers */
+            turnovers: number;
+            /** Turnovers Per Game */
+            turnovers_per_game: number | null;
         };
         /**
          * TeamBoxScoreOut
@@ -1125,6 +1468,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GameDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_players_events_players_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                season?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerListItemOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_player_events_players__player_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                player_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_player_games_events_players__player_id__games_get: {
+        parameters: {
+            query?: {
+                season?: string | null;
+                game_type?: ("regular" | "cup-final" | "play-in" | "playoffs") | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                player_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerGameOut"][];
                 };
             };
             /** @description Validation Error */
