@@ -13,8 +13,8 @@ name: coverage-check
 # nothing to reach (work-modes.md "Constraints every automation must keep"):
 #   - pull_request_target, not pull_request (decided by the human,
 #     2026-10-13). A pull_request_target job runs the workflow file of main,
-#     never the branch's, and the code that runs is main's too: the base SHA
-#     is checked out at tools/, and every script runs from there with
+#     never the branch's, and the code that runs is main's too: main's tip
+#     (github.sha) is checked out at tools/, and every script runs from there with
 #     python -I. The PR's head is checked out beside it at pr/ as data: its
 #     test files are read, nothing in it is run, and the spec is read from
 #     tools/, never from the branch.
@@ -86,10 +86,12 @@ jobs:
           fi
           echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
 
-      # main's copy: the code that runs with the keys.
+      # main's copy: the code that runs with the keys. github.sha, not the
+      # PR's base.sha: GitHub does not refresh base.sha on a reopen, so it can
+      # predate fixes the workflow file (main's tip) already has.
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.sha }}
           path: tools
           persist-credentials: false
 
