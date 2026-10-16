@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from agentlib.automation import (
@@ -125,13 +126,20 @@ def is_generated(path: str) -> bool:
     return path in _GENERATED_EXACT or bool(_GENERATED.fullmatch(path))
 
 
-def trim_diff(diff: str, max_chars: int = MAX_DIFF_CHARS) -> tuple[str, list[str]]:
-    """The merged diff without generated files, whole files in order up to
+def trim_diff(
+    diff: str, max_chars: int = MAX_DIFF_CHARS, first: Iterable[str] = ()
+) -> tuple[str, list[str]]:
+    """The merged diff without generated files, whole files up to
     `max_chars`, and the paths of the files left out past the cap.
+
+    The files in `first` (the module files the spec names) come before the
+    rest, each group in the diff's own order: the cap must not cut the very
+    change the wiki proposal is about.
 
     A file's part of the diff is never cut: half a hunk reads as a change that
     was not made. Once one does not fit, neither does anything after it, so
-    what is read is always a prefix and the comment can say what was not.
+    what is read is always a prefix of that order and the comment can say what
+    was not.
     """
     text = diff or ""
     headers = list(_DIFF_HEADER.finditer(text))
@@ -143,6 +151,9 @@ def trim_diff(diff: str, max_chars: int = MAX_DIFF_CHARS) -> tuple[str, list[str
     for i, header in enumerate(headers):
         end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
         chunks.append((header.group(2), text[header.start() : end]))
+
+    wanted = set(first)
+    chunks = [c for c in chunks if c[0] in wanted] + [c for c in chunks if c[0] not in wanted]
 
     kept: list[str] = []
     omitted: list[str] = []
@@ -350,7 +361,10 @@ def render(
             if len(omitted) > _MAX_SHOWN_OMITTED
             else ""
         )
-        lines += ["", f"Note: not read, past the input cap: {named}{more}."]
+        lines += [
+            "",
+            f"Note: The diff of these files was not read, past the input cap: {named}{more}.",
+        ]
 
     lines += [
         "",

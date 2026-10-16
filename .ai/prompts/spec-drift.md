@@ -42,7 +42,7 @@ setting) and the code you are shown does not have it.
 Output **only** this JSON object, and nothing before or after it:
 
 ```json
-{"names": [{"name": "Quarantined", "where": "acceptance criterion 1", "why": "Media.status has no Quarantined value; the chain is Uploaded, Scanning, Processed, Rejected."}]}
+{"names": [{"name": "Quarantined", "where": "acceptance criterion 1", "why": "Media.status has no Quarantined value; the chain is Uploaded, Scanning, Processed, Rejected.", "assumed_to_exist": true}]}
 ```
 
 - `name` is the name exactly as the spec writes it. A member is
@@ -50,5 +50,8 @@ Output **only** this JSON object, and nothing before or after it:
 - `where` is where the spec uses it: `objective`, `acceptance criterion N`,
   or `brief`.
 - `why` is one short sentence saying what the code has instead.
+- `assumed_to_exist` is `true` only when the spec or brief treats the name as
+  already in the code. A name the unit is asked to create is `false`, or
+  better left out; an entry without `true` here is left out of the report.
 - `{"names": []}` when nothing has drifted.
 - Never invent a name. Name only what the spec says and the code shown lacks.
