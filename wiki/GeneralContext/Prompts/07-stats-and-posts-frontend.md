@@ -32,7 +32,13 @@ PR after the unit; see "Director follow-ups".
    frontend unit, also `FrontendUI/verification.md` §3a (the Playwright
    rows).
 
-## Where things stand (2026-10-14)
+## Where things stand (2026-10-16)
+
+**Units 1–6 are merged and deployed**: `FRONTEND-008` #155, `EVENTS-006`
+#159 (migration run), `EVENTS-007` #160, `POSTS-001` #161, `FRONTEND-009`
+#162, `UI-009` #167. The `FrontendUI/components.md` follow-up for those four
+frontend units is done (Director PR, 2026-10-16). **Only `FRONTEND-010` is
+left**; the notes below are as of 2026-10-14 and kept for its context.
 
 Verify each: `git log origin/main`, `gh pr list`,
 `python .ai/bin/agentctl.py status`.
@@ -136,10 +142,11 @@ combination (`director-sessions.md` "Sibling PRs").
 
 ## Director follow-ups (not a unit's)
 
-- After `FRONTEND-008`, `FRONTEND-009`, `UI-009` and `FRONTEND-010`: update
-  `wiki/CodeContext/FrontendUI/components.md` §5's map (new components:
-  the game page, Tabs, Dialog, PostAction, the thread modal; removed:
-  GameFilter) from what each PR lists.
+- ~~After `FRONTEND-008`, `FRONTEND-009` and `UI-009`~~: done 2026-10-16
+  (`components.md` §2, §3, §4 and §5, `accessibility.md` A7,
+  `verification.md`). **After `FRONTEND-010`**: add Dialog and the thread
+  modal to `components.md` §2 and §5, and update §2's "Modal or dialog"
+  note, from what its PR lists.
 
 ## Limits
 

@@ -89,7 +89,8 @@ The existing kind of test, now also covering what styling adds to the DOM:
   scope with `within(...)`; the brand link named `fanwire`; the skip link first in the tab
   order and moving focus to `main` (A11–A13);
 - attributes that carry state: `aria-current="page"` on the current nav link,
-  `aria-expanded` on Show replies, `data-active` on Unlike/Unfollow,
+  `aria-expanded` on Show replies, `aria-pressed` on the post card's Like
+  and Repost, `data-active` on Unfollow,
   `aria-invalid` on a failed field (A7);
 - text that replaces colour: the Live badge contains "Live"; game-state
   mapping (`components.md` §4) for each code, including "an unknown code is
