@@ -22,6 +22,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Dialog } from "./Dialog";
@@ -157,5 +158,39 @@ describe("a closed Dialog", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.querySelector("dialog[open]")).toBeNull();
+  });
+});
+
+describe("a Dialog under StrictMode", () => {
+  /*
+   * Added after the implementation, from the browser pass: the dev server
+   * renders under <StrictMode>, which runs the open effect, its cleanup and
+   * the effect again. A browser queues the `close` event that the cleanup's
+   * close() causes, so it arrives after the dialog is open again. The shim in
+   * setupTests.ts fires it synchronously, so this test queues it the way a
+   * browser does.
+   */
+  it("stays open, and does not report a close, after the effect re-runs", async () => {
+    vi.spyOn(HTMLDialogElement.prototype, "close").mockImplementation(
+      function close(this: HTMLDialogElement) {
+        this.removeAttribute("open");
+        setTimeout(() => this.dispatchEvent(new Event("close")), 0);
+      },
+    );
+    const onClose = vi.fn();
+    render(
+      <StrictMode>
+        <Dialog open onClose={onClose} title="Thread">
+          <p>Body of the dialog</p>
+        </Dialog>
+      </StrictMode>,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Thread" })).toHaveAttribute(
+      "open",
+    );
   });
 });
