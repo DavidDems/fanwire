@@ -84,6 +84,8 @@ python .ai/bin/agentctl.py selfcheck           # prove the machinery works, free
 python .ai/bin/agentctl.py state show <ID>     # why a task is where it is
 python .ai/bin/agentctl.py prompt <ID> --role code_agent   # what an agent was told
 python .ai/bin/agentctl.py telemetry report    # what it cost
+gh api --paginate repos/DavidDems/fanwire/issues/comments > comments.json
+python .ai/bin/agentctl.py shadow report --comments comments.json  # jev beside Haiku
 python .ai/bin/agentctl.py state control <ID> --set PAUSE  # stop it
 ```
 
