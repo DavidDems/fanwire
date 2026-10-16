@@ -94,10 +94,15 @@ function OpenDialog({ onClose, title, children }: Omit<DialogProps, "open">) {
     onClose();
   }
 
-  function handleClose(): void {
+  function handleClose(event: SyntheticEvent<HTMLDialogElement>): void {
     // A browser may close the element itself after a repeated Escape, despite
     // the prevented `cancel`. The caller still has to hear about it, or its
-    // state says open while nothing is on screen.
+    // state says open while nothing is on screen. A `close` that arrives while
+    // the element is open again is stale: StrictMode's setup, cleanup, setup
+    // closes and reopens it, and the cleanup's queued event lands after the
+    // reopen (when `closingRef` is already reset). A forced close leaves the
+    // element closed, so it still gets through.
+    if (event.currentTarget.open) return;
     if (!closingRef.current) onClose();
   }
 
