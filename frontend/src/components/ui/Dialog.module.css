@@ -1,0 +1,80 @@
+/*
+ * The shared modal (components.md §2): a native <dialog> opened with
+ * showModal(), so the browser puts it in the top layer and makes the page
+ * underneath inert. Values come from tokens.css by name only.
+ */
+
+/*
+ * Centred in the viewport, the content column's width at most, with a gutter
+ * kept on a phone. No padding of its own: a click whose target is the
+ * <dialog> itself is a click on the backdrop, so the content has to fill it.
+ * The dialog does not scroll: its scrollbar would be the dialog too, and a
+ * click on it would close it. The content inside is the scroller.
+ */
+.dialog {
+  width: min(100% - 2 * var(--space-4), var(--content-max));
+  max-width: none;
+  max-height: calc(100% - 2 * var(--space-5));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  box-shadow: var(--shadow-2);
+}
+
+/* The page underneath, dimmed: the darkest neutral, partly see-through. */
+.dialog::backdrop {
+  background-color: var(--neutral-950);
+  opacity: 0.6;
+}
+
+.dialog:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0.125rem;
+}
+
+/*
+ * The scroller: as tall as the dialog may be (the viewport less a margin), so
+ * the sticky header below sticks to its top while the body scrolls.
+ */
+.content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100dvh - 2 * var(--space-5));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The title and Close stay in view while the body scrolls under them. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+/* Pushed right; Button's md size already makes it a full touch target. */
+.close {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  margin-inline-start: auto;
+  padding: var(--space-2);
+}
+
+.body {
+  padding: var(--space-4);
+}

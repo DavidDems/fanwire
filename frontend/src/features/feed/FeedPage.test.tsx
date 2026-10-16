@@ -31,10 +31,10 @@
  * component that only updated once the response landed would leave the held
  * assertion timing out — which is the point.
  *
- * **Reply is an address, not an import.** `/compose?reply_to=<id>` is read by
- * `ComposePage` and pinned by `features/compose/ComposeRoute.test.tsx`.
- * `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
- * one seam a feature folder can offer another without being imported by it
+ * **Reply is an address, not an import.** Since `FRONTEND-010` it is
+ * `/posts/<id>?reply=1`, the thread modal opened to reply, whose composer is
+ * `features/compose`'s and is imported only by `features/thread`. A route is
+ * the one seam a feature folder can offer another without being imported by it
  * ([[0x00-architecture]] Connection rule) — so what is asserted here is where
  * the control *navigates to*. Since UI-009 repost is a one-click toggle on the
  * card (`post-card.test.tsx`), so the card no longer links to
@@ -98,17 +98,17 @@ const FIRST_LIKED = testPostView({
   liked_by_viewer: true,
 });
 
-function ComposeStub() {
+function ThreadStub() {
   const { pathname, search } = useLocation();
   // One expression, so the address is one text node and can be matched whole.
-  return <p>{`compose stub at ${pathname}${search}`}</p>;
+  return <p>{`thread stub at ${pathname}${search}`}</p>;
 }
 
 function renderFeed(authService: AuthService = new FakeAuthService()) {
   return renderWithAuth(
     <Routes>
       <Route path="/" element={<FeedPage />} />
-      <Route path="/compose" element={<ComposeStub />} />
+      <Route path="/posts/:postId" element={<ThreadStub />} />
     </Routes>,
     { authService, route: "/" },
   );
@@ -497,8 +497,8 @@ describe("media on a post", () => {
   });
 });
 
-describe("reply opens the composer by address; repost does not", () => {
-  it("sends a reply to /compose?reply_to=<post id>", async () => {
+describe("reply opens the thread to reply by address; repost does not", () => {
+  it("sends a reply to /posts/<post id>?reply=1", async () => {
     const user = userEvent.setup();
     const feed = feedStub([feedPage([FIRST, SECOND], null)]);
     server.use(feed.handler, profileFound());
@@ -509,7 +509,7 @@ describe("reply opens the composer by address; repost does not", () => {
     await user.click(control(postCard(SECOND_TEXT), /^reply$/i));
 
     expect(
-      await screen.findByText("compose stub at /compose?reply_to=102"),
+      await screen.findByText("thread stub at /posts/102?reply=1"),
     ).toBeInTheDocument();
   });
 

@@ -43,3 +43,20 @@
 .failure {
   flex-basis: 100%;
 }
+
+/*
+ * The reply count as a link to the thread (FRONTEND-010): the same muted
+ * text, underlined on hover so it reads as a way in, and at least 24 px tall
+ * (WCAG 2.5.8). Focus is base.css's :focus-visible ring.
+ */
+.countLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  text-decoration: none;
+}
+
+.countLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}

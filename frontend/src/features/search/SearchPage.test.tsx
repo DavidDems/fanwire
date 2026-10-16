@@ -254,12 +254,13 @@ describe("post results render through the feed's PostNode (criterion 3)", () => 
       expect(
         within(card).getByText(`${post.like_count} likes`),
       ).toBeInTheDocument();
+      // FRONTEND-010: no Show replies disclosure; Reply opens the thread modal.
       expect(
-        within(card).getByRole("button", { name: "Show replies" }),
-      ).toHaveAttribute("aria-expanded", "false");
+        within(card).queryByRole("button", { name: /show replies/i }),
+      ).toBeNull();
       expect(within(card).getByRole("link", { name: "Reply" })).toHaveAttribute(
         "href",
-        `/compose?reply_to=${post.id}`,
+        `/posts/${post.id}?reply=1`,
       );
       expect(within(card).getByText("0 replies")).toBeInTheDocument();
       expect(within(card).getByText("0 reposts")).toBeInTheDocument();

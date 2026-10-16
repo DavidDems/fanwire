@@ -4,7 +4,12 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  type Location,
+} from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
 import { Button, buttonClass } from "../../components/ui/Button";
@@ -35,7 +40,9 @@ import {
  * template string (`counts.ts`), so it is one text node a reader sees whole.
  *
  * Reply is the same shape with `to` instead of a toggle: it is a link, because
- * what it does is go somewhere.
+ * what it does is go somewhere (the thread modal, opened to reply). Its count
+ * can be a link too (`countTo`, the thread itself), so the number a reader
+ * sees beside the control is a way into the replies it counts.
  */
 export interface PostActionProps {
   /** The accessible name: the action, never the count or the state. */
@@ -45,6 +52,10 @@ export interface PostActionProps {
   count: string;
   /** A link to here instead of a button (reply). */
   to?: string;
+  /** The count as a link to here (the thread), rather than plain text. */
+  countTo?: string;
+  /** Router state for both links: the page to keep under the thread modal. */
+  state?: { background?: Location };
   /** A toggle's state, as `aria-pressed`; omitted for a link. */
   pressed?: boolean;
   onClick?: () => void;
@@ -56,6 +67,8 @@ export function PostAction({
   icon,
   count,
   to,
+  countTo,
+  state,
   pressed,
   onClick,
   disabled,
@@ -79,12 +92,23 @@ export function PostAction({
         <Link
           className={`${buttonClass("ghost", "sm")} ${styles.control}`}
           to={to}
+          state={state}
           aria-label={label}
         >
           {icon}
         </Link>
       )}
-      <span className={styles.count}>{count}</span>
+      {countTo === undefined ? (
+        <span className={styles.count}>{count}</span>
+      ) : (
+        <Link
+          className={`${styles.count} ${styles.countLink}`}
+          to={countTo}
+          state={state}
+        >
+          {count}
+        </Link>
+      )}
     </span>
   );
 }
@@ -103,7 +127,7 @@ export function PostAction({
  *
  * **Where the snapshot lives, given the feed is paginated.** Nowhere near this
  * component. A post is not owned by one cache entry: it is in whichever feed
- * page it arrived on, again in the replies of every thread expanded above it,
+ * page it arrived on, again in every thread opened on it or on its parent,
  * in search results, and inside every repost of it (`reposted_post`), so
  * `useState` here would move one copy of a post and leave the others stale on
  * the same screen. `onMutate` therefore patches *every* entry under

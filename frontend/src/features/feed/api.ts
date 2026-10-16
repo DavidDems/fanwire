@@ -26,11 +26,12 @@ export type ThreadView = components["schemas"]["ThreadView"];
  * The prefix every entry this feature caches sits under.
  *
  * A post is not owned by one entry: it is in the page of the feed it arrived
- * on, and again in the replies of every expanded thread that quotes it. So the
- * root is what a like cancels, patches and rolls back across — the *exact* keys
- * it then invalidates are the ones that turned out to hold that post, which is
- * narrower than the root and is computed rather than assumed (see
- * `TogglePostAction` in `PostAction.tsx`).
+ * on, again in every thread opened on it or on its parent, and inside every
+ * repost of it. So the root is what a like cancels, patches and rolls back
+ * across — the *exact* keys it then invalidates are the ones that turned out to
+ * hold that post, which is narrower than the root and is computed rather than
+ * assumed (see `TogglePostAction` in `PostAction.tsx`, and the thread modal's
+ * refresh after a reply).
  */
 export const FEED_KEY_ROOT = ["feed"] as const;
 
@@ -44,7 +45,7 @@ export const FEED_KEY_ROOT = ["feed"] as const;
  */
 export const FEED_PAGES_KEY = ["feed", "pages"] as const;
 
-/** `GET /feed/thread/{post_id}` — one entry per post whose replies were asked for. */
+/** `GET /feed/thread/{post_id}` — one entry per thread opened in the modal. */
 export function threadKey(postId: number): readonly ["feed", "thread", number] {
   return ["feed", "thread", postId] as const;
 }
@@ -74,11 +75,16 @@ export async function fetchFeedPage(
  * `GET /feed/thread/{post_id}` — the root plus its **direct** replies only
  * ([[0x06-feed]] Routes). There is no whole-thread read to call: a deeper level
  * is this same request against the reply that carries it.
+ *
+ * A 404 is `null`, not a failure: the post is unknown, or its author was
+ * removed, and that is an answer the thread modal shows ("Post not found")
+ * rather than an error it offers to retry.
  */
-export async function fetchThread(postId: number): Promise<ThreadView> {
+export async function fetchThread(postId: number): Promise<ThreadView | null> {
   const { data, response } = await apiClient.GET("/feed/thread/{post_id}", {
     params: { path: { post_id: postId } },
   });
+  if (response.status === 404) return null;
   if (!response.ok || data === undefined) {
     throw new Error(`GET /feed/thread/${postId} answered ${response.status}`);
   }
@@ -130,8 +136,9 @@ export async function setReposted(
  * The two cached shapes that can contain a post: a run of feed pages, and one
  * thread. Both are walked by the same two helpers below so that an optimistic
  * edit reaches every rendering of a post rather than only the one that was
- * clicked — the same post is on screen twice the moment a thread is expanded on
- * a post the feed also lists.
+ * clicked — the same post is on screen twice the moment a thread is opened on
+ * a post the feed also lists. A thread read that answered 404 is cached as
+ * `null`, which holds no post.
  *
  * **A repost carries a further copy** (UI-009): its `reposted_post` is the
  * original's own view, one level deep. A plain repost renders that copy as the
@@ -139,7 +146,7 @@ export async function setReposted(
  * original through a repost of it would leave the original's own card behind.
  */
 export type FeedCacheValue =
-  InfiniteData<FeedPageBody, number | null> | ThreadView;
+  InfiniteData<FeedPageBody, number | null> | ThreadView | null;
 
 /** Whether this post is `postId`, or reposts it. */
 function holds(post: PostView, postId: number): boolean {
@@ -151,7 +158,7 @@ export function cacheHolds(
   value: FeedCacheValue | undefined,
   postId: number,
 ): boolean {
-  if (value === undefined) return false;
+  if (value === undefined || value === null) return false;
   if ("pages" in value) {
     return value.pages.some((page) =>
       page.items.some((post) => holds(post, postId)),
@@ -175,7 +182,7 @@ export function mapCachedPosts(
   value: FeedCacheValue | undefined,
   update: (post: PostView) => PostView,
 ): FeedCacheValue | undefined {
-  if (value === undefined) return value;
+  if (value === undefined || value === null) return value;
   const deep = (post: PostView): PostView => {
     const updated = update(post);
     return updated.reposted_post === null
