@@ -8,7 +8,7 @@ what the frontend does with them, and nothing that belongs to a backend module.
 ## State
 
 **Foundation, authentication, the profile page, the composer, the notifications
-view, the feed, search, the game page, and the Stats and player pages** (`FRONTEND-001` … `FRONTEND-009`). No placeholder
+view, the feed, search, the game page, the Stats and player pages, and the thread modal** (`FRONTEND-001` … `FRONTEND-010`). No placeholder
 view is left.
 
 What is real:
@@ -20,16 +20,17 @@ What is real:
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query |
-| `src/routes/` | `routes.tsx` (the table), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
-| `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
+| `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
+| `src/features/thread/` | `/posts/:postId` — the thread modal: the root, the reply composer, the direct replies (`FRONTEND-010`) |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
 | `src/features/search/` | `/search` — the free-text bar and the Accounts and Posts sections, paged apart. Accounts and posts only since `FRONTEND-009`: sports data is on `/stats` |
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the post card's controls (`PostAction`: like, reply, repost, each with its count, `UI-009`), the optimistic like and repost, repost rendering, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden` and `Tabs` (`FRONTEND-009`: links that look like tabs, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below) and `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
@@ -544,12 +545,13 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   id on screen. Those agree until view assembly silently drops a post whose
   author was soft-deleted, which [[0x06-feed]] says it does.
 - **Feed pages are not keyed by cursor.** `["feed", "pages"]` is the whole
-  infinite query; `["feed", "thread", <postId>]` is one expanded post. A key
+  infinite query; `["feed", "thread", <postId>]` is one thread, as the modal
+  reads it (a 404 is cached as `null`, `FRONTEND-010`). A key
   carrying `before_id` would make page two an entry that page one could never
   extend.
 - **The optimistic like's snapshot is not in the button.** A post is not owned by
-  one cache entry: it is in whichever feed page it arrived on, in the replies of
-  every thread expanded above it, in search results, and since `UI-009` inside
+  one cache entry: it is in whichever feed page it arrived on, in every open
+  thread that shows it, in search results, and since `UI-009` inside
   every repost of it (`reposted_post`), so state beside the cache moves one
   copy and leaves another stale **on the same screen**. `onMutate` patches every
   entry under `["feed"]` that actually holds the post, and that filtered list of
@@ -561,13 +563,15 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   replies, and replies are posts ([[wiki/CodeContext/Standards/gof-patterns|GoF patterns]] Composite). The card
   renders from its `post` **prop** and the thread query supplies only the
   replies — a node that preferred the thread response's own `root` would render
-  a post from a different cache entry than its parent is rendering from. Every
-  post carries a `Show replies` control, leaf or not: a post cannot know whether
-  it has replies without asking, and uniformity is the criterion.
-- **`GET /feed/thread/{id}` is called per expansion, on the expanded post's own
-  id.** It returns the root plus **direct** replies only; deeper levels expand
-  lazily by calling it again. The endpoint does not offer a whole thread and the
-  shape exists to stop a client trying.
+  a post from a different cache entry than its parent is rendering from.
+  **Since `FRONTEND-010` there is no inline thread**: no `Show replies`
+  disclosure and no `nested` prop. Replies are read only by the thread modal
+  (below), where each is again a `PostNode` card.
+- **`GET /feed/thread/{id}` is one level per request.** It returns the root
+  plus **direct** replies only; a deeper level is the same request on the
+  reply, which the modal makes when a reply's own thread is opened. The
+  endpoint does not offer a whole thread and the shape exists to stop a client
+  trying.
 - **A media item that fails to load leaves no `<img>` in the tree at all** — not
   hidden, not an alt-text box with a border. A feed full of broken frames is
   worse than a feed of text. The same answer covers a `null` `s3_key_public`,
@@ -575,22 +579,15 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   Media renders from `s3_key_public` (the served image), not
   `s3_key_thumbnail` — the composer's widget uses the thumbnail, and these are
   different jobs.
-- **Reply is an address, never an import**: `/compose?reply_to=<id>`, read
-  by `ComposePage`. Since `UI-009` the card no longer links to
-  `/compose?repost_of=<id>` (repost is a toggle, below); the composer still
-  reads it, so a quote repost stays reachable by address.
-  `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
-  one seam a feature folder can offer another ([[0x00-architecture]] Connection
-  rule) — enforced from disk, along with a ban on importing any sibling feature.
-- **An expanded post with no replies says "No replies yet."** (`UI-005`, the
-  one behaviour change in the styling pass). Before it, an answered thread with
-  zero replies rendered nothing, which reads as a control that did nothing. It
-  is an `EmptyState`, shown only once the thread read has answered; loading and
-  failure keep their own lines.
-- **A reply is told it is nested.** `PostNode` takes `nested`, which the
-  recursion passes to every reply: a top-level post is a `Card as="article"`,
-  a reply a plain `<article>` on its parent card's surface. Still one
-  component; the prop changes the box, never what is rendered inside it.
+- **Reply is an address, never an import**: since `FRONTEND-010`,
+  `/posts/<id>?reply=1`, the thread modal with its composer focused. The feed
+  never imports `features/compose` or `features/thread`; a route is the one
+  seam a feature folder can offer another ([[0x00-architecture]] Connection
+  rule), enforced from disk along with a ban on importing any sibling feature.
+  `/compose?reply_to=<id>` and `?repost_of=<id>` still work for anyone who
+  opens them; nothing on the card links there any more.
+- **A thread with no replies says "No replies yet."** (`UI-005`, kept by
+  the modal). An `EmptyState`, shown only once the thread read has answered.
 - **No live-score ticker since `EVENTS-003` (2026-10-13).** `PostView` lost
   `live_scores` when the API-SPORTS path was retired ([[0x06-feed]]), so
   `LiveScoreTickerDecorator` and its styles are gone and `PostNode` renders its
@@ -622,24 +619,87 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   disabled while its request is in flight. `cacheHolds` and `mapCachedPosts`
   also look inside a post's `reposted_post`, so liking an original through a
   repost card moves the original's own card in the same render.
-- **Reply does not move the reply count.** It still goes to
-  `/compose?reply_to=<id>`; the count changes when the post is read again
-  after a reply exists. `FRONTEND-010` replaces the link and the "Show
-  replies" disclosure with the thread modal.
+- **Reply does not move the reply count.** The count changes when the post is
+  read again after a reply exists (the thread modal invalidates every cached
+  copy of the parent once its reply is posted).
 - **A plain repost is the original.** Plain means `is_repost` with no text
   and no media, the same rule as [[0x03-posts]] "The repost toggle". It
   renders as a line "↻ <name> reposted" (the name links to the reposter's
-  profile), then the original's content, controls, counts and replies, all
-  acting on `reposted_post.id`. A null `reposted_post` reads "This post is
+  profile), then the original's content, controls and counts, all acting
+  on `reposted_post.id`, and opening the original's thread. A null `reposted_post` reads "This post is
   unavailable". Still one `PostNode`: the node picks its subject, the post or
   its original, and renders that.
 - **A quote repost is its own post** with the original inside as a compact
-  bordered box (author, time, text clamped to three lines, no controls),
-  linking to the original author's profile until `FRONTEND-010` adds
-  `/posts/:id`. A null original there reads "This post is unavailable".
+  bordered box (author, time, text clamped to three lines, no controls).
+  Its time links to `/posts/<original id>` and a click inside the box opens
+  the original's thread (`FRONTEND-010`); the author still links to their
+  profile. A null original there reads "This post is unavailable".
   **A plain repost of a quote shows no box**: `reposted_post` is one level
   deep ([[0x06-feed]]), so the quote inside always arrives with its own
   `reposted_post` null, which is the depth cut, not a missing original.
+
+### The thread modal (`FRONTEND-010`)
+
+`src/features/thread/ThreadModal.tsx` at `/posts/:postId`, over whatever page
+the reader was on. Public: a thread is a read path; replying needs a session.
+
+- **The background-location pattern, without a re-mount.** Every link into a
+  thread carries `state: { background: location }`. `routes.tsx` keeps the
+  table as data in two lists, `pages` and `overlays`, under one pathless
+  `AppLayout` route whose only child is a splat rendering
+  `BackgroundRoutes`. That component always renders the pages with
+  `useRoutes(pages, location)` at **one tree position**, against the real
+  location, or the background while an overlay matches (the feed, `/`, for a
+  direct load), then the overlay after it. Only the location passed changes,
+  so the page underneath keeps its instance, DOM, local state, data and
+  scroll; tests pin node identity, an uncontrolled input's text, and no second
+  read. Switching between `<Outlet />` and something else at the page's
+  position is the re-mount this avoids. The layout route has to be pathless:
+  with `path: "/"` it matched `/` alone and outranked the splat.
+- **Opening.** The timestamp is a link to `/posts/<subject id>` (the
+  keyboard and screen-reader path); a click elsewhere on the card is a mouse
+  convenience that ignores clicks on or inside `a, button, input, textarea,
+  select, label`, clicks that end a text selection, and a click on the thread
+  already open (it would push a duplicate entry). The card has no `tabindex`
+  and no wrapping link. Reply goes to `/posts/<id>?reply=1`, and the reply
+  count is a link to the thread too. A link from inside the modal carries the
+  **original** background, so the page underneath never becomes a thread.
+- **Closing.** Close, Escape, a backdrop click and Back: `navigate(-1)` with a
+  background, `navigate("/", { replace: true })` without, so a shared link
+  closes onto the feed. After opening a reply's thread inside the modal,
+  Close steps back to the previous thread, as Back does.
+- **`components/ui/Dialog`**: a native `<dialog>` opened with `showModal()`
+  (top layer, inert page, focus kept inside), the title as its heading and
+  accessible name, a Close button, the prevented `cancel` event as Escape,
+  and focus returned to the opener. **A backdrop click is a click whose
+  target, and whose mousedown's target, is the `<dialog>` itself**: the
+  dialog has no padding and does not scroll (its content does), so neither a
+  click on the scrollbar nor a selection dragged out onto the backdrop closes
+  it. jsdom has no `showModal`/`close`; `setupTests.ts` shims them on
+  `HTMLDialogElement.prototype`, only when absent. The backdrop uses the
+  `--neutral-950` primitive at 0.6 opacity: there is no scrim token.
+- **Content.** The root `PostNode`, then the composer, then the direct
+  replies oldest first (the API's order), each a `PostNode`. "Post not
+  found" for a 404 or a non-numeric id (no request); an `InlineAlert` with
+  "Try again" for a failed read.
+- **The composer is compose's.** `features/compose/InlineComposer` is built
+  on the same `ComposeMediator` (with `replyToPostId`), `PostBuilder`,
+  `ComposeTextBox`, `MentionAutocomplete` and `MediaWidget` as `ComposePage`;
+  the request goes through `createPost.ts`, now shared by both.
+  "Replying to @username" is visible and is the text box's
+  `aria-describedby` (`ComposeTextBox` takes optional `label`, `describedBy`
+  and `autoFocus`, defaulting to `/compose`'s behaviour). It takes focus only
+  when the modal was opened with `?reply=1`. Submit is "Reply", disabled in
+  flight; a failure keeps the draft and shows an `InlineAlert`.
+  `features/thread` imports `PostNode` and `feed/api` from feed and
+  `InlineComposer` from compose, and nothing else from any feature
+  (`thread-isolation.test.ts`).
+- **After a reply, the counts come from the server.** The thread's exact key
+  and every key under `["feed"]` whose value holds the parent (`cacheHolds`:
+  feed pages, search results, other threads) are invalidated. Nothing is
+  optimistic, as the human asked.
+- **Signed out**: the thread, and in place of the composer a "Sign in to
+  reply" link whose `state.from` is `/posts/<id>`.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
