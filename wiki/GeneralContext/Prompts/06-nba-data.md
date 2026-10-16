@@ -3,8 +3,8 @@
 > **Update, 2026-10-14.** The data is live: every game since 2003-04 is in the
 > production database (`EVENTS-002`, #148, loaded by the human). `EVENTS-003`
 > to `EVENTS-005` and `EVENTS-002` are done. **`EVENTS-006` and `EVENTS-007`
-> are specced and now run as part of `Prompts/07-stats-and-posts-frontend.md`**,
-> in that brief's order, next to the frontend that needs them. What is left
+> ran as part of `Prompts/07-stats-and-posts-frontend.md`** (#159, #160; that
+> prompt is done and deleted, 2026-10-16). What is left
 > to *this* thread: the API-SPORTS infra clean-up (needs a spec) and
 > `EVENTS-008` (gated; see "What's next" below). "Where things stand" and
 > "The units" below are updated; the rest is history and reference.
@@ -250,10 +250,11 @@ not applied silently.
 
 ## Not in this thread
 
-- **The frontend pass** is `Prompts/07-stats-and-posts-frontend.md`: the
-  game page, the Stats page (Seasons, Players), player pages and clickable
-  `#GameId` mentions. Still unplanned there: a narrower compose picker (team
-  and date instead of the 50 newest games) and team names in the picker.
+- **The frontend pass** was `Prompts/07-stats-and-posts-frontend.md` (done,
+  deleted 2026-10-16): the game page, the Stats page (Seasons, Players),
+  player pages and clickable `#GameId` mentions. Still unplanned: a narrower
+  compose picker (team and date instead of the 50 newest games) and team
+  names in the picker, a row in `TODO/02-backlog.md`.
 - Player mentions in posts, following players, seasons before 2003-04.
 
 ## How the human wants the work done

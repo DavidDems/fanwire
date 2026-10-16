@@ -50,6 +50,7 @@ red commit.
 | `GameScore` | the score block (§4) | `compact` (one line, for the feed ticker), `row` (for search results) | **No caller since `FRONTEND-009`**: the ticker went with `EVENTS-003` and the search game filter with `FRONTEND-009`. Kept until a unit with `components/ui/` in scope deletes it or reuses it |
 | `Tabs` (`FRONTEND-009`) | a `<nav aria-label>` of `NavLink`s styled as tabs, the current one `aria-current="page"` | — | default, `:hover`, `:focus-visible`, current (a bar and weight). **Deliberately not an ARIA `tablist`**: each tab is its own route, so the address decides the tab and Back moves between them |
 | `VisuallyHidden` | text for screen readers only (the `.visually-hidden` class from `base.css`) | — | — |
+| `Dialog` (`FRONTEND-010`) | a native `<dialog>` opened with `showModal()` (top layer, page inert, focus kept inside): a sticky header with the title as an `h2` (also the accessible name, `aria-labelledby`) and a Close button (`x` icon, 44 px), then the body. `--color-bg`, 1 px `--color-border`, `--radius-md`, `--shadow-2`, at most `--content-max` wide with a `--space-4` gutter. The backdrop is `--neutral-950` at 0.6 opacity: **there is no scrim token**, so a primitive is used; a styles unit may add one | — | open, closed (renders nothing). Escape is the prevented `cancel` event. **A backdrop click is a click whose target, and whose mousedown's target, is the `<dialog>` itself**: the dialog has no padding and does not scroll (its content does), so a scrollbar click or a selection dragged out of the content never closes it. Focus returns to the opener. A `close` event arriving while the element is open again is ignored (StrictMode's re-run) |
 
 ### As built (`UI-002`, merged 2026-10-06)
 
@@ -68,7 +69,9 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `Badge` | `variant: "neutral" \| "live" \| "outline"` and `children` |
 | `GameScore` | `variant: "compact" \| "row"`, `homeScore`, `awayScore` and `status` (`LiveScoreView` in camelCase) |
 | `VisuallyHidden` | `children` |
-| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `HeartIcon`, `MessageCircleIcon`, `Repeat2Icon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon` and `CircleCheckIcon`, each taking `size?: number` (default 20) and `className?` |
+| `Tabs` | `label: string` (the `nav`'s name) and `items: TabItem[]` (each a route and its text) |
+| `Dialog` | `open: boolean`, `onClose: () => void` (called once per way out; the dialog never closes itself, the caller turns `open` false or unmounts it), `title: string`, `children` |
+| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon` and `CircleCheckIcon`, each taking `size?: number` (default 20) and `className?` |
 
 A feature unit that needs something not listed here (for example a
 `className` on `InlineAlert`, or an `id` on `StatusLine`) can't edit
@@ -84,9 +87,10 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 - **Toast.** Every failure in the app is already inline, beside the control it
   is about, with `role="alert"`. That is the better pattern, and a toast would
   move the message away from its cause.
-- **Modal or dialog, and a menu.** None exist. The post "hamburger" menu in
-  `business-rules.md` (report, copy link) is unbuilt. When it is built, use
-  the native `<dialog>` and the Popover API before considering a dependency
+- **A modal is `Dialog`; there is still no menu.** `Dialog` (above) is the
+  native `<dialog>`, as this note asked, with no dependency. The post
+  "hamburger" menu in `business-rules.md` (report, copy link) is unbuilt.
+  When it is built, use the Popover API before considering a dependency
   such as Radix: a dependency is a Director PR (`implementation-plan.md`).
 
 ## 3. Icons
@@ -108,8 +112,8 @@ request, and only the glyphs in use.
 | Like | `heart`; pressed: `HeartFilledIcon`, the same path filled with `currentColor` | `PostAction` (`UI-009`) |
 | Reply | `message-circle` | `PostAction` |
 | Repost | `repeat-2`, also the "↻ name reposted" line; pressed: `Repeat2FilledIcon`, the same paths at stroke width 3 (an outline has nothing to fill) | `PostAction`, `PostNode` |
-| Show replies | `chevron-down` (rotated 180° when `aria-expanded="true"`) | `PostNode` footer |
-| Clear | `x` | `NotificationRow` |
+| (unused) | `chevron-down` | no caller since `FRONTEND-010` removed Show replies; kept until a tidy-up deletes it |
+| Clear, Close | `x` | `NotificationRow`, `Dialog` |
 | Image | `image` | `MediaWidget` |
 | Alert | `circle-alert` | `InlineAlert` |
 | Success | `circle-check` | `StatusLine success` |
@@ -119,7 +123,7 @@ its visible text, which is also its accessible name, and that is what the
 tests find. **The exception is the post card's action row** (`UI-009`, the
 human 2026-10-14): Like, Reply and Repost are icon-only, named by
 `aria-label`, each followed by its count as visible text ("2 likes"). The
-count stays outside the control's name. Show replies keeps its words.
+count stays outside the control's name.
 
 ## 4. Sports-specific
 
@@ -201,6 +205,7 @@ to nothing.
 | `routes/guards` `Resolving` / `Unavailable` | `StatusLine` / `InlineAlert` | Same text |
 | `routes/views` `NotFoundView` | page template, `EmptyState`, `buttonClass` | The only view left in `views.tsx` |
 | `routes/HomeView` | `SearchBar` above `FeedPage` | `/`: composed in `routes/` because neither feature imports the other |
+| `routes/BackgroundRoutes` (`FRONTEND-010`) | no styles of its own | Renders the page at one position against the real location or the modal's background, then the modal: the page underneath is never re-mounted, so it keeps its scroll |
 | `features/search/SearchBar` | `Card`, `Field` + `input type="search"` (base), `Button primary` (Search) | `form role="search"`; box and button stacked at every width (`layout.md` §3) |
 | `features/search/SearchPage` | `StatusLine`, `InlineAlert`, `EmptyState` per section; accounts as one list `Card` with dividers, `Avatar sm`, username link 600, description muted; posts as `PostNode` cards; `Button secondary` full width (Load more accounts / posts) | Every empty state names the query. Accounts and posts only since `FRONTEND-009` (`GameFilter` removed) |
 | `features/games/GamePage` (`FRONTEND-008`) | page template, `h1`, "Final: X won, 117–109" in words, `StatusLine`, `InlineAlert`, "Game not found" `EmptyState` with a link to the feed | Public. Reached from post mentions and Stats rows |
@@ -213,8 +218,10 @@ to nothing.
 | `components/FormField` `Field` | `FormField.module.css` (`UI-004`): label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with an `aria-hidden` icon; label over control, and the space between consecutive fields | Markup and ids unchanged. **Field owns its own layout**: a feature's module CSS sets control widths and the space above its submit button, never the label or the gap between fields (`UI-008` nearly doubled it) |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |
-| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, the action row (`PostAction` × 3), `Button ghost sm` × Show replies | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. Expanded with zero replies says "No replies yet." (`EmptyState`, `UI-005`'s one behaviour change). A reply is told it is nested (`nested` prop, passed by the recursion): a plain `<article>` on its parent card's surface. **Reposts (`UI-009`):** a plain repost is a muted "↻ name reposted" line over the original's content and controls; a quote repost embeds the original as a compact box (1 px `--color-border`, `--radius-md`, text clamped to 3 lines, no controls). "This post is unavailable" (muted, italic) for a missing original |
-| `features/feed/PostAction` (`UI-009`) | `Button ghost sm` (or a `Link` with `buttonClass`, for Reply), icon only, square, named by `aria-label`; then its count, `--color-text-muted`, `--font-size-sm`, `tabular-nums` | Like and Repost carry `aria-pressed` and swap to the filled icon when pressed, plus `--color-action`. `TogglePostAction` is the one optimistic pattern for both; failure is an `InlineAlert` on its own row. Replaces `LikeButton` |
+| `features/feed/PostNode` | `Card as="article"`, `Avatar sm`, author link 600, `<time>` muted tabular inside a link to `/posts/<id>` (24 px minimum), the action row (`PostAction` × 3) | **Since `FRONTEND-010` no Show replies, no inline thread and no `nested` prop**: a click on the card's own surface opens the thread modal (not a focus stop: no `tabindex`, no wrapping link; the timestamp link is the keyboard path), and replies are read only in the modal, where each is again a card. **Reposts (`UI-009`):** a plain repost is a muted "↻ name reposted" line over the original's content and controls; a quote repost embeds the original as a compact box (1 px `--color-border`, `--radius-md`, text clamped to 3 lines, no controls). "This post is unavailable" (muted, italic) for a missing original |
+| `features/feed/PostAction` (`UI-009`) | `Button ghost sm` (or a `Link` with `buttonClass`, for Reply), icon only, square, named by `aria-label`; then its count, `--color-text-muted`, `--font-size-sm`, `tabular-nums` | Like and Repost carry `aria-pressed` and swap to the filled icon when pressed, plus `--color-action`. `TogglePostAction` is the one optimistic pattern for both; failure is an `InlineAlert` on its own row. Replaces `LikeButton`. Since `FRONTEND-010` Reply goes to `/posts/<id>?reply=1` and the reply count is a link (`.countLink`, 24 px minimum) to the thread |
+| `features/thread/ThreadModal` (`FRONTEND-010`) | `Dialog` titled "Thread": the root `PostNode`, then `InlineComposer` or a "Sign in to reply" link (600, 44 px), then the direct replies as cards behind a 2 px `--color-border` rule (`--space-3` indent) | "Post not found" (`EmptyState`), "Loading the thread…" (`StatusLine`), failure as `InlineAlert` + `Button secondary` "Try again", "No replies yet." (`EmptyState`) |
+| `features/compose/InlineComposer` (`FRONTEND-010`) | "Replying to @username" muted `--font-size-sm` (the text box's `aria-describedby`), `ComposeTextBox` labelled "Your reply", `MentionAutocomplete`, `MediaWidget`, `Button primary` (Reply, right-aligned), `InlineAlert` | The same colleagues as `ComposePage`, not a second text box. Reply disabled in flight |
 | `features/feed/PostMedia` | `img`: `max-width: 100%`, `--radius-md`, `aspect-ratio` unknown so `height: auto`, max-height 28rem with `object-fit: cover` | Failure state is "nothing", unchanged |
 | `features/compose/ComposePage` | form `Card`, `Button primary` (Post), `Button ghost` (Undo mention), `Button secondary` × quick posts, `InlineAlert` | Post disabled until `canBuild()` |
 | `features/compose/ComposeTextBox` | `Field` + textarea (base) | The hint "Type # to mention a game…" is muted |
