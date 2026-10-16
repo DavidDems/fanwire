@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         raw_diff = Path(args.diff).read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         return _give_up(summary, f"cannot read the diff: {exc}", USAGE)
-    diff_text, omitted = wikiprop.trim_diff(raw_diff, max_chars)
+    diff_text, omitted = wikiprop.trim_diff(raw_diff, max_chars, first=wikiprop.module_files(spec))
 
     try:
         system = (AI_ROOT / "prompts" / "wiki-proposal.md").read_text(encoding="utf-8").strip()
