@@ -518,6 +518,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/posts/{post_id}/repost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repost
+         * @description The one-click repost: 201 with the caller's new plain repost, or 200
+         *     with the one they already have (idempotent and race-free, see
+         *     app.posts.service.repost_post).
+         */
+        post: operations["repost_posts__post_id__repost_post"];
+        /**
+         * Unrepost
+         * @description The undo: removes the caller's plain reposts of the post. 204
+         *     whether or not there was anything to remove; 409, removing nothing,
+         *     when one of them has a reply (or a repost) of its own.
+         */
+        delete: operations["unrepost_posts__post_id__repost_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/search/accounts": {
         parameters: {
             query?: never;
@@ -1269,6 +1297,13 @@ export interface components {
          *     -- it carries fields (author, like_count, media, mentioned_game_ids)
          *     PostOut doesn't, assembled from other modules' read interfaces rather
          *     than the Post row alone.
+         *
+         *     `reply_count` counts direct replies, `repost_count` reposts plain and
+         *     quote, both leaving out soft-deleted authors. `reposted_by_viewer` is
+         *     whether the viewer has a *plain* repost of this post (false for a
+         *     guest). `reposted_post` is, on a repost, the view of the post it
+         *     reposts, one level deep (its own `reposted_post` is always null); null
+         *     on every other post and when the original's author is soft-deleted.
          */
         PostView: {
             author: components["schemas"]["AuthorView"];
@@ -1295,6 +1330,13 @@ export interface components {
             original_post_id: number | null;
             /** Parent Post Id */
             parent_post_id: number | null;
+            /** Reply Count */
+            reply_count: number;
+            /** Repost Count */
+            repost_count: number;
+            /** Reposted By Viewer */
+            reposted_by_viewer: boolean;
+            reposted_post: components["schemas"]["PostView"] | null;
             /** Text */
             text: string | null;
         };
@@ -2518,6 +2560,82 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repost_posts__post_id__repost_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Already reposted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unrepost_posts__post_id__repost_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A repost to remove is in use */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

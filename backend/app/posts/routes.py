@@ -11,7 +11,8 @@ under distinct names -- `CreatePostRequest` (schemas, the body) and
 `FacadePostRequest` (facade, what gets passed to `facade.publish`) -- to
 stay unambiguous.
 
-Security: POST /posts, the like/unlike routes, and the report route all
+Security: POST /posts, the like/unlike routes, the repost/un-repost
+routes, and the report route all
 require a verified caller (get_current_user) -- author_id/user_id/
 reporter_id are always resolved server-side, never trusted from the
 client. GET /posts/{post_id} and GET /posts/{post_id}/replies are public
@@ -21,7 +22,7 @@ precedent (reading a post doesn't require being logged in).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -44,9 +45,12 @@ from app.posts.service import (
     AlreadyLikedError,
     NotLikedError,
     PostNotFoundError,
+    RepostInUseError,
     like_post,
     report_post,
+    repost_post,
     unlike_post,
+    unrepost_post,
 )
 from app.users.dependencies import get_current_user
 from app.users.models import User
@@ -132,6 +136,52 @@ def unlike(
         unlike_post(session, user_id=current_user.id, post_id=post_id)
     except NotLikedError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{post_id}/repost",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PostOut,
+    responses={status.HTTP_200_OK: {"model": PostOut, "description": "Already reposted"}},
+)
+def repost(
+    post_id: int,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    facade: PublishPostFacade = Depends(get_publish_post_facade),
+) -> Post:
+    """The one-click repost: 201 with the caller's new plain repost, or 200
+    with the one they already have (idempotent and race-free, see
+    app.posts.service.repost_post)."""
+    try:
+        post, created = repost_post(session, facade, user_id=current_user.id, post_id=post_id)
+    except PostNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PostRejected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
+    if not created:
+        response.status_code = status.HTTP_200_OK
+    return post
+
+
+@router.delete(
+    "/{post_id}/repost",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={status.HTTP_409_CONFLICT: {"description": "A repost to remove is in use"}},
+)
+def unrepost(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """The undo: removes the caller's plain reposts of the post. 204
+    whether or not there was anything to remove; 409, removing nothing,
+    when one of them has a reply (or a repost) of its own."""
+    try:
+        unrepost_post(session, user_id=current_user.id, post_id=post_id)
+    except RepostInUseError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.post("/{post_id}/report", status_code=status.HTTP_204_NO_CONTENT)
