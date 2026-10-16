@@ -299,9 +299,54 @@ record per call), and bring it to the human.
   - **jev in shadow: 2 records, 2 disagreements**, both `no` at confidence
     0.34-0.36, against Haiku's "matches" and "all pinned". Too few to judge;
     both low-confidence answers point the same way.
+- **#158 merged. Units #159-#162, 2026-10-15/16** (EVENTS-006, EVENTS-007,
+  POSTS-001, FRONTEND-009; drift dispatched by the Director on the human's
+  go for #161 and #162, not run for #160):
+  - Coverage on all four, 11-13 criteria each, all pinned, $0.0035-$0.0084 a
+    push. Two answers took 2,251 and 2,842 output tokens: the 4000 cap was
+    needed. FRONTEND-009 had 3 invented test ids, dropped and counted.
+  - CI summary on #161's red `backend-mypy`: right file, lines and cause, 81
+    output tokens, $0.0003. Its thinking fix (#156) is proven. The cause
+    sentence is still cut mid-word by the comment's own character cap. The
+    comment stayed after the fix went green. Fixed in
+    `director/ci-summary-fixed`: a `mark-fixed` job, with no key and no
+    model, adds a "Fixed" line naming the green commit.
+  - Drift: #159 clean. On #161 and #162 it reported one name each that the
+    unit is to create (`reposted_post_ids`, `Tabs`); its own `why` said so.
+    Fixed in #163: a name counts only with `"assumed_to_exist": true`.
+  - Wiki proposal: #159 nothing to change (right). #160 proposed the Seasons
+    section EVENTS-007 had already written: the unit's own diff of
+    `0x02-events.md` was last in the diff and cut by the cap. The patch must
+    not be applied. Fixed in #163: module files' diffs are read first, and
+    the prompt says what they mean.
+- **`agentctl shadow report` built** (`director/shadow-report`). It reads
+  `gh api --paginate repos/DavidDems/fanwire/issues/comments` output (a file
+  or stdin) offline. Only `github-actions[bot]`'s records count, one per
+  automation per PR. It prints agreement, jev's answers, confidence and
+  cost per automation, and a row per record; `--json` gives the same.
+- **The shadow record, 2026-10-16: 9 records, jev answered `no` to all 9.**
+
+  | | records | agree | jev yes / no | mean confidence | Haiku cost | jev cost |
+  |---|---|---|---|---|---|---|
+  | coverage | 5 | 0 | 0 / 5 | 0.42 | $0.0227 | $0.0040 |
+  | spec_drift | 4 | 2 | 0 / 4 | 0.39 | $0.0283 | $0.0037 |
+
+  - Both agreements are #161 and #162 drift, where Haiku said "no" only
+    because of the false positives #163 fixes. So jev has not yet agreed
+    with a right answer.
+  - Haiku's answers checked out each time: the coverage listings map
+    criteria to the right tests, and #155 and #159 had no drift.
+  - jev's two most confident answers (0.86 on #162 coverage, 0.60 on #159
+    drift) were both wrong.
+  - Reading: on these two questions jev answers `no` whatever the state.
+    The likely causes are the state (long, truncated to its 80K-character
+    cap) or the question's wording. It is the record to bring to the human
+    and to jev's owner; jev stays in shadow, and nothing acts on it.
 - **Next:**
-  - Collect shadow records over the queued units (`EVENTS-006`, ...).
-  - Build `agentctl shadow report` once there are about five.
+  - Bring the record above to the human, who decides whether to raise it
+    with jev's owner, change the questions, or stop asking jev.
+  - Re-prove drift on the next dispatch, to see whether Haiku fills
+    `assumed_to_exist` honestly.
   - Proposed, the human's call: drift reads the brief's files before
     `forbidden_paths`. Also proposed: run drift automatically on an
     `agent/<ID>` branch's first push.
