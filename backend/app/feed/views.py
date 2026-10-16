@@ -5,11 +5,18 @@ reason: it is a cross-module contract, not a private helper.
 
 Batches every cross-module read into one call per read function per page
 (no N+1): app.users.service.get_public_profiles, app.posts.service.
-like_counts/liked_post_ids/mentioned_game_ids_by_post,
+posts_by_ids/like_counts/liked_post_ids/reply_counts/repost_counts/
+reposted_post_ids/mentioned_game_ids_by_post,
 app.media.service.processed_media_for_posts. feed/ owns no tables of its
 own (0x00-architecture.md Connection rule) -- every field below is
 assembled from those modules' public read interfaces, never a direct query
 against their tables.
+
+A repost's `reposted_post` (POSTS-001) is built in the same pass: the
+page's reposted originals are fetched in one query, added to the set every
+batched read runs over, and their views built alongside the page's own --
+one level deep, never recursing, so a page of 20 costs the same number of
+statements as a page of 2.
 """
 
 from __future__ import annotations
@@ -22,7 +29,15 @@ from sqlalchemy.orm import Session
 
 from app.media.service import processed_media_for_posts
 from app.posts.models import Post
-from app.posts.service import like_counts, liked_post_ids, mentioned_game_ids_by_post
+from app.posts.service import (
+    like_counts,
+    liked_post_ids,
+    mentioned_game_ids_by_post,
+    posts_by_ids,
+    reply_counts,
+    repost_counts,
+    reposted_post_ids,
+)
 from app.users.service import get_public_profiles
 
 
@@ -43,7 +58,14 @@ class PostView(BaseModel):
     single post. Deliberately its own schema, not app.posts.schemas.PostOut
     -- it carries fields (author, like_count, media, mentioned_game_ids)
     PostOut doesn't, assembled from other modules' read interfaces rather
-    than the Post row alone."""
+    than the Post row alone.
+
+    `reply_count` counts direct replies, `repost_count` reposts plain and
+    quote, both leaving out soft-deleted authors. `reposted_by_viewer` is
+    whether the viewer has a *plain* repost of this post (false for a
+    guest). `reposted_post` is, on a repost, the view of the post it
+    reposts, one level deep (its own `reposted_post` is always null); null
+    on every other post and when the original's author is soft-deleted."""
 
     id: int
     text: str | None
@@ -55,8 +77,12 @@ class PostView(BaseModel):
     author: AuthorView
     like_count: int
     liked_by_viewer: bool
+    reply_count: int
+    repost_count: int
+    reposted_by_viewer: bool
     media: list[MediaItemView]
     mentioned_game_ids: list[int]
+    reposted_post: PostView | None
 
 
 def assemble_post_views(
@@ -73,46 +99,73 @@ def assemble_post_views(
     if not posts:
         return []
 
-    post_ids = [post.id for post in posts]
-    author_ids = {post.author_id for post in posts}
+    original_ids = {
+        post.original_post_id
+        for post in posts
+        if post.is_repost and post.original_post_id is not None
+    }
+    # The page's own rows win over a refetched copy of the same id.
+    every_post: dict[int, Post] = {**posts_by_ids(session, original_ids)}
+    every_post.update({post.id: post for post in posts})
+
+    post_ids = list(every_post)
+    author_ids = {post.author_id for post in every_post.values()}
 
     authors = get_public_profiles(session, author_ids)
-    counts = like_counts(session, post_ids)
+    likes = like_counts(session, post_ids)
     liked = liked_post_ids(session, viewer_id, post_ids) if viewer_id is not None else set()
+    replies = reply_counts(session, post_ids)
+    reposts = repost_counts(session, post_ids)
+    reposted = reposted_post_ids(session, viewer_id, post_ids) if viewer_id is not None else set()
     mentions_by_post = mentioned_game_ids_by_post(session, post_ids)
     media_by_post = processed_media_for_posts(session, post_ids)
 
-    views: list[PostView] = []
-    for post in posts:
+    # Every view without its reposted_post first: these are both the page's
+    # views and the one-level-deep inner views.
+    flat: dict[int, PostView] = {}
+    for post in every_post.values():
         author = authors.get(post.author_id)
         if author is None:
             continue
 
-        views.append(
-            PostView(
-                id=post.id,
-                text=post.text,
-                is_reply=post.is_reply,
-                parent_post_id=post.parent_post_id,
-                is_repost=post.is_repost,
-                original_post_id=post.original_post_id,
-                created_at=post.created_at,
-                author=AuthorView(
-                    id=author.id,
-                    username=author.username,
-                    profile_picture_media_id=author.profile_picture_media_id,
-                ),
-                like_count=counts.get(post.id, 0),
-                liked_by_viewer=post.id in liked,
-                media=[
-                    MediaItemView(
-                        id=media.id,
-                        s3_key_public=media.s3_key_public,
-                        s3_key_thumbnail=media.s3_key_thumbnail,
-                    )
-                    for media in media_by_post.get(post.id, [])
-                ],
-                mentioned_game_ids=mentions_by_post.get(post.id, []),
-            )
+        flat[post.id] = PostView(
+            id=post.id,
+            text=post.text,
+            is_reply=post.is_reply,
+            parent_post_id=post.parent_post_id,
+            is_repost=post.is_repost,
+            original_post_id=post.original_post_id,
+            created_at=post.created_at,
+            author=AuthorView(
+                id=author.id,
+                username=author.username,
+                profile_picture_media_id=author.profile_picture_media_id,
+            ),
+            like_count=likes.get(post.id, 0),
+            liked_by_viewer=post.id in liked,
+            reply_count=replies.get(post.id, 0),
+            repost_count=reposts.get(post.id, 0),
+            reposted_by_viewer=post.id in reposted,
+            media=[
+                MediaItemView(
+                    id=media.id,
+                    s3_key_public=media.s3_key_public,
+                    s3_key_thumbnail=media.s3_key_thumbnail,
+                )
+                for media in media_by_post.get(post.id, [])
+            ],
+            mentioned_game_ids=mentions_by_post.get(post.id, []),
+            reposted_post=None,
         )
+
+    views: list[PostView] = []
+    for post in posts:
+        view = flat.get(post.id)
+        if view is None:
+            continue
+        if post.is_repost and post.original_post_id is not None:
+            inner = flat.get(post.original_post_id)
+            if inner is not None:
+                view = view.model_copy(update={"reposted_post": inner})
+        views.append(view)
     return views

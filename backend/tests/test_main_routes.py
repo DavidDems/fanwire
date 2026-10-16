@@ -59,6 +59,27 @@ def test_openapi_schema_includes_posts_routes():
     assert "/posts/{post_id}/report" in paths
 
 
+def test_openapi_schema_includes_the_repost_toggle_routes():
+    """POSTS-001: POST and DELETE /posts/{post_id}/repost."""
+    client = TestClient(app)
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "/posts/{post_id}/repost" in paths
+    assert {"post", "delete"} <= set(paths["/posts/{post_id}/repost"])
+
+
+def test_openapi_post_view_carries_the_counters_and_the_reposted_post():
+    """POSTS-001: reply_count, repost_count, reposted_by_viewer and
+    reposted_post on PostView."""
+    client = TestClient(app)
+    post_view = client.get("/openapi.json").json()["components"]["schemas"]["PostView"]
+
+    assert {"reply_count", "repost_count", "reposted_by_viewer", "reposted_post"} <= set(
+        post_view["properties"]
+    )
+    assert {"reply_count", "repost_count", "reposted_by_viewer"} <= set(post_view["required"])
+
+
 def test_openapi_schema_includes_feed_routes():
     client = TestClient(app)
     schema = client.get("/openapi.json").json()

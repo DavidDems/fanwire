@@ -87,8 +87,12 @@ export function testPostView(overrides: Partial<PostView> = {}): PostView {
     created_at: "2026-09-28T12:00:00Z",
     like_count: 3,
     liked_by_viewer: false,
+    reply_count: 0,
+    repost_count: 0,
+    reposted_by_viewer: false,
     media: [],
     mentioned_game_ids: [],
+    reposted_post: null,
     ...overrides,
   };
 }

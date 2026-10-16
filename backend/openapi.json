@@ -1852,7 +1852,7 @@
         "type": "object"
       },
       "PostView": {
-        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.",
+        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original's author is soft-deleted.",
         "properties": {
           "author": {
             "$ref": "#/components/schemas/AuthorView"
@@ -1918,6 +1918,28 @@
             ],
             "title": "Parent Post Id"
           },
+          "reply_count": {
+            "title": "Reply Count",
+            "type": "integer"
+          },
+          "repost_count": {
+            "title": "Repost Count",
+            "type": "integer"
+          },
+          "reposted_by_viewer": {
+            "title": "Reposted By Viewer",
+            "type": "boolean"
+          },
+          "reposted_post": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "text": {
             "anyOf": [
               {
@@ -1941,8 +1963,12 @@
           "author",
           "like_count",
           "liked_by_viewer",
+          "reply_count",
+          "repost_count",
+          "reposted_by_viewer",
           "media",
-          "mentioned_game_ids"
+          "mentioned_game_ids",
+          "reposted_post"
         ],
         "title": "PostView",
         "type": "object"
@@ -4450,6 +4476,96 @@
           }
         },
         "summary": "Report",
+        "tags": [
+          "posts"
+        ]
+      }
+    },
+    "/posts/{post_id}/repost": {
+      "delete": {
+        "description": "The undo: removes the caller's plain reposts of the post. 204\nwhether or not there was anything to remove; 409, removing nothing,\nwhen one of them has a reply (or a repost) of its own.",
+        "operationId": "unrepost_posts__post_id__repost_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "A repost to remove is in use"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unrepost",
+        "tags": [
+          "posts"
+        ]
+      },
+      "post": {
+        "description": "The one-click repost: 201 with the caller's new plain repost, or 200\nwith the one they already have (idempotent and race-free, see\napp.posts.service.repost_post).",
+        "operationId": "repost_posts__post_id__repost_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Already reposted"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Repost",
         "tags": [
           "posts"
         ]

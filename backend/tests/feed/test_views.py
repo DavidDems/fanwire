@@ -104,6 +104,11 @@ _POST_VIEW_FIELDS = {
     "liked_by_viewer",
     "media",
     "mentioned_game_ids",
+    # POSTS-001: counters, the viewer's repost flag and the reposted post.
+    "reply_count",
+    "repost_count",
+    "reposted_by_viewer",
+    "reposted_post",
 }
 
 
