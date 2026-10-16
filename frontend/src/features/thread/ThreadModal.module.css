@@ -1,0 +1,45 @@
+/*
+ * The thread in its modal (FRONTEND-010): the root's card, the reply box (or
+ * the sign-in link), then the direct replies' cards, one column. The modal's
+ * own box is the shared Dialog's. Values come from tokens.css by name only.
+ */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/*
+ * The replies under the composer: the same card stack as the feed, indented
+ * behind a rule so they read as answers to the root above them.
+ */
+.replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--color-border);
+  list-style: none;
+}
+
+/* "Sign in to reply", where the composer would be: a full-height touch target. */
+.signIn {
+  margin: 0;
+}
+
+.signIn a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A failed read: the alert, then Try again under it. */
+.failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}

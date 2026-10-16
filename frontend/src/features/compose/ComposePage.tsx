@@ -3,8 +3,6 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { apiClient } from "../../api/client";
-import type { components } from "../../api/schema";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
@@ -14,6 +12,7 @@ import { MediaWidget } from "./MediaWidget";
 import { MentionAutocomplete } from "./MentionAutocomplete";
 import { PostBuilder } from "./PostBuilder";
 import { QUICK_POST_TEMPLATES } from "./PostTemplate";
+import { createPost } from "./createPost";
 import styles from "./ComposePage.module.css";
 
 /**
@@ -36,18 +35,17 @@ import styles from "./ComposePage.module.css";
  * **The address is how another feature opens this page in a context.**
  * `?reply_to=` and `?repost_of=` carry a post id into the mediator the composer
  * is built around. A route is the one seam a feature folder can hand another
- * without importing it, which is what the connection rule asks for and what lets
- * `features/feed/` offer a reply control while reimplementing no part of
- * composing. `src/features/compose/ComposeRoute.test.tsx` pins it.
+ * without importing it, which is what the connection rule asks for. Since
+ * `FRONTEND-010` the feed's reply control opens the thread modal instead, whose
+ * reply box is `InlineComposer`, built from these same parts; the two
+ * parameters keep working for anyone who opens them.
+ * `src/features/compose/ComposeRoute.test.tsx` pins it.
  *
  * **Laid out as one form card** (`wiki/CodeContext/FrontendUI/layout.md` §3):
  * the three controls stacked inside a `Card`, then a footer row with Undo
  * mention on the left and Post on the right. The failure sits in that footer,
  * just above Post, so the message is beside the button that produced it.
  */
-
-type CreatePostRequest = components["schemas"]["CreatePostRequest"];
-type PostOut = components["schemas"]["PostOut"];
 
 /**
  * A post id from the query string, or `null` for anything that is not one.
@@ -64,14 +62,6 @@ function postIdIn(params: URLSearchParams, name: string): number | null {
 
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : null;
-}
-
-async function createPost(body: CreatePostRequest): Promise<PostOut> {
-  const { data, response } = await apiClient.POST("/posts", { body });
-  if (!response.ok || data === undefined) {
-    throw new Error(`POST /posts answered ${response.status}`);
-  }
-  return data;
 }
 
 export function ComposePage() {

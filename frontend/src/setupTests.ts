@@ -79,6 +79,41 @@ if (
   };
 }
 
+/**
+ * Give jsdom's `HTMLDialogElement` the two methods it does not implement.
+ *
+ * jsdom (25) has the element, its `open` attribute and the UA rule that hides
+ * a closed one, but no `showModal()` and no `close()`. The shared `Dialog`
+ * (`components/ui/Dialog.tsx`, `FRONTEND-010`) opens with `showModal()`, the
+ * one call that gives a browser's dialog its focus containment, its top layer
+ * and Escape, so without these every modal throws on mount in a test.
+ *
+ * What is shimmed is only the state a test can observe: `showModal()` sets
+ * `open`, and `close()` removes it and fires `close`, as the browser does. The
+ * focus containment and the top layer are the browser's and are not faked;
+ * the browser checklist (`verification.md`) covers them. On the prototype, so
+ * `vi.spyOn(HTMLDialogElement.prototype, "showModal")` sees the calls, and
+ * only when absent, so a jsdom that implements them wins over this.
+ */
+if (
+  typeof HTMLDialogElement !== "undefined" &&
+  typeof HTMLDialogElement.prototype.showModal !== "function"
+) {
+  HTMLDialogElement.prototype.showModal = function showModal(
+    this: HTMLDialogElement,
+  ): void {
+    this.setAttribute("open", "");
+  };
+
+  HTMLDialogElement.prototype.close = function close(
+    this: HTMLDialogElement,
+  ): void {
+    if (!this.hasAttribute("open")) return;
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
+}
+
 // `onUnhandledRequest: "error"` belongs here, on listen — `setupServer()` takes
 // no options. It is the whole point of the harness: a request nobody wrote a
 // handler for fails the test instead of leaving a component stuck in its

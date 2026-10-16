@@ -1,11 +1,10 @@
 /*
- * One post and its thread (wiki/CodeContext/FrontendUI/layout.md §4,
- * components.md §5). A top-level post is a Card; a reply is the same `.post`
- * box without one, sitting on its parent card's surface. Values come from
- * tokens.css by name only.
+ * One post card (wiki/CodeContext/FrontendUI/layout.md §4, components.md §5),
+ * in the feed, in search results and in the thread modal alike. Values come
+ * from tokens.css by name only.
  */
 
-/* Tight inside a post: reposted line, header, text, media, quote, footer, thread. */
+/* Tight inside a post: reposted line, header, text, media, quote, footer. */
 .post {
   display: flex;
   flex-direction: column;
@@ -35,6 +34,28 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The time is the link to the post's thread (FRONTEND-010): it keeps the muted
+ * look of a timestamp, underlines on hover, and is at least 24 px tall (WCAG
+ * 2.5.8). Focus is base.css's :focus-visible ring.
+ */
+.timeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.timeLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.timeLink .time {
+  color: inherit;
+}
+
 /* The line breaks the author typed, and long words or URLs wrap (typography.md §2). */
 .text {
   white-space: pre-wrap;
@@ -43,8 +64,8 @@
 
 /*
  * The action row, under the content: like, reply and repost (each an icon and
- * its count, PostAction.module.css), then Show replies. Left-aligned and evenly
- * spaced, one row that wraps on a phone.
+ * its count, PostAction.module.css). Left-aligned and evenly spaced, one row
+ * that wraps on a phone.
  */
 .footer {
   display: flex;
@@ -109,43 +130,4 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   line-clamp: 3;
-}
-
-/* The chevron turns over when the replies are open. base.css zeroes the duration for reduced motion. */
-.chevron {
-  transition: transform var(--duration-base) var(--ease-out);
-}
-
-.toggle[aria-expanded="true"] .chevron {
-  transform: rotate(180deg);
-}
-
-.thread {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/*
- * Each nested level: indented --space-4 behind a 2 px rule, so the thread line
- * shows without a card-in-card box.
- */
-.replies {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0 0 0 var(--space-4);
-  border-left: 2px solid var(--color-border);
-  list-style: none;
-}
-
-/*
- * From the fourth level the indent stops growing (layout.md §4): the list is
- * pulled back by one step, so its rule lies over its parent's and its posts
- * line up with the third level. The structure still nests; only the indent is
- * capped, which keeps room for text on a 320 px phone.
- */
-.replies .replies .replies .replies {
-  margin-left: calc(-1 * (var(--space-4) + 2px));
 }

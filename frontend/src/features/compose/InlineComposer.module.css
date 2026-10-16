@@ -1,0 +1,38 @@
+/*
+ * The reply box in the thread modal (FRONTEND-010): the same controls as
+ * /compose, spaced the way ComposePage.module.css spaces them, without the
+ * page's card (the modal is the surface). Values come from tokens.css by
+ * name only.
+ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* "Replying to @username": quiet, but always there above the box. */
+.context {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Undo mention on the left, Reply on the right; they wrap if they must. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.submit {
+  margin-inline-start: auto;
+}

@@ -14,7 +14,9 @@ import { SearchPage } from "../features/search/SearchPage";
 import { PlayersTab } from "../features/stats/PlayersTab";
 import { SeasonsTab } from "../features/stats/SeasonsTab";
 import { StatsPage } from "../features/stats/StatsPage";
+import { ThreadModal } from "../features/thread/ThreadModal";
 import { AppLayout } from "./AppLayout";
+import { BackgroundRoutes } from "./BackgroundRoutes";
 import { RequireAuth, RequireNewProfile } from "./guards";
 import { HomeView } from "./HomeView";
 import { NotFoundView } from "./views";
@@ -27,76 +29,97 @@ import { NotFoundView } from "./views";
  * Every route lives under `AppLayout`, including the catch-all: a wrong address
  * still gets the navigation that lets you leave it.
  *
+ * **Two lists: the pages, and what opens over them.** A page fills `main`; an
+ * overlay (FRONTEND-010's thread modal at `/posts/:postId`) is rendered over
+ * the page the reader opened it from, which stays mounted underneath.
+ * `BackgroundRoutes` is what matches both, and why the layout's one child is a
+ * splat: react-router's background-location recipe ([[0x08-frontend]]).
+ *
  * Guards are applied here rather than inside each view, so that "which routes
  * need a session" is one readable list instead of a property of nine files.
  * The public routes are public by decision ([[0x01-users]]: the guest feed and
  * profile views are read paths) — a guard on either of those is a regression.
  */
+const pages: RouteObject[] = [
+  // FRONTEND-005's feed under FRONTEND-007's search bar. Public, and the
+  // app's index: the guest feed is a read path by decision ([[0x06-feed]]
+  // Security).
+  { index: true, element: <HomeView /> },
+  {
+    path: "compose",
+    element: (
+      <RequireAuth>
+        <ComposePage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "notifications",
+    element: (
+      <RequireAuth>
+        <NotificationsPage />
+      </RequireAuth>
+    ),
+  },
+  // FRONTEND-007's page. Public: search is a read path ([[0x07-search]]).
+  { path: "search", element: <SearchPage /> },
+  // FRONTEND-003's page. Still public, and still one route: the id in the
+  // path is what selects the own-profile variant from the public one.
+  { path: "profile/:userId", element: <ProfilePage /> },
+  // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
+  // and every other feature reaches it by this address, never by import.
+  { path: "games/:gameId", element: <GamePage /> },
+  // FRONTEND-009's pages. Public: sports data is a read path. The two
+  // tabs are child routes, so the address alone decides which one shows;
+  // `/stats` itself is the Seasons tab's.
+  {
+    path: "stats",
+    element: <StatsPage />,
+    children: [
+      { index: true, element: <Navigate to="seasons" replace /> },
+      { path: "seasons", element: <SeasonsTab /> },
+      { path: "players", element: <PlayersTab /> },
+    ],
+  },
+  { path: "players/:playerId", element: <PlayerPage /> },
+
+  // FRONTEND-002's pages.
+  { path: "sign-in", element: <SignInPage /> },
+  { path: "sign-up", element: <SignUpPage /> },
+  { path: "confirm", element: <ConfirmPage /> },
+  { path: "forgot-password", element: <ForgotPasswordPage /> },
+  {
+    // Reachable only by a signed-in visitor who has no profile row yet —
+    // the guard sends everyone else to the feed.
+    path: "create-profile",
+    element: (
+      <RequireNewProfile>
+        <ProfileSetupPage />
+      </RequireNewProfile>
+    ),
+  },
+
+  // The app's own not-found view, not react-router's error boundary.
+  { path: "*", element: <NotFoundView /> },
+];
+
+const overlays: RouteObject[] = [
+  // FRONTEND-010's thread modal. Public: a thread is a read path
+  // ([[0x06-feed]]); replying inside it needs a session, and the modal itself
+  // offers a signed-out reader the way to one.
+  { path: "posts/:postId", element: <ThreadModal /> },
+];
+
 export const routes: RouteObject[] = [
   {
-    path: "/",
+    // Pathless: a layout route with a path of its own would match `/` by
+    // itself, outranking the splat under it, and render an empty `main`.
     element: <AppLayout />,
     children: [
-      // FRONTEND-005's feed under FRONTEND-007's search bar. Public, and the
-      // app's index: the guest feed is a read path by decision ([[0x06-feed]]
-      // Security).
-      { index: true, element: <HomeView /> },
       {
-        path: "compose",
-        element: (
-          <RequireAuth>
-            <ComposePage />
-          </RequireAuth>
-        ),
+        path: "*",
+        element: <BackgroundRoutes pages={pages} overlays={overlays} />,
       },
-      {
-        path: "notifications",
-        element: (
-          <RequireAuth>
-            <NotificationsPage />
-          </RequireAuth>
-        ),
-      },
-      // FRONTEND-007's page. Public: search is a read path ([[0x07-search]]).
-      { path: "search", element: <SearchPage /> },
-      // FRONTEND-003's page. Still public, and still one route: the id in the
-      // path is what selects the own-profile variant from the public one.
-      { path: "profile/:userId", element: <ProfilePage /> },
-      // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
-      // and every other feature reaches it by this address, never by import.
-      { path: "games/:gameId", element: <GamePage /> },
-      // FRONTEND-009's pages. Public: sports data is a read path. The two
-      // tabs are child routes, so the address alone decides which one shows;
-      // `/stats` itself is the Seasons tab's.
-      {
-        path: "stats",
-        element: <StatsPage />,
-        children: [
-          { index: true, element: <Navigate to="seasons" replace /> },
-          { path: "seasons", element: <SeasonsTab /> },
-          { path: "players", element: <PlayersTab /> },
-        ],
-      },
-      { path: "players/:playerId", element: <PlayerPage /> },
-
-      // FRONTEND-002's pages.
-      { path: "sign-in", element: <SignInPage /> },
-      { path: "sign-up", element: <SignUpPage /> },
-      { path: "confirm", element: <ConfirmPage /> },
-      { path: "forgot-password", element: <ForgotPasswordPage /> },
-      {
-        // Reachable only by a signed-in visitor who has no profile row yet —
-        // the guard sends everyone else to the feed.
-        path: "create-profile",
-        element: (
-          <RequireNewProfile>
-            <ProfileSetupPage />
-          </RequireNewProfile>
-        ),
-      },
-
-      // The app's own not-found view, not react-router's error boundary.
-      { path: "*", element: <NotFoundView /> },
     ],
   },
 ];

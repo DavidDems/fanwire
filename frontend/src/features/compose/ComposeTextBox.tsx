@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Field, describeField } from "../../components/FormField";
 import type { ComposeMediator } from "./ComposeMediator";
@@ -15,21 +15,49 @@ import styles from "./ComposeTextBox.module.css";
 
 export interface ComposeTextBoxProps {
   mediator: ComposeMediator;
+  /** The visible label; "Post" on `/compose`. */
+  label?: string;
+  /**
+   * The id of an element elsewhere that describes the box too — the inline
+   * composer's "Replying to @username" — announced before the standing hint.
+   */
+  describedBy?: string;
+  /** Focus the box once it is on screen (a thread opened to reply). */
+  autoFocus?: boolean;
 }
 
 const TEXT_BOX_ID = "compose-text";
 
-export function ComposeTextBox({ mediator }: ComposeTextBoxProps) {
+export function ComposeTextBox({
+  mediator,
+  label = "Post",
+  describedBy,
+  autoFocus = false,
+}: ComposeTextBoxProps) {
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const field = describeField(TEXT_BOX_ID, { hint: true });
+  const description = [describedBy, field["aria-describedby"]]
+    .filter((token) => token !== undefined)
+    .join(" ");
+
+  // A passive effect rather than the `autoFocus` attribute: it runs after the
+  // dialog the box may sit in has opened, so the browser's own dialog
+  // focusing cannot take the focus back from it.
+  useEffect(() => {
+    if (autoFocus) ref.current?.focus();
+  }, [autoFocus]);
 
   return (
     <Field
       id={TEXT_BOX_ID}
-      label="Post"
+      label={label}
       hintText="Type # to mention a game, or $ to mention a team."
     >
       <textarea
-        {...describeField(TEXT_BOX_ID, { hint: true })}
+        {...field}
+        aria-describedby={description}
+        ref={ref}
         className={styles.text}
         name="post-text"
         rows={4}

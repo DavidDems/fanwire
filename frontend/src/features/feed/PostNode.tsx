@@ -1,16 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import type { MouseEvent } from "react";
+import {
+  Link,
+  matchPath,
+  useLocation,
+  useNavigate,
+  type Location,
+} from "react-router-dom";
 
 import { Avatar } from "../../components/ui/Avatar";
-import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { InlineAlert } from "../../components/ui/InlineAlert";
-import { StatusLine } from "../../components/ui/StatusLine";
 import {
-  ChevronDownIcon,
   HeartFilledIcon,
   HeartIcon,
   MessageCircleIcon,
@@ -22,10 +22,8 @@ import { PostMedia } from "./PostMedia";
 import styles from "./PostNode.module.css";
 import { PostText } from "./PostText";
 import {
-  fetchThread,
   setLiked,
   setReposted,
-  threadKey,
   withLike,
   withRepost,
   type PostView,
@@ -33,67 +31,112 @@ import {
 import { likesText, repliesText, repostsText } from "./counts";
 
 /**
- * One post — and, when a reader asks for them, its replies, which are posts and
- * are rendered by this same component.
+ * One post card — in the feed, in search results, and in the thread modal,
+ * where the root and each of its replies is one of these.
  *
  * **Composite** ([[wiki/CodeContext/Standards/gof-patterns|GoF patterns]]): a
- * leaf and a node with children are the same thing here, so there is no second
- * component for "a thread", none for "the root" and none for "a reply". That is
- * what makes depth free — the third level costs no code the first did not
- * already need — and it is why the expand control is on *every* post rather than
- * only on the ones that have replies. A post view now carries `reply_count`,
- * but the "Show replies" disclosure is kept as it was until `FRONTEND-010`
- * replaces it with the thread view; it still asks for nothing until it is used.
+ * root and a reply are the same thing here, so there is no second component
+ * for "the root" and none for "a reply". Since `FRONTEND-010` the thread is not
+ * expanded inside the card: the thread modal (`features/thread/`) at
+ * `/posts/:id` shows the root's card and its direct replies' cards, and a
+ * reply's card opens that reply's own thread in the same modal. The card
+ * itself fetches nothing.
  *
- * **One level per request.** `GET /feed/thread/{post_id}` answers the root plus
- * its **direct** replies ([[0x06-feed]] Routes). Expanding a reply asks for that
- * reply's own id; the root's id is never asked for twice, because the answer
- * would be the same page it already has and would still not contain the deeper
- * level.
+ * **How a card opens its thread.** The timestamp is a link to `/posts/<id>`:
+ * the keyboard and screen-reader path. A click anywhere else on the card that
+ * is not on a link, a button or a field, and is not the end of a text
+ * selection, opens the same thread — a mouse convenience, not a second focus
+ * stop, so the card has no `tabindex` and is never wrapped in a link. The reply
+ * count is a link to the thread too, and Reply opens it to reply
+ * (`/posts/<id>?reply=1`). Every one of them carries `state.background`, the
+ * page the card is on, which is what keeps that page rendered under the modal
+ * (`routes/BackgroundRoutes.tsx`).
  *
  * **A repost is rendered as what it is** (UI-009). A *plain* repost — no text
  * and no media of its own — stands for the original: a line naming who
  * reposted it, then the original's own card built from `reposted_post`, whose
- * controls, counts and replies are the original's. A *quote* repost is a post
- * of its own, with the original inside it as a compact card without controls.
- * Either way it is this one node choosing what to render, not a second
- * component.
+ * controls, counts and thread are the original's. A *quote* repost is a post
+ * of its own, with the original inside it as a compact box without controls,
+ * linked to the original's own thread. Either way it is this one node choosing
+ * what to render, not a second component.
  *
  * **The card renders from the `post` it was handed** (for a plain repost, from
- * the `reposted_post` inside it), and the thread read is used only for the
- * replies underneath it. A node that preferred the thread's own copy of the
- * root would show a post from a different cache entry than the one its parent
- * is rendering from, and the two would disagree for as long as one of them was
- * stale.
- *
- * **Only the top level is a card** (`layout.md` §4). A reply is the same node
- * with `nested` set, which changes nothing but the box: it renders as a plain
- * `<article>` on its parent card's surface, so a thread reads as one card with
- * a line down its side rather than as cards inside cards.
+ * the `reposted_post` inside it), never from another cache entry's copy of it.
  */
 
 export interface PostNodeProps {
   post: PostView;
-  /** Set by the recursion on every reply: a reply sits inside its parent's card. */
-  nested?: boolean;
 }
 
-export function PostNode({ post, nested = false }: PostNodeProps) {
+/** The thread modal's address pattern, as `routes/routes.tsx` declares it. */
+const THREAD_PATH = "/posts/:postId";
+
+/** The address of a post's thread, or of the thread opened to reply. */
+function threadPath(postId: number, reply = false): string {
+  return `/posts/${postId}${reply ? "?reply=1" : ""}`;
+}
+
+/** What a link into a thread carries: the page to keep underneath, if any. */
+interface ThreadState {
+  background?: Location;
+}
+
+/**
+ * The `state` every link into a thread carries: the page underneath.
+ *
+ * On an ordinary page that is the page itself. Inside the thread modal it is
+ * whatever the modal is already open over — carried on, never replaced by the
+ * modal's own address, so opening a reply's thread keeps the same page
+ * underneath and closing still returns to it. A modal opened directly by URL
+ * has no background, and so neither has one opened from inside it: the feed is
+ * what is rendered under both.
+ */
+function useThreadState(): ThreadState {
+  const location = useLocation();
+  if (matchPath(THREAD_PATH, location.pathname) === null) {
+    return { background: location };
+  }
+  const carried = (location.state as ThreadState | null)?.background;
+  return carried === undefined ? {} : { background: carried };
+}
+
+/**
+ * The mouse convenience: a click on a card's own surface opens a thread.
+ * Links, buttons and fields keep their own clicks, and a click that ends a text
+ * selection is the reader selecting, not opening.
+ */
+function useOpenThreadOnClick(postId: number) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const state = useThreadState();
+  return (event: MouseEvent<HTMLElement>): void => {
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest("a, button, input, textarea, select, label") !== null
+    ) {
+      return;
+    }
+    const selection = window.getSelection();
+    if (selection !== null && !selection.isCollapsed) return;
+    // Marked handled, so the card around a quote's original does not open
+    // its own thread as well.
+    event.preventDefault();
+    // Already open (the root's own card in the modal): a second entry for the
+    // same thread would make the next Close, which goes back one, look dead.
+    if (pathname === threadPath(postId)) return;
+    navigate(threadPath(postId), { state });
+  };
+}
+
+export function PostNode({ post }: PostNodeProps) {
   const plain = isPlainRepost(post);
-  // The post this card is about: what its header, text, controls and replies
+  // The post this card is about: what its header, text, controls and thread
   // belong to. For a plain repost that is the original, or nothing at all.
   const subject = plain ? post.reposted_post : post;
-  const subjectId = subject?.id ?? post.id;
-  const [expanded, setExpanded] = useState(false);
-
-  // Nothing is fetched to render a post nobody has expanded — mounting a feed of
-  // twenty posts would otherwise be twenty-one requests.
-  const thread = useQuery({
-    queryKey: threadKey(subjectId),
-    queryFn: () => fetchThread(subjectId),
-    enabled: expanded && subject !== null,
-  });
-  const replies = thread.data?.replies;
+  const state = useThreadState();
+  const openThread = useOpenThreadOnClick(subject?.id ?? post.id);
 
   const repostedBy = !plain ? null : (
     <p className={styles.reposted}>
@@ -128,8 +171,8 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
 
         {/*
          * The reader's controls, under the content: like, reply and repost,
-         * each followed by its count, then the replies disclosure. For a plain
-         * repost every one of them acts on the original.
+         * each followed by its count. For a plain repost every one of them acts
+         * on the original.
          */}
         <footer className={styles.footer}>
           <TogglePostAction
@@ -143,17 +186,19 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
             apply={withLike}
           />
           {/*
-           * Reply is an address, never an import. `/compose` reads `reply_to`
-           * and seeds its own draft from it; a route is the one seam a feature
-           * folder can offer another without being imported by it
-           * ([[0x00-architecture]] Connection rule), and this unit reimplements
-           * no part of composing. It looks like the two toggles and stays a
-           * link: what it does is go somewhere. Its count moves only once a
-           * reply exists and the post is read again, never on the click.
+           * Reply is an address, never an import: the thread modal opened to
+           * reply, whose composer is `features/compose`'s and is put beside
+           * this card by `features/thread`, neither of which this folder
+           * imports ([[0x00-architecture]] Connection rule). It looks like the
+           * two toggles and stays a link: what it does is go somewhere. Its
+           * count links to the same thread, and moves only once a reply exists
+           * and the post is read again, never on the click.
            */}
           <PostAction
             label="Reply"
-            to={`/compose?reply_to=${subject.id}`}
+            to={threadPath(subject.id, true)}
+            countTo={threadPath(subject.id)}
+            state={state}
             icon={<MessageCircleIcon />}
             count={repliesText(subject)}
           />
@@ -167,61 +212,15 @@ export function PostNode({ post, nested = false }: PostNodeProps) {
             send={setReposted}
             apply={withRepost}
           />
-          {/*
-           * A disclosure button: the label stays put and `aria-expanded` is what
-           * carries the state, so the control a reader learned once does not
-           * rename itself under them every time they use it. The chevron turning
-           * over is that same attribute, read by CSS.
-           */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={styles.toggle}
-            aria-expanded={expanded}
-            onClick={() => setExpanded(!expanded)}
-          >
-            Show replies
-            <ChevronDownIcon className={styles.chevron} />
-          </Button>
         </footer>
-
-        {!expanded ? null : (
-          <div className={styles.thread}>
-            {thread.isPending ? (
-              <StatusLine>Loading replies…</StatusLine>
-            ) : null}
-            {thread.isError ? (
-              <InlineAlert>
-                We could not load these replies just now. Please try again.
-              </InlineAlert>
-            ) : null}
-            {/*
-             * An answered thread with no replies says so: an expanded post that
-             * showed nothing would read as a control that did nothing.
-             */}
-            {replies === undefined ? null : replies.length === 0 ? (
-              <EmptyState>No replies yet.</EmptyState>
-            ) : (
-              <ol className={styles.replies}>
-                {replies.map((reply) => (
-                  <li key={reply.id}>
-                    <PostNode post={reply} nested />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        )}
       </>
     );
 
   // `article` is the role for a self-contained composition, which is the one
-  // thing a post can honestly claim — and it nests, which a thread needs.
-  return nested ? (
-    <article className={styles.post}>{body}</article>
-  ) : (
-    <Card as="article" className={styles.post}>
+  // thing a post can honestly claim. The click is a mouse shortcut to what the
+  // timestamp link already offers, so the card takes no role or tabindex for it.
+  return (
+    <Card as="article" className={styles.post} onClick={openThread}>
       {body}
     </Card>
   );
@@ -241,7 +240,7 @@ function isPlainRepost(post: PostView): boolean {
 
 /**
  * The post itself: who wrote it, when, what it says and what it carries. The
- * controls and the replies below it are the reader's, not the post's.
+ * controls below it are the reader's, not the post's.
  */
 function PostContent({ post }: { post: PostView }) {
   return (
@@ -251,9 +250,7 @@ function PostContent({ post }: { post: PostView }) {
         <Link className={styles.author} to={`/profile/${post.author.id}`}>
           {post.author.username}
         </Link>
-        <time className={styles.time} dateTime={post.created_at}>
-          {postedOn(post.created_at)}
-        </time>
+        <ThreadTimeLink post={post} />
       </header>
       {post.text === null || post.text === "" ? null : (
         <PostText
@@ -282,20 +279,23 @@ function QuotedPost({ post }: { post: PostView | null }) {
       </div>
     );
   }
+  return <QuotedOriginal post={post} />;
+}
+
+/**
+ * The original, present: its author's profile, and its time as a link to its
+ * own thread. A click anywhere else in the box opens that thread too — the
+ * original's, not the quote's around it.
+ */
+function QuotedOriginal({ post }: { post: PostView }) {
+  const openThread = useOpenThreadOnClick(post.id);
   return (
-    <div className={styles.quoted}>
+    <div className={styles.quoted} onClick={openThread}>
       <p className={styles.quotedHeader}>
-        {/*
-         * FRONTEND-010 replaces this with a link to the original post itself
-         * (`/posts/:id`). Until that route exists, the original author's
-         * profile is the nearest page that shows it.
-         */}
         <Link className={styles.author} to={`/profile/${post.author.id}`}>
           {post.author.username}
         </Link>
-        <time className={styles.time} dateTime={post.created_at}>
-          {postedOn(post.created_at)}
-        </time>
+        <ThreadTimeLink post={post} />
       </p>
       {post.text === null || post.text === "" ? null : (
         <PostText
@@ -305,6 +305,18 @@ function QuotedPost({ post }: { post: PostView | null }) {
         />
       )}
     </div>
+  );
+}
+
+/** A post's time, as the link to its thread: the keyboard path to it. */
+function ThreadTimeLink({ post }: { post: PostView }) {
+  const state = useThreadState();
+  return (
+    <Link className={styles.timeLink} to={threadPath(post.id)} state={state}>
+      <time className={styles.time} dateTime={post.created_at}>
+        {postedOn(post.created_at)}
+      </time>
+    </Link>
   );
 }
 
