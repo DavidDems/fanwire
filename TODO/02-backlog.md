@@ -70,12 +70,8 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
 | **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (#142, deployed 2026-10-14) | Now unblocked; needs a spec. Two are `RETAIN`: the human deletes them by hand afterwards |
-| **Game detail API** and a paginated, filterable game list | `hand` | `EVENTS-005` | `business-rules.md` "Events" | Done, #146 (2026-10-14) |
-| **Player API**: search, detail with career and season stats, game log | `hand` | `EVENTS-006` | the human, 2026-10-13 | Specced 2026-10-14; runs under `Prompts/07` |
-| **Stats API**: seasons, standings, champion, leaders, a team's season | `hand` | `EVENTS-007` | `business-rules.md` "Events" | Specced 2026-10-14; runs under `Prompts/07`, after `EVENTS-006` |
-| **Load the live RDS**: S3 data bucket and a hand-invoked load function | `hand` | `EVENTS-002` | #139's proposal | Done, #148; loaded by the human 2026-10-14 (runbook #149) |
 | **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
-| **Frontend pass for sports data**: game page with box score, Stats page (Seasons, Players), player pages, `#GameId` links | `hand` | `FRONTEND-008`, `FRONTEND-009` | the human, 2026-10-13 and 2026-10-14 | Specced 2026-10-14; `Prompts/07`. A narrower compose picker is still unplanned |
+| **A narrower compose game picker** for `#GameId` mentions, now that games, teams and players have their own pages | `hand` | — | `FRONTEND-008`/`FRONTEND-009` (left unplanned) | Needs a design decision from the human first |
 
 ## Backend and infra
 
@@ -84,15 +80,14 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `hand` | — | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
 | **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | `hand` | — | the runbook's known gap | Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
-| **Team abbreviations on `LiveScoreView`**, so the feed's score block can name teams instead of "Home" and "Away" | `hand` | — | `components.md` §4 | `feed/` backend, then a frontend unit |
+| **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (#161), `0x03-posts.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
 
 ## Frontend
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Post counts and a one-click repost** (backend): `reply_count`, `repost_count`, `reposted_by_viewer`, `reposted_post`; `POST`/`DELETE /posts/{id}/repost` | `hand` | `POSTS-001` | the human, 2026-10-14 | Specced; `Prompts/07`. Un-repost is the first post delete (plain reposts only) |
-| **The post card**: icon-only like, reply and repost with "x likes"/"x replies"/"x reposts", live like and repost counts, reposts rendered as the original | `hand` | `UI-009` | the human, 2026-10-14 | Specced; after `POSTS-001` |
-| **Thread modal at `/posts/:id`** with the reply written in place, below the original | `hand` | `FRONTEND-010` | the human, 2026-10-14 | Specced; after `UI-009` |
+| **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore`; stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the three PRs' "for the Director" lists | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
+| **Thread modal at `/posts/:id`** with the reply written in place, below the original | `hand` | `FRONTEND-010` | the human, 2026-10-14 | Specced; runs next under `Prompts/07` |
 | **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
 | **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
 | **Compose: drop the separate *Attach* click.** Upload → wait for the scan → click *Attach* | `hand` | — | the human, 2026-09-30 ("a bit annoying") | The wait for `Processed` stays; only the click goes. `features/compose/` |

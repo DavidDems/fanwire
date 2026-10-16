@@ -36,7 +36,7 @@ red commit.
 
 | Component | Renders | Variants | States |
 |---|---|---|---|
-| `Button` | a native `<button>` (all props passed through) | `primary` (`--color-action` fill, `--color-on-action` label), `secondary` (surface fill, `--color-border-strong` 1 px edge, `--color-text`), `ghost` (no fill or edge, `--color-text-muted`; for in-card actions such as Clear, Show replies, Undo) | default, `:hover` (primary → `--color-action-hover`; others → `--color-surface-muted` fill), `:active`, `:focus-visible` (`--focus-ring`), `:disabled` (`--opacity-disabled`, `cursor: not-allowed`), `data-active` (Unlike, Unfollow: secondary, with the icon filled). **Not `aria-pressed`:** these buttons already change their label (Like ↔ Unlike), and a changing label plus a pressed state is announced as "Unlike, pressed", a double signal. The label stays the state; the attribute is for CSS only |
+| `Button` | a native `<button>` (all props passed through) | `primary` (`--color-action` fill, `--color-on-action` label), `secondary` (surface fill, `--color-border-strong` 1 px edge, `--color-text`), `ghost` (no fill or edge, `--color-text-muted`; for in-card actions such as Clear, Show replies, Undo) | default, `:hover` (primary → `--color-action-hover`; others → `--color-surface-muted` fill), `:active`, `:focus-visible` (`--focus-ring`), `:disabled` (`--opacity-disabled`, `cursor: not-allowed`), `data-active` (Unfollow: secondary, with the icon filled; the attribute is for CSS only, because the label already carries the state). **A control is one or the other, never both:** either its label changes (Follow ↔ Unfollow, no `aria-pressed`), or its name stays fixed and `aria-pressed` carries the state (the post card's Like and Repost since `UI-009`, the human 2026-10-16). A changing label plus a pressed state is announced as "Unlike, pressed", a double signal |
 | `buttonClass(variant, size)` | a class string, for a `Link` that should look like a button (header "Sign in", the not-found link back to the feed) | as `Button` | as `Button` |
 | — sizes | | `md`: min-height 44 px (`--target-min`), padding `--space-2 --space-4`. `sm`: min-height 32 px, with a hit area padded to at least 24 × 24 (WCAG 2.5.8); for post footers and the notification Clear | |
 | `Card` | a box with `--color-surface`, 1 px `--color-border`, `--radius-md`, padding `--space-4` | `as` prop: `article`, `section` or `div` (the element's role is the caller's choice; `PostNode` must stay an `article`) | — |
@@ -47,7 +47,8 @@ red commit.
 | `Avatar` | the first character of the username **as typed**, in a `--radius-full` circle, `--color-surface-muted` fill, `--color-text` | `sm` 32 px, `lg` 64 px | `aria-hidden="true"`: the username is always beside it. No hashed per-user colours, which would land near team colours |
 | `Badge` | an inline label, `--font-size-xs`, 600 | `neutral` (`--color-surface-muted` / `--color-text`), `live` (`--color-live` / `--color-on-live`, with a dot), `outline` (team abbreviations: transparent, 1 px `--color-border-strong`) | — |
 | `Icon` | one inline SVG, `aria-hidden="true"`, `currentColor`, 20 px (16 in `sm` buttons) | see §3 | — |
-| `GameScore` | the score block (§4) | `compact` (one line, for the feed ticker), `row` (for search results) | — |
+| `GameScore` | the score block (§4) | `compact` (one line, for the feed ticker), `row` (for search results) | **No caller since `FRONTEND-009`**: the ticker went with `EVENTS-003` and the search game filter with `FRONTEND-009`. Kept until a unit with `components/ui/` in scope deletes it or reuses it |
+| `Tabs` (`FRONTEND-009`) | a `<nav aria-label>` of `NavLink`s styled as tabs, the current one `aria-current="page"` | — | default, `:hover`, `:focus-visible`, current (a bar and weight). **Deliberately not an ARIA `tablist`**: each tab is its own route, so the address decides the tab and Back moves between them |
 | `VisuallyHidden` | text for screen readers only (the `.visually-hidden` class from `base.css`) | — | — |
 
 ### As built (`UI-002`, merged 2026-10-06)
@@ -90,7 +91,7 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 
 ## 3. Icons
 
-**Copied, not installed.** Thirteen Lucide icons (ISC licence, `branding.md` §5)
+**Copied, not installed.** Fourteen Lucide icons plus two pressed variants (ISC licence, `branding.md` §5)
 are copied as inline SVG React components into `src/components/ui/icons/`,
 with Lucide's licence text in `src/components/ui/icons/LICENSE`. There is no
 `lucide-react` dependency (so no `package.json` Director PR), no third-party
@@ -103,21 +104,31 @@ request, and only the glyphs in use.
 | Compose | `square-pen` | nav |
 | Notifications | `bell` | nav |
 | Your profile | `user` | nav |
-| Like / Unlike | `heart` (filled when liked) | `LikeButton` |
-| Reply | `message-circle` | `PostNode` footer |
-| Repost | `repeat-2` | `PostNode` footer |
+| Stats | `chart-column` | nav (`FRONTEND-009`) |
+| Like | `heart`; pressed: `HeartFilledIcon`, the same path filled with `currentColor` | `PostAction` (`UI-009`) |
+| Reply | `message-circle` | `PostAction` |
+| Repost | `repeat-2`, also the "↻ name reposted" line; pressed: `Repeat2FilledIcon`, the same paths at stroke width 3 (an outline has nothing to fill) | `PostAction`, `PostNode` |
 | Show replies | `chevron-down` (rotated 180° when `aria-expanded="true"`) | `PostNode` footer |
 | Clear | `x` | `NotificationRow` |
 | Image | `image` | `MediaWidget` |
 | Alert | `circle-alert` | `InlineAlert` |
 | Success | `circle-check` | `StatusLine success` |
 
-**An icon never replaces a label.** Every control keeps its visible text, which
-is also its accessible name, and that is what the tests find.
+**An icon never replaces a label, with one exception.** Every control keeps
+its visible text, which is also its accessible name, and that is what the
+tests find. **The exception is the post card's action row** (`UI-009`, the
+human 2026-10-14): Like, Reply and Repost are icon-only, named by
+`aria-label`, each followed by its count as visible text ("2 likes"). The
+count stays outside the control's name. Show replies keeps its words.
 
 ## 4. Sports-specific
 
 ### Score block (`GameScore`, inside `LiveScoreTickerDecorator`)
+
+**History, not current.** The ticker was removed with `EVENTS-003`
+(2026-10-13) and the search game filter with `FRONTEND-009`, so nothing
+renders `GameScore` now (§2). This section and "Game state" below are kept
+as the design to reuse if a score block comes back.
 
 ```
 ┌ status region "Live score" ───────────────────────────────┐
@@ -175,31 +186,35 @@ both teams by abbreviation.
 
 ### Mentions in posts
 
-Post text is rendered as typed, so `#GameId123` and `$TOR` appear literally.
-**No unit in this plan parses them into links.** There is no game page to link
-to yet ("Posts with a link to a game should be clickable to go to the stats
-page", `business-rules.md`, is unbuilt), and `$TOR` deliberately resolves to
-nothing (`0x08-frontend.md`). When the game page exists, the unit that builds
-it renders `#GameId<n>` as a link styled as an inline `neutral` badge. That
-style is reserved for it now, so nobody invents another.
+**`#GameId<n>` is a link since `FRONTEND-008`**, to `/games/<n>`, and only
+when the server resolved it (`mentioned_game_ids`; `0x08-frontend.md` →
+Game page). **As built it is a plain text link**, not the inline `neutral`
+badge this section reserved; the badge style stays reserved if a later
+unit wants it. `$TOR` is still rendered as typed and deliberately resolves
+to nothing.
 
 ## 5. Map: every existing component and view
 
 | Existing | Uses | Notes |
 |---|---|---|
-| `routes/AppLayout` | header, nav, `buttonClass` (Sign in), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current` |
+| `routes/AppLayout` | header, nav, `buttonClass` (Sign in), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current`. Six items for a signed-in visitor since `FRONTEND-009` (Stats between Search and the profile item); `NavItem`'s `alsoCurrentOn` marks Stats current on `/players/*` too |
 | `routes/guards` `Resolving` / `Unavailable` | `StatusLine` / `InlineAlert` | Same text |
 | `routes/views` `NotFoundView` | page template, `EmptyState`, `buttonClass` | The only view left in `views.tsx` |
 | `routes/HomeView` | `SearchBar` above `FeedPage` | `/`: composed in `routes/` because neither feature imports the other |
 | `features/search/SearchBar` | `Card`, `Field` + `input type="search"` (base), `Button primary` (Search) | `form role="search"`; box and button stacked at every width (`layout.md` §3) |
-| `features/search/SearchPage` | `StatusLine`, `InlineAlert`, `EmptyState` per section; accounts as one list `Card` with dividers, `Avatar sm`, username link 600, description muted; posts as `PostNode` cards; `Button secondary` full width (Load more accounts / posts) | Every empty state names the query |
-| `features/search/GameFilter` | filter `Card` with three `Field` + native `select` (base), stacked; results as one list `Card` with dividers: two `Badge outline` abbreviations, a muted `<time>`, `GameScore row` (status `FT`, so "Final"); `Button secondary` (Load more games) | **No text input of any kind** (`0x08-frontend.md` → Search). "Team {id}" while teams load. No logo, no team colour |
+| `features/search/SearchPage` | `StatusLine`, `InlineAlert`, `EmptyState` per section; accounts as one list `Card` with dividers, `Avatar sm`, username link 600, description muted; posts as `PostNode` cards; `Button secondary` full width (Load more accounts / posts) | Every empty state names the query. Accounts and posts only since `FRONTEND-009` (`GameFilter` removed) |
+| `features/games/GamePage` (`FRONTEND-008`) | page template, `h1`, "Final: X won, 117–109" in words, `StatusLine`, `InlineAlert`, "Game not found" `EmptyState` with a link to the feed | Public. Reached from post mentions and Stats rows |
+| `features/games/LineScore`, `BoxScore` | real tables (`caption`, `th scope`), each in a labelled, focusable `role="region"` with `overflow-x: auto`; `tabular-nums` | Box-score names link to `/players/<id>` (`FRONTEND-009`). Did-not-play players listed after the table |
+| `features/stats/StatsPage` (`FRONTEND-009`) | page template, one `h1` "Stats", `Tabs` (Seasons, Players), the tab's route below | `/stats` redirects to `/stats/seasons` |
+| `features/stats/SeasonsTab`, `LeagueView`, `TeamSeasonView` | native `select` season picker, `TeamSearch`, tables in `ScrollTable`, `Button secondary` (Load more) | Champion line, standings per conference, leaders with the API's rule text, the season's or a team's games |
+| `features/stats/TeamSearch` | `Field` + input as an ARIA 1.2 combobox with a `listbox` panel | Arrow keys, Enter, Escape, click (options take `mousedown`) |
+| `features/stats/PlayersTab` | `Field` + search input (debounced), result list, `EmptyState` naming the search, `Button secondary` (Load more) | |
+| `features/players/PlayerPage` (`FRONTEND-009`) | page template, `h1` name, attributes as a `dl`, career, season and game-log tables in `ScrollTable` | "Player not found" for an unknown id. **`ScrollTable` is copied in `stats` and `players`** (features may not import each other); one shared table wrapper in `components/ui/` is the fix |
 | `components/FormField` `Field` | `FormField.module.css` (`UI-004`): label 600 `--font-size-sm`; hint `--color-text-muted`; error `--color-danger` with an `aria-hidden` icon; label over control, and the space between consecutive fields | Markup and ids unchanged. **Field owns its own layout**: a feature's module CSS sets control widths and the space above its submit button, never the label or the gap between fields (`UI-008` nearly doubled it) |
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more) | Load more's disabled-while-fetching state |
-| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, `Button ghost sm` × Show replies, links styled as `ghost sm` (Reply, Repost) | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. Expanded with zero replies says "No replies yet." (`EmptyState`, `UI-005`'s one behaviour change). A reply is told it is nested (`nested` prop, passed by the recursion): a plain `<article>` on its parent card's surface |
-| `features/feed/LiveScoreTickerDecorator` | `GameScore compact` under a muted "Game {id}" label, one per game, on a `--color-surface-muted` band | §4. Still a fragment: children first and bare. **Known:** `Badge neutral` shares the band's fill, so "Final" and an unknown code lose their pill (follow-up in `implementation-plan.md`) |
-| `features/feed/LikeButton` | `Button ghost sm` + `heart` icon, `data-active` when liked | "N likes" stays one text node. Failure: `InlineAlert` |
+| `features/feed/PostNode` | `Card as="article"` (top level only), `Avatar sm`, author link 600, `<time>` muted tabular, the action row (`PostAction` × 3), `Button ghost sm` × Show replies | Thread nesting: `layout.md` §4. Thread loading/error as `StatusLine` / `InlineAlert`. Expanded with zero replies says "No replies yet." (`EmptyState`, `UI-005`'s one behaviour change). A reply is told it is nested (`nested` prop, passed by the recursion): a plain `<article>` on its parent card's surface. **Reposts (`UI-009`):** a plain repost is a muted "↻ name reposted" line over the original's content and controls; a quote repost embeds the original as a compact box (1 px `--color-border`, `--radius-md`, text clamped to 3 lines, no controls). "This post is unavailable" (muted, italic) for a missing original |
+| `features/feed/PostAction` (`UI-009`) | `Button ghost sm` (or a `Link` with `buttonClass`, for Reply), icon only, square, named by `aria-label`; then its count, `--color-text-muted`, `--font-size-sm`, `tabular-nums` | Like and Repost carry `aria-pressed` and swap to the filled icon when pressed, plus `--color-action`. `TogglePostAction` is the one optimistic pattern for both; failure is an `InlineAlert` on its own row. Replaces `LikeButton` |
 | `features/feed/PostMedia` | `img`: `max-width: 100%`, `--radius-md`, `aspect-ratio` unknown so `height: auto`, max-height 28rem with `object-fit: cover` | Failure state is "nothing", unchanged |
 | `features/compose/ComposePage` | form `Card`, `Button primary` (Post), `Button ghost` (Undo mention), `Button secondary` × quick posts, `InlineAlert` | Post disabled until `canBuild()` |
 | `features/compose/ComposeTextBox` | `Field` + textarea (base) | The hint "Type # to mention a game…" is muted |
