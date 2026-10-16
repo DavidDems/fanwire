@@ -19,6 +19,7 @@ would turn a failing test into a way to write on the PR.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from agentlib import ciresult
@@ -42,6 +43,11 @@ from agentlib.automation import fenced as _fenced
 # How the workflow finds the comment it posted last time, to update it in
 # place. An HTML comment, so it is invisible on the rendered PR.
 MARKER = "<!-- fanwire-ci-summary -->"
+
+# The line a green run puts under the marker. Replaced, never stacked.
+FIXED_PREFIX = "**Fixed:**"
+
+_SHA = re.compile(r"[0-9a-f]{7,40}")
 
 # Haiku 5.5's price doubles above 100K input tokens (Prompts/04). 20K
 # characters of log is roughly 5-7K tokens: far below that, and the end of a
@@ -213,3 +219,41 @@ def _footer(usage: dict[str, Any] | None, cost: float | None, model: str | None,
     if model is None:
         return f"No model was asked; this was read from the log alone. {tail}"
     return f"Cause by {_code(model)} · {tokens_text(usage)} · {cost_text(cost)} · {tail}"
+
+
+# --------------------------------------------------------------------------- fixed
+
+
+def mark_fixed(body: Any, sha: Any, run_url: Any) -> str | None:
+    """`body` with a `**Fixed:**` line under its marker, or None to leave it be.
+
+    Run when `test-agent` passes on a PR whose red run left a summary: the
+    failure below the line stays, as history, but a reader is told it is from
+    an earlier push. Nothing here is trusted: a body that is not this
+    comment, a sha that is not lowercase hex, or a URL that could break out
+    of its link is refused with None, and the workflow then edits nothing.
+
+    Idempotent: an existing `**Fixed:**` line (and the blank line after it)
+    is removed first, so a second green run replaces the line.
+    """
+    head = MARKER + "\n"
+    if not isinstance(body, str) or not body.startswith(head):
+        return None
+    if not isinstance(sha, str) or not _SHA.fullmatch(sha) or not is_safe_url(run_url):
+        return None
+    kept: list[str] = []
+    skip_blank = False
+    for line in body[len(head) :].split("\n"):
+        if line.startswith(FIXED_PREFIX):
+            skip_blank = True
+            continue
+        if skip_blank and line == "":
+            skip_blank = False
+            continue
+        skip_blank = False
+        kept.append(line)
+    fixed = (
+        f"{FIXED_PREFIX} CI passed on `{sha[:7]}` ([the run]({run_url})). "
+        "The failure below is from an earlier push."
+    )
+    return head + fixed + "\n\n" + "\n".join(kept)

@@ -143,7 +143,9 @@ One structure for every mode, so any session can start cold:
   up to date, with the cost in its footer. **Proven live 2026-10-14** on #144
   (`agent/EVENTS-004`'s test-first push): ci-summary run 38503764563 posted
   its comment 15 s after the red run, 10,283 input / 226 output tokens,
-  **$0.001141**.
+  **$0.001141**. When `test-agent` later passes, the `mark-fixed` job (no
+  key, no model) adds a "Fixed" line naming the green commit, so a fixed
+  failure no longer reads as a live one (seen on #161).
 - **Criteria coverage check built** (2026-10-14):
   `.github/workflows/coverage-check.yml` runs `main`'s copy on
   `pull_request_target` when an `agent/*` PR from this repository opens or is
