@@ -148,7 +148,9 @@ def ask(args: argparse.Namespace) -> int:
     findings = drift.check_paths(task_id, spec, brief, root)
 
     def no_answer(error: str, status: int, usage: Any = None, cost: Any = None) -> int:
-        _write_json(work / RESULT, _result(task_id, findings, [], 0, [], None, usage, cost, error))
+        _write_json(
+            work / RESULT, _result(task_id, findings, [], 0, 0, [], None, usage, cost, error)
+        )
         return status
 
     config = _config()
@@ -211,10 +213,12 @@ def ask(args: argparse.Namespace) -> int:
         print(f"::error::{error}", file=sys.stderr)
         return no_answer(error, FAILED, usage, cost)
 
-    names, dropped = answer
+    names, dropped, created = answer
     _write_json(
         work / RESULT,
-        _result(task_id, findings, names, dropped, omitted, answered_by, usage, cost, None),
+        _result(
+            task_id, findings, names, dropped, created, omitted, answered_by, usage, cost, None
+        ),
     )
     _write(work / JEV_STATE, drift.jev_state(spec, brief, context, findings))
     _summarize(
@@ -222,7 +226,7 @@ def ask(args: argparse.Namespace) -> int:
         [
             (
                 f"- {len(findings)} path or link problem(s), {len(names)} missing name(s), "
-                f"{dropped} claimed name(s) dropped"
+                f"{dropped} claimed name(s) dropped, {created} left out as the unit's to create"
             )
         ]
         + automation.call_lines(answered_by, usage, cost),
@@ -237,6 +241,7 @@ def _result(
     findings: list[dict[str, str]],
     names: list[dict[str, str]],
     dropped: int,
+    created: int,
     omitted: list[str],
     model: str | None,
     usage: dict[str, Any] | None,
@@ -248,6 +253,7 @@ def _result(
         "findings": findings,
         "names": names,
         "dropped": dropped,
+        "created": created,
         "omitted": omitted,
         "model": model,
         "usage": usage,
@@ -297,6 +303,7 @@ def render(args: argparse.Namespace) -> int:
     usage = result.get("usage") if isinstance(result.get("usage"), dict) else None
     cost = result.get("cost_usd") if isinstance(result.get("cost_usd"), float) else None
     dropped = automation.count(result.get("dropped"))
+    created = automation.count(result.get("created"))
     omitted = [str(p) for p in result.get("omitted") or [] if isinstance(p, str)]
     # Haiku's yes/no, as its list and the path check together say it. None
     # when the model gave no answer: the free half alone is not its verdict.
@@ -315,6 +322,7 @@ def render(args: argparse.Namespace) -> int:
             "findings": len(findings),
             "names": [_cut(n.get("name")) for n in names],
             "dropped": dropped,
+            "created": created,
             "cost_usd": cost,
         },
         "jev": {
@@ -332,6 +340,7 @@ def render(args: argparse.Namespace) -> int:
         findings,
         names,
         dropped=dropped,
+        created=created,
         omitted=omitted,
         usage=usage,
         cost=cost,

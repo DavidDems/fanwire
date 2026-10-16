@@ -138,6 +138,29 @@ class TestTheInput:
     def test_the_default_cap_keeps_the_input_far_below_100k_tokens(self):
         assert wikiprop.MAX_DIFF_CHARS <= 200_000
 
+    def test_a_module_files_diff_is_read_first_and_never_cut_for_code(self):
+        """On #160 the unit's own update to 0x02-events.md was the last file
+        of the diff and the first one past the cap, and Haiku proposed the
+        same section again. The module files' diffs come first."""
+        code = DIFF.split("diff --git a/backend/openapi.json")[0]
+        code = code.replace("router = APIRouter()", "router = APIRouter()  # " + "x" * 5000)
+        module = (
+            f"diff --git a/{MODULE} b/{MODULE}\n--- a/{MODULE}\n+++ b/{MODULE}\n"
+            "@@ -1 +1,2 @@\n # Events\n+- **Seasons (`EVENTS-007`).** Read models.\n"
+        )
+        text, omitted = wikiprop.trim_diff(
+            code + module, max_chars=len(module) + 100, first=[MODULE]
+        )
+        assert "Seasons (`EVENTS-007`)" in text
+        assert MODULE not in omitted
+        assert omitted == ["backend/app/events/routes.py"]
+
+    def test_with_room_for_all_the_module_diff_still_comes_first(self):
+        code = DIFF.split("diff --git a/backend/openapi.json")[0]
+        module = f"diff --git a/{MODULE} b/{MODULE}\n+x\n"
+        text, omitted = wikiprop.trim_diff(code + module, first=[MODULE])
+        assert omitted == [] and text.startswith(f"diff --git a/{MODULE} ")
+
 
 class TestTheModelIsAskedOneQuestion:
     def body(self, diff=DIFF):
@@ -171,6 +194,8 @@ class TestTheModelIsAskedOneQuestion:
     def test_the_system_prompt_is_a_committed_file(self):
         text = (AI_ROOT / "prompts" / "wiki-proposal.md").read_text(encoding="utf-8")
         assert "data" in text.lower() and "json" in text.lower()
+        # The unit already documented what its own diff of a module file adds.
+        assert "If the diff changes a module file" in text
 
 
 class TestTheModelNamesPassagesAndThePatchIsMadeHere:
@@ -253,6 +278,12 @@ class TestTheComment:
 
     def proposal(self):
         return wikiprop.read_answer(text_body(EDITS), {MODULE: MODULE_TEXT})
+
+    def test_the_cap_note_says_it_is_the_diff_that_was_not_read(self):
+        """ "not read: 0x02-events.md" read as if the module file itself was
+        never shown, on #160, where only its diff was past the cap."""
+        text = self.render(self.proposal(), omitted=["backend/app/events/routes.py"])
+        assert "The diff of these files was not read, past the input cap" in text
 
     def test_it_starts_with_its_own_marker(self):
         text = self.render(self.proposal())

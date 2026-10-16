@@ -143,7 +143,9 @@ One structure for every mode, so any session can start cold:
   up to date, with the cost in its footer. **Proven live 2026-10-14** on #144
   (`agent/EVENTS-004`'s test-first push): ci-summary run 38503764563 posted
   its comment 15 s after the red run, 10,283 input / 226 output tokens,
-  **$0.001141**.
+  **$0.001141**. When `test-agent` later passes, the `mark-fixed` job (no
+  key, no model) adds a "Fixed" line naming the green commit, so a fixed
+  failure no longer reads as a live one (seen on #161).
 - **Criteria coverage check built** (2026-10-14):
   `.github/workflows/coverage-check.yml` runs `main`'s copy on
   `pull_request_target` when an `agent/*` PR from this repository opens or is
@@ -157,14 +159,16 @@ One structure for every mode, so any session can start cold:
   dispatched by the human before a unit (`gh workflow run spec-drift.yml -f
   task_id=<ID>`), runs `main`'s copy against `main`. Paths and links in the
   spec are checked without a model; Haiku 5.5 is asked only for names in the
-  prose, and a name it calls missing is kept only if no non-test source file
-  has it. `jev` answers "does the spec still match?" in shadow. The report
+  prose, and a name it calls missing is kept only if Haiku marks it
+  `assumed_to_exist` (a name the unit is to create is not drift) and no
+  non-test source file has it. `jev` answers "does the spec still match?" in shadow. The report
   goes to the job summary, and to the task's open PR as a comment if there
   is one. **Proven live 2026-10-14** on #155, $0.0087.
 - **Wiki update proposal built** (2026-10-14):
   `.github/workflows/wiki-proposal.yml` runs `main`'s copy on
   `pull_request_target` when an `agent/*` PR from this repository merges. The
-  merged diff (generated files left out) and the module files its spec names,
+  merged diff (generated files left out, the module files' own diffs first, so
+  the cap never cuts a unit's update to its wiki) and the module files its spec names,
   as they stand after the merge, go to Haiku 5.5, which names exact passages
   and their replacements; the patch is made from the real files, so it
   applies. One comment on the merged PR (the human's option (a)): "no

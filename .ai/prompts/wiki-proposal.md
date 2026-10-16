@@ -31,6 +31,11 @@ module files do not describe needs no edit. A module file that already says
 what the code now does needs no edit either: it may have been updated in the
 same pull request.
 
+If the diff changes a module file, the unit updated that file in the same pull
+request. The file is shown as it is after the merge: read it as shown, and
+propose an edit only for what it still gets wrong. Never add a section or a
+passage the file already has in other words.
+
 ## Edits
 
 - `file` is a module file's path exactly as given. Never any other file.

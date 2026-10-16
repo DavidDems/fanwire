@@ -421,15 +421,18 @@ def _label(path: str) -> str:
     return flat.replace("<", "").replace(">", "")
 
 
-def read_answer(body: Any, repo_root: str | Path) -> tuple[list[dict[str, str]], int] | None:
-    """The names the spec uses that the code does not have, and how many
-    claimed names were dropped; or None when the response has no usable
-    answer.
+def read_answer(body: Any, repo_root: str | Path) -> tuple[list[dict[str, str]], int, int] | None:
+    """The names the spec uses that the code does not have, how many claimed
+    names were dropped, and how many were left out as the unit's to create;
+    or None when the response has no usable answer.
 
-    The answer is `{"names": [{"name", "where", "why"}]}`, alone or in a code
-    fence. An entry that is not that shape is skipped. A name some source
-    file outside the tests has is dropped and counted: the count is shown, so
-    a model that misreads the code is visible as one.
+    The answer is `{"names": [{"name", "where", "why", "assumed_to_exist"}]}`,
+    alone or in a code fence. An entry that is not that shape is skipped. An
+    entry whose `assumed_to_exist` is not exactly the JSON `true` is left out
+    and counted as created: a name the unit is to create is its work, not
+    drift. A name some source file outside the tests has is dropped and
+    counted: the counts are shown, so a model that misreads the code is
+    visible as one.
     """
     text = first_text(body)
     if text is None:
@@ -443,6 +446,7 @@ def read_answer(body: Any, repo_root: str | Path) -> tuple[list[dict[str, str]],
     names: list[dict[str, str]] = []
     seen: set[str] = set()
     dropped = 0
+    created = 0
     for item in listed:
         if not isinstance(item, dict):
             continue
@@ -453,7 +457,9 @@ def read_answer(body: Any, repo_root: str | Path) -> tuple[list[dict[str, str]],
         if name in seen:
             continue
         seen.add(name)
-        if _has_name(name, texts):
+        if item.get("assumed_to_exist") is not True:
+            created += 1
+        elif _has_name(name, texts):
             dropped += 1
         elif len(names) < MAX_NAMES:
             names.append(
@@ -463,7 +469,7 @@ def read_answer(body: Any, repo_root: str | Path) -> tuple[list[dict[str, str]],
                     "why": _text(item.get("why"), _MAX_WHY_CHARS),
                 }
             )
-    return names, dropped
+    return names, dropped, created
 
 
 def _text(value: Any, limit: int) -> str:
@@ -497,6 +503,7 @@ def render(
     names: list[dict[str, str]],
     *,
     dropped: int,
+    created: int = 0,
     omitted: list[str],
     usage: dict[str, Any] | None,
     cost: float | None,
@@ -540,6 +547,11 @@ def render(
     if dropped:
         notes.append(
             f"{dropped} name(s) the model gave are in the code after all, and were left out."
+        )
+    if created:
+        notes.append(
+            f"{created} name(s) the model said the unit is to create were left out: "
+            "that is the unit's work, not drift."
         )
     if omitted:
         named = ", ".join(code(p, 100) for p in omitted[:MAX_SHOWN_OMITTED])

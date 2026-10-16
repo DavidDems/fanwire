@@ -13,7 +13,8 @@ name: ci-summary
 #     no ref, so it is main's .ai/ that runs with the key. The failed run's
 #     log and job list are read through the API; the PR's code is never
 #     checked out.
-#   - the job's if: admits only a failed run (green needs no comment), of the
+#   - the job's if: admits only a failed run (a green one is the mark-fixed
+#     job's, below, which holds no key), of the
 #     pull_request event (never main's push run, and never the orchestrator's
 #     dispatched baseline runs, which carry no PR), on an agent/* branch, from
 #     this repository (a fork's PR gets nothing). ci_summary.py then checks
@@ -137,3 +138,91 @@ jobs:
             gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
               -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
           fi
+
+# The second job. On #161 the red summary stayed on the PR after the fix went
+# green, because summarize runs only on a failure. When test-agent passes on an
+# agent/* PR, mark-fixed puts one **Fixed:** line under the marker of the
+# summary comment, naming the green commit and run; the failure below stays as
+# history. It has no key and calls no model. It edits only the bot's own
+# comment and never creates one: no summary, nothing to do. The head SHA is
+# data only: it reaches the script through env:, is checked as hex there, and
+# is never checked out or pasted into a script.
+  mark-fixed:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'agent/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Shared with summarize: a red and a green run on one branch must not edit
+    # the comment at the same time. Never cancelled.
+    concurrency:
+      group: ci-summary-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # The bot's summary comment, if the PR has one. Its body is fetched to a
+      # file; nothing here is pasted into a script.
+      - name: Find the summary comment
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          case "$PR_NUMBER" in
+            ''|*[!0-9]*)
+              echo "::notice::this run names no pull request; nothing to mark"
+              exit 0 ;;
+          esac
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-ci-summary -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          case "$ID" in
+            ''|*[!0-9]*)
+              echo "::notice::no summary comment on this PR; nothing to mark"
+              exit 0 ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$ID" --jq .body > "$RUNNER_TEMP/old.md"
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      # main's copy, as in summarize: no ref, no credential kept.
+      - uses: actions/checkout@v5
+        if: steps.find.outputs.id != ''
+        with:
+          persist-credentials: false
+          sparse-checkout: .ai
+
+      - uses: actions/setup-python@v6
+        if: steps.find.outputs.id != ''
+        with:
+          python-version: "3.12"
+
+      # Exit 1 means there was nothing to mark (not the summary, or an unusable
+      # value); that is not a failure of the job. Any other code is.
+      - name: Mark the summary fixed
+        if: steps.find.outputs.id != ''
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          python -I .ai/bin/ci_summary_fixed.py \
+            --body-in "$RUNNER_TEMP/old.md" \
+            --head-sha "$HEAD_SHA" \
+            --run-url "$RUN_URL" \
+            --comment-out "$RUNNER_TEMP/new.md" || [ $? -eq 1 ]
+
+      - name: Edit the PR comment
+        if: steps.find.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ steps.find.outputs.id }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/new.md" ]; then
+            echo "::notice::nothing was marked; the comment is left as it is"
+            exit 0
+          fi
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+            -F body=@"$RUNNER_TEMP/new.md" > /dev/null

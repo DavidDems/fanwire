@@ -66,8 +66,22 @@ ANSWER = {
             "name": "Quarantined",
             "where": "acceptance criterion 1",
             "why": "Media.status has no Quarantined; the chain starts at Uploaded.",
+            "assumed_to_exist": True,
         },
-        {"name": "Uploaded", "where": "objective", "why": "a wrong claim, dropped"},
+        {
+            "name": "Uploaded",
+            "where": "objective",
+            "why": "a wrong claim, dropped",
+            "assumed_to_exist": True,
+        },
+        # What Haiku did on #162 and #161: listed a name and said, in its own
+        # why, that the unit is asked to create it.
+        {
+            "name": "Tabs",
+            "where": "acceptance criterion 11",
+            "why": "No Tabs component exists yet; the unit is asked to create it.",
+            "assumed_to_exist": False,
+        },
     ]
 }
 
@@ -234,6 +248,7 @@ class TestTheModelIsAskedOnlyAboutProse:
     def test_the_system_prompt_is_a_committed_file(self):
         text = (AI_ROOT / "prompts" / "spec-drift.md").read_text(encoding="utf-8")
         assert "data" in text.lower() and "json" in text.lower()
+        assert '"assumed_to_exist": true' in text
 
 
 def text_body(answer, usage=None) -> dict:
@@ -248,13 +263,24 @@ def text_body(answer, usage=None) -> dict:
 
 class TestReadingTheAnswer:
     def test_quarantined_is_kept_and_a_name_the_code_has_is_dropped(self, repo):
-        names, dropped = drift.read_answer(text_body(ANSWER), repo)
+        names, dropped, created = drift.read_answer(text_body(ANSWER), repo)
         assert [n["name"] for n in names] == ["Quarantined"]
         assert names[0]["where"] == "acceptance criterion 1"
         assert dropped == 1
+        assert created == 1
+
+    @pytest.mark.parametrize("flag", [False, None, "true", 1, "missing"])
+    def test_a_name_not_claimed_to_exist_is_left_out_and_counted(self, repo, flag):
+        """Only `"assumed_to_exist": true` counts: a name the unit is asked to
+        create is the unit's work, not drift, whatever else the entry says."""
+        entry = {"name": "Quarantined", "where": "objective", "why": "x"}
+        if flag != "missing":
+            entry["assumed_to_exist"] = flag
+        names, dropped, created = drift.read_answer(text_body({"names": [entry]}), repo)
+        assert names == [] and dropped == 0 and created == 1
 
     def test_a_fenced_answer_is_read(self, repo):
-        names, _ = drift.read_answer(text_body("```json\n" + json.dumps(ANSWER) + "\n```"), repo)
+        names, _, _ = drift.read_answer(text_body("```json\n" + json.dumps(ANSWER) + "\n```"), repo)
         assert [n["name"] for n in names] == ["Quarantined"]
 
     @pytest.mark.parametrize(
@@ -270,7 +296,7 @@ class TestReadingTheAnswer:
 
     def test_malformed_entries_are_skipped(self, repo):
         answer = {"names": [{"name": 3}, "x", {"name": ""}, *ANSWER["names"]]}
-        names, _ = drift.read_answer(text_body(answer), repo)
+        names, _, _ = drift.read_answer(text_body(answer), repo)
         assert [n["name"] for n in names] == ["Quarantined"]
 
 
@@ -292,9 +318,10 @@ class TestTheReport:
     def render(self, repo, **kw):
         spec, brief = spec_and_brief(repo)
         findings = drift.check_paths(TASK, spec, brief, repo)
-        names, dropped = drift.read_answer(text_body(ANSWER), repo)
+        names, dropped, created = drift.read_answer(text_body(ANSWER), repo)
         args = {
             "dropped": dropped,
+            "created": created,
             "omitted": [],
             "usage": USAGE,
             "cost": 0.000675,
@@ -317,6 +344,11 @@ class TestTheReport:
         assert "02-deployment-requirements.md" in text
         assert "Quarantined" in text and "acceptance criterion 1" in text
         assert "$0.000675" in text and "claude-haiku-5-5" in text
+
+    def test_a_name_the_unit_creates_is_counted_not_listed(self, repo):
+        text = self.render(repo)
+        assert "Tabs" not in text
+        assert "1 name(s) the model said the unit is to create" in text
 
     def test_a_clean_spec_says_so(self, repo):
         text = drift.render(
@@ -452,6 +484,7 @@ class TestTheOneCall:
         assert [f["name"] for f in result["findings"]] == ["TODO/02-deployment-requirements.md"]
         assert [n["name"] for n in result["names"]] == ["Quarantined"]
         assert result["dropped"] == 1
+        assert result["created"] == 1
         assert result["cost_usd"] == pytest.approx(6000 * 0.1 / 1e6 + 150 * 0.5 / 1e6)
         assert "Quarantined" in (out["work"] / "jev-state.txt").read_text(encoding="utf-8")
 

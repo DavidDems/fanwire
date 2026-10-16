@@ -2309,7 +2309,7 @@ class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
             if "actions/checkout@" in chunk:
                 assert "ref:" not in chunk and "repository:" not in chunk
                 assert "persist-credentials: false" in chunk
-        assert "head_sha" not in "\n".join(live_lines(wf))
+        assert "head_sha" not in "\n".join(live_lines(job_block(wf, "summarize")))
 
     def test_the_key_is_held_by_one_step_only_and_that_step_has_no_token(self, wf):
         assert wf.count("secrets.ANTHROPIC_API_KEY") == 1
@@ -2338,6 +2338,67 @@ class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
         steps = titled(job_block(wf, "summarize"))
         poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
         assert "hashFiles(" in step_if(poster) or "-s " in poster
+
+
+class TestTheCiSummaryIsMarkedFixedWhenCiPasses:
+    """On #161 a red run's summary stayed after the fix went green. The
+    `mark-fixed` job runs when `test-agent` passes on an `agent/*` PR, and
+    edits the summary comment, if there is one, to say so. It calls no model
+    and holds no key: it reads the bot's own comment and writes it back."""
+
+    JOB = "mark-fixed"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        return CI_SUMMARY.read_text(encoding="utf-8")
+
+    def test_it_runs_only_for_a_green_pr_run_on_this_repositorys_task_branch(self, wf):
+        cond = " ".join(job_block(wf, self.JOB).split("    runs-on:", 1)[0].split())
+        for clause in (
+            "github.event.workflow_run.conclusion == 'success'",
+            "github.event.workflow_run.event == 'pull_request'",
+            "startsWith(github.event.workflow_run.head_branch, 'agent/')",
+            "github.event.workflow_run.head_repository.full_name == github.repository",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+        assert "||" not in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {"contents": "read", "pull-requests": "write"}
+
+    def test_it_holds_no_key_and_no_secret(self, wf):
+        block = job_block(wf, self.JOB)
+        assert "secrets." not in block and "ANTHROPIC" not in block
+
+    def test_the_head_sha_is_data_and_no_pr_code_is_checked_out(self, wf):
+        for chunk in steps_in(job_block(wf, self.JOB)):
+            if "actions/checkout@" in chunk:
+                assert "ref:" not in chunk and "repository:" not in chunk
+                assert "persist-credentials: false" in chunk
+        for line in live_lines(job_block(wf, self.JOB)):
+            if "head_sha" in line:
+                assert line == "HEAD_SHA: ${{ github.event.workflow_run.head_sha }}", line
+
+    def test_it_only_edits_the_bots_summary_and_never_creates_one(self, wf):
+        body = "\n".join(live_lines(job_block(wf, self.JOB)))
+        assert "fanwire-ci-summary" in body and "github-actions[bot]" in body
+        assert "--method PATCH" in body and "body=@" in body
+        assert "--method POST" not in body
+
+    def test_it_runs_the_script_from_mains_copy_isolated(self, wf):
+        body = "\n".join(live_lines(job_block(wf, self.JOB)))
+        assert "python -I .ai/bin/ci_summary_fixed.py" in body
+
+    def test_it_shares_the_summarys_concurrency_group(self, wf):
+        """A red run and a green run on one branch must not edit the comment
+        at the same time."""
+        group = "group: ci-summary-${{ github.event.workflow_run.head_branch }}"
+        assert group in job_block(wf, "summarize") and group in job_block(wf, self.JOB)
 
 
 class TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData:
