@@ -344,6 +344,37 @@ describe("a quote repost shows its own post with the original inside (criterion 
   });
 });
 
+describe("a plain repost of a quote repost", () => {
+  /*
+   * The API's reposted_post is one level deep: the quote inside a plain repost
+   * always arrives with its own reposted_post null. That is the depth cut, not
+   * an original that has gone, so the card must not say it is unavailable.
+   */
+  const PLAIN_OF_QUOTE = testPlainRepost(
+    testQuoteRepost(null, QUOTE_TEXT, {
+      id: 403,
+      author: testAuthor({ id: 23, username: "quoter23" }),
+      original_post_id: 401,
+    }),
+    { id: 404, author: testAuthor({ id: 22, username: "reposter22" }) },
+  );
+
+  it("shows the quote without claiming its original is unavailable", () => {
+    renderNode(PLAIN_OF_QUOTE);
+
+    expect(normalized(repostLine())).toBe("reposter22 reposted");
+    expect(screen.getByText(QUOTE_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText("This post is unavailable")).toBeNull();
+  });
+
+  it("still says This post is unavailable for a quote seen directly whose original is gone", () => {
+    renderNode(testQuoteRepost(null, QUOTE_TEXT, { id: 403 }));
+
+    expect(screen.getByText(QUOTE_TEXT)).toBeInTheDocument();
+    expect(screen.getByText("This post is unavailable")).toBeInTheDocument();
+  });
+});
+
 describe("every cached copy of a post agrees (criterion 4)", () => {
   it("liking through the repost card moves the original's own card too, at once", async () => {
     const user = userEvent.setup();
