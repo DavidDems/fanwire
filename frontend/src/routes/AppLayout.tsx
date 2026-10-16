@@ -1,5 +1,12 @@
 import { useRef, type ComponentType } from "react";
-import { Link, NavLink, Outlet, useMatch } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  matchPath,
+  useLocation,
+  useMatch,
+} from "react-router-dom";
 
 import symbol from "../assets/brand/symbol.svg";
 import wordmarkDark from "../assets/brand/wordmark-dark.svg";
@@ -9,6 +16,7 @@ import { useProfile } from "../auth/profile";
 import { buttonClass } from "../components/ui/Button";
 import {
   BellIcon,
+  ChartColumnIcon,
   HouseIcon,
   SearchIcon,
   SquarePenIcon,
@@ -22,6 +30,12 @@ interface NavItemProps {
   label: string;
   Icon: ComponentType<IconProps>;
   end?: boolean;
+  /**
+   * Further route patterns this item is current on, beyond its own address:
+   * Stats is current on `/players/:playerId` too, because a player page is
+   * reached from the Stats page's Players tab and belongs to that section.
+   */
+  alsoCurrentOn?: string[];
 }
 
 /**
@@ -30,13 +44,30 @@ interface NavItemProps {
  * `NavLink` sets `aria-current="page"`, which is what the CSS keys the
  * current-item bar and weight on.
  */
-function NavItem({ to, label, Icon, end }: NavItemProps) {
+function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
+  const { pathname } = useLocation();
+  const elsewhere = alsoCurrentOn.some(
+    (pattern) => matchPath(pattern, pathname) !== null,
+  );
+  const content = (
+    <>
+      <Icon className={styles.icon} />
+      {label}
+    </>
+  );
   return (
     <li>
-      <NavLink to={to} end={end} className={styles.link}>
-        <Icon className={styles.icon} />
-        {label}
-      </NavLink>
+      {elsewhere ? (
+        // NavLink sets aria-current only on its own address, so a page of the
+        // same section outside it says so itself.
+        <Link to={to} className={styles.link} aria-current="page">
+          {content}
+        </Link>
+      ) : (
+        <NavLink to={to} end={end} className={styles.link}>
+          {content}
+        </NavLink>
+      )}
     </li>
   );
 }
@@ -103,6 +134,12 @@ export function AppLayout() {
               Icon={BellIcon}
             />
             <NavItem to="/search" label="Search" Icon={SearchIcon} />
+            <NavItem
+              to="/stats"
+              label="Stats"
+              Icon={ChartColumnIcon}
+              alsoCurrentOn={["/players/*"]}
+            />
             {ownUserId === null ? null : (
               <NavItem
                 to={`/profile/${ownUserId}`}

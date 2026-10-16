@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { EmptyState } from "../../components/ui/EmptyState";
 import type {
   BoxScorePlayerOut,
@@ -171,7 +173,7 @@ function PlayerRow({
   return (
     <tr className={firstOfBench ? styles.benchStart : undefined}>
       <th scope="row" className={styles.name}>
-        {fullName(player)}
+        <Link to={`/players/${player.player_id}`}>{fullName(player)}</Link>
         {player.starting_position === null ? null : (
           <span className={styles.position}> {player.starting_position}</span>
         )}

@@ -1,5 +1,6 @@
 /**
- * Thirteen Lucide icons (`components.md` §3), copied rather than installed.
+ * Fourteen Lucide icons (`components.md` §3, plus `chart-column` for the Stats
+ * nav item from `FRONTEND-009`), copied rather than installed.
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
  * 1fae58d0a9c661a338036838caf3399b5507bab6. The shape elements below are those
@@ -137,6 +138,18 @@ export function CircleCheckIcon(props: IconProps) {
     <Icon {...props}>
       <circle cx="12" cy="12" r="10" />
       <path d="m16 9-5.5 5.5L8 12" />
+    </Icon>
+  );
+}
+
+/** lucide: chart-column — the Stats nav item (`FRONTEND-009`) */
+export function ChartColumnIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="M18 17V9" />
+      <path d="M13 17V5" />
+      <path d="M8 17v-3" />
     </Icon>
   );
 }
