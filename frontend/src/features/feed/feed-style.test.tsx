@@ -7,7 +7,8 @@
  * What jsdom can honestly show (`verification.md` §2b, §2c): which shared
  * component each piece renders through, read off the class that component's
  * own module exports, and the attributes that carry state (`aria-pressed`,
- * `aria-hidden`, `aria-expanded`). Every class asserted here belongs to a shared
+ * `aria-hidden`). The "Show replies" disclosure and the nested replies under a
+ * card went with `FRONTEND-010`, whose thread modal replaced them. Every class asserted here belongs to a shared
  * module in `src/components/ui/`; that those rules exist on disk, and that the
  * feed's own module CSS is clean, is `feed-css.test.ts`.
  *
@@ -20,7 +21,6 @@
  * (`feed-isolation.test.ts`): every render is the same guest render.
  */
 import { screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,8 +35,6 @@ import {
   feedPage,
   feedStub,
   testPostView,
-  threadStub,
-  threadView,
   type FeedPageBody,
   type PostView,
 } from "../../test/feed";
@@ -45,20 +43,12 @@ import { FeedPage } from "./FeedPage";
 import { PostNode } from "./PostNode";
 
 const ROOT_TEXT = "Game thread, tip-off in ten";
-const REPLY_TEXT = "That first quarter was ugly";
 
 const ROOT = testPostView({ id: 301, text: ROOT_TEXT });
-const REPLY = testPostView({
-  id: 302,
-  text: REPLY_TEXT,
-  is_reply: true,
-  parent_post_id: 301,
-});
 
 const LOADING = "Loading the feed…";
 const LOAD_FAILED = "We could not load the feed just now. Please try again.";
 const NOTHING_HERE = "There is nothing here yet.";
-const NO_REPLIES = "No replies yet.";
 
 /** The text a reader gets from `element`, ignoring any icon's empty SVG. */
 function textOf(element: Element): string {
@@ -134,25 +124,6 @@ describe("PostNode as a card (criterion 1)", () => {
     expect(article.tagName).toBe("ARTICLE");
     expect(article).toHaveClass(cardStyles.card);
   });
-
-  it("renders a nested reply as an <article> without the card class", async () => {
-    const user = userEvent.setup();
-    server.use(threadStub([threadView(ROOT, [REPLY])]).handler);
-    renderNode(ROOT);
-
-    const root = articleFor(ROOT_TEXT);
-    await user.click(
-      within(root).getByRole("button", { name: /show replies/i }),
-    );
-    await screen.findByText(REPLY_TEXT);
-
-    const reply = articleFor(REPLY_TEXT);
-    expect(reply).not.toBe(root);
-    expect(root.contains(reply)).toBe(true);
-    expect(reply.tagName).toBe("ARTICLE");
-    expect(reply).not.toHaveClass(cardStyles.card);
-    expect(root).toHaveClass(cardStyles.card);
-  });
 });
 
 describe("no live-score block on a post card (EVENTS-003)", () => {
@@ -212,20 +183,6 @@ describe("the feed's loading, failed and empty states (criterion 3)", () => {
   });
 });
 
-describe("an expanded post with no replies (criterion 4)", () => {
-  it("says No replies yet.", async () => {
-    const user = userEvent.setup();
-    server.use(threadStub([threadView(ROOT, [])]).handler);
-    renderNode(ROOT);
-
-    await user.click(screen.getByRole("button", { name: /show replies/i }));
-
-    expect(
-      await within(articleFor(ROOT_TEXT)).findByText(NO_REPLIES),
-    ).toBeInTheDocument();
-  });
-});
-
 describe("the like control (criterion 5)", () => {
   // UI-009: the name is always "Like" and the state is aria-pressed (the
   // human's decision, 2026-10-16), replacing the data-active / "Unlike" pair.
@@ -251,29 +208,6 @@ describe("the like control (criterion 5)", () => {
     renderNode(testPostView({ like_count: 3 }));
 
     expect(screen.getByText("3 likes")).toBeInTheDocument();
-  });
-});
-
-describe("Show replies (criterion 6)", () => {
-  it("carries an aria-hidden chevron icon", () => {
-    renderNode(ROOT);
-
-    const button = screen.getByRole("button", { name: /show replies/i });
-    const icon = button.querySelector("svg");
-    expect(icon, "an <svg> inside Show replies").not.toBeNull();
-    expect(icon).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("toggles aria-expanded from false to true, as before", async () => {
-    const user = userEvent.setup();
-    server.use(threadStub([threadView(ROOT, [REPLY])]).handler);
-    renderNode(ROOT);
-
-    const button = screen.getByRole("button", { name: /show replies/i });
-    expect(button).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(button);
-    expect(button).toHaveAttribute("aria-expanded", "true");
   });
 });
 

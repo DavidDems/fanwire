@@ -17,10 +17,13 @@
  * - **Criterion 3 — one component renders a post and a thread.** A second
  *   component module for threads is the thing the criterion forbids.
  * - **Criterion 8 — the feed reimplements no part of composing.** It reaches the
- *   composer by address (`/compose?reply_to=`), which is the one seam a feature
- *   folder can offer another without being imported by it
- *   ([[0x00-architecture]] Connection rule) — and `features/compose/**` is in
- *   this unit's `forbidden_paths` besides.
+ *   composer by address, which is the one seam a feature folder can offer
+ *   another without being imported by it ([[0x00-architecture]] Connection
+ *   rule). Since `FRONTEND-010` that address is the thread modal
+ *   (`/posts/:id?reply=1`): `features/thread/` imports the feed's `PostNode`
+ *   and compose's `InlineComposer`, and the feed imports neither of them —
+ *   `thread` is a sibling here like the rest, or the two would import each
+ *   other.
  * - **EVENTS-003 — the live-score ticker is gone.** The API no longer sends
  *   `live_scores`, so `LiveScoreTickerDecorator` and its stylesheet are deleted
  *   and nothing under `src/` imports them.
@@ -262,7 +265,8 @@ describe("the feed never learns which ranking strategy the API chose", () => {
 
 describe("the feed composes nothing", () => {
   /** A sibling feature folder, reached by any spelling. */
-  const SIBLING = /(^|\/)(features\/)?(compose|profile|notifications|search)(\/|$)/;
+  const SIBLING =
+    /(^|\/)(features\/)?(compose|profile|notifications|search|thread)(\/|$)/;
 
   it("reaches the composer by address, not by import", () => {
     const offenders: string[] = [];
@@ -275,7 +279,7 @@ describe("the feed composes nothing", () => {
 
     expect(
       offenders,
-      "/compose?reply_to= is the seam; a feature folder never imports another's internals",
+      "an address is the seam; a feature folder never imports another's internals",
     ).toEqual([]);
   });
 

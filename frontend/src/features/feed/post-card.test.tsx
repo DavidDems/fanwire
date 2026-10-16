@@ -45,9 +45,9 @@ import { PostNode } from "./PostNode";
 
 const TEXT = "Raptors in six";
 
-function ComposeStub() {
+function ThreadStub() {
   const { pathname, search } = useLocation();
-  return <p>{`compose stub at ${pathname}${search}`}</p>;
+  return <p>{`thread stub at ${pathname}${search}`}</p>;
 }
 
 function SignInStub() {
@@ -62,10 +62,10 @@ function renderFeed(authService: AuthService = new FakeAuthService()) {
     <Routes>
       <Route path="/" element={<FeedPage />} />
       <Route
-        path="/compose"
+        path="/posts/:postId"
         element={
           <>
-            <ComposeStub />
+            <ThreadStub />
             {/* The same feed, from the same cache, still on screen after the reply. */}
             <FeedPage />
           </>
@@ -180,13 +180,13 @@ describe("the three controls are icons with a fixed name (criterion 1)", () => {
     expect(repostButton()).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("gives reply no pressed state: it is a link to the composer", () => {
+  it("gives reply no pressed state: it is a link to the thread, to reply (FRONTEND-010)", () => {
     renderNode(testPostView({ id: 101, text: TEXT }));
 
     const reply = replyLink();
     expect(reply.tagName).toBe("A");
     expect(reply).not.toHaveAttribute("aria-pressed");
-    expect(reply).toHaveAttribute("href", "/compose?reply_to=101");
+    expect(reply).toHaveAttribute("href", "/posts/101?reply=1");
   });
 
   it("shows the pressed like as a filled heart", () => {
@@ -524,7 +524,7 @@ describe("a signed-out viewer is sent to sign-in and nothing is called (criterio
 });
 
 describe("pressing reply does not change the reply count (criterion 6)", () => {
-  it("goes to /compose?reply_to=<id> and leaves the count as it was", async () => {
+  it("goes to /posts/<id>?reply=1 and leaves the count as it was", async () => {
     const user = userEvent.setup();
     const feed = feedStub([
       feedPage([testPostView({ id: 101, text: TEXT, reply_count: 2 })], null),
@@ -544,7 +544,7 @@ describe("pressing reply does not change the reply count (criterion 6)", () => {
     await user.click(replyLink());
 
     expect(
-      await screen.findByText("compose stub at /compose?reply_to=101"),
+      await screen.findByText("thread stub at /posts/101?reply=1"),
     ).toBeInTheDocument();
     expect(await within(card()).findByText("2 replies")).toBeInTheDocument();
     expect(within(card()).queryByText("3 replies")).toBeNull();

@@ -11,8 +11,8 @@
  *
  * **A quote repost** shows its own author, text and controls (acting on its own
  * id), with the original inside as a compact card: author and text, no
- * controls, and a link to the original. Until `FRONTEND-010` adds `/posts/:id`
- * that link goes to the original author's profile.
+ * controls, and a link to the original: since `FRONTEND-010`, the original's
+ * own thread at `/posts/:id`.
  *
  * **Two cards of one post never disagree** (criterion 4): a feed page holding an
  * original and a plain repost of it shows the same post twice, once directly
@@ -193,7 +193,7 @@ describe("a plain repost renders as the post it reposts (criterion 7)", () => {
 
     expect(screen.getByRole("link", { name: "Reply" })).toHaveAttribute(
       "href",
-      "/compose?reply_to=401",
+      "/posts/401?reply=1",
     );
   });
 
@@ -297,7 +297,7 @@ describe("a quote repost shows its own post with the original inside (criterion 
     expect(screen.getAllByRole("button", { name: "Repost" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Reply" })).toHaveAttribute(
       "href",
-      "/compose?reply_to=403",
+      "/posts/403?reply=1",
     );
     expect(screen.getByText("3 likes")).toBeInTheDocument();
     // The original's numbers are not on the quote's card.
@@ -318,13 +318,13 @@ describe("a quote repost shows its own post with the original inside (criterion 
     ).toBeNull();
   });
 
-  it("links to the original (its author's profile until FRONTEND-010 adds /posts/:id)", () => {
+  it("links to the original's own thread at /posts/:id (FRONTEND-010)", () => {
     renderNode(QUOTE);
 
     const hrefs = within(embedded())
       .getAllByRole("link")
       .map((link) => link.getAttribute("href"));
-    expect(hrefs).toContain("/profile/21");
+    expect(hrefs).toContain("/posts/401");
   });
 
   it("likes its own id, not the original's", async () => {
