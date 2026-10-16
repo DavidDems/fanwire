@@ -583,7 +583,7 @@ export function playerGames(count: number): PlayerGameOut[] {
 // ---------------------------------------------------------------- stubs
 
 export interface RecordedRequest {
-  /** The path parameters, as strings. */
+  /** The route's named path parameters, as strings (msw's wildcard "0" left out). */
   path: Record<string, string>;
   query: URLSearchParams;
 }
@@ -609,8 +609,13 @@ function stub(
   return {
     handler: http.get(path, ({ request, params }) => {
       const recorded: RecordedRequest = {
+        // The leading `*` of every stub's path is a wildcard msw also reports,
+        // as the numbered parameter "0" (the origin and `/api`): not a path
+        // parameter of the route, so it is left out.
         path: Object.fromEntries(
-          Object.entries(params).map(([key, value]) => [key, String(value)]),
+          Object.entries(params)
+            .filter(([key]) => !/^\d+$/.test(key))
+            .map(([key, value]) => [key, String(value)]),
         ),
         query: new URL(request.url).searchParams,
       };
