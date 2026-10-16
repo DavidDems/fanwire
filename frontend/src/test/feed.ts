@@ -4,8 +4,9 @@ import type { components } from "../api/schema";
 
 /**
  * The feed unit's network kit: fixtures and msw handler factories for the three
- * endpoints `features/feed/` touches — `GET /feed`, `GET /feed/thread/{post_id}`
- * and `POST`/`DELETE /posts/{post_id}/like`.
+ * endpoints `features/feed/` touches — `GET /feed`, `GET /feed/thread/{post_id}`,
+ * `POST`/`DELETE /posts/{post_id}/like` and (UI-009) `POST`/`DELETE
+ * /posts/{post_id}/repost`.
  *
  * Everything is typed against the generated schema, so a fixture that drifts
  * from `backend/openapi.json` is a typecheck failure rather than a suite that
@@ -32,6 +33,7 @@ export type FeedPageBody = components["schemas"]["FeedPage"];
 export type MediaItemView = components["schemas"]["MediaItemView"];
 export type PostView = components["schemas"]["PostView"];
 export type ThreadView = components["schemas"]["ThreadView"];
+export type PostOut = components["schemas"]["PostOut"];
 
 /**
  * `POST`/`DELETE /posts/{post_id}/like`, as a regular expression.
@@ -42,6 +44,9 @@ export type ThreadView = components["schemas"]["ThreadView"];
  * only makes the match and the id one decision instead of two.
  */
 const LIKE_PATH = /\/posts\/(\d+)\/like$/;
+
+/** `POST`/`DELETE /posts/{post_id}/repost`, digits only, for the same reason. */
+const REPOST_PATH = /\/posts\/(\d+)\/repost$/;
 
 /** The `s3_key_public` a media fixture carries — `media/{id}/…` per [[0x04-media]]. */
 export const TEST_PUBLIC_MEDIA_KEY = "media/5150/full.jpg";
@@ -59,7 +64,9 @@ export function testAuthor(overrides: Partial<AuthorView> = {}): AuthorView {
 }
 
 /** One processed image on a post. `s3_key_public` is what the feed renders from. */
-export function testMediaItem(overrides: Partial<MediaItemView> = {}): MediaItemView {
+export function testMediaItem(
+  overrides: Partial<MediaItemView> = {},
+): MediaItemView {
   return {
     id: 5150,
     s3_key_public: TEST_PUBLIC_MEDIA_KEY,
@@ -97,13 +104,60 @@ export function testPostView(overrides: Partial<PostView> = {}): PostView {
   };
 }
 
+/**
+ * A plain repost of `original` (UI-009): `is_repost`, no text, no media of its
+ * own, and the original's view one level deep in `reposted_post`. The defaults
+ * name a reposter other than the original's author so a test can tell the two
+ * apart. Pass `reposted_post: null` for a repost whose original is unavailable.
+ */
+export function testPlainRepost(
+  original: PostView | null,
+  overrides: Partial<PostView> = {},
+): PostView {
+  return testPostView({
+    id: 9001,
+    text: null,
+    author: testAuthor({ id: 22, username: "reposter22" }),
+    is_repost: true,
+    original_post_id: original?.id ?? null,
+    like_count: 0,
+    media: [],
+    reposted_post: original,
+    ...overrides,
+  });
+}
+
+/** A quote repost of `original`: a repost with text of its own (UI-009). */
+export function testQuoteRepost(
+  original: PostView | null,
+  text: string,
+  overrides: Partial<PostView> = {},
+): PostView {
+  return testPostView({
+    id: 9002,
+    text,
+    author: testAuthor({ id: 23, username: "quoter23" }),
+    is_repost: true,
+    original_post_id: original?.id ?? null,
+    like_count: 0,
+    reposted_post: original,
+    ...overrides,
+  });
+}
+
 /** `GET /feed`'s body: the items, and the cursor for the page after them. */
-export function feedPage(items: PostView[] = [], nextBeforeId: number | null = null): FeedPageBody {
+export function feedPage(
+  items: PostView[] = [],
+  nextBeforeId: number | null = null,
+): FeedPageBody {
   return { items, next_before_id: nextBeforeId };
 }
 
 /** `GET /feed/thread/{post_id}`'s body: the root plus its **direct** replies. */
-export function threadView(root: PostView, replies: PostView[] = []): ThreadView {
+export function threadView(
+  root: PostView,
+  replies: PostView[] = [],
+): ThreadView {
   return { root, replies };
 }
 
@@ -193,16 +247,19 @@ export function threadStub(threads: ThreadView[]): ThreadStub {
   const byRootId = new Map(threads.map((thread) => [thread.root.id, thread]));
 
   return {
-    handler: http.get<{ post_id: string }>("*/feed/thread/:post_id", ({ params }) => {
-      const postId = Number(params.post_id);
-      requests.push(postId);
+    handler: http.get<{ post_id: string }>(
+      "*/feed/thread/:post_id",
+      ({ params }) => {
+        const postId = Number(params.post_id);
+        requests.push(postId);
 
-      const thread = byRootId.get(postId);
-      if (thread === undefined) {
-        return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
-      }
-      return HttpResponse.json<ThreadView>(thread);
-    }),
+        const thread = byRootId.get(postId);
+        if (thread === undefined) {
+          return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+        }
+        return HttpResponse.json<ThreadView>(thread);
+      },
+    ),
     requests,
   };
 }
@@ -240,11 +297,18 @@ export function likeStub(): LikeStub {
   let gate: Promise<void> | null = null;
   let failing = false;
 
-  async function respond(method: "POST" | "DELETE", url: string): Promise<Response> {
+  async function respond(
+    method: "POST" | "DELETE",
+    url: string,
+  ): Promise<Response> {
     // Recorded before the gate, so a held call is still observable as "sent".
     calls.push({ method, postId: postIdIn(url) });
     if (gate !== null) await gate;
-    if (failing) return HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 });
+    if (failing)
+      return HttpResponse.json(
+        { detail: "Internal Server Error" },
+        { status: 500 },
+      );
     return new HttpResponse(null, { status: 204 });
   }
 
@@ -270,17 +334,118 @@ export function likeStub(): LikeStub {
   };
 }
 
+export type RepostCall = LikeCall;
+
+export interface RepostStub {
+  /** Both halves of `/posts/{post_id}/repost` — install them together. */
+  handlers: RequestHandler[];
+  /** Every repost/unrepost the page issued, in order. */
+  readonly calls: RepostCall[];
+  /** Hold every repost/unrepost open until the returned function is called. */
+  hold(): () => void;
+  /**
+   * Answer every repost/unrepost with this failing status from here on: 500 by
+   * default, or e.g. 409 (an unrepost whose repost has a reply of its own).
+   */
+  fail(status?: number): void;
+  /** Answer `POST` with 200 (already reposted) instead of 201 (new) from here on. */
+  answerExisting(): void;
+}
+
+/** The `PostOut` body `POST /posts/{post_id}/repost` answers with: the caller's plain repost. */
+export function testRepostOut(
+  originalId: number,
+  overrides: Partial<PostOut> = {},
+): PostOut {
+  return {
+    id: 9100,
+    author_id: 7,
+    text: null,
+    is_reply: false,
+    is_repost: true,
+    parent_post_id: null,
+    original_post_id: originalId,
+    reported: false,
+    created_at: "2026-09-28T12:30:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * `POST /posts/{post_id}/repost` → 201 (or 200) with the repost's `PostOut`, and
+ * `DELETE` → 204, per the generated schema. Same shape as `likeStub`: the call is
+ * recorded before the gate, so a held request is still observable as sent.
+ */
+export function repostStub(): RepostStub {
+  const calls: RepostCall[] = [];
+  let gate: Promise<void> | null = null;
+  let failing: number | null = null;
+  let postStatus = 201;
+
+  async function respond(
+    method: "POST" | "DELETE",
+    url: string,
+  ): Promise<Response> {
+    const postId = repostIdIn(url);
+    calls.push({ method, postId });
+    if (gate !== null) await gate;
+    if (failing !== null) {
+      return HttpResponse.json(
+        { detail: "Repost failed" },
+        { status: failing },
+      );
+    }
+    if (method === "DELETE") return new HttpResponse(null, { status: 204 });
+    return HttpResponse.json<PostOut>(testRepostOut(postId), {
+      status: postStatus,
+    });
+  }
+
+  return {
+    handlers: [
+      http.post(REPOST_PATH, ({ request }) => respond("POST", request.url)),
+      http.delete(REPOST_PATH, ({ request }) => respond("DELETE", request.url)),
+    ],
+    calls,
+    hold(): () => void {
+      let open = (): void => {};
+      gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return () => {
+        open();
+        gate = null;
+      };
+    },
+    fail(status = 500): void {
+      failing = status;
+    },
+    answerExisting(): void {
+      postStatus = 200;
+    },
+  };
+}
+
 /**
  * `GET /feed` → an empty first page, for a test that renders the app somewhere
  * else and only needs the feed not to be an unhandled request.
  */
 export function emptyFeed(): RequestHandler {
-  return http.get("*/feed", () => HttpResponse.json<FeedPageBody>(feedPage([], null)));
+  return http.get("*/feed", () =>
+    HttpResponse.json<FeedPageBody>(feedPage([], null)),
+  );
 }
 
 /** The `{post_id}` a like/unlike was for, read from the path the handler matched. */
 function postIdIn(url: string): number {
   const matched = LIKE_PATH.exec(new URL(url).pathname);
+  if (matched === null) throw new Error(`no post id in ${url}`);
+  return Number(matched[1]);
+}
+
+/** The `{post_id}` a repost/unrepost was for. */
+function repostIdIn(url: string): number {
+  const matched = REPOST_PATH.exec(new URL(url).pathname);
   if (matched === null) throw new Error(`no post id in ${url}`);
   return Number(matched[1]);
 }

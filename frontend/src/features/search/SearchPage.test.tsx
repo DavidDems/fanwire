@@ -36,7 +36,12 @@ import {
   teamsAre,
   testSession,
 } from "../../test/auth";
-import { likeStub, testAuthor, testPostView } from "../../test/feed";
+import {
+  likeStub,
+  testAuthor,
+  testPlainRepost,
+  testPostView,
+} from "../../test/feed";
 import {
   accountsPage,
   accountsStub,
@@ -138,7 +143,9 @@ describe("the search view", () => {
     const { accounts, posts } = renderSearch("/search");
 
     expect(
-      await screen.findByRole("searchbox", { name: "Search accounts and posts" }),
+      await screen.findByRole("searchbox", {
+        name: "Search accounts and posts",
+      }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Accounts" })).toBeNull();
@@ -239,17 +246,23 @@ describe("post results render through the feed's PostNode (criterion 3)", () => 
         within(card).getByRole("link", { name: post.author.username }),
       ).toHaveAttribute("href", `/profile/${post.author.id}`);
       expect(
-        within(card).getByRole("button", { name: /^like$/i }),
-      ).toBeInTheDocument();
+        within(card).getByRole("button", { name: "Like" }),
+      ).toHaveAttribute("aria-pressed", "false");
+      expect(
+        within(card).getByRole("button", { name: "Repost" }),
+      ).toHaveAttribute("aria-pressed", "false");
       expect(
         within(card).getByText(`${post.like_count} likes`),
       ).toBeInTheDocument();
       expect(
         within(card).getByRole("button", { name: "Show replies" }),
       ).toHaveAttribute("aria-expanded", "false");
-      expect(
-        within(card).getByRole("link", { name: /reply/i }),
-      ).toHaveAttribute("href", `/compose?reply_to=${post.id}`);
+      expect(within(card).getByRole("link", { name: "Reply" })).toHaveAttribute(
+        "href",
+        `/compose?reply_to=${post.id}`,
+      );
+      expect(within(card).getByText("0 replies")).toBeInTheDocument();
+      expect(within(card).getByText("0 reposts")).toBeInTheDocument();
     }
   });
 
@@ -275,15 +288,17 @@ describe("post results render through the feed's PostNode (criterion 3)", () => 
 
     await user.click(
       within(postCard(POST_A.text ?? "")).getByRole("button", {
-        name: /^like$/i,
+        name: "Like",
       }),
     );
 
-    expect(
-      await within(postCard(POST_A.text ?? "")).findByRole("button", {
-        name: /^unlike$/i,
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        within(postCard(POST_A.text ?? "")).getByRole("button", {
+          name: "Like",
+        }),
+      ).toHaveAttribute("aria-pressed", "true");
+    });
     expect(
       within(postCard(POST_A.text ?? "")).getByText("4 likes"),
     ).toBeInTheDocument();
@@ -292,9 +307,65 @@ describe("post results render through the feed's PostNode (criterion 3)", () => 
     release();
     await waitFor(() => {
       expect(
-        within(postsRegion()).getByRole("button", { name: /^unlike$/i }),
-      ).toBeInTheDocument();
+        within(postsRegion()).getByRole("button", { name: "Like" }),
+      ).not.toBeDisabled();
     });
+    expect(
+      within(postsRegion()).getByRole("button", { name: "Like" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("moves the original's own result when it is liked through a plain repost of it (UI-009)", async () => {
+    // Search results are cached under the feed's key root, so the copy of a
+    // post inside a repost's `reposted_post` is patched with the rest.
+    const user = userEvent.setup();
+    const like = likeStub();
+    server.use(...like.handlers, profileFound());
+    const plain = testPlainRepost(POST_A, { id: 299 });
+    renderSearch(
+      `/search?q=${Q}`,
+      { posts: { 0: postsPage([POST_A, plain], null) } },
+      new FakeAuthService({ session: testSession() }),
+    );
+
+    const region = await screen.findByRole("region", { name: "Posts" });
+    await within(region).findAllByText(POST_A.text ?? "");
+    const cards = () =>
+      within(postsRegion())
+        .getAllByRole("article")
+        .filter(
+          (article) => article.parentElement?.closest("article") === null,
+        );
+    const isRepost = (card: HTMLElement) =>
+      /reposted/.test(card.textContent ?? "");
+    const only = (found: HTMLElement | undefined, what: string) => {
+      if (found === undefined)
+        throw new Error(`no ${what} card in the results`);
+      return found;
+    };
+    const originalCard = () =>
+      only(
+        cards().find((card) => !isRepost(card)),
+        "original",
+      );
+    const repostCard = () => only(cards().find(isRepost), "plain repost");
+    expect(cards()).toHaveLength(2);
+    expect(within(originalCard()).getByText("3 likes")).toBeInTheDocument();
+    const release = like.hold();
+
+    await user.click(
+      within(repostCard()).getByRole("button", { name: "Like" }),
+    );
+
+    await waitFor(() => {
+      expect(within(originalCard()).getByText("4 likes")).toBeInTheDocument();
+    });
+    expect(within(repostCard()).getByText("4 likes")).toBeInTheDocument();
+    expect(
+      within(originalCard()).getByRole("button", { name: "Like" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(like.calls).toEqual([{ method: "POST", postId: POST_A.id }]);
+    release();
   });
 });
 
