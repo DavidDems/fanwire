@@ -31,21 +31,38 @@
  * component that only updated once the response landed would leave the held
  * assertion timing out — which is the point.
  *
- * **Reply and repost are an address, not an import.** `/compose?reply_to=<id>`
- * and `/compose?repost_of=<id>` are read by `ComposePage` and pinned by
- * `features/compose/ComposeRoute.test.tsx`. `features/compose/**` is in this
- * unit's `forbidden_paths`, and a route is the one seam a feature folder can
- * offer another without being imported by it ([[0x00-architecture]] Connection
- * rule) — so what is asserted here is where the control *navigates to*.
+ * **Reply is an address, not an import.** `/compose?reply_to=<id>` is read by
+ * `ComposePage` and pinned by `features/compose/ComposeRoute.test.tsx`.
+ * `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
+ * one seam a feature folder can offer another without being imported by it
+ * ([[0x00-architecture]] Connection rule) — so what is asserted here is where
+ * the control *navigates to*. Since UI-009 repost is a one-click toggle on the
+ * card (`post-card.test.tsx`), so the card no longer links to
+ * `/compose?repost_of=` at all.
+ *
+ * **UI-009: the like control's name is always "Like"**, and its state is
+ * `aria-pressed` (the human's decision, 2026-10-16), so the tests below find it
+ * by that one name and read the state off the attribute.
  */
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { AuthService } from "../../auth/AuthService";
 import { config } from "../../config";
-import { FakeAuthService, profileFound, renderWithAuth, testSession } from "../../test/auth";
+import {
+  FakeAuthService,
+  profileFound,
+  renderWithAuth,
+  testSession,
+} from "../../test/auth";
 import {
   TEST_PUBLIC_MEDIA_KEY,
   feedPage,
@@ -112,7 +129,8 @@ function postCard(text: string): HTMLElement {
   const card = screen
     .getAllByRole("article")
     .find((article) => article.textContent?.includes(text));
-  if (card === undefined) throw new Error(`no post card containing ${JSON.stringify(text)}`);
+  if (card === undefined)
+    throw new Error(`no post card containing ${JSON.stringify(text)}`);
   return card;
 }
 
@@ -131,7 +149,14 @@ function control(scope: HTMLElement, name: RegExp): HTMLElement {
 
 /** Every rendered card's text, in order — what "the same posts" is compared as. */
 function renderedCards(): string[] {
-  return screen.getAllByRole("article").map((article) => article.textContent ?? "");
+  return screen
+    .getAllByRole("article")
+    .map((article) => article.textContent ?? "");
+}
+
+/** The like control inside a card — always named "Like" (UI-009). */
+function likeIn(scope: HTMLElement): HTMLElement {
+  return within(scope).getByRole("button", { name: "Like" });
 }
 
 function loadMore(): HTMLElement | null {
@@ -158,12 +183,17 @@ describe("the feed renders from GET /feed", () => {
 
     renderFeed();
 
-    expect(await screen.findByRole("heading", { name: /^feed$/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^feed$/i }),
+    ).toBeInTheDocument();
   });
 
   it("loads the next page using next_before_id from the previous response", async () => {
     const user = userEvent.setup();
-    const feed = feedStub([feedPage([FIRST, SECOND], 102), feedPage([THIRD, FOURTH], null)]);
+    const feed = feedStub([
+      feedPage([FIRST, SECOND], 102),
+      feedPage([THIRD, FOURTH], null),
+    ]);
     server.use(feed.handler);
 
     renderFeed();
@@ -176,12 +206,18 @@ describe("the feed renders from GET /feed", () => {
     // 102 is the cursor the *first response* carried, not the last id on screen
     // and not a count — those agree here by luck and diverge the moment view
     // assembly drops a post whose author was soft-deleted ([[0x06-feed]]).
-    expect(feed.requests.map((request) => request.beforeId)).toEqual([null, "102"]);
+    expect(feed.requests.map((request) => request.beforeId)).toEqual([
+      null,
+      "102",
+    ]);
   });
 
   it("keeps the pages it already has when the next one arrives", async () => {
     const user = userEvent.setup();
-    const feed = feedStub([feedPage([FIRST, SECOND], 102), feedPage([THIRD, FOURTH], null)]);
+    const feed = feedStub([
+      feedPage([FIRST, SECOND], 102),
+      feedPage([THIRD, FOURTH], null),
+    ]);
     server.use(feed.handler);
 
     renderFeed();
@@ -196,7 +232,10 @@ describe("the feed renders from GET /feed", () => {
 
   it("stops cleanly once a response reports no further page", async () => {
     const user = userEvent.setup();
-    const feed = feedStub([feedPage([FIRST, SECOND], 102), feedPage([THIRD, FOURTH], null)]);
+    const feed = feedStub([
+      feedPage([FIRST, SECOND], 102),
+      feedPage([THIRD, FOURTH], null),
+    ]);
     server.use(feed.handler);
 
     renderFeed();
@@ -235,7 +274,10 @@ describe("a guest and a signed-in visitor render through the same component", ()
     await screen.findByText(FIRST_TEXT);
     const asMember = renderedCards();
 
-    expect(asMember, "the same response must render the same feed either way").toEqual(asGuest);
+    expect(
+      asMember,
+      "the same response must render the same feed either way",
+    ).toEqual(asGuest);
     expect(feed.requests).toHaveLength(2);
     expect(
       feed.requests[1].search,
@@ -253,7 +295,9 @@ describe("a guest and a signed-in visitor render through the same component", ()
     renderFeed(new FakeAuthService());
 
     expect(await screen.findByText(FIRST_TEXT)).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /^sign\s*-?\s*in$/i })).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: /^sign\s*-?\s*in$/i }),
+    ).toBeNull();
   });
 });
 
@@ -268,7 +312,7 @@ describe("liking a post", () => {
     await screen.findByText(FIRST_TEXT);
     feed.answerWith(feedPage([FIRST_LIKED, SECOND], null));
 
-    await user.click(control(postCard(FIRST_TEXT), /^like$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
     await waitFor(() => {
       expect(like.calls).toEqual([{ method: "POST", postId: 101 }]);
@@ -285,7 +329,7 @@ describe("liking a post", () => {
     await screen.findByText(FIRST_TEXT);
     feed.answerWith(feedPage([FIRST], null));
 
-    await user.click(control(postCard(FIRST_TEXT), /^unlike$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
     await waitFor(() => {
       expect(like.calls).toEqual([{ method: "DELETE", postId: 101 }]);
@@ -306,17 +350,26 @@ describe("liking a post", () => {
     feed.answerWith(feedPage([FIRST_LIKED], null));
     const release = like.hold();
 
-    await user.click(control(postCard(FIRST_TEXT), /^like$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
+    await waitFor(() => {
+      expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
     expect(
-      await within(postCard(FIRST_TEXT)).findByRole("button", { name: /^unlike$/i }),
+      within(postCard(FIRST_TEXT)).getByText("4 likes"),
     ).toBeInTheDocument();
-    expect(within(postCard(FIRST_TEXT)).getByText("4 likes")).toBeInTheDocument();
 
     release();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^unlike$/i })).toBeInTheDocument();
+      expect(likeIn(postCard(FIRST_TEXT))).not.toBeDisabled();
     });
+    expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("flips the control and lowers the count before the unlike returns", async () => {
@@ -330,17 +383,26 @@ describe("liking a post", () => {
     feed.answerWith(feedPage([FIRST], null));
     const release = like.hold();
 
-    await user.click(control(postCard(FIRST_TEXT), /^unlike$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
+    await waitFor(() => {
+      expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
     expect(
-      await within(postCard(FIRST_TEXT)).findByRole("button", { name: /^like$/i }),
+      within(postCard(FIRST_TEXT)).getByText("3 likes"),
     ).toBeInTheDocument();
-    expect(within(postCard(FIRST_TEXT)).getByText("3 likes")).toBeInTheDocument();
 
     release();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^like$/i })).toBeInTheDocument();
+      expect(likeIn(postCard(FIRST_TEXT))).not.toBeDisabled();
     });
+    expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("restores the control and the count when the like fails, and says so", async () => {
@@ -353,11 +415,16 @@ describe("liking a post", () => {
     renderFeed(memberAuth());
     await screen.findByText("3 likes");
 
-    await user.click(control(postCard(FIRST_TEXT), /^like$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
     const failure = await screen.findByRole("alert");
     expect(failure.textContent?.trim()).not.toBe("");
-    expect(await screen.findByRole("button", { name: /^like$/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
     expect(await screen.findByText("3 likes")).toBeInTheDocument();
   });
 
@@ -371,17 +438,26 @@ describe("liking a post", () => {
     renderFeed(memberAuth());
     await screen.findByText("4 likes");
 
-    await user.click(control(postCard(FIRST_TEXT), /^unlike$/i));
+    await user.click(likeIn(postCard(FIRST_TEXT)));
 
     const failure = await screen.findByRole("alert");
     expect(failure.textContent?.trim()).not.toBe("");
-    expect(await screen.findByRole("button", { name: /^unlike$/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(likeIn(postCard(FIRST_TEXT))).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
     expect(await screen.findByText("4 likes")).toBeInTheDocument();
   });
 });
 
 describe("media on a post", () => {
-  const WITH_MEDIA = testPostView({ id: 105, text: MEDIA_TEXT, media: [testMediaItem()] });
+  const WITH_MEDIA = testPostView({
+    id: 105,
+    text: MEDIA_TEXT,
+    media: [testMediaItem()],
+  });
 
   it("renders the public-media key against the configured media base url", async () => {
     const feed = feedStub([feedPage([WITH_MEDIA], null)]);
@@ -421,7 +497,7 @@ describe("media on a post", () => {
   });
 });
 
-describe("reply and repost open the composer by address", () => {
+describe("reply opens the composer by address; repost does not", () => {
   it("sends a reply to /compose?reply_to=<post id>", async () => {
     const user = userEvent.setup();
     const feed = feedStub([feedPage([FIRST, SECOND], null)]);
@@ -432,20 +508,28 @@ describe("reply and repost open the composer by address", () => {
 
     await user.click(control(postCard(SECOND_TEXT), /^reply$/i));
 
-    expect(await screen.findByText("compose stub at /compose?reply_to=102")).toBeInTheDocument();
+    expect(
+      await screen.findByText("compose stub at /compose?reply_to=102"),
+    ).toBeInTheDocument();
   });
 
-  it("sends a repost to /compose?repost_of=<post id>", async () => {
-    const user = userEvent.setup();
+  it("offers no repost by address: no link on the card goes to /compose?repost_of=", async () => {
     const feed = feedStub([feedPage([FIRST, SECOND], null)]);
     server.use(feed.handler, profileFound());
 
     renderFeed(memberAuth());
     await screen.findByText(FIRST_TEXT);
 
-    await user.click(control(postCard(FIRST_TEXT), /^repost$/i));
-
-    expect(await screen.findByText("compose stub at /compose?repost_of=101")).toBeInTheDocument();
+    for (const text of [FIRST_TEXT, SECOND_TEXT]) {
+      const hrefs = within(postCard(text))
+        .queryAllByRole("link")
+        .map((link) => link.getAttribute("href") ?? "");
+      expect(hrefs.filter((href) => href.includes("repost_of"))).toEqual([]);
+      // Repost is a toggle on the card now, not a navigation.
+      expect(
+        within(postCard(text)).getByRole("button", { name: "Repost" }),
+      ).toBeInTheDocument();
+    }
   });
 
   it("reimplements no part of composing", async () => {

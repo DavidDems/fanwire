@@ -1,0 +1,45 @@
+/*
+ * One post action (UI-009): an icon-only ghost Button or Link, then its count
+ * as muted text. The control's own states (hover, focus-visible, disabled
+ * while the request is in flight) are Button.module.css's; the 2 rem small
+ * size keeps the hit area above 24 × 24 (WCAG 2.5.8). Values come from
+ * tokens.css by name only.
+ */
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/*
+ * Square: an icon-only control is as wide as it is tall (Button's `sm`
+ * min-width and min-height of 2 rem). Scoped under `.action` so it outranks
+ * `sm`'s padding whatever order the two modules load in.
+ */
+.action .control {
+  padding: var(--space-1);
+}
+
+/*
+ * Pressed like or repost. The shape change (filled heart, heavier arrows) is
+ * the signal that does not rely on colour; the action colour repeats it.
+ */
+.control[aria-pressed="true"] {
+  color: var(--color-action);
+}
+
+.control[aria-pressed="true"]:hover:not(:disabled) {
+  color: var(--color-action-hover);
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The action row wraps (PostNode.module.css): the alert takes a row of its own. */
+.failure {
+  flex-basis: 100%;
+}

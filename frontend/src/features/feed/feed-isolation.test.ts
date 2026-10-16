@@ -219,7 +219,9 @@ describe("the live-score ticker is gone (EVENTS-003)", () => {
     // parsed nothing: PostNode's own imports must be visible to it.
     const imported = importSpecifiers(read(join(FEED_DIR, "PostNode.tsx"))).map(moduleName);
 
-    expect(imported).toContain("LikeButton");
+    // UI-009 may move the like control behind PostAction, so the guard names
+    // the import PostNode keeps either way: the thread read in ./api.
+    expect(imported).toContain("api");
   });
 });
 

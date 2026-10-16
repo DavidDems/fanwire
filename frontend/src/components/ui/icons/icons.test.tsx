@@ -10,6 +10,12 @@
  * FRONTEND-009 adds a fourteenth, lucide `chart-column`, for the Stats nav
  * item: `ChartColumnIcon`, in the same shape as the others and under the same
  * licence. Its four paths are pinned below as Lucide draws them.
+ *
+ * UI-009 adds the two pressed variants for the post card, so a pressed like or
+ * repost is told apart by shape and not by colour alone (`accessibility.md`):
+ * `HeartFilledIcon`, Lucide's heart path filled with currentColor, and
+ * `Repeat2FilledIcon`, Lucide's repeat-2 paths drawn heavier than the default
+ * stroke of 2. Both keep the shared frame (aria-hidden, currentColor only).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -24,10 +30,12 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  HeartFilledIcon,
   HeartIcon,
   HouseIcon,
   ImageIcon,
   MessageCircleIcon,
+  Repeat2FilledIcon,
   Repeat2Icon,
   SearchIcon,
   SquarePenIcon,
@@ -51,6 +59,8 @@ const ICONS: [string, ComponentType][] = [
   ["circle-alert", CircleAlertIcon],
   ["circle-check", CircleCheckIcon],
   ["chart-column", ChartColumnIcon],
+  ["heart (filled, UI-009)", HeartFilledIcon],
+  ["repeat-2 (heavier, UI-009)", Repeat2FilledIcon],
 ];
 
 const SHAPES = "path, circle, line, rect, polyline, polygon, ellipse";
@@ -99,6 +109,55 @@ describe("chart-column (FRONTEND-009)", () => {
       "path M13 17V5",
       "path M8 17v-3",
     ]);
+  });
+});
+
+/** Each child shape as `<name> <d>`, the way the chart-column test reads them. */
+function shapesOf(Component: ComponentType): string[] {
+  const { container } = render(<Component />);
+  return [...container.querySelectorAll("svg > *, svg > g > *")]
+    .filter((shape) => shape.localName !== "g")
+    .map((shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`);
+}
+
+/** Every stroke-width the icon sets, on the svg and on any shape or group in it. */
+function strokeWidthsOf(Component: ComponentType): number[] {
+  const { container } = render(<Component />);
+  const svg = container.querySelector("svg") as SVGSVGElement;
+  return [svg, ...svg.querySelectorAll("*")]
+    .map((element) => element.getAttribute("stroke-width"))
+    .filter((value): value is string => value !== null)
+    .map(Number);
+}
+
+describe("heart, filled (UI-009)", () => {
+  it("draws Lucide's heart path, unchanged", () => {
+    expect(shapesOf(HeartFilledIcon)).toEqual(shapesOf(HeartIcon));
+  });
+
+  it("fills the heart with currentColor", () => {
+    const { container } = render(<HeartFilledIcon />);
+
+    expect(container.querySelector('[fill="currentColor"]')).not.toBeNull();
+  });
+
+  it("is distinguishable from the outline heart, which fills nothing", () => {
+    const { container } = render(<HeartIcon />);
+
+    expect(container.querySelector('[fill="currentColor"]')).toBeNull();
+  });
+});
+
+describe("repeat-2, heavier (UI-009)", () => {
+  it("draws Lucide's repeat-2 paths, unchanged", () => {
+    expect(shapesOf(Repeat2FilledIcon)).toEqual(shapesOf(Repeat2Icon));
+  });
+
+  it("draws with a heavier stroke than the outline's 2", () => {
+    expect(Math.max(...strokeWidthsOf(Repeat2Icon))).toBe(2);
+    expect(
+      Math.max(...strokeWidthsOf(Repeat2FilledIcon)),
+    ).toBeGreaterThanOrEqual(3);
   });
 });
 

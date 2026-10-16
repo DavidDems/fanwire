@@ -25,11 +25,11 @@ What is real:
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
 | `src/features/search/` | `/search` — the free-text bar and the Accounts and Posts sections, paged apart. Accounts and posts only since `FRONTEND-009`: sports data is on `/stats` |
-| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the optimistic like, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
+| `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the post card's controls (`PostAction`: like, reply, repost, each with its count, `UI-009`), the optimistic like and repost, repost rendering, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden` and `Tabs` (`FRONTEND-009`: links that look like tabs, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden` and `Tabs` (`FRONTEND-009`: links that look like tabs, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
@@ -548,8 +548,9 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   carrying `before_id` would make page two an entry that page one could never
   extend.
 - **The optimistic like's snapshot is not in the button.** A post is not owned by
-  one cache entry: it is in whichever feed page it arrived on *and* in the
-  replies of every thread expanded above it, so state beside the cache moves one
+  one cache entry: it is in whichever feed page it arrived on, in the replies of
+  every thread expanded above it, in search results, and since `UI-009` inside
+  every repost of it (`reposted_post`), so state beside the cache moves one
   copy and leaves another stale **on the same screen**. `onMutate` patches every
   entry under `["feed"]` that actually holds the post, and that filtered list of
   entries *is* the rollback context — which is how `onSettled` can still
@@ -574,8 +575,10 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   Media renders from `s3_key_public` (the served image), not
   `s3_key_thumbnail` — the composer's widget uses the thumbnail, and these are
   different jobs.
-- **Reply and repost are an address, never an import**:
-  `/compose?reply_to=<id>` and `/compose?repost_of=<id>`, read by `ComposePage`.
+- **Reply is an address, never an import**: `/compose?reply_to=<id>`, read
+  by `ComposePage`. Since `UI-009` the card no longer links to
+  `/compose?repost_of=<id>` (repost is a toggle, below); the composer still
+  reads it, so a quote repost stays reachable by address.
   `features/compose/**` is in this unit's `forbidden_paths`, and a route is the
   one seam a feature folder can offer another ([[0x00-architecture]] Connection
   rule) — enforced from disk, along with a ban on importing any sibling feature.
@@ -593,6 +596,50 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   `LiveScoreTickerDecorator` and its styles are gone and `PostNode` renders its
   view directly. `GameScore`'s `compact` variant, which only the ticker used, is
   left in `components/ui/` (outside that unit's paths) with no caller.
+
+### The post card (`UI-009`)
+
+- **One control shape, `PostAction`.** Like, reply and repost are each an
+  icon-only ghost `sm` control (the hit area stays above 24 × 24) followed by
+  its count as text: "0 likes", "1 like", "1,000 replies". `countText`
+  (`counts.ts`) formats the number with `Intl.NumberFormat` and picks the
+  noun by hand, singular at exactly one. The count is outside the control and
+  never in its name, so a stranger's like does not rename the button.
+- **Fixed names, `aria-pressed` for state (the human, 2026-10-16).** The
+  buttons are always "Like" and "Repost" (the `aria-label`); the viewer's
+  state is `aria-pressed`, and a pressed control swaps to `HeartFilledIcon`
+  or the heavier `Repeat2FilledIcon`, so the state is not colour alone.
+  Reply is a link named "Reply", with no pressed state. This supersedes the
+  task's "Unlike"/"Undo repost" wording and `components.md` §2's "not
+  `aria-pressed`" for these two controls: a name that changes *and* a pressed
+  state is the same fact said twice. `LikeButton` is gone, folded into
+  `PostAction.tsx`.
+- **One optimistic pattern, `TogglePostAction`.** Like and repost differ only
+  in the request (`setLiked`, `setReposted`) and the edit (`withLike`,
+  `withRepost`); the cancel, the snapshot of every entry that holds the post,
+  the patch, the rollback with an `InlineAlert`, the exact-key invalidation
+  and the sign-in redirect for a guest are written once. The control is
+  disabled while its request is in flight. `cacheHolds` and `mapCachedPosts`
+  also look inside a post's `reposted_post`, so liking an original through a
+  repost card moves the original's own card in the same render.
+- **Reply does not move the reply count.** It still goes to
+  `/compose?reply_to=<id>`; the count changes when the post is read again
+  after a reply exists. `FRONTEND-010` replaces the link and the "Show
+  replies" disclosure with the thread modal.
+- **A plain repost is the original.** Plain means `is_repost` with no text
+  and no media, the same rule as [[0x03-posts]] "The repost toggle". It
+  renders as a line "↻ <name> reposted" (the name links to the reposter's
+  profile), then the original's content, controls, counts and replies, all
+  acting on `reposted_post.id`. A null `reposted_post` reads "This post is
+  unavailable". Still one `PostNode`: the node picks its subject, the post or
+  its original, and renders that.
+- **A quote repost is its own post** with the original inside as a compact
+  bordered box (author, time, text clamped to three lines, no controls),
+  linking to the original author's profile until `FRONTEND-010` adds
+  `/posts/:id`. A null original there reads "This post is unavailable".
+  **A plain repost of a quote shows no box**: `reposted_post` is one level
+  deep ([[0x06-feed]]), so the quote inside always arrives with its own
+  `reposted_post` null, which is the depth cut, not a missing original.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
@@ -629,7 +676,7 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
   other (pinned with result sets of different lengths). Accounts render above
   posts.
 - **Post results are `PostNode`s, and are cached under the feed's key root**
-  (`["feed", "search", q]`). `LikeButton` patches a like optimistically into
+  (`["feed", "search", q]`). `TogglePostAction` patches a like or repost optimistically into
   every entry under `FEED_KEY_ROOT` that holds the post, and `PostsPage`'s
   `{ items }` page shape is one `cacheHolds`/`mapCachedPosts` already walk.
   Keyed anywhere else, a like on a search result would not move until the

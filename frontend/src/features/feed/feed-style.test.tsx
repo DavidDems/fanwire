@@ -6,7 +6,7 @@
  *
  * What jsdom can honestly show (`verification.md` §2b, §2c): which shared
  * component each piece renders through, read off the class that component's
- * own module exports, and the attributes that carry state (`data-active`,
+ * own module exports, and the attributes that carry state (`aria-pressed`,
  * `aria-hidden`, `aria-expanded`). Every class asserted here belongs to a shared
  * module in `src/components/ui/`; that those rules exist on disk, and that the
  * feed's own module CSS is clean, is `feed-css.test.ts`.
@@ -157,10 +157,14 @@ describe("PostNode as a card (criterion 1)", () => {
 
 describe("no live-score block on a post card (EVENTS-003)", () => {
   it("renders a post that mentions games with no Live score region", () => {
-    renderNode(testPostView({ id: 304, text: ROOT_TEXT, mentioned_game_ids: [1, 2] }));
+    renderNode(
+      testPostView({ id: 304, text: ROOT_TEXT, mentioned_game_ids: [1, 2] }),
+    );
 
     const article = articleFor(ROOT_TEXT);
-    expect(within(article).queryByRole("status", { name: "Live score" })).toBeNull();
+    expect(
+      within(article).queryByRole("status", { name: "Live score" }),
+    ).toBeNull();
     expect(within(article).queryAllByRole("status")).toHaveLength(0);
   });
 });
@@ -223,19 +227,23 @@ describe("an expanded post with no replies (criterion 4)", () => {
 });
 
 describe("the like control (criterion 5)", () => {
-  it("carries data-active when the post is liked", () => {
+  // UI-009: the name is always "Like" and the state is aria-pressed (the
+  // human's decision, 2026-10-16), replacing the data-active / "Unlike" pair.
+  it("carries aria-pressed=true when the post is liked", () => {
     renderNode(testPostView({ liked_by_viewer: true, like_count: 4 }));
 
-    expect(screen.getByRole("button", { name: /^unlike$/i })).toHaveAttribute(
-      "data-active",
+    expect(screen.getByRole("button", { name: "Like" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
   });
 
-  it("carries no data-active when the post is not liked", () => {
+  it("carries aria-pressed=false when the post is not liked", () => {
     renderNode(testPostView({ liked_by_viewer: false }));
 
-    expect(screen.getByRole("button", { name: /^like$/i })).not.toHaveAttribute(
-      "data-active",
+    expect(screen.getByRole("button", { name: "Like" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
   });
 

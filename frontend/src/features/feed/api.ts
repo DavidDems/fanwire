@@ -5,8 +5,8 @@ import type { components } from "../../api/schema";
 import { config } from "../../config";
 
 /**
- * The three endpoints this feature reads and writes, the cache keys their
- * answers live under, and the two helpers that edit a cached post in place.
+ * The endpoints this feature reads and writes, the cache keys their answers
+ * live under, and the helpers that edit a cached post in place.
  *
  * Every type here is an alias of the generated schema — nothing in this folder
  * hand-writes an API shape, and all HTTP goes through `api/client.ts`.
@@ -29,7 +29,8 @@ export type ThreadView = components["schemas"]["ThreadView"];
  * on, and again in the replies of every expanded thread that quotes it. So the
  * root is what a like cancels, patches and rolls back across — the *exact* keys
  * it then invalidates are the ones that turned out to hold that post, which is
- * narrower than the root and is computed rather than assumed (see `LikeButton`).
+ * narrower than the root and is computed rather than assumed (see
+ * `TogglePostAction` in `PostAction.tsx`).
  */
 export const FEED_KEY_ROOT = ["feed"] as const;
 
@@ -56,9 +57,13 @@ export function threadKey(postId: number): readonly ["feed", "thread", number] {
  * literal `before_id=null` in the query string is a value the route would have
  * to validate rather than a request for the first page.
  */
-export async function fetchFeedPage(beforeId: number | null): Promise<FeedPageBody> {
+export async function fetchFeedPage(
+  beforeId: number | null,
+): Promise<FeedPageBody> {
   const query = beforeId === null ? {} : { before_id: beforeId };
-  const { data, response } = await apiClient.GET("/feed", { params: { query } });
+  const { data, response } = await apiClient.GET("/feed", {
+    params: { query },
+  });
   if (!response.ok || data === undefined) {
     throw new Error(`GET /feed answered ${response.status}`);
   }
@@ -98,25 +103,69 @@ export async function setLiked(postId: number, liked: boolean): Promise<void> {
 }
 
 /**
+ * Repost (`POST`) or undo it (`DELETE`) on the one path — the twin of
+ * `setLiked`. `POST` answers 201 with the new repost, or 200 with the one the
+ * viewer already had; `DELETE` answers 204. The body is not read: what the card
+ * shows is the original's `reposted_by_viewer` and `repost_count`, which the
+ * refetch after the toggle brings back. Any other status (a 409 for a repost
+ * that has replies of its own, say) is a failure the card rolls back.
+ */
+export async function setReposted(
+  postId: number,
+  reposted: boolean,
+): Promise<void> {
+  const options = { params: { path: { post_id: postId } } } as const;
+  const { response } = reposted
+    ? await apiClient.POST("/posts/{post_id}/repost", options)
+    : await apiClient.DELETE("/posts/{post_id}/repost", options);
+
+  if (!response.ok) {
+    throw new Error(
+      `${reposted ? "POST" : "DELETE"} /posts/${postId}/repost answered ${response.status}`,
+    );
+  }
+}
+
+/**
  * The two cached shapes that can contain a post: a run of feed pages, and one
  * thread. Both are walked by the same two helpers below so that an optimistic
  * edit reaches every rendering of a post rather than only the one that was
  * clicked — the same post is on screen twice the moment a thread is expanded on
  * a post the feed also lists.
+ *
+ * **A repost carries a further copy** (UI-009): its `reposted_post` is the
+ * original's own view, one level deep. A plain repost renders that copy as the
+ * original's card, so both helpers look inside it too; otherwise liking an
+ * original through a repost of it would leave the original's own card behind.
  */
-export type FeedCacheValue = InfiniteData<FeedPageBody, number | null> | ThreadView;
+export type FeedCacheValue =
+  InfiniteData<FeedPageBody, number | null> | ThreadView;
 
-/** Whether this cached value has the post in it at all. */
-export function cacheHolds(value: FeedCacheValue | undefined, postId: number): boolean {
+/** Whether this post is `postId`, or reposts it. */
+function holds(post: PostView, postId: number): boolean {
+  return post.id === postId || post.reposted_post?.id === postId;
+}
+
+/** Whether this cached value has the post in it at all, a repost's original included. */
+export function cacheHolds(
+  value: FeedCacheValue | undefined,
+  postId: number,
+): boolean {
   if (value === undefined) return false;
   if ("pages" in value) {
-    return value.pages.some((page) => page.items.some((post) => post.id === postId));
+    return value.pages.some((page) =>
+      page.items.some((post) => holds(post, postId)),
+    );
   }
-  return value.root.id === postId || value.replies.some((post) => post.id === postId);
+  return (
+    holds(value.root, postId) ||
+    value.replies.some((post) => holds(post, postId))
+  );
 }
 
 /**
- * The same cached value with `update` applied to every post in it.
+ * The same cached value with `update` applied to every post in it, and to the
+ * `reposted_post` inside each repost (left `null` when the original is gone).
  *
  * Copies rather than edits: react-query hands observers the object it holds, and
  * a component that was given the same reference back re-renders into the old
@@ -127,13 +176,22 @@ export function mapCachedPosts(
   update: (post: PostView) => PostView,
 ): FeedCacheValue | undefined {
   if (value === undefined) return value;
+  const deep = (post: PostView): PostView => {
+    const updated = update(post);
+    return updated.reposted_post === null
+      ? updated
+      : { ...updated, reposted_post: update(updated.reposted_post) };
+  };
   if ("pages" in value) {
     return {
       ...value,
-      pages: value.pages.map((page) => ({ ...page, items: page.items.map(update) })),
+      pages: value.pages.map((page) => ({
+        ...page,
+        items: page.items.map(deep),
+      })),
     };
   }
-  return { ...value, root: update(value.root), replies: value.replies.map(update) };
+  return { ...value, root: deep(value.root), replies: value.replies.map(deep) };
 }
 
 /**
@@ -149,6 +207,18 @@ export function withLike(post: PostView, liked: boolean): PostView {
     ...post,
     liked_by_viewer: liked,
     like_count: Math.max(0, post.like_count + (liked ? 1 : -1)),
+  };
+}
+
+/**
+ * A post as it looks the instant the viewer reposts it or undoes the repost —
+ * `withLike`'s twin, floored at zero for the same reason.
+ */
+export function withRepost(post: PostView, reposted: boolean): PostView {
+  return {
+    ...post,
+    reposted_by_viewer: reposted,
+    repost_count: Math.max(0, post.repost_count + (reposted ? 1 : -1)),
   };
 }
 

@@ -26,11 +26,13 @@ export function accountsKey(
 
 /**
  * `GET /search/posts` — one infinite query per search text, **under the feed's
- * key root on purpose.** `LikeButton` patches a like optimistically into every
- * cached entry under `FEED_KEY_ROOT` that holds the post (`cacheHolds` /
- * `mapCachedPosts`), and a `PostsPage` has the same `{ items }` page shape those
- * helpers walk. Keyed anywhere else, a like on a search result would wait for
- * the server before its count moved, unlike the same post on the feed.
+ * key root on purpose.** The feed's post actions (`TogglePostAction`) patch a
+ * like or a repost optimistically into every cached entry under
+ * `FEED_KEY_ROOT` that holds the post (`cacheHolds` / `mapCachedPosts`, which
+ * also reach the original inside a repost), and a `PostsPage` has the same
+ * `{ items }` page shape those helpers walk. Keyed anywhere else, a like on a
+ * search result would wait for the server before its count moved, unlike the
+ * same post on the feed.
  */
 export function postsKey(q: string): readonly ["feed", "search", string] {
   return [...FEED_KEY_ROOT, "search", q] as const;
