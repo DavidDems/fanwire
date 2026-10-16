@@ -605,6 +605,8 @@ def _run_line(run_url: str) -> str:
 
 def _shadow_line(model: str | None, matches: bool, jev: dict[str, Any] | None) -> str:
     haiku = "no answer" if model is None else ("matches" if matches else "does not match")
+    if isinstance(jev, dict) and jev.get("off") is True:
+        return f"Shadow, acted on by nothing: Haiku: {haiku} · jev: off"
     choice = jev.get("choice") if isinstance(jev, dict) else None
     if not isinstance(jev, dict) or not isinstance(choice, str):
         return f"Shadow, acted on by nothing: Haiku: {haiku} · jev: no answer"

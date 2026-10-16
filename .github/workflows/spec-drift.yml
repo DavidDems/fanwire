@@ -2,26 +2,35 @@ name: spec-drift
 
 # Prompts/04-cheap-automations.md automation 3: before a unit, a person runs
 #   gh workflow run spec-drift.yml --ref main -f task_id=<ID>
-# and gets every path, link and name the task's spec uses that the code on
+# (or it runs once by itself when an agent/<ID> PR is opened) and gets every path, link and name the task's spec uses that the code on
 # main no longer has, in the job summary and, if the task has an open
 # agent/<ID> PR, in one comment on it, updated in place on later runs. It
 # fails nothing and changes nothing. .ai/agentlib/drift.py checks the paths
 # and links without a model, builds the request, checks the answer and
 # renders; .ai/bin/spec_drift.py makes the one model call, about the names in
-# the prose only. jev is asked "does the spec still match the code?" in
-# shadow (.ai/questions/drift.json), and both answers are recorded side by
-# side in a hidden record at the end of the report. Nothing acts on either.
+# the prose only. jev is switched off in .ai/config.json
+# (automations.spec_drift.ask_jev, the human's decision, 2026-10-16): its step
+# still runs but makes no request, and the report says "jev: off". Turned on,
+# jev is asked "does the spec still match the code?" in shadow
+# (.ai/questions/drift.json) and both answers are recorded side by side in a
+# hidden record at the end of the report. Nothing acts on either.
 #
 # It holds the Anthropic and TypeSafe keys, so it is shaped to give them
 # nothing to reach (work-modes.md "Constraints every automation must keep"):
-#   - workflow_dispatch only (decided by the human, 2026-10-13): nothing but a
-#     person's deliberate run spends a call. Running it automatically when an
-#     agent/<ID> branch is first pushed is a later option the human may
-#     choose; it is not wired here.
+#   - a dispatch, or an opened agent/* PR (the human decided on 2026-10-16 to
+#     also run it once when a PR is opened, beside the dispatch of
+#     2026-10-13): pull_request_target, `opened` only. A later push does not
+#     re-run it, since the spec and the code it is checked against are main's,
+#     not the PR's. The job runs only for a PR from this repository whose head
+#     branch starts with agent/.
 #   - main's copy only. A dispatch picks a ref, and that ref's code is what
 #     runs, so the job refuses every ref but main, as jev-smoke.yml does: a
-#     branch's spec_drift.py must never be handed a key. The one checkout is
-#     that ref, so the spec and the code are read from main, never a branch.
+#     branch's spec_drift.py must never be handed a key. That still holds on
+#     pull_request_target: it runs the workflow file of the base branch, and
+#     github.ref is the base, so a PR into anything but main does not run. The
+#     one checkout has no ref:, so it is main on a dispatch and the base
+#     branch (main) on a PR, never the PR's head: the spec and the code are
+#     read from main, never a branch.
 #   - the task id is text a person typed. It is checked in bash against the
 #     guard's task-id pattern before it is used for anything, and reaches the
 #     shell only through env:, as data.
@@ -40,6 +49,7 @@ name: spec-drift
 #
 # What the tests cannot show, and only a live run proves: that a dispatch on
 # main runs it at all (GitHub dispatches only a workflow already on main);
+# that pull_request_target `opened` fires for a hand-opened agent/* PR here;
 # that gh pr list finds the task's open PR with this token; and that the
 # token, with pull-requests: write, may comment on it.
 
@@ -50,14 +60,22 @@ on:
         description: "The task whose spec to check, e.g. MEDIA-002"
         required: true
         type: string
+  pull_request_target:
+    types: [opened]
 
 permissions: {}
 
 jobs:
   drift:
     # Main's copy only: on any other ref this job does not run, and no key is
-    # handed to a branch's code.
-    if: github.ref == 'refs/heads/main'
+    # handed to a branch's code. On pull_request_target github.ref is the base
+    # branch, so a PR into anything but main does not run. A PR counts only
+    # from this repository and only on an agent/* branch.
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request_target'
+      && startsWith(github.event.pull_request.head.ref, 'agent/')
+      && github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       pull-requests: write
@@ -66,17 +84,24 @@ jobs:
     # One check per task at a time, so two runs cannot both create a comment.
     # Never cancelled: the later run simply updates it.
     concurrency:
-      group: spec-drift-${{ inputs.task_id }}
+      group: spec-drift-${{ inputs.task_id && format('agent/{0}', inputs.task_id) || github.event.pull_request.head.ref }}
       cancel-in-progress: false
     steps:
-      # The input is free text, so it is validated against the guard's own
-      # TASK_ID_SAFE (a bash copy, pinned by test_workflows.py) and reaches
-      # later steps only as $TASK_ID.
+      # The input is free text, and on an opened PR the id is the branch name
+      # after agent/, which a branch chose. Either is validated against the
+      # guard's own TASK_ID_SAFE (a bash copy, pinned by test_workflows.py) and
+      # reaches later steps only as $TASK_ID. Both reach the shell through
+      # env: only.
       - name: Check the task id
         env:
           TASK_ID_INPUT: ${{ inputs.task_id }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          if [ "$EVENT" = "pull_request_target" ]; then
+            TASK_ID_INPUT="${HEAD_REF#agent/}"
+          fi
           export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
           TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
           if ! [[ "$TASK_ID_INPUT" =~ $TASK_ID_SAFE ]]; then
@@ -86,7 +111,9 @@ jobs:
           echo "TASK_ID=$TASK_ID_INPUT" >> "$GITHUB_ENV"
 
       # main's copy: the spec, the code it is checked against, and the code
-      # that runs with the keys.
+      # that runs with the keys. No ref:, so on a dispatch it is main (the job
+      # refuses any other) and on pull_request_target it is the base branch,
+      # main, never the PR's head.
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
@@ -125,8 +152,9 @@ jobs:
           --summary "$GITHUB_STEP_SUMMARY"
 
       # In shadow: the only step with the TypeSafe key, and it holds no
-      # GitHub token. Its failure never stops the report; the report then
-      # says jev gave no answer.
+      # GitHub token. Switched off for now (config.json, 2026-10-16): the step
+      # runs and makes no request. Its failure never stops the report; the
+      # report then says jev gave no answer, or that it is off.
       - name: Ask jev whether the spec still matches, in shadow
         continue-on-error: true
         env:
@@ -140,6 +168,7 @@ jobs:
             --questions .ai/questions/drift.json \
             --state-file "$RUNNER_TEMP/drift/jev-state.txt" \
             --out "$RUNNER_TEMP/drift/jev.json" \
+            --automation spec_drift \
             --summary "$GITHUB_STEP_SUMMARY"
 
       # No key and no token: the report, into the job summary and a file.

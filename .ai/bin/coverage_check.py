@@ -358,6 +358,7 @@ def render(args: argparse.Namespace) -> int:
             "choice": choice,
             "confidence": jev["confidence"] if choice is not None else None,
             "cost_usd": jev["cost_usd"],
+            "off": jev["off"],
         },
         # Only when both answered: jev's yes/no against what Haiku's list says.
         "agree": None if choice is None or model is None else (choice == "yes") == all_pinned,
@@ -371,7 +372,7 @@ def render(args: argparse.Namespace) -> int:
         model=model,
         unverified=unverified,
         omitted=omitted,
-        jev=jev if choice is not None else None,
+        jev=jev if choice is not None or jev["off"] else None,
         record=record,
         head_sha=args.head_sha,
         run_url=args.run_url,
@@ -415,6 +416,7 @@ def _jev(path: Path) -> dict[str, Any]:
         "choice": choice,
         "confidence": confidence,
         "cost_usd": cost if isinstance(cost, int | float) and not isinstance(cost, bool) else None,
+        "off": doc.get("off") is True,
     }
 
 

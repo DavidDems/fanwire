@@ -2533,15 +2533,40 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
     def triggers(self, wf: str) -> str:
         return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
 
-    def test_only_a_dispatch_with_a_task_id_starts_it(self, wf):
+    def test_a_dispatch_or_an_opened_pr_starts_it_and_nothing_else(self, wf):
+        """The human's decision, 2026-10-16: also run it automatically, once
+        per agent/* PR, when the PR is opened. A later push does not re-run
+        it: the spec and the code it is checked against are main's."""
         on = self.triggers(wf)
         assert "workflow_dispatch:" in on and "task_id:" in on
-        for other in ("pull_request", "push", "workflow_run", "schedule", "issue"):
-            assert other not in on, f"spec-drift.yml must not run on {other}"
+        assert "pull_request_target:" in on
+        assert re.search(r"types:\s*\[\s*opened\s*\]", on)
+        assert "synchronize" not in on and "reopened" not in on
+        for other in ("\n  pull_request:", "push:", "workflow_run", "schedule", "issue"):
+            assert other not in on, f"spec-drift.yml must not run on {other.strip()}"
 
     def test_it_runs_only_on_main(self, wf):
         cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
         assert "github.ref == 'refs/heads/main'" in cond
+
+    def test_an_opened_pr_counts_only_for_this_repositorys_task_branch(self, wf):
+        cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
+        for clause in (
+            "github.event_name == 'workflow_dispatch'",
+            "github.event_name == 'pull_request_target'",
+            "startsWith(github.event.pull_request.head.ref, 'agent/')",
+            "github.event.pull_request.head.repo.full_name == github.repository",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+
+    def test_one_check_per_task_whichever_event_started_it(self, wf):
+        """A dispatch and an opened PR for one task share one concurrency
+        group, so they cannot both create a comment."""
+        group = (
+            "group: spec-drift-${{ inputs.task_id && format('agent/{0}', inputs.task_id)"
+            " || github.event.pull_request.head.ref }}"
+        )
+        assert group in job_block(wf, self.JOB)
 
     def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
         assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
@@ -2553,6 +2578,9 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
         assert granted == {"contents": "read", "pull-requests": "write"}
 
     def test_the_checkout_is_mains_and_keeps_no_credential(self, wf):
+        """No ref: on a dispatch that is main (the job refuses any other),
+        and on pull_request_target it is the base branch, main, never the
+        PR's head. No branch's code runs with the keys."""
         checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
         assert len(checkouts) == 1
         assert "ref:" not in checkouts[0] and "repository:" not in checkouts[0]
@@ -2561,8 +2589,12 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
     def test_the_task_id_is_checked_and_never_pasted_into_a_script(self, wf):
         assert f"TASK_ID_SAFE='{TASK_ID_SAFE.pattern}'" in wf
         assert "${{ inputs.task_id }}" in wf or "${{ github.event.inputs.task_id }}" in wf
+        # On an opened PR the id is the branch name after agent/, which a
+        # branch chose: it reaches the shell through env: only.
+        assert "HEAD_REF: ${{ github.event.pull_request.head.ref }}" in wf
         for body in run_bodies(wf):
             assert "inputs.task_id" not in body
+            assert "github.event" not in body
 
     def test_each_key_is_held_by_one_step_and_that_step_has_no_token(self, wf):
         steps = steps_in(job_block(wf, self.JOB))

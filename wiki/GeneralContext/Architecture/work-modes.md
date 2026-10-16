@@ -133,8 +133,11 @@ One structure for every mode, so any session can start cold:
 - **`jev`'s seam on `main`** (#138, 2026-10-13, `Prompts/04` Deliverable 0):
   `.ai/bin/ask_jev.py` on the direct route, and a dispatch-only
   `jev-smoke.yml`. Its smoke on `main` returned a 200 with `confidence` the
-  same day (run 38422783284, $0.0000184), so automations 2 and 3 may ask it
-  in shadow. The triggers for the four were decided the same day
+  same day (run 38422783284, $0.0000184), and automations 2 and 3 asked it
+  in shadow until **2026-10-16, when the human switched it off**: it
+  answered `no` to all 9 questions (`Prompts/04` Progress). It stays wired
+  (`config.json` `automations.<name>.ask_jev`, now `false`) for when its use
+  is better understood. The triggers for the four were decided the same day
   (`Prompts/04` "Decided by the human").
 - **CI failure summary built** (2026-10-13): `.github/workflows/ci-summary.yml`
   runs `main`'s copy on `workflow_run` when `test-agent` fails on an
@@ -151,17 +154,19 @@ One structure for every mode, so any session can start cold:
   `pull_request_target` when an `agent/*` PR from this repository opens or is
   pushed. The spec's `acceptance_criteria` (from `main`) and the test files
   the PR changes go to Haiku 5.5, which names the test that pins each one; a
-  test it names must be in that file, or it does not count. `jev` answers
-  "every criterion pinned?" in shadow. One advisory comment, kept up to date,
-  with both answers and their costs and a hidden `fanwire-shadow` record.
+  test it names must be in that file, or it does not count. One advisory
+  comment, kept up to date, with the cost and a hidden `fanwire-shadow`
+  record.
   **Proven live 2026-10-15** on #155, $0.0035 a push.
 - **Spec drift check built** (2026-10-14): `.github/workflows/spec-drift.yml`,
-  dispatched by the human before a unit (`gh workflow run spec-drift.yml -f
-  task_id=<ID>`), runs `main`'s copy against `main`. Paths and links in the
+  runs once when an `agent/*` PR from this repository is opened (the human's
+  decision, 2026-10-16), and can be dispatched (`gh workflow run
+  spec-drift.yml -f task_id=<ID>`); either way `main`'s copy runs against
+  `main`. Paths and links in the
   spec are checked without a model; Haiku 5.5 is asked only for names in the
   prose, and a name it calls missing is kept only if Haiku marks it
   `assumed_to_exist` (a name the unit is to create is not drift) and no
-  non-test source file has it. `jev` answers "does the spec still match?" in shadow. The report
+  non-test source file has it. The report
   goes to the job summary, and to the task's open PR as a comment if there
   is one. **Proven live 2026-10-14** on #155, $0.0087.
 - **Wiki update proposal built** (2026-10-14):
