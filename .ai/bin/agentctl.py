@@ -18,6 +18,7 @@ thing, write state.
   agentctl distill DEMO-001 --log ci.txt --ci-status failure
   agentctl ci-event --conclusion cancelled   the event a CI conclusion means
   agentctl telemetry report
+  agentctl shadow report --comments comments.json   jev's answers beside Haiku's
   agentctl selfcheck                    prove the machinery works, no tokens spent
 
 Exit codes: 0 success, 1 the thing being checked failed, 2 usage/IO error.
@@ -61,6 +62,7 @@ from agentlib import (
     guard,
     orchestrator,
     promptbuild,
+    shadow,
 )
 from agentlib import (
     spec as spec_mod,
@@ -630,6 +632,48 @@ def cmd_distill(args) -> int:
     return OK
 
 
+# --------------------------------------------------------------------------- shadow
+
+
+# Usage: gh api --paginate repos/<owner>/<repo>/issues/comments > comments.json
+def cmd_shadow_report(args) -> int:
+    try:
+        if args.comments == "-":
+            text = sys.stdin.read()
+        else:
+            text = Path(args.comments).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        die(f"cannot read comments from {args.comments}: {exc}")
+    summary = shadow.summarize(shadow.collect(shadow.load_comments(text)))
+    if args.json:
+        emit(summary)
+        return OK
+    t = summary["totals"]
+    print(
+        f"records {t['records']}  agree {t['agree']}  disagree {t['disagree']}  "
+        f"haiku ${t['haiku_cost_usd']:.4f}  jev ${t['jev_cost_usd']:.4f}"
+    )
+    for name, b in sorted(summary["by_automation"].items()):
+        conf = "-" if b["mean_confidence"] is None else f"{b['mean_confidence']:.2f}"
+        j = b["jev"]
+        print(
+            f"  {name:<12} {b['records']} records  {b['agree']} agree  "
+            f"{b['disagree']} disagree  jev yes {j['yes']} / no {j['no']} / none {j['none']}  "
+            f"mean confidence {conf}  haiku ${b['haiku_cost_usd']:.4f}  "
+            f"jev ${b['jev_cost_usd']:.4f}"
+        )
+    if summary["rows"]:
+        print("\nrows:")
+    words = {True: "agree", False: "disagree", None: "-"}
+    for r in summary["rows"]:
+        conf = "-" if r["confidence"] is None else f"{r['confidence']:.2f}"
+        print(
+            f"  #{r['pr']:<4} {r['task'] or '-'!s:<12} {r['automation']:<11} "
+            f"haiku {r['haiku'] or '-'}  jev {r['jev'] or '-'}  {conf}  {words[r['agree']]}"
+        )
+    return OK
+
+
 # --------------------------------------------------------------------------- telemetry
 
 
@@ -999,6 +1043,12 @@ def build_parser() -> argparse.ArgumentParser:
     tel_rep = tel.add_parser("report")
     tel_rep.add_argument("--json", action="store_true")
     tel_rep.set_defaults(func=cmd_telemetry_report)
+
+    sh = sub.add_parser("shadow").add_subparsers(dest="sub", required=True)
+    sh_rep = sh.add_parser("report", help="jev answers beside Haiku, from gh api comments")
+    sh_rep.add_argument("--comments", required=True, help="gh api output file, or - for stdin")
+    sh_rep.add_argument("--json", action="store_true")
+    sh_rep.set_defaults(func=cmd_shadow_report)
 
     sub.add_parser("status", help="board of every task").set_defaults(func=cmd_status)
     sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent").set_defaults(
