@@ -20,9 +20,9 @@ const BOX_ID = "search-bar-q";
  * `SearchPage` reads `q` from there, so both entry points reach the same results
  * view by construction, and a result is a link someone can share or reload.
  *
- * It searches accounts and posts only. Sports data has no free-text search at
- * all (`business-rules.md`, carried into [[0x07-search]]): that is
- * `GameFilter`'s dropdowns, which share nothing with this.
+ * It searches accounts and posts only. Sports data (seasons, teams, games and
+ * players) is the Stats page's, since `FRONTEND-009`, and shares nothing with
+ * this.
  */
 export function SearchBar() {
   const [params] = useSearchParams();

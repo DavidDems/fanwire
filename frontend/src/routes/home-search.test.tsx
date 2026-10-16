@@ -155,8 +155,7 @@ describe("both entry points reach the same results view", () => {
       await screen.findByRole("heading", { level: 1, name: "Search" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: BOX_NAME })).toHaveValue("");
-    expect(
-      await screen.findByRole("region", { name: "Games" }),
-    ).toBeInTheDocument();
+    // FRONTEND-009: the sports-data filter has moved to the Stats page.
+    expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
   });
 });

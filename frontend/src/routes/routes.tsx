@@ -1,4 +1,4 @@
-import type { RouteObject } from "react-router-dom";
+import { Navigate, type RouteObject } from "react-router-dom";
 
 import { ConfirmPage } from "../auth/ConfirmPage";
 import { ForgotPasswordPage } from "../auth/ForgotPasswordPage";
@@ -8,8 +8,12 @@ import { SignUpPage } from "../auth/SignUpPage";
 import { ComposePage } from "../features/compose/ComposePage";
 import { GamePage } from "../features/games/GamePage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
+import { PlayerPage } from "../features/players/PlayerPage";
 import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
+import { PlayersTab } from "../features/stats/PlayersTab";
+import { SeasonsTab } from "../features/stats/SeasonsTab";
+import { StatsPage } from "../features/stats/StatsPage";
 import { AppLayout } from "./AppLayout";
 import { RequireAuth, RequireNewProfile } from "./guards";
 import { HomeView } from "./HomeView";
@@ -61,6 +65,19 @@ export const routes: RouteObject[] = [
       // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
       // and every other feature reaches it by this address, never by import.
       { path: "games/:gameId", element: <GamePage /> },
+      // FRONTEND-009's pages. Public: sports data is a read path. The two
+      // tabs are child routes, so the address alone decides which one shows;
+      // `/stats` itself is the Seasons tab's.
+      {
+        path: "stats",
+        element: <StatsPage />,
+        children: [
+          { index: true, element: <Navigate to="seasons" replace /> },
+          { path: "seasons", element: <SeasonsTab /> },
+          { path: "players", element: <PlayersTab /> },
+        ],
+      },
+      { path: "players/:playerId", element: <PlayerPage /> },
 
       // FRONTEND-002's pages.
       { path: "sign-in", element: <SignInPage /> },

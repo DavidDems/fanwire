@@ -133,13 +133,14 @@ describe("the search view", () => {
     ).toBeInTheDocument();
   });
 
-  it("without a query shows the bar and the Games filter, and fetches no accounts or posts", async () => {
+  it("without a query shows the bar, no sports-data filter, and fetches no accounts or posts", async () => {
+    // FRONTEND-009: the Games filter has moved to the Stats page.
     const { accounts, posts } = renderSearch("/search");
 
-    await screen.findByRole("region", { name: "Games" });
     expect(
-      screen.getByRole("searchbox", { name: "Search accounts and posts" }),
+      await screen.findByRole("searchbox", { name: "Search accounts and posts" }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Accounts" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Posts" })).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -177,12 +178,11 @@ describe("free-text results (criterion 1)", () => {
     expect(offsetOf(posts.requests[0])).toBe(0);
   });
 
-  it("renders the bar, then accounts above posts, then the Games filter", async () => {
+  it("renders the bar, then accounts above posts, and no Games filter", async () => {
     renderSearch(`/search?q=${Q}`);
 
     const accounts = await screen.findByRole("region", { name: "Accounts" });
     const posts = screen.getByRole("region", { name: "Posts" });
-    const games = screen.getByRole("region", { name: "Games" });
     const bar = screen.getByRole("search");
 
     expect(
@@ -198,10 +198,8 @@ describe("free-text results (criterion 1)", () => {
       true,
     );
     expect(posts.contains(accounts)).toBe(false);
-    expect(
-      precedes(posts, games),
-      "the Games filter comes after the posts",
-    ).toBe(true);
+    // FRONTEND-009: the sports-data filter has moved to the Stats page.
+    expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
   });
 
   it("lists each account linking to its profile by username, with its description when it has one", async () => {
