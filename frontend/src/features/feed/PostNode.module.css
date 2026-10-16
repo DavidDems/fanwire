@@ -5,7 +5,7 @@
  * tokens.css by name only.
  */
 
-/* Tight inside a post: header, text, media, footer, thread. */
+/* Tight inside a post: reposted line, header, text, media, quote, footer, thread. */
 .post {
   display: flex;
   flex-direction: column;
@@ -41,12 +41,74 @@
   overflow-wrap: anywhere;
 }
 
-/* Like, count, Reply, Repost, Show replies: one row that wraps on a phone. */
+/*
+ * The action row, under the content: like, reply and repost (each an icon and
+ * its count, PostAction.module.css), then Show replies. Left-aligned and evenly
+ * spaced, one row that wraps on a phone.
+ */
 .footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  column-gap: var(--space-5);
+  row-gap: var(--space-1);
+}
+
+/* "↻ name reposted", above a plain repost's original: quiet, one small line. */
+.reposted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.reposter {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* An original that can no longer be shown, said in place of an empty card. */
+.unavailable {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/*
+ * The original inside a quote repost: a compact bordered box, not a second
+ * card (layout.md §4 keeps cards one level deep), with no controls of its own.
+ */
+.quoted {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.quotedHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  margin: 0;
+}
+
+/* A few lines of the original, then an ellipsis: the box stays compact. */
+.quotedText {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 /* The chevron turns over when the replies are open. base.css zeroes the duration for reduced motion. */

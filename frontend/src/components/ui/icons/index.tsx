@@ -1,6 +1,9 @@
 /**
  * Fourteen Lucide icons (`components.md` §3, plus `chart-column` for the Stats
- * nav item from `FRONTEND-009`), copied rather than installed.
+ * nav item from `FRONTEND-009`), copied rather than installed — and, since
+ * `UI-009`, two pressed variants of them for the post card: a filled heart and
+ * a heavier repeat-2, so a pressed like or repost is told apart by shape and
+ * not by colour alone (`accessibility.md`).
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
  * 1fae58d0a9c661a338036838caf3399b5507bab6. The shape elements below are those
@@ -61,11 +64,26 @@ export function UserIcon(props: IconProps) {
   );
 }
 
-/** lucide: heart — filled by CSS (`fill: currentColor`) when liked */
+/** lucide: heart — the unpressed like */
 export function HeartIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" />
+    </Icon>
+  );
+}
+
+/**
+ * lucide: heart, filled with `currentColor` — the pressed like (`UI-009`). The
+ * fill is on the shape, not in CSS, so the pressed state is in the markup.
+ */
+export function HeartFilledIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fill="currentColor"
+        d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"
+      />
     </Icon>
   );
 }
@@ -87,6 +105,24 @@ export function Repeat2Icon(props: IconProps) {
       <path d="M13 18H7a2 2 0 0 1-2-2V6" />
       <path d="m22 15-3 3-3-3" />
       <path d="M11 6h6a2 2 0 0 1 2 2v10" />
+    </Icon>
+  );
+}
+
+/**
+ * lucide: repeat-2, drawn at stroke width 3 instead of 2 — the pressed repost
+ * (`UI-009`). An arrow outline has no area to fill, so the weight is what
+ * changes. The group overrides the frame's stroke width for its paths.
+ */
+export function Repeat2FilledIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <g strokeWidth={3}>
+        <path d="m2 9 3-3 3 3" />
+        <path d="M13 18H7a2 2 0 0 1-2-2V6" />
+        <path d="m22 15-3 3-3-3" />
+        <path d="M11 6h6a2 2 0 0 1 2 2v10" />
+      </g>
     </Icon>
   );
 }
