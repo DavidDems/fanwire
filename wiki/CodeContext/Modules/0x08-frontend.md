@@ -8,7 +8,7 @@ what the frontend does with them, and nothing that belongs to a backend module.
 ## State
 
 **Foundation, authentication, the profile page, the composer, the notifications
-view, the feed, search and the game page** (`FRONTEND-001` … `FRONTEND-008`). No placeholder
+view, the feed, search, the game page, and the Stats and player pages** (`FRONTEND-001` … `FRONTEND-009`). No placeholder
 view is left.
 
 What is real:
@@ -24,11 +24,13 @@ What is real:
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
-| `src/features/search/` | `/search` — the free-text bar, the Accounts and Posts sections paged apart, and the dropdown-only game filter, whose rows link to `/games/<id>` |
+| `src/features/search/` | `/search` — the free-text bar and the Accounts and Posts sections, paged apart. Accounts and posts only since `FRONTEND-009`: sports data is on `/stats` |
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the optimistic like, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
-| `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) and `VisuallyHidden`, plus thirteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
-| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts` and `games.ts` (the per-unit network fixtures) |
+| `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
+| `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
+| `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden` and `Tabs` (`FRONTEND-009`: links that look like tabs, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency) |
+| `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
 Each unit lifted its view out of `views.tsx` — they were in one file so that
@@ -605,16 +607,14 @@ is recorded so the second copy is a known state rather than a discovery.
 `src/features/search/`, wired at `/search`, and its bar on `/` too. **Public**,
 like the feed: every search route is a read path ([[0x07-search]]).
 
-- **Two mechanisms, two UIs, nothing shared.** [[0x07-search]] keeps
-  free-text search (accounts, posts) and sports-data filtering (games) apart
-  by business rule, so `SearchBar`/`SearchPage` and `GameFilter` share no
-  component and no state.
-- **There is no text input in the game filter, of any kind.** Season, team
-  and position are native `<select>`s. A type-ahead box over the team list
-  *is* a text input, so `GameFilter.test.tsx` asserts no `textbox` or
-  `searchbox` role, that every `combobox` is a `SELECT`, and no `input`,
-  `textarea` or `contenteditable` in the region. Don't add "a small filter
-  box" to the team list.
+**Accounts and posts only (`FRONTEND-009`, the human, 2026-10-14).** The
+sports-data filter (`GameFilter`, its tests and CSS, and the
+`GET /search/games` and `/search/games/filters` client code only it used) is
+gone; games, teams and players are on `/stats` (below). The backend routes
+stay: only the UI moved. `search-scope.test.ts` pins from disk that nothing
+under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
+`/search/games` route.
+
 - **The address is the seam between the two entry points.** The bar on `/`
   and on `/search` both submit to `/search?q=<trimmed text>`; `SearchPage`
   reads `q` from there, so both reach the same results view and a search is a
@@ -637,27 +637,7 @@ like the feed: every search route is a read path ([[0x07-search]]).
   `["feed"]` prefix also refetches open search results. `features/search`
   imports `PostNode` and `feed/api` only, enforced from disk by
   `search-isolation.test.ts`.
-- **Game rows are `GameScore` `row`s with status `FT`.** `GameOut` has no
-  status column and search reads historical games, so every row is Final.
-  Both teams are named by abbreviation, from the same `GET /events/teams` the
-  team dropdown loads, in `outline` badges; "Team {id}" stands in while the
-  team list is loading or has failed. No logo, no team colour.
-- **No game request until a filter is set**, and the filters are the query
-  key, so changing one asks the server again rather than narrowing the last
-  answer on the client. "Any" is never sent: the route 422s on a position
-  that isn't on its allow-list, and `""` isn't.
-- **Every empty result names what was searched**: the query for Accounts and
-  Posts, the chosen season, team and position for Games.
-- **Teams are fetched locally again.** `features/search/api.ts` reuses the
-  `["events", "teams"]` key `features/profile` uses, so the two share one cache
-  entry, but the fetch function is now in four places (profile,
-  `ProfileSetupPage`, `MentionAutocomplete`, search). The connection rule
-  stops a sideways import; **moving it into `api/` is the fix**, for a unit
-  with all four in scope.
-- **The bar and the three selects are stacked at every width.** Putting
-  `Field`s in a row needs a rule on `Field`'s wrapper, which "Field owns its
-  own layout" (`FrontendUI/components.md` §5) rules out. A row layout needs a
-  `Field` layout option first.
+- **Every empty result names what was searched.**
 
 ## Game page (`FRONTEND-008`)
 
@@ -666,9 +646,13 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
 `features/games/api.ts`, typed by the schema's own `GameDetailOut`,
 `TeamBoxScoreOut` and `BoxScorePlayerOut` with no renamed client model.
 
-- **Reached by address only.** Search rows (`GameScore` with `to`) and post
-  text (`PostText`) link to `/games/<id>`; nothing imports `features/games/`,
-  and it imports no other feature (`games-isolation.test.ts`).
+- **Reached by address only.** Post text (`PostText`) and the Stats page's
+  game rows link to `/games/<id>`. One exception to "nothing imports
+  `features/games/`": `features/stats` and `features/players` import
+  `features/games/format` (the brief: one number format), and nothing else
+  from the folder. `features/games` imports no other feature
+  (`games-isolation.test.ts` pins both). Moving `format.ts` to a shared
+  `src/lib/` is the cleaner home, for a unit with that path in scope.
 - **A 404 is not-found, not an error.** `fetchGame` returns `null` on 404 and
   the page says "Game not found" with a link back to the feed; any other
   failure throws and shows `InlineAlert`. A non-numeric id is not-found
@@ -693,8 +677,73 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
   `#GameId(\d+)` and links a token only if its id is in
   `mentioned_game_ids`; it builds React nodes, so post text is never parsed as
   HTML. `\d+` is greedy: `#GameId5012` is 5012, never 501.
-- **Box-score names are not links yet**: `FRONTEND-009` links them once
-  `/players/:id` exists.
+- **Box-score names link to `/players/<id>`** (`FRONTEND-009`), inside the
+  row's `th scope="row"`; the position stays outside the link, and the
+  totals row has none.
+
+## Stats and player pages (`FRONTEND-009`)
+
+`src/features/stats/` at `/stats/seasons` and `/stats/players`, and
+`src/features/players/` at `/players/:playerId`. **Public**: sports data is a
+read path ([[0x02-events]] "Players", "Seasons"). Every type is an alias of
+the generated schema; each feature has its own `api.ts`.
+
+- **Tabs are routes, not state.** `/stats` redirects to `/stats/seasons`;
+  the two tabs are child routes of `StatsPage` (one h1 "Stats", then
+  `<Tabs label="Stats">`, then the `Outlet`), so the address alone decides
+  the tab and Back moves between them. **`components/ui/Tabs` is links that
+  look like tabs**: a `<nav aria-label>` of `NavLink`s with
+  `aria-current="page"`, deliberately not an ARIA `tablist`, which promises
+  arrow-key switching between panels of one page. Its doc comment says so;
+  don't "fix" it to `role="tab"`.
+- **The nav's Stats item** (lucide `chart-column`) sits between Search and
+  the profile item and is current on `/stats/*` and `/players/*`. `NavLink`
+  can only mark its own address, so `NavItem` takes `alsoCurrentOn`
+  patterns and renders a plain `Link` with `aria-current="page"` on them.
+  The phone bar holds six items for a signed-in visitor (`grid-auto-columns:
+  1fr`).
+- **URL state.** `?season=`, `?team=` and `?q=` live in the address through
+  `useSearchParams`. The season defaults to the newest from
+  `GET /events/seasons` **without being written to the URL** until the user
+  picks one, so `/stats/seasons` stays the address of "the current season".
+- **The league view** (`LeagueView`): the champion and series result, or
+  that there is no champion yet; one standings table per conference, sorted
+  across divisions by the API's rule (win fraction, wins, name) with the
+  API's `tie_break` note; points, rebounds and assists leaders, each table
+  with the API's `rule` string, so a reader knows why a player is missing;
+  the season's games from `GET /events/games?season=`, newest first.
+- **The team search is a client-side combobox** (`TeamSearch`) over
+  `GET /events/teams`, matching name or abbreviation case-insensitively: ARIA
+  1.2 `role="combobox"` with a `listbox` and `aria-activedescendant`;
+  ArrowDown/ArrowUp, Enter, Escape and click (options take `mousedown`
+  with `preventDefault`, so the input keeps focus). Choosing a team sets
+  `?team=` and swaps the league view for `TeamSeasonView` (record, home and
+  away, every game with W/L as a letter in an `abbr`); clearing the box
+  returns to the league view. Every team in a table links to
+  `/stats/seasons?team=<id>`, every game to `/games/<id>`.
+- **The player search hits the API**, debounced 250 ms, trimmed, and sends
+  nothing for an empty box; the trimmed text goes into `?q=` with `replace`.
+  An empty result names the search.
+- **Paging without `next_offset`.** `GET /events/games`, `/events/players`
+  and the game log answer bare lists, so each fetcher sends its page size
+  (50, 20, 50) and a page that comes back full is the only sign another may
+  follow: Load more shows only then.
+- **The player page**: the name as the h1; the attributes as a `dl`, null
+  ones left out, height from inches as `6'9"` (`formatHeight`), averages to
+  one place (`formatAverage`, null is an en dash); the career table (Regular
+  season, Playoffs), the season-by-season table and the game log, with
+  did-not-play rows giving the reason or "Did not play". A 404 or a
+  non-numeric id is "Player not found"; any other failure is `InlineAlert`.
+- **Every table** has a `caption` and `th` with `scope`, and sits in its own
+  `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
+  `overflow-x: auto`): at 360 px the tables scroll and the page does not
+  (checked in Chromium, 2026-10-16). `ScrollTable` is copied in both
+  features, since neither may import the other; a shared table wrapper in
+  `components/ui/` is the fix, for a unit with that path in scope.
+- **Teams are fetched in four places now**: profile, `ProfileSetupPage`,
+  `MentionAutocomplete` and `features/stats/api.ts` (search no longer
+  fetches them). They share the `["events", "teams"]` cache key; moving
+  the fetch into `api/` is the fix, for a unit with all four in scope.
 
 ## Open decisions
 

@@ -26,6 +26,20 @@ export function formatPercentage(value: number | null): string {
   return fixed.startsWith("0.") ? fixed.slice(1) : fixed;
 }
 
+/**
+ * A per-game average to one place, as the API rounds it: `27.1`, `9.0`.
+ * `null` means no game was played, which is an en dash, as a null percentage
+ * is. Used by the stats and player pages (`FRONTEND-009`).
+ */
+export function formatAverage(value: number | null): string {
+  return value === null ? EN_DASH : value.toFixed(1);
+}
+
+/** A height in inches as feet and inches: 81 → `6'9"`. */
+export function formatHeight(inches: number): string {
+  return `${Math.floor(inches / 12)}'${inches % 12}"`;
+}
+
 /** Signed: `+12`, `−3` (a true minus sign), and `0` with no sign. */
 export function formatPlusMinus(value: number): string {
   if (value > 0) return `+${value}`;

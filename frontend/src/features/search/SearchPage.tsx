@@ -8,7 +8,6 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { PostNode } from "../feed/PostNode";
-import { GameFilter } from "./GameFilter";
 import { SearchBar } from "./SearchBar";
 import styles from "./Search.module.css";
 import {
@@ -19,14 +18,11 @@ import {
 } from "./api";
 
 /**
- * `/search` — the free-text bar, its two result sections, then the sports-data
- * filter (`layout.md` §3).
+ * `/search` — the free-text bar and its two result sections (`layout.md` §3).
  *
- * **Two mechanisms, not two variants of one** ([[0x07-search]]). The bar and
- * its results search accounts and posts by text; `GameFilter` searches games by
- * dropdown and has no text input at all. They share no component and no state —
- * the filter is on this page because this is where search lives, not because it
- * reads `q`.
+ * **Accounts and posts only.** Sports data (seasons, teams, games, players)
+ * lives on the Stats page since `FRONTEND-009`, which took the old dropdown
+ * game filter's place; this page searches people and what they wrote.
  *
  * **Two queries, two paginations.** Accounts and posts are independent requests
  * with their own `next_offset` ("accounts first" is a rendering order, not a
@@ -48,7 +44,6 @@ export function SearchPage() {
           <PostResults q={q} />
         </>
       )}
-      <GameFilter />
     </section>
   );
 }

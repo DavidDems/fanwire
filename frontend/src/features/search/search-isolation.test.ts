@@ -4,8 +4,9 @@
  *
  * - **Built from the shared components** (criterion 9): the search sources,
  *   between them, import `Card`, `Button`, `InlineAlert`, `StatusLine` and
- *   `EmptyState` from `components/ui/`, and `GameScore` for the game rows
- *   (criterion 10). A hand-rolled `<p role="alert">` renders the same role,
+ *   `EmptyState` from `components/ui/`. (`GameScore` went with the game rows
+ *   when FRONTEND-009 moved the sports-data filter to the Stats page; its
+ *   absence is `search-scope.test.ts`'s.) A hand-rolled `<p role="alert">` renders the same role,
  *   which is why this is read from disk.
  * - **Posts render through `PostNode`, not a search renderer** (criterion 3):
  *   a source imports `PostNode` from `../feed/PostNode`, nothing in this
@@ -28,7 +29,7 @@ import { SRC_DIR } from "../../test/css";
 const SEARCH_DIR = join(SRC_DIR, "features", "search");
 
 /** The modules this unit's interface names. */
-const MODULES = ["SearchPage.tsx", "SearchBar.tsx", "GameFilter.tsx"] as const;
+const MODULES = ["SearchPage.tsx", "SearchBar.tsx"] as const;
 
 const SHARED = [
   "Card",
@@ -36,7 +37,6 @@ const SHARED = [
   "InlineAlert",
   "StatusLine",
   "EmptyState",
-  "GameScore",
 ] as const;
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
