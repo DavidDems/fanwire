@@ -30,6 +30,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BellIcon,
+  ChartColumnIcon,
   HouseIcon,
   SearchIcon,
   SquarePenIcon,
@@ -43,6 +44,7 @@ import {
   lastCompoundClasses,
   topLevelFixedBottomRules,
 } from "../test/module-css";
+import { testPlayerDetail } from "../test/stats";
 import { usernameForId } from "../test/users";
 
 interface Visit {
@@ -56,6 +58,11 @@ const exactly = (text: string) => new RegExp(`^${text}$`, "i");
 
 const OWN_PROFILE_PATH = `/profile/${OWN_USER_ID}`;
 const OTHER_PROFILE_PATH = "/profile/42";
+/** FRONTEND-009's player page, for the player `statsDefaults()` knows. */
+const PLAYER_PATH = `/players/${testPlayerDetail().id}`;
+const PLAYER_HEADING = exactly(
+  `${testPlayerDetail().first_name} ${testPlayerDetail().last_name}`,
+);
 
 /**
  * Every route in the table, for every visitor its guards let render it, plus
@@ -64,6 +71,10 @@ const OTHER_PROFILE_PATH = "/profile/42";
 const VISITS: Visit[] = [
   { path: "/", as: "anonymous", heading: /^feed$/i },
   { path: "/search", as: "anonymous", heading: /^search$/i },
+  // FRONTEND-009's routes: public, one Stats heading above both tabs.
+  { path: "/stats/seasons", as: "anonymous", heading: /^stats$/i },
+  { path: "/stats/players", as: "anonymous", heading: /^stats$/i },
+  { path: PLAYER_PATH, as: "anonymous", heading: PLAYER_HEADING },
   {
     path: OTHER_PROFILE_PATH,
     as: "anonymous",
@@ -86,6 +97,8 @@ const VISITS: Visit[] = [
   { path: "/compose", as: "member", heading: /^compose$/i },
   { path: "/notifications", as: "member", heading: /^notifications$/i },
   { path: "/search", as: "member", heading: /^search$/i },
+  { path: "/stats/seasons", as: "member", heading: /^stats$/i },
+  { path: PLAYER_PATH, as: "member", heading: PLAYER_HEADING },
   {
     path: OTHER_PROFILE_PATH,
     as: "member",
@@ -163,6 +176,8 @@ const NAV_ITEMS: [string, ComponentType<IconProps>][] = [
   ["Compose", SquarePenIcon],
   ["Notifications", BellIcon],
   ["Search", SearchIcon],
+  // FRONTEND-009: between Search and the profile item.
+  ["Stats", ChartColumnIcon],
   ["Your profile", UserIcon],
 ];
 
@@ -382,6 +397,12 @@ describe("aria-current on the current route's nav link (criterion 5)", () => {
     { path: "/compose", as: "member", current: "Compose" },
     { path: "/notifications", as: "member", current: "Notifications" },
     { path: "/search", as: "member", current: "Search" },
+    // FRONTEND-009: Stats is current on every /stats and /players route.
+    { path: "/stats/seasons", as: "anonymous", current: "Stats" },
+    { path: "/stats/players", as: "anonymous", current: "Stats" },
+    { path: PLAYER_PATH, as: "anonymous", current: "Stats" },
+    { path: "/stats/seasons", as: "member", current: "Stats" },
+    { path: PLAYER_PATH, as: "member", current: "Stats" },
     { path: OWN_PROFILE_PATH, as: "member", current: "Your profile" },
     // Someone else's profile, a page outside the nav, and a wrong address:
     // no nav link is the current page.

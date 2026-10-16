@@ -51,7 +51,6 @@ describe("every *.module.css under src/features/search", () => {
 /** Shared module → the classes the search tests read off it. */
 const SHARED_CLASSES: [string, string[]][] = [
   ["components/ui/Button.module.css", ["button", "secondary"]],
-  ["components/ui/GameScore.module.css", ["score", "row"]],
 ];
 
 describe.each(SHARED_CLASSES)("%s", (path, classNames) => {

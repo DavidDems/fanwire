@@ -6,6 +6,10 @@
  *
  * Export names are the Lucide name in PascalCase plus `Icon`, all from
  * `src/components/ui/icons/index.ts`.
+ *
+ * FRONTEND-009 adds a fourteenth, lucide `chart-column`, for the Stats nav
+ * item: `ChartColumnIcon`, in the same shape as the others and under the same
+ * licence. Its four paths are pinned below as Lucide draws them.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,6 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BellIcon,
+  ChartColumnIcon,
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
@@ -30,7 +35,7 @@ import {
   XIcon,
 } from "./index";
 
-/** Lucide name → component, exactly the thirteen of components.md §3. */
+/** Lucide name → component: the thirteen of components.md §3, plus chart-column (FRONTEND-009). */
 const ICONS: [string, ComponentType][] = [
   ["house", HouseIcon],
   ["search", SearchIcon],
@@ -45,6 +50,7 @@ const ICONS: [string, ComponentType][] = [
   ["image", ImageIcon],
   ["circle-alert", CircleAlertIcon],
   ["circle-check", CircleCheckIcon],
+  ["chart-column", ChartColumnIcon],
 ];
 
 const SHAPES = "path, circle, line, rect, polyline, polygon, ellipse";
@@ -77,6 +83,22 @@ describe.each(ICONS)("icon %s", (_name, Icon) => {
         }
       }
     }
+  });
+});
+
+describe("chart-column (FRONTEND-009)", () => {
+  it("draws Lucide's four paths: the axes, then three bars", () => {
+    const { container } = render(<ChartColumnIcon />);
+
+    const paths = [...container.querySelectorAll("svg > *")].map(
+      (shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`,
+    );
+    expect(paths).toEqual([
+      "path M3 3v16a2 2 0 0 0 2 2h16",
+      "path M18 17V9",
+      "path M13 17V5",
+      "path M8 17v-3",
+    ]);
   });
 });
 

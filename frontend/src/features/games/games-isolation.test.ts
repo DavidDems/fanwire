@@ -10,6 +10,10 @@
  *   `features/games/`, and `features/games/` imports no other feature. The
  *   route table (`routes/`) is the one place that names the page, the way it
  *   names every other feature's page.
+ * - **One exception, `FRONTEND-009`**: `features/stats/` and
+ *   `features/players/` may import `features/games/format` (the brief: "Number
+ *   formats reuse the game page's formatting module"), and nothing else from
+ *   this folder. No other feature may import even that.
  * - **All HTTP through `api/`**, and the failure is the shared `InlineAlert`
  *   from `components/ui/` (a hand-rolled `<p role="alert">` renders the same
  *   role, which is why this is read from disk).
@@ -90,13 +94,37 @@ function moduleName(specifier: string): string {
   return last.replace(/\.[cm]?[jt]sx?$/, "");
 }
 
-/** Does `specifier`, imported from `file`, resolve into `features/games/`? */
-function reachesGames(file: string, specifier: string): boolean {
-  if (!specifier.startsWith("."))
-    return /(^|\/)features\/games(\/|$)/.test(specifier);
+/** Where `specifier`, imported from `file`, lands inside `features/games/`, or `null`. */
+function insideGames(file: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) {
+    const match = /(^|\/)features\/games(\/(.*))?$/.exec(specifier);
+    return match === null ? null : (match[3] ?? "");
+  }
   const resolved = join(file, "..", ...specifier.split("/"));
   const inside = relative(GAMES_DIR, resolved);
-  return inside === "" || (!inside.startsWith("..") && !inside.includes(":"));
+  if (inside === "") return "";
+  return inside.startsWith("..") || inside.includes(":")
+    ? null
+    : inside.split(sep).join("/");
+}
+
+/** Does `specifier`, imported from `file`, resolve into `features/games/`? */
+function reachesGames(file: string, specifier: string): boolean {
+  return insideGames(file, specifier) !== null;
+}
+
+/** The feature folders allowed to import `features/games/format` (FRONTEND-009). */
+const FORMAT_IMPORTERS = ["stats", "players"].map((name) =>
+  join(FEATURES_DIR, name),
+);
+
+function mayImportFormat(file: string, specifier: string): boolean {
+  const target = insideGames(file, specifier);
+  return (
+    target !== null &&
+    /^format(\.[jt]s)?$/.test(target) &&
+    FORMAT_IMPORTERS.some((dir) => !relative(dir, file).startsWith(".."))
+  );
 }
 
 describe("the games feature's modules exist where the brief names them", () => {
@@ -133,14 +161,14 @@ describe("the games feature's modules exist where the brief names them", () => {
 });
 
 describe("other features reach the game page by address only", () => {
-  it("no other feature folder imports from features/games", () => {
+  it("no other feature folder imports from features/games (stats and players: format only)", () => {
     const others = sourceFiles(FEATURES_DIR)
       .filter((file) => !isTest(file))
       .filter((file) => relative(GAMES_DIR, file).startsWith(".."));
     const offenders: string[] = [];
     for (const file of others) {
       for (const specifier of importSpecifiers(read(file))) {
-        if (reachesGames(file, specifier))
+        if (reachesGames(file, specifier) && !mayImportFormat(file, specifier))
           offenders.push(`${posix(file)} imports ${specifier}`);
       }
     }
@@ -151,7 +179,7 @@ describe("other features reach the game page by address only", () => {
 
   it("features/games imports no other feature", () => {
     const sibling =
-      /(^|\/)(features\/)?(feed|compose|profile|notifications|search)(\/|$)/;
+      /(^|\/)(features\/)?(feed|compose|profile|notifications|search|stats|players)(\/|$)/;
     const offenders: string[] = [];
     for (const file of shipped(GAMES_DIR)) {
       for (const specifier of importSpecifiers(read(file))) {
@@ -171,6 +199,18 @@ describe("other features reach the game page by address only", () => {
     expect(reachesGames(fromFeed, "../../features/games/format")).toBe(true);
     expect(reachesGames(fromFeed, "./api")).toBe(false);
     expect(reachesGames(fromFeed, "../search/api")).toBe(false);
+  });
+
+  it("allows format, and only format, to stats and players", () => {
+    const fromStats = join(FEATURES_DIR, "stats", "SeasonsTab.tsx");
+    const fromPlayers = join(FEATURES_DIR, "players", "PlayerPage.tsx");
+    const fromFeed = join(FEED_DIR, "PostNode.tsx");
+
+    expect(mayImportFormat(fromStats, "../games/format")).toBe(true);
+    expect(mayImportFormat(fromPlayers, "../games/format")).toBe(true);
+    expect(mayImportFormat(fromStats, "../games/api")).toBe(false);
+    expect(mayImportFormat(fromStats, "../games/BoxScore")).toBe(false);
+    expect(mayImportFormat(fromFeed, "../games/format")).toBe(false);
   });
 
   it("is wired into the route table", () => {

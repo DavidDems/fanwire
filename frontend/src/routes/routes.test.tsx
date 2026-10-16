@@ -43,6 +43,7 @@ import { emptyFeed } from "../test/feed";
 import { notificationsAre, preferenceIs } from "../test/notifications";
 import { gameFiltersAre } from "../test/search";
 import { server } from "../test/server";
+import { statsDefaults, testPlayerDetail } from "../test/stats";
 import { publicProfilesById, usernameForId } from "../test/users";
 import { routes } from "./routes";
 
@@ -65,6 +66,18 @@ interface View {
 const VIEWS: View[] = [
   { path: "/", heading: /^feed$/i, as: "anonymous" },
   { path: "/search", heading: /^search$/i, as: "anonymous" },
+  // FRONTEND-009's two public routes. `/stats/players` shares the Stats
+  // heading with `/stats/seasons`, so the tab routes are told apart in
+  // `features/stats/StatsPage.test.tsx`, not by this heading sweep.
+  { path: "/stats/seasons", heading: /^stats$/i, as: "anonymous" },
+  {
+    path: `/players/${testPlayerDetail().id}`,
+    heading: new RegExp(
+      `^${testPlayerDetail().first_name} ${testPlayerDetail().last_name}$`,
+      "i",
+    ),
+    as: "anonymous",
+  },
   // FRONTEND-003 replaced the placeholder with the real page, whose heading is
   // the viewed user's username. The route stays public and stays anonymous here.
   {
@@ -112,6 +125,8 @@ function arrange(as: Visitor): AuthService {
   // seasons and positions on mount (its teams are `teamsAre()` above). Same
   // reason again: answered for every visitor, asserted on nowhere here.
   server.use(gameFiltersAre());
+  // FRONTEND-009's stats and player routes read on mount too. Same reason.
+  server.use(...statsDefaults());
   if (as === "anonymous") return new FakeAuthService();
 
   server.use(as === "member" ? profileFound() : profileMissing());

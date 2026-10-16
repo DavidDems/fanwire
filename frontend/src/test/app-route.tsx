@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
+import type { RequestHandler } from "msw";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 
 import { AuthProvider } from "../auth/AuthContext";
@@ -17,6 +18,7 @@ import { emptyFeed } from "./feed";
 import { notificationsAre, preferenceIs } from "./notifications";
 import { gameFiltersAre } from "./search";
 import { server } from "./server";
+import { statsDefaults } from "./stats";
 import { followingStub, publicProfilesById } from "./users";
 
 /**
@@ -43,13 +45,15 @@ export const OWN_USER_ID = testProfile().id;
  * Every read any route makes on mount is answered for every visitor (msw runs
  * with `onUnhandledRequest: "error"`): the feed, public profiles, teams, and
  * the notification list and preference, the search page's game filters (its
- * teams are the same `GET /events/teams`), and (signed in) the follow set.
- * Nothing the shell's tests assert depends on them.
+ * teams are the same `GET /events/teams`), the stats and player routes' reads
+ * (`statsDefaults`, `FRONTEND-009`), and (signed in) the follow set. Nothing
+ * the shell's tests assert depends on them.
  */
 export function arrangeVisitor(as: Visitor): AuthService {
   server.use(publicProfilesById(), teamsAre(), emptyFeed());
   server.use(notificationsAre([]), preferenceIs(true));
   server.use(gameFiltersAre());
+  server.use(...statsDefaults());
   if (as === "anonymous") return new FakeAuthService();
 
   server.use(as === "member" ? profileFound() : profileMissing());
@@ -58,8 +62,22 @@ export function arrangeVisitor(as: Visitor): AuthService {
   return new FakeAuthService({ session: testSession() });
 }
 
-export function renderAppAt(path: string, as: Visitor): RenderResult {
+export type AppRouter = ReturnType<typeof createMemoryRouter>;
+
+/**
+ * `handlers` are installed after the visitor's defaults, so they win: a test
+ * that asserts on a read passes its own stub here rather than racing the
+ * defaults with a `server.use` of its own. The memory router is returned
+ * beside the render result, so a test can read the address
+ * (`router.state.location`) and go Back (`router.navigate(-1)`).
+ */
+export function renderAppAt(
+  path: string,
+  as: Visitor,
+  handlers: RequestHandler[] = [],
+): RenderResult & { router: AppRouter } {
   const authService = arrangeVisitor(as);
+  if (handlers.length > 0) server.use(...handlers);
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -67,11 +85,12 @@ export function renderAppAt(path: string, as: Visitor): RenderResult {
       mutations: { retry: false },
     },
   });
-  return render(
+  const result = render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider authService={authService}>
         <RouterProvider router={router} />
       </AuthProvider>
     </QueryClientProvider>,
   );
+  return { ...result, router };
 }
