@@ -177,6 +177,44 @@ The loader above, run against the live database as the `SportsDataLoad` Lambda: 
     - On three real seasons (2018-19, 2023-24, 2024-25) in a throwaway Postgres, the warm search takes 8–17 ms, Dončić's detail 43 ms and his log 18 ms.
     - His lines there match nba.com: 2023-24 regular, 70 GP, 33.9 PPG, .487 FG. The one exception is 2024-25, which shows 48 games, not his 50. The dataset itself has only 27 Lakers rows for him, one of them a DNP.
 
+- **Seasons (`EVENTS-007`).** Read models in `app.events.service` (`standings`, `champion`, `leaders`, `team_season`), computed at read time. Each route takes a fixed number of queries whatever the season's size, and the aggregation is a `GROUP BY` in Postgres. **A malformed value is a 422; a well-formed season with no stored games, or an unknown team, is a 404**, and every route's docstring says so, so it reaches `openapi.json`.
+  - `GET /events/seasons`: every season with a stored game, newest first, as a list of `"YYYY-YY"` strings. It reuses `distinct_seasons`, which `search/` keeps using unchanged. 1 query.
+  - `GET /events/seasons/{season}/standings`: `{season, tie_break, conferences: [{conference, divisions: [{division, teams}]}]}`. Conferences and divisions are sorted by name.
+    - Each row has `team`, `wins`, `losses`, `win_pct` (three places, through `_pct`), `games_behind` and the home/away splits.
+    - **Only `regular` games count**, NBA Cup group and knockout games included. `cup-final`, `play-in` and `playoffs` don't count.
+    - Within a conference the order is the exact win fraction, then wins, then team name. `win_pct` is rounded for display only.
+    - `games_behind` is `((leader_w - w) + (l - leader_l)) / 2` from the first team in that order, so it can be a half game.
+    - **NBA tie-breakers are not applied.** `tie_break` says so: "Win percentage, then wins, then team name (NBA tie-breakers not applied)". Real tie-breakers are a later decision for the human.
+    - 2 queries: the season check, then one `GROUP BY`.
+  - `GET /events/seasons/{season}/champion`: `{season, champion, runner_up, result}`. **Computed, never stored**: among the season's `playoffs` games labelled `NBA Finals` (the dataset's spelling, checked on the full load: 7 games in 2015-16 and in 2024-25), the team with four wins. `result` is its wins, then the runner-up's (`"4-2"`). With no such team yet (a season in progress, or a season without Finals games), the same shape comes back with nulls, a 200. 2 queries.
+  - `GET /events/seasons/{season}/leaders?stat=`: `stat` is one of `points|rebounds|assists|steals|blocks|threes`; `threes` means three-pointers made. `limit` defaults to 10 (1–50). `game_type` is `regular` (the default) or `playoffs`.
+    - The response is `{rule, minimum_games, leaders: [{player_id, first_name, last_name, teams, games_played, average}]}`.
+    - Only played rows of the requested game type count. Rows are ordered by the exact average (descending), then player id (ascending). `average` is rounded to one place through `_per_game`.
+    - **Qualifier:**
+      - From 2023-24, 65 games: the NBA's rule for awards and leaderboards.
+      - Before that, 70 % of the most regular-season games any team played, rounded up and computed in integers. This is the proxy the human accepted for the NBA's old minimums per stat, which aren't reproduced.
+      - The playoffs have no minimum (0).
+    - `rule` names the rule applied: "65 games (NBA rule from 2023-24)", "70% of 82 team games, rounded up: 58" or "No minimum in the playoffs".
+    - 2 queries; 3 for a regular season before 2023-24, which also needs the most team games.
+  - `GET /events/teams/{team_id}/seasons/{season}`: the team (with conference and division), its regular-season `record` with home and away splits, and every one of its games that season of every stored type, newest first.
+    - Each game has its id, date, type, label, sub-label, `opponent` (id, abbreviation), `is_home`, `team_score`/`opponent_score` and `won`.
+    - A known team with no games in a stored season gets a 200 with a 0-0 record.
+    - 4 queries.
+  - **No index (measured, 2026-10-15).** On the full 2003-04 to 2025-26 load (29,646 games, local Docker Postgres, Windows host), the median warm call over the app is:
+
+    | Call | Median |
+    |---|---|
+    | seasons | 11 ms |
+    | standings | 16 ms |
+    | points leaders, regular season | 58–66 ms |
+    | points leaders, playoffs | 21 ms |
+    | a team's season | 29 ms |
+
+    On that load:
+    - Champions match the real results: 2015-16 CLE over GSW 4-3, 2023-24 BOS over DAL 4-1, 2024-25 OKC over IND 4-3.
+    - BOS's 2023-24 record is 64-18 (37-4 at home, 27-14 away).
+    - The 2023-24 scoring leaders are Dončić 33.9, Antetokounmpo 30.4 and Gilgeous-Alexander 30.1. Embiid is out: he played under 65 games.
+
 No pagination on `GET /events/teams` (YAGNI — `Team` is a small, static ~30-row table).
 
 ## Resolved decisions

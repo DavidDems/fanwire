@@ -1,0 +1,2197 @@
+{
+  "paths": {
+    "/events/games": {
+      "get": {
+        "description": "One page, newest first (date, then id). Paged because a full load is\n~30,000 games, over a Lambda response's 6 MB as one list (EVENTS-005).\nStill a list, so the compose picker reads the 50 newest unchanged.",
+        "operationId": "list_games_events_games_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "team_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Team Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "game_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "regular",
+                    "cup-final",
+                    "play-in",
+                    "playoffs"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Game Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GameOut"
+                  },
+                  "title": "Response List Games Events Games Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Games",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/games/{game_id}": {
+      "get": {
+        "description": "The game page: both teams, line scores and the box score per team.\nposts/'s EventMention.game_id points here.",
+        "operationId": "get_game_events_games__game_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "game_id",
+            "required": true,
+            "schema": {
+              "title": "Game Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Game",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/players": {
+      "get": {
+        "description": "One page of players by last name, first name, id. `q` matches when\nevery word of it is a prefix of the first or last name, case- and\naccent-insensitively; `season` keeps players who played in it.",
+        "operationId": "list_players_events_players_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerListItemOut"
+                  },
+                  "title": "Response List Players Events Players Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Players",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/players/{player_id}": {
+      "get": {
+        "description": "The player page: attributes, regular-season and playoff career\nlines, and one line per season and game type, newest first.",
+        "operationId": "get_player_events_players__player_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "title": "Player Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Player",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/players/{player_id}/games": {
+      "get": {
+        "description": "The player's game log, played and did-not-play, newest first.",
+        "operationId": "list_player_games_events_players__player_id__games_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "title": "Player Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "game_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "regular",
+                    "cup-final",
+                    "play-in",
+                    "playoffs"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Game Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlayerGameOut"
+                  },
+                  "title": "Response List Player Games Events Players  Player Id  Games Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Player Games",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/teams": {
+      "get": {
+        "description": "No pagination \u2014 the NBA team set is ~30 rows, small and stable\n(YAGNI, wiki/CodeContext/Modules/0x02-events.md).",
+        "operationId": "list_teams_events_teams_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeamOut"
+                  },
+                  "title": "Response List Teams Events Teams Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Teams",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/teams/{team_id}": {
+      "get": {
+        "operationId": "get_team_events_teams__team_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Team",
+        "tags": [
+          "events"
+        ]
+      }
+    }
+  },
+  "schemas": {
+    "BoxScorePlayerOut": {
+      "description": "One player who played: has minutes, possibly zero seconds.",
+      "properties": {
+        "assists": {
+          "title": "Assists",
+          "type": "integer"
+        },
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "defensive_rebounds": {
+          "title": "Defensive Rebounds",
+          "type": "integer"
+        },
+        "field_goal_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field Goal Pct"
+        },
+        "field_goals_attempted": {
+          "title": "Field Goals Attempted",
+          "type": "integer"
+        },
+        "field_goals_made": {
+          "title": "Field Goals Made",
+          "type": "integer"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Name"
+        },
+        "free_throw_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Free Throw Pct"
+        },
+        "free_throws_attempted": {
+          "title": "Free Throws Attempted",
+          "type": "integer"
+        },
+        "free_throws_made": {
+          "title": "Free Throws Made",
+          "type": "integer"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Name"
+        },
+        "offensive_rebounds": {
+          "title": "Offensive Rebounds",
+          "type": "integer"
+        },
+        "personal_fouls": {
+          "title": "Personal Fouls",
+          "type": "integer"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "plus_minus": {
+          "title": "Plus Minus",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "rebounds": {
+          "title": "Rebounds",
+          "type": "integer"
+        },
+        "seconds_played": {
+          "title": "Seconds Played",
+          "type": "integer"
+        },
+        "starter": {
+          "title": "Starter",
+          "type": "boolean"
+        },
+        "starting_position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Starting Position"
+        },
+        "steals": {
+          "title": "Steals",
+          "type": "integer"
+        },
+        "three_point_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Point Pct"
+        },
+        "three_pointers_attempted": {
+          "title": "Three Pointers Attempted",
+          "type": "integer"
+        },
+        "three_pointers_made": {
+          "title": "Three Pointers Made",
+          "type": "integer"
+        },
+        "turnovers": {
+          "title": "Turnovers",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seconds_played",
+        "field_goals_made",
+        "field_goals_attempted",
+        "field_goal_pct",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "three_point_pct",
+        "free_throws_made",
+        "free_throws_attempted",
+        "free_throw_pct",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "player_id",
+        "first_name",
+        "last_name",
+        "starter",
+        "starting_position",
+        "plus_minus"
+      ],
+      "title": "BoxScorePlayerOut",
+      "type": "object"
+    },
+    "DidNotPlayOut": {
+      "properties": {
+        "dnp_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dnp Reason"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Name"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Name"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_id",
+        "first_name",
+        "last_name",
+        "dnp_reason"
+      ],
+      "title": "DidNotPlayOut",
+      "type": "object"
+    },
+    "GameDetailOut": {
+      "description": "GET /events/games/{id}: a read model built by\napp.events.service.game_detail, not the ORM row.",
+      "properties": {
+        "away_box_score": {
+          "$ref": "#/components/schemas/TeamBoxScoreOut"
+        },
+        "away_line_score": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Away Line Score"
+        },
+        "away_score": {
+          "title": "Away Score",
+          "type": "integer"
+        },
+        "away_team": {
+          "$ref": "#/components/schemas/TeamRefOut"
+        },
+        "date": {
+          "format": "date-time",
+          "title": "Date",
+          "type": "string"
+        },
+        "game_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Game Type"
+        },
+        "home_box_score": {
+          "$ref": "#/components/schemas/TeamBoxScoreOut"
+        },
+        "home_line_score": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Home Line Score"
+        },
+        "home_score": {
+          "title": "Home Score",
+          "type": "integer"
+        },
+        "home_team": {
+          "$ref": "#/components/schemas/TeamRefOut"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "nba_game_id": {
+          "title": "Nba Game Id",
+          "type": "integer"
+        },
+        "season": {
+          "title": "Season",
+          "type": "string"
+        },
+        "series_game_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Series Game Number"
+        },
+        "sub_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sub Label"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        }
+      },
+      "required": [
+        "id",
+        "nba_game_id",
+        "date",
+        "season",
+        "game_type",
+        "label",
+        "sub_label",
+        "series_game_number",
+        "venue",
+        "home_score",
+        "away_score",
+        "home_team",
+        "away_team",
+        "home_line_score",
+        "away_line_score",
+        "home_box_score",
+        "away_box_score"
+      ],
+      "title": "GameDetailOut",
+      "type": "object"
+    },
+    "GameOut": {
+      "properties": {
+        "away_score": {
+          "title": "Away Score",
+          "type": "integer"
+        },
+        "away_team_id": {
+          "title": "Away Team Id",
+          "type": "integer"
+        },
+        "date": {
+          "format": "date-time",
+          "title": "Date",
+          "type": "string"
+        },
+        "game_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Game Type"
+        },
+        "home_score": {
+          "title": "Home Score",
+          "type": "integer"
+        },
+        "home_team_id": {
+          "title": "Home Team Id",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "nba_game_id": {
+          "title": "Nba Game Id",
+          "type": "integer"
+        },
+        "season": {
+          "title": "Season",
+          "type": "string"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        }
+      },
+      "required": [
+        "id",
+        "nba_game_id",
+        "home_team_id",
+        "away_team_id",
+        "date",
+        "season",
+        "home_score",
+        "away_score",
+        "venue",
+        "game_type"
+      ],
+      "title": "GameOut",
+      "type": "object"
+    },
+    "PlayerDetailOut": {
+      "description": "GET /events/players/{id}: a read model built by\napp.events.service.player_detail. Only played rows of `regular` and\n`playoffs` games count towards a line.",
+      "properties": {
+        "birth_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Birth Date"
+        },
+        "career_playoffs": {
+          "$ref": "#/components/schemas/StatLineOut"
+        },
+        "career_regular": {
+          "$ref": "#/components/schemas/StatLineOut"
+        },
+        "country": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Country"
+        },
+        "draft_number": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Draft Number"
+        },
+        "draft_round": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Draft Round"
+        },
+        "draft_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Draft Year"
+        },
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Name"
+        },
+        "first_season": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Season"
+        },
+        "height_inches": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Height Inches"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "jersey": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Jersey"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Name"
+        },
+        "last_season": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Season"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Position"
+        },
+        "school": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "School"
+        },
+        "seasons": {
+          "items": {
+            "$ref": "#/components/schemas/SeasonLineOut"
+          },
+          "title": "Seasons",
+          "type": "array"
+        },
+        "weight_lbs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Weight Lbs"
+        }
+      },
+      "required": [
+        "id",
+        "first_name",
+        "last_name",
+        "birth_date",
+        "height_inches",
+        "weight_lbs",
+        "country",
+        "school",
+        "jersey",
+        "position",
+        "draft_year",
+        "draft_round",
+        "draft_number",
+        "first_season",
+        "last_season",
+        "career_regular",
+        "career_playoffs",
+        "seasons"
+      ],
+      "title": "PlayerDetailOut",
+      "type": "object"
+    },
+    "PlayerGameOut": {
+      "description": "One row of GET /events/players/{id}/games: the player's box-score\nline in one game, played or not, with the game around it. A row\nwithout minutes (`seconds_played` null) is a did-not-play.",
+      "properties": {
+        "assists": {
+          "title": "Assists",
+          "type": "integer"
+        },
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "date": {
+          "format": "date-time",
+          "title": "Date",
+          "type": "string"
+        },
+        "defensive_rebounds": {
+          "title": "Defensive Rebounds",
+          "type": "integer"
+        },
+        "dnp_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dnp Reason"
+        },
+        "field_goal_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field Goal Pct"
+        },
+        "field_goals_attempted": {
+          "title": "Field Goals Attempted",
+          "type": "integer"
+        },
+        "field_goals_made": {
+          "title": "Field Goals Made",
+          "type": "integer"
+        },
+        "free_throw_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Free Throw Pct"
+        },
+        "free_throws_attempted": {
+          "title": "Free Throws Attempted",
+          "type": "integer"
+        },
+        "free_throws_made": {
+          "title": "Free Throws Made",
+          "type": "integer"
+        },
+        "game_id": {
+          "title": "Game Id",
+          "type": "integer"
+        },
+        "game_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Game Type"
+        },
+        "is_home": {
+          "title": "Is Home",
+          "type": "boolean"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "offensive_rebounds": {
+          "title": "Offensive Rebounds",
+          "type": "integer"
+        },
+        "opponent": {
+          "$ref": "#/components/schemas/TeamRefOut"
+        },
+        "opponent_score": {
+          "title": "Opponent Score",
+          "type": "integer"
+        },
+        "personal_fouls": {
+          "title": "Personal Fouls",
+          "type": "integer"
+        },
+        "plus_minus": {
+          "title": "Plus Minus",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "rebounds": {
+          "title": "Rebounds",
+          "type": "integer"
+        },
+        "season": {
+          "title": "Season",
+          "type": "string"
+        },
+        "seconds_played": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seconds Played"
+        },
+        "starter": {
+          "title": "Starter",
+          "type": "boolean"
+        },
+        "starting_position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Starting Position"
+        },
+        "steals": {
+          "title": "Steals",
+          "type": "integer"
+        },
+        "team": {
+          "$ref": "#/components/schemas/TeamRefOut"
+        },
+        "team_score": {
+          "title": "Team Score",
+          "type": "integer"
+        },
+        "three_point_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Point Pct"
+        },
+        "three_pointers_attempted": {
+          "title": "Three Pointers Attempted",
+          "type": "integer"
+        },
+        "three_pointers_made": {
+          "title": "Three Pointers Made",
+          "type": "integer"
+        },
+        "turnovers": {
+          "title": "Turnovers",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "game_id",
+        "date",
+        "season",
+        "game_type",
+        "label",
+        "team",
+        "opponent",
+        "is_home",
+        "team_score",
+        "opponent_score",
+        "starter",
+        "starting_position",
+        "seconds_played",
+        "field_goals_made",
+        "field_goals_attempted",
+        "field_goal_pct",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "three_point_pct",
+        "free_throws_made",
+        "free_throws_attempted",
+        "free_throw_pct",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "plus_minus",
+        "dnp_reason"
+      ],
+      "title": "PlayerGameOut",
+      "type": "object"
+    },
+    "PlayerListItemOut": {
+      "description": "One player in GET /events/players' list.",
+      "properties": {
+        "first_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Name"
+        },
+        "first_season": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Season"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "jersey": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Jersey"
+        },
+        "last_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Name"
+        },
+        "last_season": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Season"
+        },
+        "latest_team_abbreviation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Latest Team Abbreviation"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Position"
+        }
+      },
+      "required": [
+        "id",
+        "first_name",
+        "last_name",
+        "position",
+        "jersey",
+        "first_season",
+        "last_season",
+        "latest_team_abbreviation"
+      ],
+      "title": "PlayerListItemOut",
+      "type": "object"
+    },
+    "SeasonLineOut": {
+      "description": "One season and game type the player played in. `teams` are\nabbreviations in the order first played; the stats are summed across\nthem, as nba.com's \"TOT\" row is.",
+      "properties": {
+        "assists": {
+          "title": "Assists",
+          "type": "integer"
+        },
+        "assists_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assists Per Game"
+        },
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "blocks_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Blocks Per Game"
+        },
+        "defensive_rebounds": {
+          "title": "Defensive Rebounds",
+          "type": "integer"
+        },
+        "field_goal_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field Goal Pct"
+        },
+        "field_goals_attempted": {
+          "title": "Field Goals Attempted",
+          "type": "integer"
+        },
+        "field_goals_made": {
+          "title": "Field Goals Made",
+          "type": "integer"
+        },
+        "free_throw_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Free Throw Pct"
+        },
+        "free_throws_attempted": {
+          "title": "Free Throws Attempted",
+          "type": "integer"
+        },
+        "free_throws_made": {
+          "title": "Free Throws Made",
+          "type": "integer"
+        },
+        "game_type": {
+          "enum": [
+            "regular",
+            "playoffs"
+          ],
+          "title": "Game Type",
+          "type": "string"
+        },
+        "games_played": {
+          "title": "Games Played",
+          "type": "integer"
+        },
+        "games_started": {
+          "title": "Games Started",
+          "type": "integer"
+        },
+        "minutes_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Minutes Per Game"
+        },
+        "offensive_rebounds": {
+          "title": "Offensive Rebounds",
+          "type": "integer"
+        },
+        "personal_fouls": {
+          "title": "Personal Fouls",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "points_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Points Per Game"
+        },
+        "rebounds": {
+          "title": "Rebounds",
+          "type": "integer"
+        },
+        "rebounds_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rebounds Per Game"
+        },
+        "season": {
+          "title": "Season",
+          "type": "string"
+        },
+        "seconds_played": {
+          "title": "Seconds Played",
+          "type": "integer"
+        },
+        "steals": {
+          "title": "Steals",
+          "type": "integer"
+        },
+        "steals_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Steals Per Game"
+        },
+        "teams": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Teams",
+          "type": "array"
+        },
+        "three_point_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Point Pct"
+        },
+        "three_pointers_attempted": {
+          "title": "Three Pointers Attempted",
+          "type": "integer"
+        },
+        "three_pointers_made": {
+          "title": "Three Pointers Made",
+          "type": "integer"
+        },
+        "three_pointers_made_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Pointers Made Per Game"
+        },
+        "turnovers": {
+          "title": "Turnovers",
+          "type": "integer"
+        },
+        "turnovers_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turnovers Per Game"
+        }
+      },
+      "required": [
+        "seconds_played",
+        "field_goals_made",
+        "field_goals_attempted",
+        "field_goal_pct",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "three_point_pct",
+        "free_throws_made",
+        "free_throws_attempted",
+        "free_throw_pct",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "games_played",
+        "games_started",
+        "points_per_game",
+        "rebounds_per_game",
+        "assists_per_game",
+        "steals_per_game",
+        "blocks_per_game",
+        "turnovers_per_game",
+        "three_pointers_made_per_game",
+        "minutes_per_game",
+        "season",
+        "game_type",
+        "teams"
+      ],
+      "title": "SeasonLineOut",
+      "type": "object"
+    },
+    "ShootingOut": {
+      "description": "Counting stats and shooting percentages, shared by a player's line\nand a team's totals. Percentages are a fraction from 0 to 1, three\nplaces, computed from made and attempted; null when none was attempted.",
+      "properties": {
+        "assists": {
+          "title": "Assists",
+          "type": "integer"
+        },
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "defensive_rebounds": {
+          "title": "Defensive Rebounds",
+          "type": "integer"
+        },
+        "field_goal_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field Goal Pct"
+        },
+        "field_goals_attempted": {
+          "title": "Field Goals Attempted",
+          "type": "integer"
+        },
+        "field_goals_made": {
+          "title": "Field Goals Made",
+          "type": "integer"
+        },
+        "free_throw_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Free Throw Pct"
+        },
+        "free_throws_attempted": {
+          "title": "Free Throws Attempted",
+          "type": "integer"
+        },
+        "free_throws_made": {
+          "title": "Free Throws Made",
+          "type": "integer"
+        },
+        "offensive_rebounds": {
+          "title": "Offensive Rebounds",
+          "type": "integer"
+        },
+        "personal_fouls": {
+          "title": "Personal Fouls",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "rebounds": {
+          "title": "Rebounds",
+          "type": "integer"
+        },
+        "seconds_played": {
+          "title": "Seconds Played",
+          "type": "integer"
+        },
+        "steals": {
+          "title": "Steals",
+          "type": "integer"
+        },
+        "three_point_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Point Pct"
+        },
+        "three_pointers_attempted": {
+          "title": "Three Pointers Attempted",
+          "type": "integer"
+        },
+        "three_pointers_made": {
+          "title": "Three Pointers Made",
+          "type": "integer"
+        },
+        "turnovers": {
+          "title": "Turnovers",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "seconds_played",
+        "field_goals_made",
+        "field_goals_attempted",
+        "field_goal_pct",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "three_point_pct",
+        "free_throws_made",
+        "free_throws_attempted",
+        "free_throw_pct",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points"
+      ],
+      "title": "ShootingOut",
+      "type": "object"
+    },
+    "StatLineOut": {
+      "description": "A career or season line: totals of the played rows, percentages\ncomputed from the totals (the box score's rule) and per-game averages\nto one place, null when no game was played.",
+      "properties": {
+        "assists": {
+          "title": "Assists",
+          "type": "integer"
+        },
+        "assists_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assists Per Game"
+        },
+        "blocks": {
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "blocks_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Blocks Per Game"
+        },
+        "defensive_rebounds": {
+          "title": "Defensive Rebounds",
+          "type": "integer"
+        },
+        "field_goal_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field Goal Pct"
+        },
+        "field_goals_attempted": {
+          "title": "Field Goals Attempted",
+          "type": "integer"
+        },
+        "field_goals_made": {
+          "title": "Field Goals Made",
+          "type": "integer"
+        },
+        "free_throw_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Free Throw Pct"
+        },
+        "free_throws_attempted": {
+          "title": "Free Throws Attempted",
+          "type": "integer"
+        },
+        "free_throws_made": {
+          "title": "Free Throws Made",
+          "type": "integer"
+        },
+        "games_played": {
+          "title": "Games Played",
+          "type": "integer"
+        },
+        "games_started": {
+          "title": "Games Started",
+          "type": "integer"
+        },
+        "minutes_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Minutes Per Game"
+        },
+        "offensive_rebounds": {
+          "title": "Offensive Rebounds",
+          "type": "integer"
+        },
+        "personal_fouls": {
+          "title": "Personal Fouls",
+          "type": "integer"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "points_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Points Per Game"
+        },
+        "rebounds": {
+          "title": "Rebounds",
+          "type": "integer"
+        },
+        "rebounds_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rebounds Per Game"
+        },
+        "seconds_played": {
+          "title": "Seconds Played",
+          "type": "integer"
+        },
+        "steals": {
+          "title": "Steals",
+          "type": "integer"
+        },
+        "steals_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Steals Per Game"
+        },
+        "three_point_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Point Pct"
+        },
+        "three_pointers_attempted": {
+          "title": "Three Pointers Attempted",
+          "type": "integer"
+        },
+        "three_pointers_made": {
+          "title": "Three Pointers Made",
+          "type": "integer"
+        },
+        "three_pointers_made_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Three Pointers Made Per Game"
+        },
+        "turnovers": {
+          "title": "Turnovers",
+          "type": "integer"
+        },
+        "turnovers_per_game": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turnovers Per Game"
+        }
+      },
+      "required": [
+        "seconds_played",
+        "field_goals_made",
+        "field_goals_attempted",
+        "field_goal_pct",
+        "three_pointers_made",
+        "three_pointers_attempted",
+        "three_point_pct",
+        "free_throws_made",
+        "free_throws_attempted",
+        "free_throw_pct",
+        "offensive_rebounds",
+        "defensive_rebounds",
+        "rebounds",
+        "assists",
+        "steals",
+        "blocks",
+        "turnovers",
+        "personal_fouls",
+        "points",
+        "games_played",
+        "games_started",
+        "points_per_game",
+        "rebounds_per_game",
+        "assists_per_game",
+        "steals_per_game",
+        "blocks_per_game",
+        "turnovers_per_game",
+        "three_pointers_made_per_game",
+        "minutes_per_game"
+      ],
+      "title": "StatLineOut",
+      "type": "object"
+    },
+    "TeamBoxScoreOut": {
+      "description": "One team's side: played rows (starters first, then by seconds\nplayed), the players who did not play, and totals summed from the\nplayed rows, never adjusted to the final score.",
+      "properties": {
+        "did_not_play": {
+          "items": {
+            "$ref": "#/components/schemas/DidNotPlayOut"
+          },
+          "title": "Did Not Play",
+          "type": "array"
+        },
+        "players": {
+          "items": {
+            "$ref": "#/components/schemas/BoxScorePlayerOut"
+          },
+          "title": "Players",
+          "type": "array"
+        },
+        "totals": {
+          "$ref": "#/components/schemas/ShootingOut"
+        }
+      },
+      "required": [
+        "players",
+        "did_not_play",
+        "totals"
+      ],
+      "title": "TeamBoxScoreOut",
+      "type": "object"
+    },
+    "TeamOut": {
+      "properties": {
+        "abbreviation": {
+          "title": "Abbreviation",
+          "type": "string"
+        },
+        "conference": {
+          "title": "Conference",
+          "type": "string"
+        },
+        "division": {
+          "title": "Division",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "logo_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Logo Url"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "nba_team_id": {
+          "title": "Nba Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "nba_team_id",
+        "name",
+        "abbreviation",
+        "conference",
+        "division",
+        "logo_url"
+      ],
+      "title": "TeamOut",
+      "type": "object"
+    },
+    "TeamRefOut": {
+      "description": "A team as a game detail embeds it.",
+      "properties": {
+        "abbreviation": {
+          "title": "Abbreviation",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "abbreviation"
+      ],
+      "title": "TeamRefOut",
+      "type": "object"
+    }
+  }
+}

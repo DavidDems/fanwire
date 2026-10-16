@@ -277,6 +277,75 @@
         "title": "BoxScorePlayerOut",
         "type": "object"
       },
+      "ChampionOut": {
+        "description": "GET /events/seasons/{season}/champion. `result` is the Finals score,\nthe champion's wins first (\"4-2\"). All three are null until a team has\nwon four Finals games.",
+        "properties": {
+          "champion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "runner_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "champion",
+          "runner_up",
+          "result"
+        ],
+        "title": "ChampionOut",
+        "type": "object"
+      },
+      "ConferenceStandingsOut": {
+        "properties": {
+          "conference": {
+            "title": "Conference",
+            "type": "string"
+          },
+          "divisions": {
+            "items": {
+              "$ref": "#/components/schemas/DivisionStandingsOut"
+            },
+            "title": "Divisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conference",
+          "divisions"
+        ],
+        "title": "ConferenceStandingsOut",
+        "type": "object"
+      },
       "CreatePostRequest": {
         "properties": {
           "is_reply": {
@@ -471,6 +540,28 @@
           "dnp_reason"
         ],
         "title": "DidNotPlayOut",
+        "type": "object"
+      },
+      "DivisionStandingsOut": {
+        "description": "A division's teams, in their conference's order.",
+        "properties": {
+          "division": {
+            "title": "Division",
+            "type": "string"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/StandingRowOut"
+            },
+            "title": "Teams",
+            "type": "array"
+          }
+        },
+        "required": [
+          "division",
+          "teams"
+        ],
+        "title": "DivisionStandingsOut",
         "type": "object"
       },
       "FeedPage": {
@@ -783,6 +874,116 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LeaderOut": {
+        "description": "`teams` are the abbreviations the player played for in the counted\ngames; `average` is per game, one place.",
+        "properties": {
+          "average": {
+            "title": "Average",
+            "type": "number"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "games_played": {
+            "title": "Games Played",
+            "type": "integer"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "teams": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Teams",
+            "type": "array"
+          }
+        },
+        "required": [
+          "player_id",
+          "first_name",
+          "last_name",
+          "teams",
+          "games_played",
+          "average"
+        ],
+        "title": "LeaderOut",
+        "type": "object"
+      },
+      "LeadersOut": {
+        "description": "GET /events/seasons/{season}/leaders. `rule` names the qualifying\nrule applied and `minimum_games` its minimum (0 for the playoffs).",
+        "properties": {
+          "game_type": {
+            "enum": [
+              "regular",
+              "playoffs"
+            ],
+            "title": "Game Type",
+            "type": "string"
+          },
+          "leaders": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderOut"
+            },
+            "title": "Leaders",
+            "type": "array"
+          },
+          "minimum_games": {
+            "title": "Minimum Games",
+            "type": "integer"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "stat": {
+            "enum": [
+              "points",
+              "rebounds",
+              "assists",
+              "steals",
+              "blocks",
+              "threes"
+            ],
+            "title": "Stat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "stat",
+          "game_type",
+          "rule",
+          "minimum_games",
+          "leaders"
+        ],
+        "title": "LeadersOut",
         "type": "object"
       },
       "MeOut": {
@@ -1845,6 +2046,45 @@
         "title": "PublicUserOut",
         "type": "object"
       },
+      "RecordOut": {
+        "description": "A team's regular-season record (only `regular` games count: NBA Cup\ngroup and knockout games do; play-in, playoffs and the cup final do\nnot), with home and away splits.",
+        "properties": {
+          "away_losses": {
+            "title": "Away Losses",
+            "type": "integer"
+          },
+          "away_wins": {
+            "title": "Away Wins",
+            "type": "integer"
+          },
+          "home_losses": {
+            "title": "Home Losses",
+            "type": "integer"
+          },
+          "home_wins": {
+            "title": "Home Wins",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wins",
+          "losses",
+          "home_wins",
+          "home_losses",
+          "away_wins",
+          "away_losses"
+        ],
+        "title": "RecordOut",
+        "type": "object"
+      },
       "SeasonLineOut": {
         "description": "One season and game type the player played in. `teams` are\nabbreviations in the order first played; the stats are summed across\nthem, as nba.com's \"TOT\" row is.",
         "properties": {
@@ -2223,6 +2463,86 @@
         "title": "ShootingOut",
         "type": "object"
       },
+      "StandingRowOut": {
+        "description": "`win_pct` is wins / games, three places. `games_behind` is in half\ngames behind the first team of the conference's order:\n((leader_w - w) + (l - leader_l)) / 2.",
+        "properties": {
+          "away_losses": {
+            "title": "Away Losses",
+            "type": "integer"
+          },
+          "away_wins": {
+            "title": "Away Wins",
+            "type": "integer"
+          },
+          "games_behind": {
+            "title": "Games Behind",
+            "type": "number"
+          },
+          "home_losses": {
+            "title": "Home Losses",
+            "type": "integer"
+          },
+          "home_wins": {
+            "title": "Home Wins",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamRefOut"
+          },
+          "win_pct": {
+            "title": "Win Pct",
+            "type": "number"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wins",
+          "losses",
+          "home_wins",
+          "home_losses",
+          "away_wins",
+          "away_losses",
+          "team",
+          "win_pct",
+          "games_behind"
+        ],
+        "title": "StandingRowOut",
+        "type": "object"
+      },
+      "StandingsOut": {
+        "description": "GET /events/seasons/{season}/standings. `tie_break` names the\nordering rule: the NBA's own tie-breakers are not applied.",
+        "properties": {
+          "conferences": {
+            "items": {
+              "$ref": "#/components/schemas/ConferenceStandingsOut"
+            },
+            "title": "Conferences",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "tie_break": {
+            "title": "Tie Break",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "tie_break",
+          "conferences"
+        ],
+        "title": "StandingsOut",
+        "type": "object"
+      },
       "StatLineOut": {
         "description": "A career or season line: totals of the played rows, percentages\ncomputed from the totals (the box score's rule) and per-game averages\nto one place, null when no game was played.",
         "properties": {
@@ -2555,6 +2875,116 @@
           "abbreviation"
         ],
         "title": "TeamRefOut",
+        "type": "object"
+      },
+      "TeamSeasonGameOut": {
+        "description": "One of the team's games, from its side: `team_score` is its own.",
+        "properties": {
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "game_id": {
+            "title": "Game Id",
+            "type": "integer"
+          },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
+          "is_home": {
+            "title": "Is Home",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/TeamRefOut"
+          },
+          "opponent_score": {
+            "title": "Opponent Score",
+            "type": "integer"
+          },
+          "sub_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Label"
+          },
+          "team_score": {
+            "title": "Team Score",
+            "type": "integer"
+          },
+          "won": {
+            "title": "Won",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "game_id",
+          "date",
+          "game_type",
+          "label",
+          "sub_label",
+          "opponent",
+          "is_home",
+          "team_score",
+          "opponent_score",
+          "won"
+        ],
+        "title": "TeamSeasonGameOut",
+        "type": "object"
+      },
+      "TeamSeasonOut": {
+        "description": "GET /events/teams/{team_id}/seasons/{season}: the regular-season\nrecord and every game of every type, newest first.",
+        "properties": {
+          "games": {
+            "items": {
+              "$ref": "#/components/schemas/TeamSeasonGameOut"
+            },
+            "title": "Games",
+            "type": "array"
+          },
+          "record": {
+            "$ref": "#/components/schemas/RecordOut"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamOut"
+          }
+        },
+        "required": [
+          "season",
+          "team",
+          "record",
+          "games"
+        ],
+        "title": "TeamSeasonOut",
         "type": "object"
       },
       "ThreadView": {
@@ -3120,6 +3550,207 @@
         ]
       }
     },
+    "/events/seasons": {
+      "get": {
+        "description": "Every season with at least one stored game, of any type, newest\nfirst, as \"YYYY-YY\".",
+        "operationId": "list_seasons_events_seasons_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Seasons Events Seasons Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Seasons",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/seasons/{season}/champion": {
+      "get": {
+        "description": "The team that won four of the season's playoff games labelled \"NBA\nFinals\", the runner-up and the series result. Until then all three are\nnull, in a 200.\n\n422: a malformed season (not \"YYYY-YY\"). 404: a well-formed season with\nno stored game.",
+        "operationId": "get_champion_events_seasons__season__champion_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "title": "Season",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChampionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Champion",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/seasons/{season}/leaders": {
+      "get": {
+        "description": "The top players by per-game average of `stat` (`threes`: three-\npointers made) over their played games of `game_type`, then by player\nid. Regular season: 65 games from 2023-24 on, before that 70 % of the\nmost games any team played, rounded up; the playoffs have no minimum.\nThe response names the rule and the minimum.\n\n422: a malformed season, an unknown `stat` or `game_type`, or `limit`\noutside 1-50. 404: a well-formed season with no stored game.",
+        "operationId": "get_leaders_events_seasons__season__leaders_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "title": "Season",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stat",
+            "required": true,
+            "schema": {
+              "enum": [
+                "points",
+                "rebounds",
+                "assists",
+                "steals",
+                "blocks",
+                "threes"
+              ],
+              "title": "Stat",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "game_type",
+            "required": false,
+            "schema": {
+              "default": "regular",
+              "enum": [
+                "regular",
+                "playoffs"
+              ],
+              "title": "Game Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadersOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Leaders",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/seasons/{season}/standings": {
+      "get": {
+        "description": "Regular-season standings by conference, then division. Within a\nconference: win percentage, then wins, then team name (`tie_break`;\nthe NBA's own tie-breakers are not applied). Only `regular` games count.\n\n422: a malformed season (not \"YYYY-YY\"). 404: a well-formed season with\nno stored game.",
+        "operationId": "get_standings_events_seasons__season__standings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "season",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "title": "Season",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Standings",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/events/teams": {
       "get": {
         "description": "No pagination \u2014 the NBA team set is ~30 rows, small and stable\n(YAGNI, wiki/CodeContext/Modules/0x02-events.md).",
@@ -3183,6 +3814,59 @@
           }
         },
         "summary": "Get Team",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/teams/{team_id}/seasons/{season}": {
+      "get": {
+        "description": "One team's season: its regular-season record with home and away\nsplits, and every one of its games that season, of every type, newest\nfirst.\n\n422: a malformed season (not \"YYYY-YY\"). 404: an unknown team, or a\nwell-formed season with no stored game.",
+        "operationId": "get_team_season_events_teams__team_id__seasons__season__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "season",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "title": "Season",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamSeasonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Team Season",
         "tags": [
           "events"
         ]

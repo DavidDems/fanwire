@@ -14,9 +14,11 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Any
 
 from sqlalchemy import (
     RowMapping,
+    Select,
     SQLColumnExpression,
     Text,
     case,
@@ -751,3 +753,369 @@ def player_games(
             )
         )
     return rows
+
+
+# ------------------------------------------------------------------ seasons
+#
+# EVENTS-007. Standings, the champion, stat leaders and a team's season,
+# computed at read time with GROUP BY in Postgres: no aggregate table.
+# Each read model is None for a season with no stored game (the route's 404).
+
+# Only `regular` games make a record: NBA Cup group and knockout games are
+# regular; play-in, playoffs and the cup final are not (decision 5).
+REGULAR = "regular"
+
+# The ordering standings apply; the NBA's own tie-breakers are not.
+STANDINGS_TIE_BREAK = "Win percentage, then wins, then team name (NBA tie-breakers not applied)"
+
+# The dataset's label on every Finals game (tests/fixtures/nba_data/Games.csv).
+FINALS_LABEL = "NBA Finals"
+FINALS_WINS = 4
+
+# The box-score column behind each leaders `stat`; threes are made threes.
+LEADER_STATS: dict[str, str] = {
+    "points": "points",
+    "rebounds": "rebounds",
+    "assists": "assists",
+    "steals": "steals",
+    "blocks": "blocks",
+    "threes": "three_pointers_made",
+}
+
+# From 2023-24 the NBA requires 65 games for awards and leaderboards.
+GAMES_RULE_FROM = "2023-24"
+GAMES_RULE_MINIMUM = 65
+# Before it, 70 % of the most games any team played, rounded up: the proxy
+# the human accepted for the NBA's per-stat minimums (Prompts/06).
+TEAM_GAMES_PERCENT = 70
+
+
+@dataclass(frozen=True)
+class Record:
+    """A team's regular-season record, with home and away splits."""
+
+    wins: int
+    losses: int
+    home_wins: int
+    home_losses: int
+    away_wins: int
+    away_losses: int
+
+
+_NO_RECORD = Record(0, 0, 0, 0, 0, 0)
+
+
+@dataclass(frozen=True)
+class StandingRow(Record):
+    team: TeamRef
+    win_pct: float
+    games_behind: float
+
+
+@dataclass(frozen=True)
+class DivisionStandings:
+    division: str
+    teams: list[StandingRow]
+
+
+@dataclass(frozen=True)
+class ConferenceStandings:
+    conference: str
+    divisions: list[DivisionStandings]
+
+
+@dataclass(frozen=True)
+class Standings:
+    """The read model behind GET /events/seasons/{season}/standings."""
+
+    season: str
+    tie_break: str
+    conferences: list[ConferenceStandings]
+
+
+@dataclass(frozen=True)
+class Champion:
+    """GET /events/seasons/{season}/champion: all three null until a team
+    has won FINALS_WINS Finals games."""
+
+    season: str
+    champion: TeamRef | None
+    runner_up: TeamRef | None
+    result: str | None
+
+
+@dataclass(frozen=True)
+class Leader:
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    teams: list[str]
+    games_played: int
+    average: float
+
+
+@dataclass(frozen=True)
+class Leaders:
+    """GET /events/seasons/{season}/leaders: the rule applied, its minimum
+    (0 for the playoffs) and the leaders."""
+
+    season: str
+    stat: str
+    game_type: str
+    rule: str
+    minimum_games: int
+    leaders: list[Leader]
+
+
+@dataclass(frozen=True)
+class TeamSeasonGame:
+    game_id: int
+    date: datetime
+    game_type: str | None
+    label: str | None
+    sub_label: str | None
+    opponent: TeamRef
+    is_home: bool
+    team_score: int
+    opponent_score: int
+    won: bool
+
+
+@dataclass(frozen=True)
+class TeamSeason:
+    """GET /events/teams/{team_id}/seasons/{season}."""
+
+    season: str
+    team: Team
+    record: Record
+    games: list[TeamSeasonGame]
+
+
+def season_has_games(session: Session, season: str) -> bool:
+    """Whether any game of any type is stored for `season`."""
+    return bool(session.scalar(select(exists().where(Game.season == season))))
+
+
+def _team_won() -> ColumnElement[bool]:
+    """In a query joining Team to the games it played: it won this one."""
+    return case(
+        (Game.home_team_id == Team.id, Game.home_score > Game.away_score),
+        else_=Game.away_score > Game.home_score,
+    )
+
+
+def _team_games(*columns: ColumnElement[Any]) -> Select[Any]:
+    """Team joined to every game it played, home or away, one group per
+    team: `columns` are its aggregates."""
+    return (
+        select(Team, *columns)
+        .join(Game, or_(Game.home_team_id == Team.id, Game.away_team_id == Team.id))
+        .group_by(Team.id)
+    )
+
+
+def _records(
+    session: Session, season: str, team_id: int | None = None
+) -> list[tuple[Team, Record]]:
+    """Every team's regular-season record in `season` (one GROUP BY), or
+    only `team_id`'s. A team without a regular game has no row."""
+    won, is_home = _team_won(), Game.home_team_id == Team.id
+    stmt = _team_games(
+        func.count().filter(won),
+        func.count().filter(~won),
+        func.count().filter(is_home, won),
+        func.count().filter(is_home, ~won),
+        func.count().filter(~is_home, won),
+        func.count().filter(~is_home, ~won),
+    ).where(Game.season == season, Game.game_type == REGULAR)
+    if team_id is not None:
+        stmt = stmt.where(Team.id == team_id)
+    return [(team, Record(*counts)) for team, *counts in session.execute(stmt).tuples()]
+
+
+def standings(session: Session, season: str) -> Standings | None:
+    """Regular-season standings by conference, then division. Two queries:
+    the season check and one GROUP BY. Within a conference, teams are
+    ordered by win percentage (exact, not the rounded figure), then wins,
+    then name; games behind is against the first of that order."""
+    if not season_has_games(session, season):
+        return None
+
+    def order(entry: tuple[Team, Record]) -> tuple[float, int, str]:
+        team, record = entry
+        return (-record.wins / (record.wins + record.losses), -record.wins, team.name)
+
+    by_conference: dict[str, list[tuple[Team, Record]]] = {}
+    for entry in sorted(_records(session, season), key=order):
+        by_conference.setdefault(entry[0].conference, []).append(entry)
+
+    conferences = []
+    for conference, entries in sorted(by_conference.items()):
+        leader = entries[0][1]
+        divisions: dict[str, list[StandingRow]] = {}
+        for team, record in entries:
+            behind = (leader.wins - record.wins) + (record.losses - leader.losses)
+            divisions.setdefault(team.division, []).append(
+                StandingRow(
+                    **asdict(record),
+                    team=_team_ref(team),
+                    # A listed team has played, so the percentage is never null.
+                    win_pct=_pct(record.wins, record.wins + record.losses) or 0.0,
+                    games_behind=behind / 2,
+                )
+            )
+        conferences.append(
+            ConferenceStandings(
+                conference=conference,
+                divisions=[
+                    DivisionStandings(division=division, teams=rows)
+                    for division, rows in sorted(divisions.items())
+                ],
+            )
+        )
+    return Standings(season=season, tie_break=STANDINGS_TIE_BREAK, conferences=conferences)
+
+
+def champion(session: Session, season: str) -> Champion | None:
+    """The team with FINALS_WINS wins in the season's `playoffs` games
+    labelled FINALS_LABEL, the other Finals team and the series score. Two
+    queries: the season check and one GROUP BY of Finals wins per team."""
+    if not season_has_games(session, season):
+        return None
+
+    wins = func.count().filter(_team_won())
+    finals = (
+        session.execute(
+            _team_games(wins)
+            .where(
+                Game.season == season,
+                Game.game_type == "playoffs",
+                Game.label == FINALS_LABEL,
+            )
+            .order_by(wins.desc(), Team.id)
+        )
+        .tuples()
+        .all()
+    )
+    if not finals or finals[0][1] < FINALS_WINS:
+        return Champion(season=season, champion=None, runner_up=None, result=None)
+    (winner, won), *others = finals
+    runner_up, lost = others[0] if others else (None, 0)
+    return Champion(
+        season=season,
+        champion=_team_ref(winner),
+        runner_up=_team_ref(runner_up) if runner_up is not None else None,
+        result=f"{won}-{lost}",
+    )
+
+
+def _qualifier(session: Session, season: str, game_type: str) -> tuple[int, str]:
+    """The minimum games a leader must have played, and the rule's name."""
+    if game_type != REGULAR:
+        return 0, "No minimum in the playoffs"
+    # "YYYY-YY" strings order as their seasons do.
+    if season >= GAMES_RULE_FROM:
+        return GAMES_RULE_MINIMUM, f"{GAMES_RULE_MINIMUM} games (NBA rule from {GAMES_RULE_FROM})"
+    per_team = (
+        _team_games(func.count().label("games"))
+        .where(Game.season == season, Game.game_type == REGULAR)
+        .subquery()
+    )
+    team_games = int(session.scalar(select(func.max(per_team.c.games))) or 0)
+    # Rounded up in integers: 0.7 * 10 is 7.000000000000001 in floating point.
+    minimum = -(-team_games * TEAM_GAMES_PERCENT // 100)
+    return minimum, f"{TEAM_GAMES_PERCENT}% of {team_games} team games, rounded up: {minimum}"
+
+
+def leaders(
+    session: Session, season: str, *, stat: str, game_type: str, limit: int
+) -> Leaders | None:
+    """The top `limit` players by per-game average of `stat` over their
+    played rows of `game_type` games, among those with the qualifier's
+    minimum games; ordered by the exact average, then player id. Two or
+    three queries: the season check, the regular season's most team games
+    (before 2023-24 only), and one GROUP BY per player."""
+    if not season_has_games(session, season):
+        return None
+
+    minimum, rule = _qualifier(session, season, game_type)
+    column = getattr(PlayerGameStats, LEADER_STATS[stat])
+    games = func.count()
+    rows = session.execute(
+        select(
+            Player.id,
+            Player.first_name,
+            Player.last_name,
+            func.array_agg(Team.abbreviation.distinct()),
+            games,
+            func.sum(column),
+        )
+        .select_from(PlayerGameStats)
+        .join(Game, Game.id == PlayerGameStats.game_id)
+        .join(Player, Player.id == PlayerGameStats.player_id)
+        .join(Team, Team.id == PlayerGameStats.team_id)
+        .where(Game.season == season, Game.game_type == game_type, PlayerGameStats.played)
+        .group_by(Player.id)
+        .having(games >= minimum)
+        .order_by(func.avg(column).desc(), Player.id)
+        .limit(limit)
+    ).tuples()
+    return Leaders(
+        season=season,
+        stat=stat,
+        game_type=game_type,
+        rule=rule,
+        minimum_games=minimum,
+        leaders=[
+            Leader(
+                player_id=player_id,
+                first_name=first_name,
+                last_name=last_name,
+                teams=list(teams),
+                games_played=played,
+                # A group has at least one played row, so never null.
+                average=_per_game(total, played) or 0.0,
+            )
+            for player_id, first_name, last_name, teams, played, total in rows
+        ],
+    )
+
+
+def team_season(session: Session, team_id: int, season: str) -> TeamSeason | None:
+    """One team's season: its regular-season record and every one of its
+    games, of every type, newest first. Four queries whatever the season's
+    size: the team, the season check, the record and the games with their
+    opponents. None for an unknown team or a season with no stored game."""
+    team = session.get(Team, team_id)
+    if team is None or not season_has_games(session, season):
+        return None
+
+    record = next((found for _, found in _records(session, season, team_id)), _NO_RECORD)
+    opponent = aliased(Team)
+    is_home = Game.home_team_id == team_id
+    games = []
+    for game, other in session.execute(
+        select(Game, opponent)
+        .join(opponent, opponent.id == case((is_home, Game.away_team_id), else_=Game.home_team_id))
+        .where(Game.season == season, or_(is_home, Game.away_team_id == team_id))
+        .order_by(Game.date.desc(), Game.id.desc())
+    ).tuples():
+        home = game.home_team_id == team_id
+        own, theirs = (
+            (game.home_score, game.away_score) if home else (game.away_score, game.home_score)
+        )
+        games.append(
+            TeamSeasonGame(
+                game_id=game.id,
+                date=game.date,
+                game_type=game.game_type,
+                label=game.label,
+                sub_label=game.sub_label,
+                opponent=_team_ref(other),
+                is_home=home,
+                team_score=own,
+                opponent_score=theirs,
+                won=own > theirs,
+            )
+        )
+    return TeamSeason(season=season, team=team, record=record, games=games)
