@@ -277,7 +277,8 @@ def reply_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
         .where(Post.parent_post_id.in_(post_ids), Post.is_reply.is_(True), _live_author())
         .group_by(Post.parent_post_id)
     ).all()
-    return {post_id: count for post_id, count in rows}
+    # The IN filter already excludes NULL; the guard narrows the nullable FK for mypy.
+    return {post_id: count for post_id, count in rows if post_id is not None}
 
 
 def repost_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
@@ -291,7 +292,8 @@ def repost_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]
         .where(Post.original_post_id.in_(post_ids), Post.is_repost.is_(True), _live_author())
         .group_by(Post.original_post_id)
     ).all()
-    return {post_id: count for post_id, count in rows}
+    # The IN filter already excludes NULL; the guard narrows the nullable FK for mypy.
+    return {post_id: count for post_id, count in rows if post_id is not None}
 
 
 def _without_media(session: Session, posts: list[Post]) -> list[Post]:
