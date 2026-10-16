@@ -342,14 +342,26 @@ record per call), and bring it to the human.
     The likely causes are the state (long, truncated to its 80K-character
     cap) or the question's wording. It is the record to bring to the human
     and to jev's owner; jev stays in shadow, and nothing acts on it.
+- **#163, #164, #165 merged. The human's decisions, 2026-10-16:**
+  - Haiku costs about **$0.025 per PR** ($0.017-$0.035 over #155-#162), so
+    it runs on every `agent/*` PR, a spend limit being set in the API
+    console. Drift now also runs once when an `agent/*` PR is opened
+    (`pull_request_target`, `opened` only; the dispatch stays).
+  - jev is switched off for now: "more research on how to use it will be
+    needed". `config.json` `automations.coverage.ask_jev` and
+    `automations.spec_drift.ask_jev` are `false`. With them off,
+    `ask_jev.py --automation <name>` makes no request, and the comments say
+    `jev: off`. The old records stay readable by `agentctl shadow report`.
+  - Built in `director/drift-auto-jev-off`.
 - **Next:**
-  - Bring the record above to the human, who decides whether to raise it
-    with jev's owner, change the questions, or stop asking jev.
-  - Re-prove drift on the next dispatch, to see whether Haiku fills
-    `assumed_to_exist` honestly.
+  - Prove live on the next unit: drift fires on the PR's opening, "jev:
+    off" shows, `assumed_to_exist` is honest (#163), and a red then green
+    push gets the "Fixed" line (#164).
+  - Then this prompt's work is done: the four automations run unattended.
+    Delete this prompt per the index's lifecycle rule, once its lasting
+    facts are in `work-modes.md`.
   - Proposed, the human's call: drift reads the brief's files before
-    `forbidden_paths`. Also proposed: run drift automatically on an
-    `agent/<ID>` branch's first push.
+    `forbidden_paths`.
 
 ## The four, with design notes (starting points, not decisions)
 
