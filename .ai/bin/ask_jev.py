@@ -4,6 +4,7 @@
   ask_jev.py --questions .ai/questions/smoke.json \
              --state-file .ai/questions/smoke-state.txt \
              --out answers.json [--summary FILE] [--require-confidence]
+             [--automation NAME]
 
 `.ai/bin/invoke_agent.sh` is the seam for "run an agent and let it work". This
 is the seam for "ask a bounded question and get a typed answer". They are kept
@@ -28,6 +29,13 @@ them:
     config.json's `telemetry.prices`.
   - the key is never printed: it goes into one header and nowhere else, and
     is redacted from any remote text before that text is written anywhere.
+
+`--automation NAME` names the `.ai/config.json` `automations` entry that is
+asking. If that entry's `ask_jev` is not exactly true, jev is switched off for
+it: no key is read, no request goes out, `--out` is written with `"off": true`
+(so a reader tells "switched off" from "asked, no answer"), and the exit is 0.
+An entry that is missing is a usage error. Without it, jev is always asked
+(the smoke does this).
 
 Exit 0 the call completed (and, with `--require-confidence`, every answer
 carried what its type promises); 1 it did not; 2 the invocation itself is
@@ -73,11 +81,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="fail unless every answer carries what its type promises (the smoke's gate)",
     )
+    ap.add_argument(
+        "--automation",
+        help="the config.json automations entry asking; its ask_jev must be true to ask",
+    )
     args = ap.parse_args(argv)
 
     out_path = Path(args.out)
     summary = Path(args.summary) if args.summary else None
-    provider = _config().get("providers", {}).get(PROVIDER, {})
+    config = _config()
+    provider = config.get("providers", {}).get(PROVIDER, {})
     model = provider.get("model")
     endpoint = provider.get("endpoint")
     key_var = provider.get("api_key_env")
@@ -85,6 +98,30 @@ def main(argv: list[str] | None = None) -> int:
     # Written before anything else can fail, so every reader downstream has a
     # parseable file even if this process dies on the next line.
     _write(out_path, _record(model))
+
+    if args.automation is not None:
+        entry = config.get("automations", {}).get(args.automation)
+        if not isinstance(entry, dict):
+            return _give_up(
+                out_path,
+                summary,
+                model,
+                f"config.json has no automation {args.automation!r}",
+                USAGE,
+            )
+        if entry.get("ask_jev") is not True:
+            record = _record(model)
+            record["off"] = True
+            _write(out_path, record)
+            note = f"jev is switched off for {args.automation} in config.json; not asked"
+            if summary is not None:
+                try:
+                    with summary.open("a", encoding="utf-8") as fh:
+                        fh.write(f"### jev\n\n- {note}\n\n")
+                except OSError as exc:
+                    print(f"::warning::cannot write the summary: {exc}", file=sys.stderr)
+            print(f"::notice::{note}")
+            return OK
 
     if not (isinstance(model, str) and isinstance(endpoint, str) and isinstance(key_var, str)):
         return _give_up(out_path, summary, model, "config.json has no usable providers.jev", USAGE)

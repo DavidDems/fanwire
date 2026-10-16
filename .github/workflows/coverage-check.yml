@@ -5,9 +5,12 @@ name: coverage-check
 # criteria with the test that pins it, or "not pinned", updated in place on
 # later pushes. It fails nothing. .ai/agentlib/coverage.py builds the request,
 # checks the answer and renders; .ai/bin/coverage_check.py makes the one model
-# call. jev is asked the same question in shadow (.ai/questions/coverage.json),
-# and both answers are recorded side by side in a hidden record at the end of
-# the comment and in the job summary. Nothing acts on either.
+# call. jev is switched off in .ai/config.json (automations.coverage.ask_jev,
+# the human's decision, 2026-10-16): its step still runs but makes no request,
+# and the comment says "jev: off". Turned on, jev is asked the same question
+# in shadow (.ai/questions/coverage.json) and both answers are recorded side
+# by side in a hidden record at the end of the comment and in the job summary.
+# Nothing acts on either.
 #
 # It holds the Anthropic and TypeSafe keys, so it is shaped to give them
 # nothing to reach (work-modes.md "Constraints every automation must keep"):
@@ -137,8 +140,9 @@ jobs:
           --summary "$GITHUB_STEP_SUMMARY"
 
       # In shadow: the only step with the TypeSafe key, and it holds no
-      # GitHub token. Its failure never stops the comment; the comment then
-      # says jev gave no answer.
+      # GitHub token. Switched off for now (config.json, 2026-10-16): the step
+      # runs and makes no request. Its failure never stops the comment; the
+      # comment then says jev gave no answer, or that it is off.
       - name: Ask jev the same question, in shadow
         continue-on-error: true
         env:
@@ -152,6 +156,7 @@ jobs:
             --questions "$TOOLS/.ai/questions/coverage.json" \
             --state-file "$RUNNER_TEMP/coverage/jev-state.txt" \
             --out "$RUNNER_TEMP/coverage/jev.json" \
+            --automation coverage \
             --summary "$GITHUB_STEP_SUMMARY"
 
       # No key and no token: the comment file, from the two answers.

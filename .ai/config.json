@@ -70,17 +70,19 @@
       "max_log_chars": 20000
     },
     "coverage": {
-      "_why": "Prompts/04 automation 2: which acceptance criteria no test pins, from the spec on main and the test files an agent/* PR changes; advisory, fails nothing. jev is asked .ai/questions/coverage.json in shadow. .ai/bin/coverage_check.py, run by .github/workflows/coverage-check.yml.",
+      "_why": "Prompts/04 automation 2: which acceptance criteria no test pins, from the spec on main and the test files an agent/* PR changes; advisory, fails nothing. jev was asked .ai/questions/coverage.json in shadow until 2026-10-16; ask_jev switches it. .ai/bin/coverage_check.py, run by .github/workflows/coverage-check.yml.",
       "provider": "anthropic",
       "model": "claude-haiku-5-5",
       "max_tokens": 4000,
+      "ask_jev": false,
       "max_test_chars": 200000
     },
     "spec_drift": {
-      "_why": "Prompts/04 automation 3: which paths, links and names a task spec uses that the code on main does not have, dispatched by hand before a unit. Paths and links are checked without a model; Haiku is asked only for names in the prose, each re-checked against the code. jev is asked .ai/questions/drift.json in shadow. .ai/bin/spec_drift.py, run by .github/workflows/spec-drift.yml.",
+      "_why": "Prompts/04 automation 3: which paths, links and names a task spec uses that the code on main does not have, dispatched by hand before a unit. Paths and links are checked without a model; Haiku is asked only for names in the prose, each re-checked against the code. jev was asked .ai/questions/drift.json in shadow until 2026-10-16; ask_jev switches it. .ai/bin/spec_drift.py, run by .github/workflows/spec-drift.yml.",
       "provider": "anthropic",
       "model": "claude-haiku-5-5",
       "max_tokens": 2000,
+      "ask_jev": false,
       "max_context_chars": 200000
     },
     "wiki_proposal": {

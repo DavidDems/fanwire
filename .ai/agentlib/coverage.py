@@ -330,6 +330,8 @@ def _run_line(head_sha: str, run_url: str) -> str:
 
 def _shadow_line(model: str | None, all_pinned: bool, jev: dict[str, Any] | None) -> str:
     haiku = "not asked" if model is None else ("all pinned" if all_pinned else "not all pinned")
+    if isinstance(jev, dict) and jev.get("off") is True:
+        return f"Shadow, acted on by nothing: Haiku: {haiku} · jev: off"
     choice = jev.get("choice") if isinstance(jev, dict) else None
     if not isinstance(choice, str):
         return f"Shadow, acted on by nothing: Haiku: {haiku} · jev: no answer"
