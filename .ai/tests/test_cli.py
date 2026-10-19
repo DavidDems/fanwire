@@ -360,7 +360,8 @@ class TestInvokeAgentRunsTheModelInTheDataRoot:
         assert json.loads(out.read_text(encoding="utf-8"))["session_id"] == "s-1"
         # The CLI must not load the checkout's own settings (hooks run
         # commands) or MCP servers (processes), whatever the branch carries.
-        # Both flags confirmed in `claude --help`, CLI 2.1.293.
+        # Both flags confirmed in `claude --help`, CLI 2.1.293, and on 2.1.295,
+        # the version config.json pins, 2026-10-19.
         assert "setting-sources=user" in seen
         assert "strict-mcp-config" in seen
 
