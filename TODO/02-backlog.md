@@ -68,7 +68,7 @@ From the Director's review of 2026-10-19, agreed with the human. There are
 two tracks, and they run in parallel because they share no files except
 `deploy.yml` (`08` deliverable 4). Within a track the order is a dependency
 order. Each brief is in `wiki/GeneralContext/Prompts/`.
-The five decisions the briefs raised were answered by the human on
+The decisions the briefs raised were answered by the human on
 2026-10-19 (`Architecture/human-decisions.md` §8), and each brief records
 its answer.
 
@@ -82,7 +82,7 @@ its answer.
 | System 4 | `12-agent-evals.md` | `director` | The test harness. Its first run is the baseline `13`–`15` are judged against. |
 | System 5 | `13-worker-shell.md` | `director` | The biggest bottleneck (CI round trips). The first change scored by `12`. |
 | System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
-| System 7 | `15-context-graph.md` | `director` | The most speculative change: an in-house map against tempograph, decided by `12`'s bake-off. |
+| System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
 
 ## Sports data
 
