@@ -1,0 +1,75 @@
+name: scorecard
+
+# Prompts/09-supply-chain-and-trust.md deliverable 4: OpenSSF Scorecard, once a
+# week, results to the repository's Security tab (code scanning). It grades
+# the repository's supply-chain hygiene: pinned actions, token permissions,
+# dangerous workflow patterns, branch protection and so on.
+#
+# Advisory. It fails nothing that is required: gate (test-agent.yml) does not
+# depend on it, and it is not a required check on main. Some of its checks
+# this repository fails on purpose (a solo maintainer, an app rather than a
+# package); .ai/docs/threat-model.md, "OpenSSF Scorecard", says which and why.
+# A low score is a prompt to read that list, not a broken build.
+#
+# Permissions (pinned by test_workflows.py):
+#   - permissions: {} at the top; the job is granted contents: read and
+#     actions: read, which Scorecard needs to read the code and the workflow
+#     runs, and security-events: write, which uploading SARIF to the
+#     Security tab needs. That is the only write, and it can write nothing
+#     but a code-scanning result.
+#   - publish_results: false. The results go to the Security tab only, not to
+#     the public Scorecard API, so the job is given no OIDC token.
+#   - no secret is referenced. The action reads with the job's own token,
+#     which is why Branch-Protection is scored only partly: reading the full
+#     ruleset needs an admin token, deliberately not given.
+#   - the checkout keeps no credential, and no branch's code runs here: the
+#     triggers are a schedule, a dispatch, and branch_protection_rule (a
+#     changed ruleset is worth a fresh score), all of which run main's copy,
+#     and the job refuses any other ref a dispatch might name.
+#
+# Every action is pinned to a full commit SHA. ossf/scorecard-action is a
+# docker action, and inside its action.yml the image is named by tag, not by
+# digest: a residual the SHA pin does not close.
+#
+# Gate first use, not merge: a schedule and a dispatch run only from the
+# default branch, so the first run is after this file is on main. What only a
+# live run proves: that the action runs with these three grants and no more,
+# that the SARIF upload is accepted into the Security tab, and which checks
+# actually score low (the threat-model list is the expectation, to be
+# confirmed against that first run).
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC: off the hour
+  workflow_dispatch:
+  branch_protection_rule:
+
+permissions: {}
+
+jobs:
+  analysis:
+    # main's copy only. A dispatch may name another ref; nothing from it runs.
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      # A docker action: its image is referenced by tag inside the action.
+      - name: Run the Scorecard checks
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload the results to the Security tab
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+        with:
+          sarif_file: results.sarif

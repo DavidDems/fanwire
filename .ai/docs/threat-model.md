@@ -105,3 +105,53 @@ by hand, (2) still fails the PR.
   agent's write permission for the duration of a task branch, which is why
   that permission is narrow and why nothing merges without a human.
 - **Runner compromise.** Out of scope; standard GitHub-hosted runner trust.
+
+## OpenSSF Scorecard: what this repository fails on purpose
+
+`.github/workflows/scorecard.yml` runs OpenSSF Scorecard weekly and uploads
+the result to the Security tab. It is advisory: it fails nothing, `gate` does
+not depend on it, and it is not a required check. Its job token can read, and
+write one thing, a code-scanning result; its results are not published.
+
+The checks below are **expected** to score low, and each is accepted for the
+reason given. This list is the expectation, to be confirmed against the first
+run (it can only run from `main`, after merge); correct it then.
+
+- **Code-Review.** Solo maintainer. The human authors Director PRs and merges
+  them through the ruleset's admin bypass, because GitHub never lets an author
+  approve their own PR (`wiki/GeneralContext/Architecture/github-automation-setup.md`
+  §3). Agent PRs, authored by `github-actions[bot]`, do get a real approval.
+  So Director changes show as merged unreviewed, which they are, by a second
+  person; the human reads every one before it lands.
+- **Branch-Protection.** The same bypass, and one more reason: reading a
+  ruleset in full needs an admin token, and the job is deliberately given
+  none. The score reflects what a read-only token can see, not the ruleset.
+- **Dangerous-Workflow.** Likely flags `coverage-check.yml` (it checks out the
+  PR's head under `pull_request_target`) and possibly `wiki-proposal.yml` (it
+  checks out the merged commit; spec-drift.yml checks out only the base). This
+  is the D2b pattern (`handoff.md` §10.1): `main`'s workflow file and `main`'s
+  scripts run, from a `tools/` checkout with `python -I`; the PR is checked
+  out beside them as data only, and nothing from it is executed; no checkout
+  keeps a credential, and each key sits in one step with no GitHub token.
+  `test_workflows.py` pins this (`TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData`,
+  `TestTheWikiProposalRunsMainsCopyAfterAMerge`). A pattern match cannot see
+  that the checkout is never run; the tests can.
+- **Pinned-Dependencies.** Partial. Actions are pinned by commit SHA, but the
+  Dockerfiles name their base images by tag (`public.ecr.aws/lambda/python:3.12`
+  in `docker/backend.Dockerfile`, `node:20-alpine` in `docker/frontend.Dockerfile`
+  and `docker/cdk-deploy.Dockerfile`), `pip install` runs without `--require-hashes`
+  (the backend Dockerfile, and `test-agent.yml`), and `agent-worker.yml`
+  installs the Claude Code CLI with `npm install -g`. `npm ci` installs from
+  the lockfile, which carries integrity hashes. Inside the Scorecard action
+  itself, its docker image is named by tag. Closing the rest is deliverable 2
+  (toolchain pins) and Renovate's job, not this workflow's.
+- **Fuzzing.** No fuzz targets. The boundaries that matter here are permission
+  checks, and those are pinned by tests that try the specific escapes.
+- **CII-Best-Practices.** No OpenSSF Best Practices badge; not applied for.
+- **Signed-Releases** and **Packaging.** This is an application deployed to
+  AWS by `deploy.yml`, not a package anyone downloads; there are no releases
+  to sign or packages to publish.
+- **Contributors.** One maintainer, one organisation, by design.
+- **Maintained**, **Security-Policy**, **License.** May score low or zero: a
+  young repository with no `SECURITY.md` and no top-level licence. Not
+  addressed by this workflow; noted so a low score there is not a surprise.

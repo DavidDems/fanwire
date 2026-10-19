@@ -93,21 +93,21 @@ jobs:
       # holds it after the merge (github.sha is normally the merge commit).
       # Not the PR's base.sha: GitHub does not refresh it on a reopen, so it
       # can predate fixes the workflow file (main's tip) already has.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.sha }}
           path: tools
           persist-credentials: false
 
       # The merge commit, as data, with its first parent for the diff.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           path: merged
           fetch-depth: 2
           persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 

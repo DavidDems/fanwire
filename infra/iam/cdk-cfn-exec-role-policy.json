@@ -8,6 +8,7 @@
         "acm:*",
         "apigateway:*",
         "cloudfront:*",
+        "cloudwatch:*",
         "cognito-idp:*",
         "dynamodb:*",
         "ec2:*",
@@ -22,6 +23,7 @@
         "scheduler:*",
         "secretsmanager:*",
         "ses:*",
+        "sns:*",
         "sqs:*",
         "wafv2:*"
       ],
