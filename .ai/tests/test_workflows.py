@@ -991,6 +991,11 @@ class TestActionsRunOnNode24:
         # download-artifact@v6 still declare node20.
         "actions/upload-artifact": 6,
         "actions/download-artifact": 7,
+        # Checked 2026-10-19 for scorecard.yml: codeql-action@v3's upload-sarif
+        # declares node20, v4's node24. scorecard-action is a docker action
+        # with no Node runtime; its floor is the major pinned.
+        "github/codeql-action": 4,
+        "ossf/scorecard-action": 2,
     }
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
@@ -2872,6 +2877,69 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
         assert "github-actions[bot]" in body
         assert "--method PATCH" in body and "body=@" in body
         assert "agent/$TASK_ID" in body
+
+
+class TestTheScorecardIsAdvisoryAndCanOnlyUploadSarif:
+    """Prompts/09-supply-chain-and-trust.md deliverable 4: OpenSSF Scorecard,
+    weekly, read-only, results to the Security tab, advisory. It runs no
+    branch's code and holds no secret; the one write it is given,
+    `security-events: write`, is what uploading SARIF needs, and the results
+    are not published (`publish_results: false`), so it needs no OIDC token.
+    It fails nothing that is required: `gate` does not depend on it."""
+
+    PATH = WORKFLOWS / "scorecard.yml"
+    JOB = "analysis"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert self.PATH.exists(), "scorecard.yml is missing"
+        return self.PATH.read_text(encoding="utf-8")
+
+    def test_a_schedule_or_a_dispatch_starts_it_and_nothing_from_a_branch(self, wf):
+        on = wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        triggers = set(re.findall(r"^  ([a-z_]+):", on, re.MULTILINE))
+        assert {"schedule", "workflow_dispatch"} <= triggers
+        assert triggers <= {"schedule", "workflow_dispatch", "branch_protection_rule"}, triggers
+        assert re.search(r"cron:\s*['\"]\d+ \d+ \* \* \d['\"]", on), "weekly, at a fixed minute"
+        assert not re.search(r"cron:\s*['\"]0 ", on), "off the hour, not on it"
+
+    def test_the_token_can_upload_sarif_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {
+            "contents": "read",
+            "actions": "read",
+            "security-events": "write",
+        }
+        assert "id-token" not in wf
+
+    def test_it_holds_no_secret(self, wf):
+        assert "secrets." not in wf
+        assert "github.token" not in wf and "GITHUB_TOKEN" not in wf
+
+    def test_the_checkout_keeps_no_credential(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 1
+        assert "persist-credentials: false" in checkouts[0]
+        assert "ref:" not in checkouts[0] and "repository:" not in checkouts[0]
+
+    def test_results_are_not_published(self, wf):
+        (scan,) = [s for s in steps_in(job_block(wf, self.JOB)) if "ossf/scorecard-action@" in s]
+        assert re.search(r"^\s+publish_results: false$", scan, re.MULTILINE)
+        assert "github/codeql-action/upload-sarif@" in wf
+
+    def test_the_job_is_bounded(self, wf):
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(wf, self.JOB), re.MULTILINE)
+
+    def test_it_is_not_part_of_the_required_gate(self, wf):
+        gate = TEST_AGENT_WF.read_text(encoding="utf-8")
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert self.JOB not in needs and "scorecard" not in needs
+        assert "scorecard" not in gate
 
 
 class TestTheWikiProposalRunsMainsCopyAfterAMerge:
