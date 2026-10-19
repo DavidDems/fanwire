@@ -45,7 +45,8 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
    returned a 200 with `confidence` the same day (run 38422783284,
    $0.0000184), so automations 2 and 3 may ask it in shadow.
 
-11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`; pin the CLI at 2.1.280.
+11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`. The CLI pin
+    moved to `Prompts/09` deliverable 2 (2026-10-19).
 12. `director`: The CI half of bug 17.
 14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
@@ -60,6 +61,28 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
     `agentctl shadow report`.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
+
+## Improvement roadmap
+
+From the Director's review of 2026-10-19, agreed with the human. There are
+two tracks, and they run in parallel because they share no files except
+`deploy.yml` (`08` deliverable 4). Within a track the order is a dependency
+order. Each brief is in `wiki/GeneralContext/Prompts/`.
+The decisions the briefs raised were answered by the human on
+2026-10-19 (`Architecture/human-decisions.md` §8), and each brief records
+its answer.
+
+| Order | Brief | Mode | Why it's here |
+|---|---|---|---|
+| App 1 | `08-production-hardening.md` | `hand` + `director` | The per-user post rate limit and spam score are fakes in production, there are no alarms, and no deploy is checked. These are live risks, so they start now. |
+| App 2 | `16-performance-tests.md` | `hand` | k6 locally, P95/P99 as a regression gate. Goes after `08` because the new rate limiter must be configurable for virtual users. |
+| System 1 | `09-supply-chain-and-trust.md` | `director` | Small, and first so that every workflow added later is born SHA-pinned. Absorbs item 11's CLI pin. |
+| System 2 | `10-docs-structure.md` | `director` | Every later brief writes docs. Typed docs and a ratcheted linter stop that work from adding drift. |
+| System 3 | `11-metrics-every-mode.md` | `director` | The sensor. `12` needs its record format and the pipeline version. |
+| System 4 | `12-agent-evals.md` | `director` | The test harness. Its first run is the baseline `13`–`15` are judged against. |
+| System 5 | `13-worker-shell.md` | `director` | The biggest bottleneck (CI round trips). The first change scored by `12`. |
+| System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
+| System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
 
 ## Sports data
 
@@ -78,7 +101,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
 | **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `hand` | — | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
-| **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | `hand` | — | the runbook's known gap | Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
+| **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | `hand` | — | the runbook's known gap | Now part of `Prompts/08` deliverable 3 (`INFRA-004`). Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (#161), `0x03-posts.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
 

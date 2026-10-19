@@ -125,3 +125,21 @@ The review in §6 reported; its findings (D1–D7) and evidence are
 - **Repository settings changed**: fork-PR workflow approval is now
   `all_external_contributors`; `AI_GATEWAY_API_KEY` deleted. Both are
   recorded in `github-automation-setup.md`.
+
+## §8. The improvement roadmap (2026-10-19)
+
+The roadmap's open questions (`TODO/02-backlog.md` "Improvement
+roadmap"), answered by the human before any brief started:
+
+- **Spam scoring** (`Prompts/08`): deterministic heuristics.
+- **Unit metrics storage** (`Prompts/11`): a `metrics` data branch.
+- **Where evals run** (`Prompts/12`): locally, on the human's subscription.
+- **Who runs a wiki maintenance pass** (`Prompts/10`): a Director session,
+  before any automated pass is considered.
+- **Independent review of Director PRs** (`Prompts/09`): `claude-sonnet-5-5`;
+  Haiku is too light for reading workflow diffs.
+- **The context graph** (`Prompts/15`): our own thin generator on mature
+  parsers (`ast`, the TypeScript compiler API, `cdk synth` output). It
+  supplements the docs and doesn't replace them. It also enforces the
+  connection rule. tempograph is not adopted, and is at most an optional
+  comparison arm in the bake-off.
