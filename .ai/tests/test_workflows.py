@@ -27,6 +27,7 @@ CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
 SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
 WIKI_PROPOSAL = WORKFLOWS / "wiki-proposal.yml"
+RENOVATE = WORKFLOWS.parent / "renovate.json"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -2252,6 +2253,76 @@ class TestTheJevSmokeIsDispatchOnly:
         assert "--require-confidence" in body
         assert '--summary "$GITHUB_STEP_SUMMARY"' in body
         assert ".ai/questions/smoke.json" in body
+
+
+class TestRenovateNeverMergesAnything:
+    """Prompts/09-supply-chain-and-trust.md deliverable 3, and philosophy.md
+    §8 ("No auto-merge ... this one is load-bearing"): Renovate keeps the
+    dependencies and the SHA-pinned actions current, weekly, and a human
+    merges every one of its PRs. Plain JSON, so this stdlib test reads it."""
+
+    @pytest.fixture
+    def config(self) -> dict:
+        assert RENOVATE.exists(), ".github/renovate.json is missing"
+        return json.loads(RENOVATE.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _walk(node, path="$"):
+        yield path, node
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}[{i}]")
+
+    def test_nothing_turns_automerge_on(self, config):
+        """Anywhere: top level, a packageRule, a group, a lockfile setting."""
+        on = [
+            path
+            for path, node in self._walk(config)
+            if isinstance(node, dict)
+            for key, value in node.items()
+            if key.lower().endswith("automerge") and value is True
+        ]
+        assert not on, f"automerge is on at {on}"
+        assert config.get("automerge") is False
+        assert config.get("platformAutomerge") is False
+
+    def test_no_preset_brings_automerge_in(self, config):
+        presets = [p for p in config.get("extends", []) if "automerge" in p.lower()]
+        assert all(p.endswith(":automergeDisabled") for p in presets), presets
+
+    def test_nothing_is_proposed_before_three_days(self, config):
+        """A release pulled within days (a compromised publish) never reaches
+        a PR. `strict` holds the branch itself back, not just its status."""
+        ages = [
+            (path, node["minimumReleaseAge"])
+            for path, node in self._walk(config)
+            if isinstance(node, dict) and "minimumReleaseAge" in node
+        ]
+        assert any(path == "$" for path, _ in ages), "no top-level minimumReleaseAge"
+        for path, age in ages:
+            m = re.fullmatch(r"(\d+)\s*(day|days|week|weeks)", age.strip())
+            assert m, f"{path}: unreadable minimumReleaseAge {age!r}"
+            days = int(m.group(1)) * (7 if m.group(2).startswith("week") else 1)
+            assert days >= 3, f"{path}: minimumReleaseAge {age!r} is under 3 days"
+        assert config.get("internalChecksFilter") == "strict"
+
+    def test_its_branches_are_not_agent_branches(self, config):
+        """`agent/*` is the worker's namespace: the guard would hold such a
+        PR against a task spec it does not have, and Renovate is not a worker."""
+        prefix = config.get("branchPrefix")
+        assert prefix, "branchPrefix must be stated, not left to the default"
+        assert not prefix.startswith("agent/")
+        for path, node in self._walk(config):
+            if isinstance(node, dict) and "branchPrefix" in node:
+                assert not node["branchPrefix"].startswith("agent/"), path
+
+    def test_action_pins_stay_pinned(self, config):
+        """Deliverable 1 pins every action to a full SHA; this keeps the SHA
+        and its `# vN` comment current instead of loosening it to a tag."""
+        assert "helpers:pinGitHubActionDigests" in config.get("extends", [])
 
 
 class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
