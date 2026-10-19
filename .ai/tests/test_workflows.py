@@ -874,6 +874,11 @@ class TestActionsRunOnNode24:
         # download-artifact@v6 still declare node20.
         "actions/upload-artifact": 6,
         "actions/download-artifact": 7,
+        # Checked 2026-10-19 for scorecard.yml: codeql-action@v3's upload-sarif
+        # declares node20, v4's node24. scorecard-action is a docker action
+        # with no Node runtime; its floor is the major pinned.
+        "github/codeql-action": 4,
+        "ossf/scorecard-action": 2,
     }
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
