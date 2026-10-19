@@ -862,3 +862,28 @@ Console.
 Before dispatch the spec had drifted (criteria named a `Quarantined` status
 that no longer exists; #122 fixed the wording). Recheck a spec against the
 code, not just `task validate`, before every first dispatch.
+
+### 10.6 Supply chain and trust, 2026-10-19 (`Prompts/09`, deleted)
+
+Merged: #174 every action SHA-pinned (`TestEveryActionIsPinnedToACommit`),
+plus the repository setting that refuses an unpinned action; #175 the CLI
+pinned at **2.1.295** in `config.json` (§5.6), ruff 0.17.1 and mypy 2.4.0
+pinned exactly; #176 Renovate; #177 OpenSSF Scorecard; #178 `director-review`,
+an advisory Sonnet 5.5 reader of Director PRs. The settings are recorded in
+`wiki/GeneralContext/Architecture/github-automation-setup.md` §1.
+
+Proven live: the pinned deploy actions under the selected-actions allowlist
+(deploy runs 39309832485 and 39317008407, both green).
+
+**Unproven until it happens:**
+- **The pinned CLI install** and its `claude --version` check on a hosted
+  runner. The first worker run will exercise them.
+- **Renovate actually running.** The app is installed. The proof is the
+  Dependency Dashboard issue, then a first grouped PR and the CLI regex
+  manager's PR.
+- **Scorecard's first run** (never dispatched), and whether
+  `threat-model.md`'s list of expected failures matches it.
+- **`director-review`'s first run**, on the next Director PR touching `.ai/`
+  or `.github/`. That run proves `between_tools` with a 2000-token cap on
+  Sonnet 5.5, the `paths:` filter, and the real cost. A `refusal` from Sonnet
+  5.5's classifiers would post no comment, and the job summary would say why.

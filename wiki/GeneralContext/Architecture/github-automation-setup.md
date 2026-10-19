@@ -5,8 +5,10 @@ agent pipeline depends on is in place and has been exercised by a real task
 running unattended end to end. **Revised
 2026-10-08** after the workflow review (`.ai/docs/handoff.md` §10): fork-PR
 approval tightened, the secrets changed, spend controls added, and
-`action_required` decided. **Outstanding since 2026-10-19:** installing the
-Renovate app (§7).
+`action_required` decided. **Revised 2026-10-19** (supply chain, PRs
+#174–#178): only selected actions may run and each must be pinned to a commit
+SHA, secret scanning and push protection are on (§1, "Which actions may
+run"), and Renovate is installed (§7) but not yet seen running.
 
 **Human-facing.** This page records *what is configured, and why* — the settings
 themselves live in GitHub's UI and API, where they are invisible to the
@@ -58,6 +60,35 @@ why the job refuses forks and never executes the PR's files.
 **`wiki-proposal` runs when any pull request closes** and is skipped unless
 an `agent/*` branch of this repository merged. Then it spends one Haiku 5.5
 call, unless the task's spec names no module file.
+
+**`director-review` runs on a pull request to `main` that touches `.ai/` or
+`.github/`** (`pull_request_target`, 2026-10-19, #178) and is skipped for an
+`agent/*` branch, a bot's PR or a fork. Then it spends one Sonnet 5.5 call
+(about $0.05) and posts one advisory comment. It fails nothing.
+
+**`scorecard` runs weekly** (Mondays 06:17 UTC, #177), from `main`, with no
+secret and no model call. Its results go to the Security tab; it is advisory.
+
+### Which actions may run, and how they are pinned
+
+Set by the human and read back with `gh api` on 2026-10-19:
+
+| Setting (Settings → Actions → General, unless noted) | Value |
+|---|---|
+| Actions permissions | **Allow DavidDems, and select non-DavidDems, actions and reusable workflows**. "Allowed by GitHub" and "verified creators" are unticked |
+| Allowed patterns | `actions/*`, `aws-actions/*`, `docker/*`, `github/*`, `ossf/*` |
+| Require actions to be pinned to a full-length commit SHA | **On** |
+| Workflow permissions | **Read repository contents and packages permissions** |
+| Allow GitHub Actions to create and approve pull requests | **On**: the orchestrator opens review PRs (§4). No workflow approves anything (`TestNoWorkflowCanApprove`) |
+| Security → Advanced Security: secret scanning, push protection | **On** |
+
+The pin requirement is the server-side half of
+`TestEveryActionIsPinnedToACommit`. The test stops an unpinned `uses:`
+reaching `main`, and the setting stops GitHub running one at all, including
+from an old commit. **A re-run of a deploy from before #174 now fails** at its
+first action, because that commit's `deploy.yml` uses tags. Re-deploy from a
+newer commit instead. A new action owner needs a pattern here before its first
+run. Renovate keeps the SHAs and their `# vN` comments current (§7).
 
 ### Fork pull requests need approval from every outside contributor
 
@@ -214,8 +245,10 @@ one.
 
 ## 7. Renovate
 
-**Added 2026-10-19** (`Prompts/09-supply-chain-and-trust.md` deliverable 3).
-**Not running until the human installs the app** (steps below). The config is
+**Added 2026-10-19** (#176). **The app is installed** (the human, 2026-10-19,
+on Mend's free plan). As of the end of that day it had created nothing yet: no
+Dependency Dashboard issue and no PR. That issue appearing is the proof it
+runs. The config is
 `.github/renovate.json`; `TestRenovateNeverMergesAnything` in
 `.ai/tests/test_workflows.py` holds its safety properties.
 
