@@ -71,13 +71,17 @@ One Director PR each, in order, test-first.
    Never estimate silently: `cost_source` keeps that distinction.
 3. **Collected after every merge, on a schedule.** A workflow with no model
    and no key: on `pull_request_target` closed+merged for `agent/*`, run
-   `main`'s `agentctl metrics collect`. Where do the records live? Workflows
-   can't push to `main`. **Ask the human** (`AskUserQuestion`):
-   - (a) a `metrics` data branch the workflow pushes to, outside the ruleset
-     and not protected. Recommended: durable, diffable, free.
-   - (b) workflow artifacts. They expire.
-   - (c) derived on demand every time, with no storage. Simplest, but slow,
-     and it depends on GitHub API history.
+   `main`'s `agentctl metrics collect`. **Storage: decided, a `metrics` data
+   branch** (the human, 2026-10-19, `Architecture/human-decisions.md` §8;
+   don't ask again).
+   - The workflow pushes one JSON per unit to it. The branch is outside the
+     `main` ruleset and holds only records.
+   - Give the push job `contents: write` and nothing else, and no model or
+     key.
+   - Add a structural test that the job checks out `metrics`, never `main`,
+     to write.
+   - If the ruleset's branch pattern would catch `metrics`, give the human
+     the setting to check as a manual step.
 4. **A pipeline version.** `.ai/VERSION` (semver) and a changelog entry,
    required by a CI check on any PR that changes `.ai/agentlib`, `.ai/bin`,
    `.ai/prompts`, `.ai/skills`, `.ai/policy.json`, `.ai/config.json` or an

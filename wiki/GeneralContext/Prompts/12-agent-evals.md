@@ -64,15 +64,15 @@ each restricted-tree edit in the PR body.**
 
    Results are one JSON per run, carrying the pipeline version, in `11`'s
    storage.
-3. **Where it runs: ask the human** (`AskUserQuestion`). Recommended:
-   **locally, on the subscription**, through the same CLI
-   (`invoke_agent.sh` against the human's logged-in CLI). That's $0
-   marginal, at the price of being started by the human.
-   - The CI variant on the API exists only as an option, run on a single
-     named case.
-   - Check whether the subscription's terms and limits allow headless
-     `claude -p` runs at this volume before recommending it. Cite what you
-     find.
+3. **Where it runs: decided, locally, on the human's subscription** (the
+   human, 2026-10-19, `Architecture/human-decisions.md` §8; don't ask
+   again).
+   - Use the same CLI (`invoke_agent.sh` against the human's logged-in CLI),
+     started by the human with one PowerShell line.
+   - Build no CI or API variant.
+   - Before the first full run, check the subscription's usage limits for
+     headless `claude -p` runs at this volume. Size the default suite and
+     `--runs` to fit, and say what you found.
 4. **Noise, measured before it's trusted.** Run the baseline 3 times per
    case. Report the mean and spread, and in `philosophy.md` §7 state the
    smallest difference that counts as a real change. A result inside the

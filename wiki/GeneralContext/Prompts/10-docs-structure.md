@@ -114,18 +114,13 @@ One Director PR each, in order.
      weekly. When there are 3 or more merges since the last maintenance PR
      (count by label) **and** the linter reports debt, it opens or updates a
      single issue, "Wiki maintenance due", listing the violations.
-   - **Ask the human** (`AskUserQuestion`) who does the pass:
-     - (a) the human starts a Director session with the skill, on the
-       subscription, $0. Recommended to start.
-     - (b) a scheduled Claude Code cloud routine on the subscription opens a
-       PR. The `schedule` skill; check what it can reach first.
-     - (c) an API job opens a PR. Sonnet-class, about $0.30–1 a pass.
-
-     For (b) or (c), the pass writes `wiki/GeneralContext/`, which no worker
-     may write. It has to land on a non-`agent/*` branch named
-     `wiki-maintenance/*`, with a new guard role whose only write is `wiki/**`
-     (a policy change; say so), plus human review. Do not build (b) or (c)
-     until the evals in `12` can score a maintenance pass.
+   - **Who does the pass: decided, a Director session** started by the
+     human with the skill, on the subscription (the human, 2026-10-19,
+     `Architecture/human-decisions.md` §8; don't ask again). The issue says
+     how to start one. Build no automated pass. Automating it would mean a
+     scheduled cloud routine or an API job opening a `wiki-maintenance/*` PR
+     under a new guard role whose only write is `wiki/**`. That is a later
+     proposal, only once `12` can score a maintenance pass.
 
 ## Design notes (starting points, not decisions)
 

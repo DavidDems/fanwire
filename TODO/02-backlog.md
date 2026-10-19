@@ -68,6 +68,9 @@ From the Director's review of 2026-10-19, agreed with the human. There are
 two tracks, and they run in parallel because they share no files except
 `deploy.yml` (`08` deliverable 4). Within a track the order is a dependency
 order. Each brief is in `wiki/GeneralContext/Prompts/`.
+The five decisions the briefs raised were answered by the human on
+2026-10-19 (`Architecture/human-decisions.md` §8), and each brief records
+its answer.
 
 | Order | Brief | Mode | Why it's here |
 |---|---|---|---|

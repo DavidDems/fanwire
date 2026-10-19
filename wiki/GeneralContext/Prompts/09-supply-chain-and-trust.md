@@ -81,8 +81,10 @@ structural assertion is committed alone, red, then the change.
    data (`promptbuild.py`), plus `philosophy.md` and `threat-model.md`. It
    makes one call and posts one comment listing safety regressions against
    the enforcement grades. It fails nothing.
-   - Model: **ask the human**. Haiku 5.5 is cheap but shallow. Sonnet 5.5 at
-     about $0.05 a PR reads a workflow diff properly.
+   - Model: **decided, `claude-sonnet-5-5`** (the human, 2026-10-19,
+     `Architecture/human-decisions.md` §8; don't ask again). Haiku is too
+     light for workflow diffs. Expect about $0.05 a PR, and record the real
+     cost in the comment footer, as the other automations do.
    - Keep every constraint in `work-modes.md` "Constraints every automation
      must keep". Reuse `agentlib/automation.py`; do not write a new HTTP
      client.

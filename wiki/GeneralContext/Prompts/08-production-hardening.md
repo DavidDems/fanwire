@@ -68,17 +68,13 @@ Order: 1 and 2 are independent; 3 needs 2's topic; 4 is last.
    limit, one over it, and a window boundary. Document it in `0x03-posts.md`.
    **Ask the human** (`AskUserQuestion`) for the limits: posts per minute and
    per hour.
-2. **A spam score with teeth (`POSTS-003`). This is a human decision first.**
-   Put three options to the human with their costs:
-   - (a) deterministic heuristics: link count, repeated characters, a new
-     account posting links. $0.
-   - (b) a Haiku 5.5 classification per post, about $0.0001 a post, with
-     the latency on the write path.
-   - (c) keep the fake and record the decision in `0x03-posts.md`.
-
-   Recommend (a). Whatever is chosen, the fakes stop being production
+2. **A spam score with teeth (`POSTS-003`). Decided: deterministic
+   heuristics** (the human, 2026-10-19, `Architecture/human-decisions.md`
+   §8; don't ask again). Score link count, repeated characters, and a new
+   account posting links. No model call. The fakes stop being production
    defaults: a missing real adapter must fail at startup in a deployed
    environment, which is the repo's fail-fast rule (`Standards/design-principles.md`).
+   The thresholds are yours to propose in the spec.
 3. **Alarms and where they go (`INFRA-004`).** One SNS topic with an email
    subscription. **The address is the human's to set by hand**, never
    committed. Alarms:
