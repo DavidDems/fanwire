@@ -1,8 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
@@ -19,6 +22,22 @@ export const CONSUMER_TIMEOUTS = {
   media: cdk.Duration.seconds(60),
 } as const;
 
+/** The period every fanwire alarm evaluates over. */
+export const ALARM_PERIOD = cdk.Duration.minutes(5);
+
+/** A message in a DLQ has failed every retry: the first one is worth an email. */
+const DLQ_DEPTH_THRESHOLD = 0;
+
+/**
+ * Sends both ALARM and OK of `alarm` to `topic`. Without the OK action an
+ * alarm goes quiet after its first email and nobody learns it recovered.
+ */
+export function notifyAlarmTopic(alarm: cloudwatch.Alarm, topic: sns.ITopic): void {
+  const action = new cwActions.SnsAction(topic);
+  alarm.addAlarmAction(action);
+  alarm.addOkAction(action);
+}
+
 /**
  * Async plumbing: the PostEventBus (EventBridge custom bus = the Observer
  * bus), the SQS queues that must survive a downstream outage (aws-stack.md
@@ -31,6 +50,8 @@ export class MessagingStack extends cdk.Stack {
   readonly ingestionRetryQueue: sqs.Queue;
   readonly ingestionDeadLetterQueue: sqs.Queue;
   readonly mediaScanResultQueue: sqs.Queue;
+  /** Where every fanwire alarm sends ALARM and OK; App's alarms import its ARN. */
+  readonly alarmTopic: sns.Topic;
 
   private readonly keyRef: kms.IKey;
 
@@ -38,6 +59,32 @@ export class MessagingStack extends cdk.Stack {
     super(scope, id, props);
     // Imported handle: stops Queue/target helpers adding grants to the key policy.
     this.keyRef = kms.Key.fromKeyArn(this, 'KeyRef', props.key.keyArn);
+
+    // --- the alarm topic. No CMK, deliberately: CloudWatch can publish to a
+    // KMS-encrypted topic only if the key policy grants
+    // cloudwatch.amazonaws.com, the one CMK's policy lives in Fanwire-Data,
+    // and this stack uses an imported key reference precisely so that it
+    // never edits that policy. Notifications carry alarm names, metrics and
+    // thresholds, no user data. No subscription either: the address is the
+    // human's, subscribed by hand and never committed.
+    this.alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: 'fanwire alarms',
+      enforceSSL: true,
+    });
+    // A topic policy replaces SNS's default one, so CloudWatch needs its own
+    // allow, scoped to this account's alarms (confused deputy).
+    this.alarmTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchAlarms',
+        principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [this.alarmTopic.topicArn],
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          ArnLike: { 'aws:SourceArn': `arn:${this.partition}:cloudwatch:${this.region}:${this.account}:alarm:*` },
+        },
+      }),
+    );
 
     this.postEventBus = new events.EventBus(this, 'PostEventBus', {
       eventBusName: 'PostEventBus',
@@ -102,7 +149,21 @@ export class MessagingStack extends cdk.Stack {
       deadLetterQueue: { queue: dlq, maxReceiveCount },
     });
     cdk.Tags.of(queue).add('purpose', purpose);
+    this.dlqDepthAlarm(id, dlq);
     return { queue, dlq };
+  }
+
+  /** Each DLQ alarms on its first message, beside the queue it watches. */
+  private dlqDepthAlarm(id: string, dlq: sqs.Queue): void {
+    const alarm = new cloudwatch.Alarm(this, `${id}DlqDepthAlarm`, {
+      alarmDescription: `fanwire: a message reached the ${id} dead-letter queue`,
+      metric: dlq.metricApproximateNumberOfMessagesVisible({ statistic: 'Maximum', period: ALARM_PERIOD }),
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      threshold: DLQ_DEPTH_THRESHOLD,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    notifyAlarmTopic(alarm, this.alarmTopic);
   }
 
   /**

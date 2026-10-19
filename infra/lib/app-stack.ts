@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaAuthorizer, HttpLambdaResponseType } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -11,12 +12,13 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ses from 'aws-cdk-lib/aws-ses';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { AuthStack } from './auth-stack';
 import { FanwireConfig } from './config';
 import { DataStack } from './data-stack';
-import { CONSUMER_TIMEOUTS, MessagingStack } from './messaging-stack';
+import { ALARM_PERIOD, CONSUMER_TIMEOUTS, MessagingStack, notifyAlarmTopic } from './messaging-stack';
 import { NetworkStack } from './network-stack';
 import { StorageStack } from './storage-stack';
 
@@ -27,6 +29,8 @@ export interface AppStackProps extends cdk.StackProps {
   readonly auth: AuthStack;
   readonly storage: StorageStack;
   readonly messaging: MessagingStack;
+  /** Messaging's alarm topic: every alarm in this stack sends ALARM and OK to it. */
+  readonly alarmTopic: sns.ITopic;
 }
 
 /** Repo root: the Lambda image's Docker build context. */
@@ -34,6 +38,27 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /** The only request header CloudFront adds that execute-api checks for. */
 export const ORIGIN_VERIFY_HEADER = 'x-origin-verify';
+
+/**
+ * Alarm thresholds. They start loose and are tightened from measurements
+ * (16-performance-tests gives the latency baseline).
+ */
+export const ALARM_THRESHOLDS = {
+  /** An absolute count, not a ratio: at today's traffic one error in two requests would be 50%. */
+  api5xxPerPeriod: 5,
+  /** Loose until the performance tests give a baseline; sustained over 3 of 3 periods. */
+  apiLatencyP95Ms: 3000,
+  apiLatencyP99Ms: 8000,
+  /** At this volume one is worth an email, and an alarm emails on a state change, not every period. */
+  lambdaErrorsPerPeriod: 1,
+  lambdaThrottlesPerPeriod: 1,
+  /** Sustained (3 of 3 periods), so one busy load or migration alone does not alarm. */
+  rdsCpuPercent: 80,
+  /** 10% of the instance's 20 GiB. */
+  rdsFreeStorageBytes: 2 * 1024 ** 3,
+  /** A t4g.micro allows roughly 80 to 110 connections: alarm well before the cap. */
+  rdsConnections: 60,
+} as const;
 
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
@@ -233,7 +258,7 @@ export class AppStack extends cdk.Stack {
         resultsCacheTtl: cdk.Duration.minutes(5),
       }),
     });
-    new apigwv2.HttpStage(this, 'DefaultStage', {
+    const stage = new apigwv2.HttpStage(this, 'DefaultStage', {
       httpApi: this.httpApi,
       stageName: '$default',
       autoDeploy: true,
@@ -246,6 +271,99 @@ export class AppStack extends cdk.Stack {
       value: `https://${this.httpApi.apiId}.execute-api.${this.region}.${this.urlSuffix}`,
       description: 'Direct execute-api URL (CloudFront origin only; direct requests get 401/403)',
     });
+
+    this.alarms(stage, data);
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: props.alarmTopic.topicArn,
+      description: 'Subscribe an address to this topic by hand to receive fanwire alarms (never committed)',
+    });
+  }
+
+  /**
+   * Alarms on the HTTP API stage, every Lambda function in this stack and the
+   * RDS instance, all to Messaging's alarm topic (the DLQ alarms sit beside
+   * their queues in Messaging). The function list is derived from the
+   * construct tree, not listed, so a new function cannot ship unwatched.
+   */
+  private alarms(stage: apigwv2.HttpStage, data: DataStack): void {
+    const t = ALARM_THRESHOLDS;
+    const { GREATER_THAN_THRESHOLD: GT, GREATER_THAN_OR_EQUAL_TO_THRESHOLD: GTE } = cloudwatch.ComparisonOperator;
+    const period = ALARM_PERIOD;
+
+    this.alarm('Api5xxAlarm', 'HTTP API 5xx responses', {
+      metric: stage.metricServerError({ statistic: 'Sum', period }),
+      comparisonOperator: GTE,
+      threshold: t.api5xxPerPeriod,
+    });
+    this.alarm('ApiLatencyP95Alarm', 'HTTP API p95 latency', {
+      metric: stage.metricLatency({ statistic: 'p95', period }),
+      comparisonOperator: GT,
+      threshold: t.apiLatencyP95Ms,
+      periods: 3,
+    });
+    this.alarm('ApiLatencyP99Alarm', 'HTTP API p99 latency', {
+      metric: stage.metricLatency({ statistic: 'p99', period }),
+      comparisonOperator: GT,
+      threshold: t.apiLatencyP99Ms,
+      periods: 3,
+    });
+
+    const functions = this.node.findAll().filter((c): c is lambda.Function => c instanceof lambda.Function);
+    for (const fn of functions) {
+      const id = fn.node.id;
+      this.alarm(`${id}ErrorsAlarm`, `${id} Lambda errors`, {
+        metric: fn.metricErrors({ statistic: 'Sum', period }),
+        comparisonOperator: GTE,
+        threshold: t.lambdaErrorsPerPeriod,
+      });
+      this.alarm(`${id}ThrottlesAlarm`, `${id} Lambda throttles`, {
+        metric: fn.metricThrottles({ statistic: 'Sum', period }),
+        comparisonOperator: GTE,
+        threshold: t.lambdaThrottlesPerPeriod,
+      });
+    }
+
+    const db = data.database;
+    this.alarm('RdsCpuAlarm', 'RDS CPU utilization', {
+      metric: db.metricCPUUtilization({ statistic: 'Average', period }),
+      comparisonOperator: GT,
+      threshold: t.rdsCpuPercent,
+      periods: 3,
+    });
+    this.alarm('RdsFreeStorageAlarm', 'RDS free storage', {
+      metric: db.metricFreeStorageSpace({ statistic: 'Minimum', period }),
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      threshold: t.rdsFreeStorageBytes,
+    });
+    this.alarm('RdsConnectionsAlarm', 'RDS connections', {
+      metric: db.metricDatabaseConnections({ statistic: 'Maximum', period }),
+      comparisonOperator: GT,
+      threshold: t.rdsConnections,
+    });
+  }
+
+  /** One alarm, `periods` of `periods` breaching (default 1), to the alarm topic. Missing data is not breaching. */
+  private alarm(
+    id: string,
+    what: string,
+    opts: {
+      metric: cloudwatch.IMetric;
+      comparisonOperator: cloudwatch.ComparisonOperator;
+      threshold: number;
+      periods?: number;
+    },
+  ): void {
+    const periods = opts.periods ?? 1;
+    const alarm = new cloudwatch.Alarm(this, id, {
+      alarmDescription: `fanwire: ${what}`,
+      metric: opts.metric,
+      comparisonOperator: opts.comparisonOperator,
+      threshold: opts.threshold,
+      evaluationPeriods: periods,
+      datapointsToAlarm: periods,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    notifyAlarmTopic(alarm, this.props.alarmTopic);
   }
 
   /**
