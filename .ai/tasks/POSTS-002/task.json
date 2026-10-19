@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-002",
+  "objective": "Replace the production FakeRateLimiter(allowed=True) with a real per-user post rate limiter that counts the author's own posts in a sliding window with one indexed query on posts, with limits from Settings, so one signed-in account can no longer publish without bound.",
+  "acceptance_criteria": [
+    "With the default limits (10 per minute, 100 per hour), an author with 9 posts created in the last minute can publish one more, and an author with 10 posts created in the last minute is refused.",
+    "An author with 99 posts created in the last hour, none of them in the last minute, can publish one more; an author with 100 posts created in the last hour is refused.",
+    "The windows slide and are measured against the database clock: a post created 59 seconds before now() counts against the minute limit and one created 61 seconds before does not; a post created 3599 seconds before now() counts against the hour limit and one created 3601 seconds before does not.",
+    "Only the author's own posts count: any number of posts by other authors never refuses this author.",
+    "Every kind of post counts and every kind is limited: originals, replies, quote reposts, and plain reposts, including those made through POST /posts/{post_id}/repost.",
+    "A refused post answers HTTP 429 with a detail on both POST /posts and POST /posts/{post_id}/repost, persists nothing and publishes no event. Every other moderation refusal keeps answering 400.",
+    "The limits come from Settings as POST_RATE_LIMIT_PER_MINUTE and POST_RATE_LIMIT_PER_HOUR, defaulting to 10 and 100; zero, a negative number or a non-integer makes Settings construction fail.",
+    "One rate-limit check issues exactly one SQL statement (a test counts statements with before_cursor_execute).",
+    "An Alembic revision adds an index on posts (author_id, created_at); it upgrades and downgrades cleanly against a real Postgres, as the existing migration tests do.",
+    "get_moderation_chain wires the real limiter, in the same fixed chain position (ProfanityFilter -> SpamScoreCheck -> RateLimitCheck -> DuplicateContentCheck); the chain it builds contains no FakeRateLimiter.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts match the backend."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/settings.py",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x03-posts.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/events/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/pyproject.toml",
+    "frontend/src/features/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
