@@ -41,6 +41,45 @@ You are a **Director** (`AGENTS.md` "Agent system"). Every deliverable edits
 - Director PRs merge through the "Repository admin" bypass. Agent PRs are
   bot-authored and get a real approval.
 
+## Progress (Director session, 2026-10-19)
+
+Deliverables 1–5 are open as PRs. The full `.ai` suite passed on a merged
+preview of all five (1362 passed). The next session starts here:
+
+| # | PR | Waiting on |
+|---|---|---|
+| 1 | #174 SHA-pin every action | review; merge **before #177** |
+| 2 | #175 CLI 2.1.295, ruff 0.17.1, mypy 2.4.0 | the human's OK on the dependency change (in the PR) |
+| 3 | #176 Renovate | merge, then the human installs the app (`github-automation-setup.md` §7) |
+| 4 | #177 Scorecard | #174 first (it contains #174's commits); dispatch once after merge |
+| 5 | #178 Director-PR reviewer | first live run = the next Director PR touching `.ai/`/`.github/` after merge |
+| 6 | settings audit | the human, from the list below; then record it in `github-automation-setup.md` |
+
+Found along the way:
+- CLI: MEDIA-002's worker runs (2026-10-09) proved **2.1.295**, not handoff's
+  2.1.280. `claude --help` on it shows both D2b flags.
+- ruff/mypy: CI's last green `main` run resolved 0.17.1 / 2.4.0.
+- Settings read with `gh api` on 2026-10-19: Actions allowed **all**, SHA
+  pinning not required, default token read-only, "Actions can create and
+  approve PRs" on (needed for §4 of the setup page; no workflow approves,
+  `TestNoWorkflowCanApprove`), secret scanning, push protection and
+  Dependabot security updates **off**.
+
+Deliverable 6, for the human (Settings of `DavidDems/fanwire`):
+1. Security → Advanced Security → **Secret Protection**: enable (free on a
+   public repo), then **Push protection**: enable.
+2. Actions → General → Actions permissions: **Allow DavidDems, and select
+   non-DavidDems, actions and reusable workflows**; untick "allowed by
+   GitHub" and "verified creators"; in the pattern box, one per line:
+   `actions/*`, `aws-actions/*`, `docker/*`, plus `ossf/*`, `github/*` once
+   #177 merges. Save.
+3. Same page, after #174 merges: tick **Require actions to be pinned to a
+   full-length commit SHA**. Save.
+4. Same page, Workflow permissions: confirm **Read repository contents and
+   packages permissions** stays selected (it is today).
+5. Tell the Director what each page shows. It records the result in
+   `github-automation-setup.md` and deletes this brief once the PRs are merged.
+
 ## Deliverables
 
 One Director PR each, cut from `origin/main`, in this order. Test-first: the
