@@ -17,6 +17,9 @@
     "anthropic": {
       "api_key_secret": "ANTHROPIC_API_KEY",
       "invoke": "claude",
+      "cli_package": "@anthropic-ai/claude-code",
+      "cli_version": "2.1.295",
+      "_cli_note": "The one place the provider CLI's version lives (handoff.md section 5.6). agent-worker.yml reads it from main's copy, checks it is an exact x.y.z, installs it and refuses to run if `claude --version` reports anything else. 2.1.295 is what the last live runs installed and ran (MEDIA-002, worker runs 37874920927 and 37876678705, 2026-10-09); `claude --help` on it was re-checked 2026-10-19 for --setting-sources and --strict-mcp-config, the flags invoke_agent.sh starts it with (D2b). A bump means re-checking those two flags on the new version first, and is a reviewed diff to this line.",
       "_api_note": "api_key_env, endpoint and api_version are for the direct Messages API calls the cheap automations make (automations below), stdlib urllib, no SDK. The roles above go through the claude CLI instead.",
       "api_key_env": "ANTHROPIC_API_KEY",
       "endpoint": "https://api.anthropic.com/v1/messages",
@@ -61,7 +64,7 @@
   },
 
   "automations": {
-    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS; wikiprop.MAX_TOKENS, MAX_DIFF_CHARS).",
+    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS; wikiprop.MAX_TOKENS, MAX_DIFF_CHARS; directorreview.MAX_TOKENS, MAX_DIFF_CHARS).",
     "ci_summary": {
       "_why": "Prompts/04 automation 1: one sentence naming the likely cause of a red agent/* PR run, beside ciresult's deterministic parse. .ai/bin/ci_summary.py, run by .github/workflows/ci-summary.yml.",
       "provider": "anthropic",
@@ -90,6 +93,13 @@
       "provider": "anthropic",
       "model": "claude-haiku-5-5",
       "max_tokens": 4000,
+      "max_diff_chars": 150000
+    },
+    "director_review": {
+      "_why": "Prompts/09 deliverable 5: a Director PR is reviewed by the one human who directed it and merges through the admin bypass, so an independent model reads every non-agent/*, non-bot PR of this repository touching .ai/ or .github/ against philosophy.md and threat-model.md on main, and lists safety regressions by enforcement grade; advisory, fails nothing. Sonnet 5.5, not Haiku: the human, 2026-10-19 (human-decisions.md section 8), Haiku is too light for workflow diffs. About $0.05 a PR. .ai/bin/director_review.py, run by .github/workflows/director-review.yml.",
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "max_tokens": 2000,
       "max_diff_chars": 150000
     }
   },

@@ -68,10 +68,12 @@ task state, approves or merges anything.
 | **CI failure summary** | When CI fails on an `agent/*` PR | What failed, where, and the likely cause, in a few lines | Saves reading a raw Actions log, which is most of a failed run's diagnosis time. |
 | **Criteria coverage check** | When an `agent/*` PR opens or updates | Which acceptance criteria does no test pin? | Hand runs have no Manager reviewing coverage; this is the cheap substitute. |
 | **Wiki update proposal** | After an `agent/*` PR merges | Did this change a documented decision in `wiki/CodeContext/Modules/`? If so, a proposed edit | The context maintainer did nothing for `MEDIA-002`, and module files drifting from code is a recurring cost. |
+| **Director review** | When a Director PR (not `agent/*`, not a bot's) touching `.ai/` or `.github/` opens or updates | Does this diff move a safety control to a weaker enforcement grade (`philosophy.md` §4)? | A Director PR is reviewed by the one human who directed it and merges through the admin bypass; this is the only other reader. On **`claude-sonnet-5-5`**, not Haiku (the human, 2026-10-19, `human-decisions.md` §8): about **USD $0.05 a PR**. |
 
 **Rough cost:** a Haiku 5.5 call reading 20K tokens and writing 1K costs
 about USD $0.0025. At a few units a week, all four together come to well under
-a dollar a month. Every one must record what it actually cost (D6's lesson:
+a dollar a month. The Director review is the one on Sonnet 5.5, at about
+$0.05 a Director PR. Every one must record what it actually cost (D6's lesson:
 read the provider's usage, including cache tokens, not an estimate).
 
 ### Constraints every automation must keep
@@ -179,3 +181,15 @@ One structure for every mode, so any session can start cold:
   applies. One comment on the merged PR (the human's option (a)): "no
   documented decision changed", or the patch and `git apply wiki.patch`.
   Nothing is committed. **Proven live 2026-10-15** on #155's merge, $0.0076.
+- **Director review built** (2026-10-19, `Prompts/09` deliverable 5):
+  `.github/workflows/director-review.yml` runs `main`'s copy on
+  `pull_request_target` when a PR from this repository whose branch is not
+  `agent/*` and whose author is not a bot touches `.ai/` or `.github/`. The
+  PR's diff (`.ai/` and `.github/` first, capped) and `philosophy.md` and
+  `threat-model.md` from `main` go to Sonnet 5.5, which lists each safety
+  regression with its path and the grade it falls from and to; a finding on
+  a path the diff does not show, or with a grade that does not drop, is
+  dropped. One advisory comment, kept up to date, with the cost. It fails
+  nothing, its own errors included, and is not under `gate`. **Not yet
+  proven live**: its first run is the first Director PR touching `.ai/` or
+  `.github/` after it merges.

@@ -43,8 +43,8 @@ dev = [
     "factory-boy>=3.3",
     "faker>=30.0",
     "freezegun>=1.5",               # mock time for TTL/idempotency-key tests
-    "ruff>=0.6",                    # lint + format (replaces flake8/isort/black)
-    "mypy>=1.11",
+    "ruff==0.17.1",                 # lint + format (replaces flake8/isort/black)
+    "mypy==2.4.0",
     "pip-audit>=2.7",               # CVE scan, reference/Security.md — blocks merge on a hit
     "pre-commit>=3.8",
 ]

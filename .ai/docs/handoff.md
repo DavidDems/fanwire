@@ -332,13 +332,26 @@ an order of magnitude for a job that performs one transition and exits.
 workflow drops its timeout — per §4's rule, the fix and its structural test
 landed together.
 
-### 5.6 The provider CLI is installed unpinned
+### 5.6 The provider CLI is installed unpinned — closed 2026-10-19
 
-`agent-worker.yml` runs `npm install -g @anthropic-ai/claude-code` on every run.
-The CLI can change under you and break the workflow with no change on your side.
-Pin a version, or move to a self-hosted runner with it preinstalled. (This
-said it costs ~20–30s per invocation. Measured 2026-10-08 on USERS-002's three
-worker runs it is 3–4s, so pinning is for stability, not speed — §10.)
+`agent-worker.yml` ran `npm install -g @anthropic-ai/claude-code` on every run,
+so the CLI could change under you and break the workflow with no change on
+your side. (This said it costs ~20–30s per invocation. Measured 2026-10-08 on
+USERS-002's three worker runs it is 3–4s, so pinning is for stability, not
+speed — §10.)
+
+**Closed** (`Prompts/09` deliverable 2): pinned at **2.1.295**, the version the
+last live runs installed and ran (MEDIA-002, worker runs 37874920927 and
+37876678705, 2026-10-09). The one place is `.ai/config.json`,
+`providers.anthropic.cli_package` / `cli_version`. "Install the provider CLI"
+reads it from main's copy (`$TOOLS`), refuses anything but an exact `x.y.z`
+before npm sees it, installs `package@version`, and fails unless
+`claude --version` reports that version. `TestTheToolchainIsPinnedInOnePlace`
+fails a literal or unversioned install anywhere in `.github/workflows/` or
+`.ai/bin/`. **To bump:** run `claude --help` on the new version and confirm
+`--setting-sources` and `--strict-mcp-config` are still there (D2b;
+`invoke_agent.sh` starts the CLI with both), then change `cli_version` and its
+`_cli_note` in a Director PR. The first worker run after a bump is the proof.
 
 ### 5.7 Nothing here deploys, and that is deliberate
 
@@ -584,7 +597,7 @@ because none is done when the code merely changes.
    *Done when:* either a lost transition is detectable from the state file, or
    the design stops depending on queuing that does not exist.
 
-4. **§5.6, the unpinned provider CLI.** `npm install -g
+4. **§5.6, the unpinned provider CLI** (closed 2026-10-19, §5.6). `npm install -g
    @anthropic-ai/claude-code` on every run: it can change under you and break
    the workflow with no change on your side, and costs 20–30s an invocation.
    *Done when:* a version is pinned, and moving the pin is visible in a diff.
@@ -688,9 +701,9 @@ Grade is the enforcement the fix reaches (philosophy.md §4).
 | D2b | **Code the model writes runs with the PAT in reach** (found by the D2 implementer, 2026-10-08; confirmed against the YAML) | The worker's guard step filters `grep -v '^\.ai/'`, so a model's edits under `.ai/` are never checked, and "Commit the work" commits them. Later steps of the same job run `python .ai/bin/agentctl.py` from that working tree — code that can append a fake `gh` to `$GITHUB_PATH` before "Hand control back" runs with `AGENT_DISPATCH_TOKEN`. The orchestrator also runs the task branch's `agentctl` with the PAT in env; `agent-guard` imports the PR's own `agentlib`. File edits alone suffice: no shell needed. Also `.git/config` (`core.fsmonitor`) is writable by file tools and executes on the next git command. `TASK_ID_SAFE.match` accepts a trailing newline. Found while fixing it: "Push state and work" ran `git push`, with the token in env, from the model's `.git` (a planted `pre-push` hook runs); `invoke_agent.sh` ran from the task branch with the provider key; the CLI loads `.claude/settings*.json` hooks and `.mcp.json` from the checkout; a process the model leaves behind could rewrite `upload-artifact` under `_work/_actions`, whose runtime token writes the Actions cache `main` reads | The worker is two jobs (§10.3 item 7): `run-model` (`contents: read`, no GitHub credential) runs the model as the unprivileged `agentrun` user with `.git` moved out of its tree, kills everything it left, and uploads a patch; `land`, on a fresh runner, applies it, guards every path with no `.ai/` exception, and only then records, commits, pushes and hands back. Every `agentctl` in the worker, the orchestrator and `agent-guard` runs from a trusted checkout (`main`, or the PR's base) with `AGENTCTL_DATA_ROOT` naming the task tree, under `python -I`. All three refuse a branch whose `.ai/` differs from main beyond this task's bookkeeping, in bash before any python. A branch changing `.claude/` or `.mcp.json` is refused; the CLI runs with `--setting-sources user --strict-mcp-config`. `fullmatch` everywhere. **Closed in code 2026-10-08** (`TestModelWrittenCodeNeverRunsWithAToken`, `TestTheLandingGuardRunsAgainstARealPatch`); unproven until the first live run — see below the table | impossible |
 | D3 | Unbounded loop and silent stalls | **L1** a manager worker that applies no event is re-dispatched with no history entry, so no budget counts it (bug 5's shape); **S5** a worker cancelled or failing before the model call leaves `*_RUNNING` forever; **S8** a failed orchestrator action step skips the commit; **S1** conclusions other than success/failure/timed_out fall through (`:130`); **S2** a CI result arriving while paused is discarded; **S9** the documented ESCALATED recovery is illegal (`state.py:274,285`); **race** the worker is dispatched (`:207`) before `DISPATCH_*` is committed (`:231`) — USERS-002's margin was ~4s | Worker applies `AGENT_FAILED` from an `always()` step when the agent did not succeed; commit before dispatch; record the CI run id and dispatch time in `state.json` so a lost result is detectable; MANAGER_RETRY/RESCOPE legal from ESCALATED. **Closed in code 2026-10-08:** `DISPATCH_MANAGER` puts every manager call in the history, capped at `MAX_MANAGER_INVOCATIONS = 3`; `land` routes every outcome under `always()` and records an unappliable result as `AGENT_FAILED`; each result applies only from its role's own state (`--from-state`); the orchestrator advances, commits and pushes before it dispatches, escalates any failed action step, and maps all nine CI conclusions (`state.CI_CONCLUSIONS`: anything not a test verdict escalates); `last_dispatch`/`last_ci_run` in `state.json`, `agentctl status` reports `STALLED`; a result for a paused task is discarded with a notice and `operations.md`'s re-run recipe; MANAGER_RETRY/RESCOPE legal from ESCALATED, a late `AGENT_FAILED` there stays ESCALATED. D1's rule rechecked: CI now tests the tip | detected → escalated |
 | D4 | The red baseline accepts red for any reason | `state.py:251`; dispatched CI runs every suite, so an audit CVE, openapi drift, a broken test file or a tree-scan test tripped by the new test all count as "red as required" — then the code agent, which cannot edit tests, spends its budget | Run `ciresult` on the baseline too; require the failures to lie in files the test commit changed and no non-test job to have failed. **Closed in code 2026-10-09:** `ciresult.baseline_verdict` decides from the run's jobs and failed-job log (fetched by the orchestrator, passed as files), deterministically; anything else — a non-test job, a failure outside the test commit's files (every commit from `TEST_AGENT_RUNNING`, by `git diff-tree`), a cancelled test job, an unreadable log — is `CI_FAILED_WRONG_REASON` → MANAGER_REVIEW (`red_baseline_wrong_reason`), failing closed. Enforced in `agentctl state advance`, so a hand-dispatched `CI_FAILED` cannot force it. Pinned with `MEDIA-002`'s real baseline log; `TEST_JOBS` is kept in sync with `test-agent.yml` by a test. Also fixed: `distill` now strips `gh --log-failed`'s per-line prefix, without which every real log distilled to `ambiguous`. Unproven until a live failure: the log fetch from a `workflow_run` job, real vitest output (fixtures are hand-written), both suites red at once. Residue: it guards against incidental red, not a hostile test agent; MANAGER_RETRY after a baseline still skips the check (D3 residue); a re-run of a baseline still means editing `state.json` (`operations.md`) | escalated |
-| D5 | CI never type-checks, lints or builds the frontend; no ruff/mypy for the backend | the frontend test container runs `vitest run` only; `tsc` first runs in `deploy.yml`, after merge. Hand-run sessions ran these by hand; a worker cannot | `typecheck` + `lint` in the frontend job; ruff/mypy after measuring current debt. **Closed in code 2026-10-09** (human: fix everything in D5): the backend's 8 ruff findings and 17 mypy errors fixed (the notifications consumer now raises `MissingReferenceError` for a row an event names that does not exist, before committing — posts are never deleted, so that is a malformed event, dead-lettered); four required CI jobs, `backend-ruff`, `backend-mypy` (`app` only), `frontend-typecheck`, `frontend-lint`, in the suites' images, no dependency change. D4's baseline reads them: a tsc/mypy error in a test-commit file counts as right-reason red **only alongside a failed test job** (else a type error would open implementation with tests that pin nothing); a lint failure is never right reason (the code agent cannot edit the test file it is in). Unproven until live: the cache reads, `--log-failed`'s `Process completed` line, `compose run -T --no-deps --entrypoint` on the runner. Residue: ruff/mypy are `>=`-pinned, so a cache-evicted rebuild can bring new rules and turn every PR red (pin them — a dependency change); test agents cannot run lint (D7); `ruff format` is not gated; `distill` does not parse vitest's per-test lines | detected |
+| D5 | CI never type-checks, lints or builds the frontend; no ruff/mypy for the backend | the frontend test container runs `vitest run` only; `tsc` first runs in `deploy.yml`, after merge. Hand-run sessions ran these by hand; a worker cannot | `typecheck` + `lint` in the frontend job; ruff/mypy after measuring current debt. **Closed in code 2026-10-09** (human: fix everything in D5): the backend's 8 ruff findings and 17 mypy errors fixed (the notifications consumer now raises `MissingReferenceError` for a row an event names that does not exist, before committing — posts are never deleted, so that is a malformed event, dead-lettered); four required CI jobs, `backend-ruff`, `backend-mypy` (`app` only), `frontend-typecheck`, `frontend-lint`, in the suites' images, no dependency change. D4's baseline reads them: a tsc/mypy error in a test-commit file counts as right-reason red **only alongside a failed test job** (else a type error would open implementation with tests that pin nothing); a lint failure is never right reason (the code agent cannot edit the test file it is in). Unproven until live: the cache reads, `--log-failed`'s `Process completed` line, `compose run -T --no-deps --entrypoint` on the runner. Residue: ruff/mypy were `>=`-pinned, so a cache-evicted rebuild could bring new rules and turn every PR red — **pinned 2026-10-19** at `ruff==0.17.1`, `mypy==2.4.0`, the versions CI's last green main run built (test-agent run 39295837789; §5.6, `Prompts/09` deliverable 2); test agents cannot run lint (D7); `ruff format` is not gated; `distill` does not parse vitest's per-test lines | detected |
 | D6 | Telemetry is not the real spend | records show 30–66 input tokens for a 38.6 KB prompt (cache tokens dropped); `MEDIA-002` measured USD $2.65 real against $1.25 recorded (§10.5); prices in `config.json` stale | Record the CLI envelope's cost, cache tokens and permission denials (field names to confirm on the next run); fix prices. Human: compare the Console's 2026-09-23 bill with $0.38. **Closed in code 2026-10-09:** the CLI envelope's fields were confirmed on CLI 2.1.295; `invoke_agent.sh`/`agentresult` carry `total_cost_usd`, cache read/write tokens (1h/5m split), thinking tokens, `num_turns`, and `permission_denials` as `{count, tools}` (tool names only, filtered); telemetry schema 2 records the provider's cost as `cost_usd` with `cost_source: provider`, the estimate (now pricing cache tokens, null when it cannot be honest) only as fallback; `telemetry report` flags estimated records and shows denials. Prices updated, `*-5-5` rows added for item 5. The 8 records before D6 stay under-counted and are flagged. Unproven until live: the envelope on CI's CLI version, multi-turn cost, a real `permission_denials` entry, cost on a non-zero CLI exit. Residue: the provider figure is read from a file the model's user could touch (not a new boundary: the tokens came from the same file); nothing reconciles it with the Console | detected |
-| D7 | Hand-run lessons never reached the workers | `.ai/skills` lacks tree scans reading test files, prettier on named files, the Vitest 4 CSS Module proxy; `frontend-unit` tells a worker to run `npm`/`docker`, which it cannot | Port them from `director-sessions.md` / `FrontendUI/verification.md`. **Closed 2026-10-09:** the skills carry the tree-scan trap, the repo's prettier/ruff style (workers cannot format), the Vitest 4 CSS Module proxy and what a test may assert about classes, the eslint/tsc/ruff rules a test must pass now that D5 makes a lint-dirty test wrong-reason red, `globals: false`, msw's `onUnhandledRequest: "error"`; every instruction to run `npm`/`docker`/`pytest`/`git` is gone, replaced by which CI job runs what; the test- and code-agent prompts no longer tell a worker to commit (the workflow does). `tests/test_skills.py` fails any skill that hands a worker a shell command (a regex heuristic). Prompts grew ~1.5 KB. The ruff rule list follows the unpinned default set (pin it, D5 residue) | prompt only |
+| D7 | Hand-run lessons never reached the workers | `.ai/skills` lacks tree scans reading test files, prettier on named files, the Vitest 4 CSS Module proxy; `frontend-unit` tells a worker to run `npm`/`docker`, which it cannot | Port them from `director-sessions.md` / `FrontendUI/verification.md`. **Closed 2026-10-09:** the skills carry the tree-scan trap, the repo's prettier/ruff style (workers cannot format), the Vitest 4 CSS Module proxy and what a test may assert about classes, the eslint/tsc/ruff rules a test must pass now that D5 makes a lint-dirty test wrong-reason red, `globals: false`, msw's `onUnhandledRequest: "error"`; every instruction to run `npm`/`docker`/`pytest`/`git` is gone, replaced by which CI job runs what; the test- and code-agent prompts no longer tell a worker to commit (the workflow does). `tests/test_skills.py` fails any skill that hands a worker a shell command (a regex heuristic). Prompts grew ~1.5 KB. The ruff rule list followed the unpinned default set; ruff is pinned at 0.17.1 since 2026-10-19 (D5 residue), so it moves only with a reviewed bump | prompt only |
 
 Also from the enumeration, lower severity: `MAX_CONSECUTIVE_FAILURES` is
 unreachable through the workflows (it peaks at 2); `INFRA_FAILED` is emitted by
@@ -701,15 +714,16 @@ grants 1; `operations.md` lists `max_attempts_exhausted` and
 `MANAGER_REVIEW`.
 
 **D2b, what only the first live run proves** — `MEDIA-002` (§10.5) proved the
-normal path of every item below except the CLI version (installed unpinned)
-and `land` after a failed or cancelled `run-model`, which no step of it
+normal path of every item below except the CLI version (installed unpinned
+then; pinned at 2.1.295 since 2026-10-19, §5.6) and `land` after a failed or cancelled `run-model`, which no step of it
 exercised: artifact hand-over between the jobs, and `land` running after a
 failed or cancelled `run-model`; `agentrun` on a hosted runner — `useradd` and
 `sudo`, `o+x` being enough to reach the checkout, the tools and its I/O
 directory, the npm-global CLI on the `PATH` it is given and runnable by that
 user with an empty `HOME`, `pkill`/`pgrep`; the CLI accepting
-`--setting-sources user --strict-mcp-config` (checked on 2.1.293 only — check
-again when it is pinned, §10.3 item 5); `github.sha` being `main`'s commit for
+`--setting-sources user --strict-mcp-config` (checked on 2.1.293, then on
+2.1.295 when it was pinned, 2026-10-19 — `claude --help` only, no live run on
+the pin yet, §5.6); `github.sha` being `main`'s commit for
 both a dispatch and a `workflow_run`. `land` now also applies `AGENT_FAILED`
 when `run-model` died before the model ran, which is part of D3's S5.
 
@@ -787,7 +801,10 @@ affect (~6 min per frontend task) — safe only once D4 lands.
 5. **Also queued, after D1–D6** (decided 2026-10-08): D7; models to
    `claude-sonnet-5-5` (same price as Sonnet 5) and `claude-opus-5-5` for the
    Manager ($4/$20); the CLI pinned at 2.1.280, the version last seen working
-   (run 35821738883); §9.2 item 1, the CI half of bug 17.
+   (run 35821738883) — **done 2026-10-19 at 2.1.295 instead**: MEDIA-002's
+   worker runs (37874920927, 37876678705, 2026-10-09) installed and ran
+   2.1.295, superseding 2.1.280 as the last version seen working, and its
+   D2b flags were re-checked on it (§5.6); §9.2 item 1, the CI half of bug 17.
 6. **§9.2 item 5 is decided: keep `action_required` on bot-authored PRs.** A
    human approves the run before CI spends on agent work, and the PR needs
    that human's review to merge anyway. Deliberate, not a defect.

@@ -27,6 +27,7 @@ CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
 SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
 WIKI_PROPOSAL = WORKFLOWS / "wiki-proposal.yml"
+RENOVATE = WORKFLOWS.parent / "renovate.json"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -360,6 +361,122 @@ class TestNoWorkflowCanApprove:
         text = path.read_text(encoding="utf-8")
         assert "gh pr review" not in text
         assert "--approve" not in text
+
+
+class TestTheToolchainIsPinnedInOnePlace:
+    """`Prompts/09` deliverable 2, handoff.md §5.6. The provider CLI was
+    installed unpinned, so a release on npm could change the agent's behaviour,
+    or drop the D2b flags it is started with, with no diff here at all. Its
+    version now lives in one place, `.ai/config.json`, read from main's copy
+    (`$TOOLS`) and checked before npm sees it: a task branch cannot move it,
+    and moving it is a reviewed diff. The same for ruff and mypy (D5 residue):
+    `>=` let a cache-evicted rebuild bring new lint rules and turn every PR
+    red."""
+
+    CONFIG = Path(__file__).resolve().parents[1] / "config.json"
+    BIN = Path(__file__).resolve().parents[1] / "bin"
+    PYPROJECT = Path(__file__).resolve().parents[2] / "backend" / "pyproject.toml"
+    STEP = "Install the provider CLI"
+    PACKAGE = "@anthropic-ai/claude-code"
+    EXACT_SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
+    # An install of the CLI by any package manager, pinned or not.
+    INSTALLS_CLI = re.compile(r"\b(npm|npx|pnpm|yarn|bun)\b.*claude-code")
+
+    def anthropic(self) -> dict:
+        return json.loads(self.CONFIG.read_text(encoding="utf-8"))["providers"]["anthropic"]
+
+    def scripts(self) -> list[Path]:
+        return sorted(WORKFLOWS.glob("*.yml")) + sorted(p for p in self.BIN.iterdir() if p.is_file())
+
+    def test_config_names_the_package_and_one_exact_version(self):
+        cfg = self.anthropic()
+        assert cfg.get("cli_package") == self.PACKAGE
+        version = cfg.get("cli_version")
+        assert isinstance(version, str) and self.EXACT_SEMVER.fullmatch(version), (
+            f"providers.anthropic.cli_version must be an exact x.y.z, got {version!r}"
+        )
+
+    def test_nothing_installs_the_cli_but_the_worker_from_config(self):
+        version = self.anthropic()["cli_version"]
+        offenders = []
+        for path in self.scripts():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                code = line.split("#", 1)[0] if path.suffix in (".yml", ".sh", ".py") else line
+                if self.INSTALLS_CLI.search(code) or "claude-code@" in code:
+                    offenders.append(f"{path.name}: {line.strip()}")
+            if path.suffix == ".yml":
+                assert version not in path.read_text(encoding="utf-8"), (
+                    f"{path.name} names CLI version {version} literally; read it from config.json"
+                )
+        assert not offenders, (
+            "the CLI is installed only by agent-worker.yml, from config.json's "
+            "cli_package/cli_version:\n    " + "\n    ".join(offenders)
+        )
+
+    def test_the_install_step_reads_trusted_config_and_validates_first(self, worker):
+        body = step(worker, self.STEP)
+        script = run_bodies("steps:\n      - name: x\n" + body)[0]
+        assert '"$TOOLS/.ai/config.json"' in script, "read main's config, never the task tree's"
+        assert "${{" not in script, "values reach the script through env:, not ${{ }}"
+        assert "::error::" in script
+        npm = script.index('npm install -g "${CLI_PACKAGE}@${CLI_VERSION}"')
+        check = script.index("=~")
+        assert check < npm, "the version is checked before npm sees it"
+        assert "claude --version" in script[npm:], "the installed CLI must report the pin"
+
+    @pytest.mark.parametrize(
+        "version,installed,ok",
+        [
+            ("2.1.295", "2.1.295", True),
+            ("2.1.295", "2.1.303", False),  # npm resolved something else
+            ("latest", None, False),
+            ("2.1", None, False),
+            ("^2.1.295", None, False),
+            ("2.1.295; touch pwned", None, False),
+            ("2.1.295\n", None, False),
+            ("02.1.295", None, False),
+        ],
+    )
+    def test_the_install_step_refuses_anything_but_the_pin(
+        self, worker, tmp_path, version, installed, ok
+    ):
+        tools = tmp_path / "tools"
+        (tools / ".ai").mkdir(parents=True)
+        cfg = {"providers": {"anthropic": {"cli_package": self.PACKAGE, "cli_version": version}}}
+        (tools / ".ai" / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        fake = tmp_path / "fakebin"
+        fake.mkdir()
+        log = tmp_path / "npm.log"
+        (fake / "npm").write_text(f'#!/bin/sh\necho "$@" >> "{log.as_posix()}"\n', encoding="utf-8")
+        (fake / "claude").write_text(
+            f'#!/bin/sh\necho "{installed or "0.0.0"} (Claude Code)"\n', encoding="utf-8"
+        )
+        for f in fake.iterdir():
+            f.chmod(0o755)
+        script = run_bodies("steps:\n      - name: x\n" + step(worker, self.STEP))[0]
+        bash_path = fake.as_posix()
+        if sys.platform == "win32" and re.match(r"^[A-Za-z]:/", bash_path):
+            bash_path = "/" + bash_path[0].lower() + bash_path[2:]
+        code, _ = run_step_body(
+            f'export PATH="{bash_path}:$PATH"\n' + script,
+            {"TOOLS": tools.as_posix()},
+            tmp_path,
+        )
+        assert (code == 0) is ok
+        if installed is None:
+            assert not log.exists(), "npm ran with a version that failed the check"
+        else:
+            assert f"install -g {self.PACKAGE}@{version}" in log.read_text(encoding="utf-8")
+
+    def test_backend_lint_and_type_check_are_exactly_pinned(self):
+        text = self.PYPROJECT.read_text(encoding="utf-8")
+        for tool in ("ruff", "mypy"):
+            specs = re.findall(rf'"{tool}([^"]*)"', text)
+            assert specs, f"backend/pyproject.toml does not list {tool}"
+            for spec in specs:
+                assert re.fullmatch(r"==\d+\.\d+\.\d+", spec), (
+                    f"{tool}{spec}: pin it with == so a rebuilt image cannot bring new rules"
+                )
 
 
 class TestAFinishedTaskDoesNotFailTheOrchestrator:
@@ -874,19 +991,75 @@ class TestActionsRunOnNode24:
         # download-artifact@v6 still declare node20.
         "actions/upload-artifact": 6,
         "actions/download-artifact": 7,
+        # Checked 2026-10-19 for scorecard.yml: codeql-action@v3's upload-sarif
+        # declares node20, v4's node24. scorecard-action is a docker action
+        # with no Node runtime; its floor is the major pinned.
+        "github/codeql-action": 4,
+        "ossf/scorecard-action": 2,
     }
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
     def test_no_action_is_pinned_to_a_node20_major(self, path):
+        # The ref is a commit SHA (TestEveryActionIsPinnedToACommit), so the
+        # major is read from the trailing `# vN` comment. A `uses:` with no
+        # version fails rather than being skipped, or this test goes vacuous.
         for line in path.read_text(encoding="utf-8").splitlines():
-            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@v(\d+)", line)
-            if not m or line.lstrip().startswith("#"):
+            if line.lstrip().startswith("#"):
                 continue
-            action, major = m.group(1), int(m.group(2))
+            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)\S*", line)
+            if not m:
+                continue
+            v = re.search(r"#\s*v(\d+)\b", line[m.end():])
+            assert v, f"{path.name}: no `# vN` version on: {line.strip()}"
+            action, major = m.group(1), int(v.group(1))
             assert action in self.MIN_MAJOR, f"{path.name}: {action} has no Node 24 floor here"
             assert major >= self.MIN_MAJOR[action], (
                 f"{path.name}: {action}@v{major} is a Node 20 major"
             )
+
+
+class TestEveryActionIsPinnedToACommit:
+    """A tag such as `actions/checkout@v5` is movable: its owner, or whoever
+    takes over their account, can point it at new code, and the next run here
+    executes that code next to `AGENT_DISPATCH_TOKEN` and the deploy role with
+    no diff in this repository. A full commit SHA cannot be moved. The tag
+    stays as a trailing `# vN` comment, the form Renovate's
+    pinGitHubActionDigests maintains, so a reader still sees the version
+    (supply-chain brief `wiki/GeneralContext/Prompts/09-supply-chain-and-trust.md`,
+    deliverable 1). To bump one, resolve the new tag to its commit with
+    `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` (dereferencing an
+    annotated tag object), or let Renovate open the PR."""
+
+    PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}\s+#\s*v\S+$")
+    DOCKER = re.compile(r"^docker://\S+@sha256:[0-9a-f]{64}(\s+#.*)?$")
+
+    def _refs(self, path):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            m = re.search(r"\buses:\s*(.+?)\s*$", line)
+            if m:
+                yield n, m.group(1).strip("'\"")
+
+    def _pinned(self, ref):
+        return ref.startswith("./") or bool(self.PINNED.match(ref) or self.DOCKER.match(ref))
+
+    def test_the_check_tells_pinned_from_movable(self):
+        sha = "a" * 40
+        assert self._pinned(f"actions/checkout@{sha} # v5")
+        assert self._pinned(f"github/codeql-action/init@{sha} # v3.1.0")
+        assert self._pinned("./.github/actions/local")
+        assert self._pinned("docker://alpine@sha256:" + "b" * 64)
+        assert not self._pinned("actions/checkout@v5")
+        assert not self._pinned(f"actions/checkout@{sha}")  # no version comment
+        assert not self._pinned(f"actions/checkout@{sha.upper()} # v5")
+        assert not self._pinned("actions/checkout@main # v5")
+        assert not self._pinned("docker://alpine:3.20")
+
+    @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
+    def test_every_uses_is_a_commit_sha(self, path):
+        movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
+        assert not movable, "movable action refs:\n" + "\n".join(movable)
 
 
 class TestNoDispatchInputReachesTheShellAsCode:
@@ -2254,6 +2427,76 @@ class TestTheJevSmokeIsDispatchOnly:
         assert ".ai/questions/smoke.json" in body
 
 
+class TestRenovateNeverMergesAnything:
+    """Prompts/09-supply-chain-and-trust.md deliverable 3, and philosophy.md
+    §8 ("No auto-merge ... this one is load-bearing"): Renovate keeps the
+    dependencies and the SHA-pinned actions current, weekly, and a human
+    merges every one of its PRs. Plain JSON, so this stdlib test reads it."""
+
+    @pytest.fixture
+    def config(self) -> dict:
+        assert RENOVATE.exists(), ".github/renovate.json is missing"
+        return json.loads(RENOVATE.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _walk(node, path="$"):
+        yield path, node
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}[{i}]")
+
+    def test_nothing_turns_automerge_on(self, config):
+        """Anywhere: top level, a packageRule, a group, a lockfile setting."""
+        on = [
+            path
+            for path, node in self._walk(config)
+            if isinstance(node, dict)
+            for key, value in node.items()
+            if key.lower().endswith("automerge") and value is True
+        ]
+        assert not on, f"automerge is on at {on}"
+        assert config.get("automerge") is False
+        assert config.get("platformAutomerge") is False
+
+    def test_no_preset_brings_automerge_in(self, config):
+        presets = [p for p in config.get("extends", []) if "automerge" in p.lower()]
+        assert all(p.endswith(":automergeDisabled") for p in presets), presets
+
+    def test_nothing_is_proposed_before_three_days(self, config):
+        """A release pulled within days (a compromised publish) never reaches
+        a PR. `strict` holds the branch itself back, not just its status."""
+        ages = [
+            (path, node["minimumReleaseAge"])
+            for path, node in self._walk(config)
+            if isinstance(node, dict) and "minimumReleaseAge" in node
+        ]
+        assert any(path == "$" for path, _ in ages), "no top-level minimumReleaseAge"
+        for path, age in ages:
+            m = re.fullmatch(r"(\d+)\s*(day|days|week|weeks)", age.strip())
+            assert m, f"{path}: unreadable minimumReleaseAge {age!r}"
+            days = int(m.group(1)) * (7 if m.group(2).startswith("week") else 1)
+            assert days >= 3, f"{path}: minimumReleaseAge {age!r} is under 3 days"
+        assert config.get("internalChecksFilter") == "strict"
+
+    def test_its_branches_are_not_agent_branches(self, config):
+        """`agent/*` is the worker's namespace: the guard would hold such a
+        PR against a task spec it does not have, and Renovate is not a worker."""
+        prefix = config.get("branchPrefix")
+        assert prefix, "branchPrefix must be stated, not left to the default"
+        assert not prefix.startswith("agent/")
+        for path, node in self._walk(config):
+            if isinstance(node, dict) and "branchPrefix" in node:
+                assert not node["branchPrefix"].startswith("agent/"), path
+
+    def test_action_pins_stay_pinned(self, config):
+        """Deliverable 1 pins every action to a full SHA; this keeps the SHA
+        and its `# vN` comment current instead of loosening it to a tag."""
+        assert "helpers:pinGitHubActionDigests" in config.get("extends", [])
+
+
 class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
     """Prompts/04-cheap-automations.md automation 1, and the trigger the human
     decided on 2026-10-13: `workflow_run` on `test-agent`, so the workflow and
@@ -2636,6 +2879,69 @@ class TestTheSpecDriftCheckIsDispatchedOnMain:
         assert "agent/$TASK_ID" in body
 
 
+class TestTheScorecardIsAdvisoryAndCanOnlyUploadSarif:
+    """Prompts/09-supply-chain-and-trust.md deliverable 4: OpenSSF Scorecard,
+    weekly, read-only, results to the Security tab, advisory. It runs no
+    branch's code and holds no secret; the one write it is given,
+    `security-events: write`, is what uploading SARIF needs, and the results
+    are not published (`publish_results: false`), so it needs no OIDC token.
+    It fails nothing that is required: `gate` does not depend on it."""
+
+    PATH = WORKFLOWS / "scorecard.yml"
+    JOB = "analysis"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert self.PATH.exists(), "scorecard.yml is missing"
+        return self.PATH.read_text(encoding="utf-8")
+
+    def test_a_schedule_or_a_dispatch_starts_it_and_nothing_from_a_branch(self, wf):
+        on = wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        triggers = set(re.findall(r"^  ([a-z_]+):", on, re.MULTILINE))
+        assert {"schedule", "workflow_dispatch"} <= triggers
+        assert triggers <= {"schedule", "workflow_dispatch", "branch_protection_rule"}, triggers
+        assert re.search(r"cron:\s*['\"]\d+ \d+ \* \* \d['\"]", on), "weekly, at a fixed minute"
+        assert not re.search(r"cron:\s*['\"]0 ", on), "off the hour, not on it"
+
+    def test_the_token_can_upload_sarif_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {
+            "contents": "read",
+            "actions": "read",
+            "security-events": "write",
+        }
+        assert "id-token" not in wf
+
+    def test_it_holds_no_secret(self, wf):
+        assert "secrets." not in wf
+        assert "github.token" not in wf and "GITHUB_TOKEN" not in wf
+
+    def test_the_checkout_keeps_no_credential(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 1
+        assert "persist-credentials: false" in checkouts[0]
+        assert "ref:" not in checkouts[0] and "repository:" not in checkouts[0]
+
+    def test_results_are_not_published(self, wf):
+        (scan,) = [s for s in steps_in(job_block(wf, self.JOB)) if "ossf/scorecard-action@" in s]
+        assert re.search(r"^\s+publish_results: false$", scan, re.MULTILINE)
+        assert "github/codeql-action/upload-sarif@" in wf
+
+    def test_the_job_is_bounded(self, wf):
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(wf, self.JOB), re.MULTILINE)
+
+    def test_it_is_not_part_of_the_required_gate(self, wf):
+        gate = TEST_AGENT_WF.read_text(encoding="utf-8")
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert self.JOB not in needs and "scorecard" not in needs
+        assert "scorecard" not in gate
+
+
 class TestTheWikiProposalRunsMainsCopyAfterAMerge:
     """Prompts/04-cheap-automations.md automation 4, and the trigger and
     output the human decided on 2026-10-13: `pull_request_target`, closed and
@@ -2731,3 +3037,152 @@ class TestTheWikiProposalRunsMainsCopyAfterAMerge:
         steps = titled(job_block(wf, self.JOB))
         poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
         assert "hashFiles(" in step_if(poster) or "-s " in poster
+
+
+DIRECTOR_REVIEW = WORKFLOWS / "director-review.yml"
+
+
+class TestTheDirectorReviewReadsADirectorPrAsData:
+    """Prompts/09-supply-chain-and-trust.md deliverable 5. A Director PR is
+    reviewed by the one human who directed it and merges through the admin
+    bypass, so an advisory model reads every non-`agent/*` PR of this
+    repository that touches `.ai/` or `.github/` and lists safety regressions
+    against philosophy §4's grades. `pull_request_target`, so the workflow
+    file and the code that run are `main`'s (`github.sha` at `tools/`), and
+    the PR is checked out beside them as data whose diff is read and nothing
+    in it executed. It holds `ANTHROPIC_API_KEY`, so work-modes.md
+    "Constraints every automation must keep" apply, and it fails nothing:
+    it is not under `gate`, and its own failure is not the PR's."""
+
+    JOB = "review"
+    CHECKOUT = "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5"
+    SETUP_PYTHON = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6"
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert DIRECTOR_REVIEW.exists(), "director-review.yml is missing"
+        return DIRECTOR_REVIEW.read_text(encoding="utf-8")
+
+    def triggers(self, wf: str) -> str:
+        return wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_only_a_pr_against_main_touching_the_system_trees_starts_it(self, wf):
+        on = self.triggers(wf)
+        assert "pull_request_target:" in on
+        assert re.search(r"types:\s*\[\s*opened,\s*synchronize,\s*reopened\s*\]", on)
+        assert re.search(r"branches:\s*\[\s*main\s*\]", on)
+        assert re.search(r'paths:\s*\[\s*"\.ai/\*\*",\s*"\.github/\*\*"\s*\]', on)
+        bare = on.replace("pull_request_target", "")
+        for other in ("pull_request", "push", "workflow_run", "workflow_dispatch", "schedule"):
+            assert other not in bare, f"director-review.yml must not run on {other}"
+
+    def test_it_runs_only_for_a_human_non_task_branch_of_this_repository(self, wf):
+        """A fork's PR gets nothing; an `agent/*` PR is a worker's, held by
+        the guard and read by the other automations; a bot's PR (Renovate)
+        is not a Director's change, and the human can approve it for real."""
+        cond = " ".join(job_block(wf, self.JOB).split("    permissions:", 1)[0].split())
+        for clause in (
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            "!startsWith(github.event.pull_request.head.ref, 'agent/')",
+            "github.event.pull_request.user.type != 'Bot'",
+        ):
+            assert clause in cond, f"the job's if: lacks {clause}"
+        assert "||" not in cond
+
+    def test_the_token_can_read_and_comment_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {"contents": "read", "pull-requests": "write"}
+        body = "\n".join(live_lines(wf))
+        for verb in ("git push", "git commit", "gh pr create", "gh pr merge", "gh pr review"):
+            assert verb not in body, f"director-review.yml must not {verb}"
+
+    def test_the_job_is_bounded(self, wf):
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(wf, self.JOB), re.MULTILINE)
+
+    def test_every_action_is_pinned_to_a_full_sha(self, wf):
+        uses = [
+            ln.split("uses:", 1)[1].strip()
+            for ln in wf.splitlines()
+            if "uses:" in ln and not ln.lstrip().startswith("#")
+        ]
+        assert uses and set(uses) <= {self.CHECKOUT, self.SETUP_PYTHON}
+
+    def test_the_tools_are_mains_and_the_pr_is_beside_them_as_data(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 2
+        for chunk in checkouts:
+            assert "persist-credentials: false" in chunk
+        tools = next(c for c in checkouts if "path: tools" in c)
+        # github.sha, main's tip, as for coverage-check: base.sha is not
+        # refreshed on a reopen and can predate fixes the workflow file has.
+        assert "ref: ${{ github.sha }}" in tools
+        pr = next(c for c in checkouts if "path: pr" in c)
+        assert "ref: ${{ github.event.pull_request.head.sha }}" in pr
+        for line in live_lines(wf):
+            if re.search(r"\bpython3?\b", line):
+                assert line.startswith('python -I "$TOOLS/.ai/bin/'), line
+
+    def test_nothing_from_the_pr_is_executed(self, wf):
+        body = "\n".join(live_lines(wf))
+        for runner in ("npm ", "npx ", "pip ", "pytest", "make ", "docker ", "bash pr/", "sh pr/"):
+            assert runner not in body, f"director-review.yml runs {runner.strip()}"
+        assert "working-directory: pr" not in wf
+
+    def test_the_diff_is_taken_with_no_credential_and_no_repo_driver(self, wf):
+        """The diff step holds neither the key nor the token. A branch can
+        set `.gitattributes`, so external diff drivers and textconv are off,
+        and `--text` keeps a `-diff` attribute from hiding a change."""
+        steps = titled(job_block(wf, self.JOB))
+        (taker,) = [c for c in steps.values() if "git -C pr diff" in c]
+        for flag in ("--no-ext-diff", "--no-textconv", "--text", "--no-renames"):
+            assert flag in taker
+        assert '"$BASE_SHA...$HEAD_SHA"' in taker
+        assert "secrets." not in taker and "GH_TOKEN" not in taker and "github.token" not in taker
+
+    def test_the_key_is_held_by_one_step_only_and_that_step_has_no_token(self, wf):
+        assert wf.count("secrets.ANTHROPIC_API_KEY") == 1
+        assert "secrets." not in wf.replace("secrets.ANTHROPIC_API_KEY", "")
+        steps = steps_in(job_block(wf, self.JOB))
+        (holder,) = [s for s in steps if "ANTHROPIC_API_KEY" in s]
+        assert "director_review.py" in holder
+        assert "GH_TOKEN" not in holder and "github.token" not in holder
+
+    def test_no_expression_is_pasted_into_a_script(self, wf):
+        """Every value, the event's and the model's, reaches a script through
+        `env:` or a file (D2)."""
+        for body in run_bodies(wf):
+            assert "${{" not in body, body
+
+    def test_a_failure_is_never_the_prs(self, wf):
+        """Fail quiet: the call and the post may fail without failing the
+        job, and nothing here is under `gate`, so a required check never
+        waits on a model."""
+        steps = titled(job_block(wf, self.JOB))
+        (asker,) = [c for c in steps.values() if "director_review.py" in c]
+        poster = next(c for c in steps.values() if "gh api" in c and "PATCH" in c)
+        for chunk in (asker, poster):
+            assert "continue-on-error: true" in chunk
+        gate = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
+        assert "director" not in job_block(gate, "gate")
+        assert "director-review" not in gate
+
+    def test_the_comment_is_updated_in_place_from_a_file(self, wf):
+        body = "\n".join(live_lines(wf))
+        assert "fanwire-director-review" in body
+        assert "github-actions[bot]" in body
+        assert "--method PATCH" in body and "body=@" in body
+
+    def test_the_comment_is_posted_only_if_the_script_wrote_one(self, wf):
+        steps = titled(job_block(wf, self.JOB))
+        poster = next(c for t, c in steps.items() if "gh api" in c and "PATCH" in c)
+        assert "hashFiles(" in step_if(poster) or "-s " in poster
+
+    def test_the_header_says_what_only_a_live_run_proves(self, wf):
+        header = wf.split("\non:\n", 1)[0]
+        assert "only a live run proves" in header
+        assert "first live run" in header

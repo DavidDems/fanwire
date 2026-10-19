@@ -125,10 +125,20 @@ were judged not good enough:
 
   What bounds it is the branch, not a path list. A Director works on an
   ordinary human-named branch, where `agent-guard` does not apply and the
-  `main` ruleset does: one approving code-owner review, no self-merge, no
-  force-push, branches must be up to date. **The review is the only control**,
-  so the Director is expected to name a restricted-tree edit in the PR body
-  rather than leave a reviewer to notice it.
+  `main` ruleset does: a pull request, required checks, no force-push,
+  branches must be up to date. **The review is the only control**, so the
+  Director is expected to name a restricted-tree edit in the PR body rather
+  than leave a reviewer to notice it.
+
+  That review is thinner than the ruleset reads. A Director PR is reviewed by
+  one human, the same one who directed the session that wrote it, and that
+  human cannot approve their own PR, so it merges through the "Repository
+  admin" bypass (`wiki/GeneralContext/Architecture/github-automation-setup.md`
+  §3): the one-approval rule is waived, not met. Beside that human there is
+  one more reader, `director-review.yml`, an advisory model that reads every
+  such PR touching `.ai/` or `.github/` and lists the controls its diff
+  weakens. It fails nothing, nothing waits on it, and it can be misled by the
+  diff it reads. It is a second pair of eyes, not a second reviewer.
 
   The split is safe only because a dispatched worker cannot reach the other
   tier: `agent-worker.yml` builds its push target as `agent/<task id>` itself
