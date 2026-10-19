@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-004",
+  "objective": "Make breakage visible. Add one SNS alarm topic and CloudWatch alarms on every dead-letter queue, the HTTP API's 5xx count and p95/p99 latency, every Lambda function's errors and throttles, and RDS CPU, free storage and connections, each notifying the topic, so a failure no longer goes unnoticed.",
+  "acceptance_criteria": [
+    "Fanwire-Messaging contains exactly one AWS::SNS::Topic (the alarm topic), with a topic policy that denies publishing without TLS, and exports its ARN for the stacks that alarm into it. The template contains no AWS::SNS::Subscription: the address is set by hand, never committed.",
+    "Each dead-letter queue in Fanwire-Messaging (notification, ingestion-retry, media-scan-result) has an alarm on AWS/SQS ApproximateNumberOfMessagesVisible, Maximum over 5 minutes, GreaterThanThreshold 0, one evaluation period.",
+    "Fanwire-App has an alarm on the HTTP API $default stage's 5xx metric, Sum over 5 minutes, GreaterThanOrEqualToThreshold 5.",
+    "Fanwire-App has two alarms on the HTTP API $default stage's Latency: p95 above 3000 ms and p99 above 8000 ms, each over 5-minute periods, 3 of 3 periods.",
+    "Every AWS::Lambda::Function in Fanwire-App has an Errors alarm (Sum over 5 minutes, GreaterThanOrEqualToThreshold 1) and a Throttles alarm (Sum over 5 minutes, GreaterThanOrEqualToThreshold 1), keyed on that function by FunctionName. A test derives the function list from the template, so a new function without alarms fails it.",
+    "There are alarms on the RDS instance: CPUUtilization Average above 80 percent for 3 of 3 5-minute periods; FreeStorageSpace Minimum below 2 GiB (2147483648 bytes); DatabaseConnections Maximum above 60.",
+    "Every alarm sends both its ALARM and its OK action to the alarm topic, and treats missing data as notBreaching.",
+    "A test counts the alarms across all synthesized stacks, so adding or removing one is a deliberate change to that test.",
+    "Fanwire-App outputs the alarm topic's ARN, so the human can subscribe an address to it.",
+    "infra/test/cfn-exec-policy.test.ts's TYPE_TO_IAM maps CloudWatch to cloudwatch and SNS to sns, and every cfn-exec-policy, iam-policy and permissions-boundary test passes in every domain mode."
+  ],
+  "allowed_paths": [
+    "infra/lib/messaging-stack.ts",
+    "infra/lib/app-stack.ts",
+    "infra/lib/app.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00-architecture.md"
+  ],
+  "forbidden_paths": [
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "infra/lib/data-stack.ts",
+    "infra/lib/edge-stack.ts",
+    "infra/lib/cdn-stack.ts",
+    "infra/lib/network-stack.ts",
+    "backend/**",
+    "frontend/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/build-deployment.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "infra-cdk",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-003",
+  "objective": "Replace the production FakeSpamScorer(score=0.0) with a deterministic heuristic spam scorer (link count, repeated characters, a new account posting links), with no model call, so SpamScoreCheck can refuse spam; after this unit the moderation chain get_moderation_chain builds holds no fake at all.",
+  "acceptance_criteria": [
+    "SpamScorer.score takes the whole ModerationContext (author id and text), not the text alone; FakeSpamScorer keeps working as a test double under the new signature.",
+    "HeuristicSpamScorer scores a post as the sum of three parts, capped at 1.0: links (1 link 0.3, 2 links 0.5, 3 or more 0.8), a run of 20 or more of the same non-whitespace character (0.5), and an author account younger than the new-account age posting at least one link (0.5). Null or empty text scores 0.0.",
+    "A link is any case-insensitive match of http://, https:// or www. followed by non-whitespace; a bare domain such as example.com is not a link.",
+    "With the default threshold 0.8 and new-account age 24 hours: an established account's post with 2 links is accepted, with 3 links is refused; an established account's post with 1 link and a 20-character run is refused, with 1 link and a 19-character run is accepted; a 25-hour-old account's post with 1 link is accepted; a 23-hour-old account's post with 1 link is refused, and without a link is accepted.",
+    "The account's age comes from a new public read in users/, app.users.service.account_created_at(session, user_id), which returns the creation time, or None for an unknown or soft-deleted user; the scorer treats None as a new account. posts/ does not query the users table for it.",
+    "The scorer takes its clock as an injected callable, so tests fix 'now'; production passes the current UTC time.",
+    "The threshold and the new-account age come from Settings as SPAM_SCORE_THRESHOLD (default 0.8, must be greater than 0 and at most 1) and SPAM_NEW_ACCOUNT_HOURS (default 24, a positive integer); an invalid value makes Settings construction fail.",
+    "A refused post answers 400 with the existing spam detail on POST /posts and POST /posts/{post_id}/repost, persists nothing and publishes no event; a plain repost (no text) is never refused by the scorer.",
+    "get_moderation_chain wires HeuristicSpamScorer in the same fixed chain position, and a test that walks the chain it builds finds no Fake* instance anywhere in it."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/users/service.py",
+    "backend/app/settings.py",
+    "backend/tests/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x01-users.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "frontend/**",
+    "backend/alembic/**",
+    "backend/app/users/models.py",
+    "backend/app/events/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/pyproject.toml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
