@@ -878,15 +878,66 @@ class TestActionsRunOnNode24:
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
     def test_no_action_is_pinned_to_a_node20_major(self, path):
+        # The ref is a commit SHA (TestEveryActionIsPinnedToACommit), so the
+        # major is read from the trailing `# vN` comment. A `uses:` with no
+        # version fails rather than being skipped, or this test goes vacuous.
         for line in path.read_text(encoding="utf-8").splitlines():
-            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@v(\d+)", line)
-            if not m or line.lstrip().startswith("#"):
+            if line.lstrip().startswith("#"):
                 continue
-            action, major = m.group(1), int(m.group(2))
+            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)\S*", line)
+            if not m:
+                continue
+            v = re.search(r"#\s*v(\d+)\b", line[m.end():])
+            assert v, f"{path.name}: no `# vN` version on: {line.strip()}"
+            action, major = m.group(1), int(v.group(1))
             assert action in self.MIN_MAJOR, f"{path.name}: {action} has no Node 24 floor here"
             assert major >= self.MIN_MAJOR[action], (
                 f"{path.name}: {action}@v{major} is a Node 20 major"
             )
+
+
+class TestEveryActionIsPinnedToACommit:
+    """A tag such as `actions/checkout@v5` is movable: its owner, or whoever
+    takes over their account, can point it at new code, and the next run here
+    executes that code next to `AGENT_DISPATCH_TOKEN` and the deploy role with
+    no diff in this repository. A full commit SHA cannot be moved. The tag
+    stays as a trailing `# vN` comment, the form Renovate's
+    pinGitHubActionDigests maintains, so a reader still sees the version
+    (supply-chain brief `wiki/GeneralContext/Prompts/09-supply-chain-and-trust.md`,
+    deliverable 1). To bump one, resolve the new tag to its commit with
+    `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` (dereferencing an
+    annotated tag object), or let Renovate open the PR."""
+
+    PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}\s+#\s*v\S+$")
+    DOCKER = re.compile(r"^docker://\S+@sha256:[0-9a-f]{64}(\s+#.*)?$")
+
+    def _refs(self, path):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            m = re.search(r"\buses:\s*(.+?)\s*$", line)
+            if m:
+                yield n, m.group(1).strip("'\"")
+
+    def _pinned(self, ref):
+        return ref.startswith("./") or bool(self.PINNED.match(ref) or self.DOCKER.match(ref))
+
+    def test_the_check_tells_pinned_from_movable(self):
+        sha = "a" * 40
+        assert self._pinned(f"actions/checkout@{sha} # v5")
+        assert self._pinned(f"github/codeql-action/init@{sha} # v3.1.0")
+        assert self._pinned("./.github/actions/local")
+        assert self._pinned("docker://alpine@sha256:" + "b" * 64)
+        assert not self._pinned("actions/checkout@v5")
+        assert not self._pinned(f"actions/checkout@{sha}")  # no version comment
+        assert not self._pinned(f"actions/checkout@{sha.upper()} # v5")
+        assert not self._pinned("actions/checkout@main # v5")
+        assert not self._pinned("docker://alpine:3.20")
+
+    @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
+    def test_every_uses_is_a_commit_sha(self, path):
+        movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
+        assert not movable, "movable action refs:\n" + "\n".join(movable)
 
 
 class TestNoDispatchInputReachesTheShellAsCode:

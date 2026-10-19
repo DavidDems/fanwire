@@ -89,7 +89,7 @@ jobs:
       VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
       VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 
@@ -117,7 +117,7 @@ jobs:
       - name: Build the pinned CDK image
         run: docker build -q -f docker/cdk-deploy.Dockerfile -t fanwire-cdk:deploy .
 
-      - uses: aws-actions/configure-aws-credentials@v6
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
         with:
           role-to-assume: arn:aws:iam::294321867941:role/GitHubActionsDeployRole
           role-session-name: fanwire-deploy-${{ github.run_id }}
