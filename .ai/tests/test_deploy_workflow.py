@@ -257,6 +257,67 @@ class TestTheDeployWorkflowShape:
         assert forbidden not in "\n".join(deploy)
 
 
+def _step(lines: list[str], name: str) -> list[str]:
+    """One step's lines, from its `- name:` to the next step at its indentation."""
+    starts = [i for i, line in enumerate(lines) if line.strip() == f"- name: {name}"]
+    assert len(starts) == 1, f"expected one step named {name!r}"
+    start = starts[0]
+    indent = lines[start][: len(lines[start]) - len(lines[start].lstrip())]
+    out = [lines[start]]
+    for line in lines[start + 1 :]:
+        if line.startswith(f"{indent}- ") or (line.strip() and not line.startswith(indent)):
+            break
+        out.append(line)
+    return out
+
+
+class TestTheDeployChecksItself:
+    """A deploy that CloudFormation calls a success can still leave the site
+    down: a bad bundle, a missing migration, an origin CloudFront cannot reach.
+    So after `cdk deploy` the run fetches the live site through its public
+    domain, the way a user would, and fails loudly if it does not answer."""
+
+    NAME = "Smoke check the live site"
+    SITE_URL = "https://fanwire.daviddems.com"
+
+    def _index(self, deploy, pattern):
+        found = [i for i, line in enumerate(deploy) if re.search(pattern, line)]
+        assert found, pattern
+        return found[0]
+
+    def test_the_step_exists(self, deploy):
+        assert any(line.strip() == f"- name: {self.NAME}" for line in deploy)
+
+    def test_it_runs_after_the_deploy_and_before_the_summary(self, deploy):
+        smoke = self._index(deploy, rf"- name: {self.NAME}$")
+        assert self._index(deploy, r"fanwire-cdk\S*\s+deploy --all\b") < smoke
+        assert smoke < self._index(deploy, r"- name: Summary$")
+
+    def test_it_runs_only_when_the_deploy_succeeded(self, deploy):
+        step = _step(deploy, self.NAME)
+        assert not any(line.strip().startswith("if:") for line in step)
+
+    def test_it_checks_the_public_domain_not_the_api_gateway(self, deploy):
+        assert any(line.strip() == f"SITE_URL: {self.SITE_URL}" for line in deploy)
+        text = "\n".join(_step(deploy, self.NAME))
+        assert "execute-api" not in text
+        # /api/health proves the function answers; /api/feed reaches the
+        # database; the root proves this run's bundle is served.
+        for path in ("$SITE_URL/api/health", "$SITE_URL/api/feed", '"$SITE_URL/"'):
+            assert path in text, path
+
+    def test_it_retries_then_fails_loudly(self, deploy):
+        text = "\n".join(_step(deploy, self.NAME))
+        assert ("seq" in text or "for " in text) and "sleep" in text
+        assert "::error::" in text
+        assert "exit 1" in text
+
+    def test_it_needs_no_aws_access_and_no_secret(self, deploy):
+        text = "\n".join(_step(deploy, self.NAME))
+        assert "aws " not in text
+        assert "secrets." not in text
+
+
 class TestThePinnedImageCanBuildTheBackendAsset:
     """`Fanwire-App`'s `DockerImageAsset` is built at deploy time, so the CLI
     has to be able to call `docker build` from inside its own container."""

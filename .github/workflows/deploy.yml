@@ -78,6 +78,8 @@ jobs:
       id-token: write
     env:
       AWS_REGION: ca-central-1
+      # The public domain, served by CloudFront; the smoke check fetches it.
+      SITE_URL: https://fanwire.daviddems.com
       # Vite inlines these at build time. They are ids, not secrets:
       # Fanwire-Auth's outputs, held as variables (not secrets: `vars.`
       # never sees secrets) on the `production` environment.
@@ -176,11 +178,45 @@ jobs:
       - name: cdk deploy
         run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy deploy --all -c deployFrontend=true --require-approval never'
 
+      # A deploy CloudFormation calls a success can still leave the site down.
+      # Fetch it through CloudFront, as a user would: /api/health (the function),
+      # /api/feed (the database), / (this run's bundle). No credentials; the
+      # retries cover a cold start and the CloudFront invalidation.
+      - name: Smoke check the live site
+        id: smoke
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/smoke-body"
+          health_ok() { python3 -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])).get("status") != "ok")' "$body"; }
+          feed_ok() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(not (isinstance(d, dict) and "items" in d))' "$body"; }
+          spa_ok() { grep -qF '<div id="root">' "$body"; }
+          check() {
+            local url="$1" valid="$2" code=000
+            rm -f "$body"
+            for attempt in $(seq 1 12); do
+              code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 10 "$url" || true)"
+              if [ "$code" = 200 ] && "$valid" 2>/dev/null; then
+                echo "$url: ok (attempt $attempt)"
+                return 0
+              fi
+              if [ "$attempt" -lt 12 ]; then
+                sleep 10
+              fi
+            done
+            echo "::error::$url failed after 12 attempts (last status $code, body: $(head -c 500 "$body" 2>/dev/null | tr '\r\n' '  ')). If this commit adds an Alembic revision, invoke the Migration function, then re-run this workflow. To roll back, re-run the last green deploy run (incident-runbook.md, 'Roll back a deploy')."
+            exit 1
+          }
+          check "$SITE_URL/api/health" health_ok
+          check "$SITE_URL/api/feed?limit=1" feed_ok
+          check "$SITE_URL/" spa_ok
+
       - name: Summary
         if: always()
         run: |
           {
             echo "### Deploy ${{ job.status }} at \`${GITHUB_SHA::7}\`"
+            echo
+            echo "Smoke check of the live site: ${{ steps.smoke.outcome }}"
             echo
             echo "Migrations are not run by this workflow. If this commit adds an Alembic"
             echo "revision, invoke the Migration function by hand now: build-deployment.md"
