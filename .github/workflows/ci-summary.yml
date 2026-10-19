@@ -67,12 +67,12 @@ jobs:
     steps:
       # main's copy: a workflow_run job checks out the default branch, and
       # naming the run's head here would hand the key a branch's code.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
           sparse-checkout: .ai
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
@@ -189,13 +189,13 @@ jobs:
           echo "id=$ID" >> "$GITHUB_OUTPUT"
 
       # main's copy, as in summarize: no ref, no credential kept.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         if: steps.find.outputs.id != ''
         with:
           persist-credentials: false
           sparse-checkout: .ai
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         if: steps.find.outputs.id != ''
         with:
           python-version: "3.12"

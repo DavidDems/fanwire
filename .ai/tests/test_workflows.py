@@ -363,6 +363,122 @@ class TestNoWorkflowCanApprove:
         assert "--approve" not in text
 
 
+class TestTheToolchainIsPinnedInOnePlace:
+    """`Prompts/09` deliverable 2, handoff.md §5.6. The provider CLI was
+    installed unpinned, so a release on npm could change the agent's behaviour,
+    or drop the D2b flags it is started with, with no diff here at all. Its
+    version now lives in one place, `.ai/config.json`, read from main's copy
+    (`$TOOLS`) and checked before npm sees it: a task branch cannot move it,
+    and moving it is a reviewed diff. The same for ruff and mypy (D5 residue):
+    `>=` let a cache-evicted rebuild bring new lint rules and turn every PR
+    red."""
+
+    CONFIG = Path(__file__).resolve().parents[1] / "config.json"
+    BIN = Path(__file__).resolve().parents[1] / "bin"
+    PYPROJECT = Path(__file__).resolve().parents[2] / "backend" / "pyproject.toml"
+    STEP = "Install the provider CLI"
+    PACKAGE = "@anthropic-ai/claude-code"
+    EXACT_SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
+    # An install of the CLI by any package manager, pinned or not.
+    INSTALLS_CLI = re.compile(r"\b(npm|npx|pnpm|yarn|bun)\b.*claude-code")
+
+    def anthropic(self) -> dict:
+        return json.loads(self.CONFIG.read_text(encoding="utf-8"))["providers"]["anthropic"]
+
+    def scripts(self) -> list[Path]:
+        return sorted(WORKFLOWS.glob("*.yml")) + sorted(p for p in self.BIN.iterdir() if p.is_file())
+
+    def test_config_names_the_package_and_one_exact_version(self):
+        cfg = self.anthropic()
+        assert cfg.get("cli_package") == self.PACKAGE
+        version = cfg.get("cli_version")
+        assert isinstance(version, str) and self.EXACT_SEMVER.fullmatch(version), (
+            f"providers.anthropic.cli_version must be an exact x.y.z, got {version!r}"
+        )
+
+    def test_nothing_installs_the_cli_but_the_worker_from_config(self):
+        version = self.anthropic()["cli_version"]
+        offenders = []
+        for path in self.scripts():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                code = line.split("#", 1)[0] if path.suffix in (".yml", ".sh", ".py") else line
+                if self.INSTALLS_CLI.search(code) or "claude-code@" in code:
+                    offenders.append(f"{path.name}: {line.strip()}")
+            if path.suffix == ".yml":
+                assert version not in path.read_text(encoding="utf-8"), (
+                    f"{path.name} names CLI version {version} literally; read it from config.json"
+                )
+        assert not offenders, (
+            "the CLI is installed only by agent-worker.yml, from config.json's "
+            "cli_package/cli_version:\n    " + "\n    ".join(offenders)
+        )
+
+    def test_the_install_step_reads_trusted_config_and_validates_first(self, worker):
+        body = step(worker, self.STEP)
+        script = run_bodies("steps:\n      - name: x\n" + body)[0]
+        assert '"$TOOLS/.ai/config.json"' in script, "read main's config, never the task tree's"
+        assert "${{" not in script, "values reach the script through env:, not ${{ }}"
+        assert "::error::" in script
+        npm = script.index('npm install -g "${CLI_PACKAGE}@${CLI_VERSION}"')
+        check = script.index("=~")
+        assert check < npm, "the version is checked before npm sees it"
+        assert "claude --version" in script[npm:], "the installed CLI must report the pin"
+
+    @pytest.mark.parametrize(
+        "version,installed,ok",
+        [
+            ("2.1.295", "2.1.295", True),
+            ("2.1.295", "2.1.303", False),  # npm resolved something else
+            ("latest", None, False),
+            ("2.1", None, False),
+            ("^2.1.295", None, False),
+            ("2.1.295; touch pwned", None, False),
+            ("2.1.295\n", None, False),
+            ("02.1.295", None, False),
+        ],
+    )
+    def test_the_install_step_refuses_anything_but_the_pin(
+        self, worker, tmp_path, version, installed, ok
+    ):
+        tools = tmp_path / "tools"
+        (tools / ".ai").mkdir(parents=True)
+        cfg = {"providers": {"anthropic": {"cli_package": self.PACKAGE, "cli_version": version}}}
+        (tools / ".ai" / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        fake = tmp_path / "fakebin"
+        fake.mkdir()
+        log = tmp_path / "npm.log"
+        (fake / "npm").write_text(f'#!/bin/sh\necho "$@" >> "{log.as_posix()}"\n', encoding="utf-8")
+        (fake / "claude").write_text(
+            f'#!/bin/sh\necho "{installed or "0.0.0"} (Claude Code)"\n', encoding="utf-8"
+        )
+        for f in fake.iterdir():
+            f.chmod(0o755)
+        script = run_bodies("steps:\n      - name: x\n" + step(worker, self.STEP))[0]
+        bash_path = fake.as_posix()
+        if sys.platform == "win32" and re.match(r"^[A-Za-z]:/", bash_path):
+            bash_path = "/" + bash_path[0].lower() + bash_path[2:]
+        code, _ = run_step_body(
+            f'export PATH="{bash_path}:$PATH"\n' + script,
+            {"TOOLS": tools.as_posix()},
+            tmp_path,
+        )
+        assert (code == 0) is ok
+        if installed is None:
+            assert not log.exists(), "npm ran with a version that failed the check"
+        else:
+            assert f"install -g {self.PACKAGE}@{version}" in log.read_text(encoding="utf-8")
+
+    def test_backend_lint_and_type_check_are_exactly_pinned(self):
+        text = self.PYPROJECT.read_text(encoding="utf-8")
+        for tool in ("ruff", "mypy"):
+            specs = re.findall(rf'"{tool}([^"]*)"', text)
+            assert specs, f"backend/pyproject.toml does not list {tool}"
+            for spec in specs:
+                assert re.fullmatch(r"==\d+\.\d+\.\d+", spec), (
+                    f"{tool}{spec}: pin it with == so a rebuilt image cannot bring new rules"
+                )
+
+
 class TestAFinishedTaskDoesNotFailTheOrchestrator:
     """Run 35670385955. CI ran on `agent/DEMO-001` for PR #30 *after* the task
     had reached COMPLETE. `workflow_run` woke the orchestrator, which tried to
@@ -879,15 +995,66 @@ class TestActionsRunOnNode24:
 
     @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
     def test_no_action_is_pinned_to_a_node20_major(self, path):
+        # The ref is a commit SHA (TestEveryActionIsPinnedToACommit), so the
+        # major is read from the trailing `# vN` comment. A `uses:` with no
+        # version fails rather than being skipped, or this test goes vacuous.
         for line in path.read_text(encoding="utf-8").splitlines():
-            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)@v(\d+)", line)
-            if not m or line.lstrip().startswith("#"):
+            if line.lstrip().startswith("#"):
                 continue
-            action, major = m.group(1), int(m.group(2))
+            m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)\S*", line)
+            if not m:
+                continue
+            v = re.search(r"#\s*v(\d+)\b", line[m.end():])
+            assert v, f"{path.name}: no `# vN` version on: {line.strip()}"
+            action, major = m.group(1), int(v.group(1))
             assert action in self.MIN_MAJOR, f"{path.name}: {action} has no Node 24 floor here"
             assert major >= self.MIN_MAJOR[action], (
                 f"{path.name}: {action}@v{major} is a Node 20 major"
             )
+
+
+class TestEveryActionIsPinnedToACommit:
+    """A tag such as `actions/checkout@v5` is movable: its owner, or whoever
+    takes over their account, can point it at new code, and the next run here
+    executes that code next to `AGENT_DISPATCH_TOKEN` and the deploy role with
+    no diff in this repository. A full commit SHA cannot be moved. The tag
+    stays as a trailing `# vN` comment, the form Renovate's
+    pinGitHubActionDigests maintains, so a reader still sees the version
+    (supply-chain brief `wiki/GeneralContext/Prompts/09-supply-chain-and-trust.md`,
+    deliverable 1). To bump one, resolve the new tag to its commit with
+    `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` (dereferencing an
+    annotated tag object), or let Renovate open the PR."""
+
+    PINNED = re.compile(r"^[\w.-]+/[\w.-]+(/[\w./-]+)?@[0-9a-f]{40}\s+#\s*v\S+$")
+    DOCKER = re.compile(r"^docker://\S+@sha256:[0-9a-f]{64}(\s+#.*)?$")
+
+    def _refs(self, path):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            m = re.search(r"\buses:\s*(.+?)\s*$", line)
+            if m:
+                yield n, m.group(1).strip("'\"")
+
+    def _pinned(self, ref):
+        return ref.startswith("./") or bool(self.PINNED.match(ref) or self.DOCKER.match(ref))
+
+    def test_the_check_tells_pinned_from_movable(self):
+        sha = "a" * 40
+        assert self._pinned(f"actions/checkout@{sha} # v5")
+        assert self._pinned(f"github/codeql-action/init@{sha} # v3.1.0")
+        assert self._pinned("./.github/actions/local")
+        assert self._pinned("docker://alpine@sha256:" + "b" * 64)
+        assert not self._pinned("actions/checkout@v5")
+        assert not self._pinned(f"actions/checkout@{sha}")  # no version comment
+        assert not self._pinned(f"actions/checkout@{sha.upper()} # v5")
+        assert not self._pinned("actions/checkout@main # v5")
+        assert not self._pinned("docker://alpine:3.20")
+
+    @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
+    def test_every_uses_is_a_commit_sha(self, path):
+        movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
+        assert not movable, "movable action refs:\n" + "\n".join(movable)
 
 
 class TestNoDispatchInputReachesTheShellAsCode:
