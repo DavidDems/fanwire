@@ -89,10 +89,11 @@ case "$PROVIDER" in
     # outside the subshell so relative paths keep meaning the caller's cwd.
     #
     # --setting-sources user / --strict-mcp-config (both in `claude --help`,
-    # checked on 2.1.293): the CLI would otherwise load .claude/settings*.json
-    # (whose hooks run commands) and .mcp.json (whose servers are processes)
-    # from the task checkout, with the provider key in its environment
-    # (handoff.md §10, D2b). In CI "user" is the unprivileged model user's
+    # checked on 2.1.293, and on 2.1.295, the pinned version, 2026-10-19; a
+    # bump of config.json's cli_version re-checks them): the CLI would
+    # otherwise load .claude/settings*.json (whose hooks run commands) and
+    # .mcp.json (whose servers are processes) from the task checkout, with the
+    # provider key in its environment (handoff.md §10, D2b). In CI "user" is the unprivileged model user's
     # empty home. agent-worker.yml also refuses a branch that changed either.
     set +e
     (

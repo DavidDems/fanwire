@@ -27,6 +27,7 @@ CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
 SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
 WIKI_PROPOSAL = WORKFLOWS / "wiki-proposal.yml"
+RENOVATE = WORKFLOWS.parent / "renovate.json"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
 # trusted copy of `main` checked out beside the task, never the task branch's.
@@ -360,6 +361,122 @@ class TestNoWorkflowCanApprove:
         text = path.read_text(encoding="utf-8")
         assert "gh pr review" not in text
         assert "--approve" not in text
+
+
+class TestTheToolchainIsPinnedInOnePlace:
+    """`Prompts/09` deliverable 2, handoff.md §5.6. The provider CLI was
+    installed unpinned, so a release on npm could change the agent's behaviour,
+    or drop the D2b flags it is started with, with no diff here at all. Its
+    version now lives in one place, `.ai/config.json`, read from main's copy
+    (`$TOOLS`) and checked before npm sees it: a task branch cannot move it,
+    and moving it is a reviewed diff. The same for ruff and mypy (D5 residue):
+    `>=` let a cache-evicted rebuild bring new lint rules and turn every PR
+    red."""
+
+    CONFIG = Path(__file__).resolve().parents[1] / "config.json"
+    BIN = Path(__file__).resolve().parents[1] / "bin"
+    PYPROJECT = Path(__file__).resolve().parents[2] / "backend" / "pyproject.toml"
+    STEP = "Install the provider CLI"
+    PACKAGE = "@anthropic-ai/claude-code"
+    EXACT_SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
+    # An install of the CLI by any package manager, pinned or not.
+    INSTALLS_CLI = re.compile(r"\b(npm|npx|pnpm|yarn|bun)\b.*claude-code")
+
+    def anthropic(self) -> dict:
+        return json.loads(self.CONFIG.read_text(encoding="utf-8"))["providers"]["anthropic"]
+
+    def scripts(self) -> list[Path]:
+        return sorted(WORKFLOWS.glob("*.yml")) + sorted(p for p in self.BIN.iterdir() if p.is_file())
+
+    def test_config_names_the_package_and_one_exact_version(self):
+        cfg = self.anthropic()
+        assert cfg.get("cli_package") == self.PACKAGE
+        version = cfg.get("cli_version")
+        assert isinstance(version, str) and self.EXACT_SEMVER.fullmatch(version), (
+            f"providers.anthropic.cli_version must be an exact x.y.z, got {version!r}"
+        )
+
+    def test_nothing_installs_the_cli_but_the_worker_from_config(self):
+        version = self.anthropic()["cli_version"]
+        offenders = []
+        for path in self.scripts():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                code = line.split("#", 1)[0] if path.suffix in (".yml", ".sh", ".py") else line
+                if self.INSTALLS_CLI.search(code) or "claude-code@" in code:
+                    offenders.append(f"{path.name}: {line.strip()}")
+            if path.suffix == ".yml":
+                assert version not in path.read_text(encoding="utf-8"), (
+                    f"{path.name} names CLI version {version} literally; read it from config.json"
+                )
+        assert not offenders, (
+            "the CLI is installed only by agent-worker.yml, from config.json's "
+            "cli_package/cli_version:\n    " + "\n    ".join(offenders)
+        )
+
+    def test_the_install_step_reads_trusted_config_and_validates_first(self, worker):
+        body = step(worker, self.STEP)
+        script = run_bodies("steps:\n      - name: x\n" + body)[0]
+        assert '"$TOOLS/.ai/config.json"' in script, "read main's config, never the task tree's"
+        assert "${{" not in script, "values reach the script through env:, not ${{ }}"
+        assert "::error::" in script
+        npm = script.index('npm install -g "${CLI_PACKAGE}@${CLI_VERSION}"')
+        check = script.index("=~")
+        assert check < npm, "the version is checked before npm sees it"
+        assert "claude --version" in script[npm:], "the installed CLI must report the pin"
+
+    @pytest.mark.parametrize(
+        "version,installed,ok",
+        [
+            ("2.1.295", "2.1.295", True),
+            ("2.1.295", "2.1.303", False),  # npm resolved something else
+            ("latest", None, False),
+            ("2.1", None, False),
+            ("^2.1.295", None, False),
+            ("2.1.295; touch pwned", None, False),
+            ("2.1.295\n", None, False),
+            ("02.1.295", None, False),
+        ],
+    )
+    def test_the_install_step_refuses_anything_but_the_pin(
+        self, worker, tmp_path, version, installed, ok
+    ):
+        tools = tmp_path / "tools"
+        (tools / ".ai").mkdir(parents=True)
+        cfg = {"providers": {"anthropic": {"cli_package": self.PACKAGE, "cli_version": version}}}
+        (tools / ".ai" / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+        fake = tmp_path / "fakebin"
+        fake.mkdir()
+        log = tmp_path / "npm.log"
+        (fake / "npm").write_text(f'#!/bin/sh\necho "$@" >> "{log.as_posix()}"\n', encoding="utf-8")
+        (fake / "claude").write_text(
+            f'#!/bin/sh\necho "{installed or "0.0.0"} (Claude Code)"\n', encoding="utf-8"
+        )
+        for f in fake.iterdir():
+            f.chmod(0o755)
+        script = run_bodies("steps:\n      - name: x\n" + step(worker, self.STEP))[0]
+        bash_path = fake.as_posix()
+        if sys.platform == "win32" and re.match(r"^[A-Za-z]:/", bash_path):
+            bash_path = "/" + bash_path[0].lower() + bash_path[2:]
+        code, _ = run_step_body(
+            f'export PATH="{bash_path}:$PATH"\n' + script,
+            {"TOOLS": tools.as_posix()},
+            tmp_path,
+        )
+        assert (code == 0) is ok
+        if installed is None:
+            assert not log.exists(), "npm ran with a version that failed the check"
+        else:
+            assert f"install -g {self.PACKAGE}@{version}" in log.read_text(encoding="utf-8")
+
+    def test_backend_lint_and_type_check_are_exactly_pinned(self):
+        text = self.PYPROJECT.read_text(encoding="utf-8")
+        for tool in ("ruff", "mypy"):
+            specs = re.findall(rf'"{tool}([^"]*)"', text)
+            assert specs, f"backend/pyproject.toml does not list {tool}"
+            for spec in specs:
+                assert re.fullmatch(r"==\d+\.\d+\.\d+", spec), (
+                    f"{tool}{spec}: pin it with == so a rebuilt image cannot bring new rules"
+                )
 
 
 class TestAFinishedTaskDoesNotFailTheOrchestrator:
@@ -2308,6 +2425,76 @@ class TestTheJevSmokeIsDispatchOnly:
         assert "--require-confidence" in body
         assert '--summary "$GITHUB_STEP_SUMMARY"' in body
         assert ".ai/questions/smoke.json" in body
+
+
+class TestRenovateNeverMergesAnything:
+    """Prompts/09-supply-chain-and-trust.md deliverable 3, and philosophy.md
+    §8 ("No auto-merge ... this one is load-bearing"): Renovate keeps the
+    dependencies and the SHA-pinned actions current, weekly, and a human
+    merges every one of its PRs. Plain JSON, so this stdlib test reads it."""
+
+    @pytest.fixture
+    def config(self) -> dict:
+        assert RENOVATE.exists(), ".github/renovate.json is missing"
+        return json.loads(RENOVATE.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _walk(node, path="$"):
+        yield path, node
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for i, value in enumerate(node):
+                yield from TestRenovateNeverMergesAnything._walk(value, f"{path}[{i}]")
+
+    def test_nothing_turns_automerge_on(self, config):
+        """Anywhere: top level, a packageRule, a group, a lockfile setting."""
+        on = [
+            path
+            for path, node in self._walk(config)
+            if isinstance(node, dict)
+            for key, value in node.items()
+            if key.lower().endswith("automerge") and value is True
+        ]
+        assert not on, f"automerge is on at {on}"
+        assert config.get("automerge") is False
+        assert config.get("platformAutomerge") is False
+
+    def test_no_preset_brings_automerge_in(self, config):
+        presets = [p for p in config.get("extends", []) if "automerge" in p.lower()]
+        assert all(p.endswith(":automergeDisabled") for p in presets), presets
+
+    def test_nothing_is_proposed_before_three_days(self, config):
+        """A release pulled within days (a compromised publish) never reaches
+        a PR. `strict` holds the branch itself back, not just its status."""
+        ages = [
+            (path, node["minimumReleaseAge"])
+            for path, node in self._walk(config)
+            if isinstance(node, dict) and "minimumReleaseAge" in node
+        ]
+        assert any(path == "$" for path, _ in ages), "no top-level minimumReleaseAge"
+        for path, age in ages:
+            m = re.fullmatch(r"(\d+)\s*(day|days|week|weeks)", age.strip())
+            assert m, f"{path}: unreadable minimumReleaseAge {age!r}"
+            days = int(m.group(1)) * (7 if m.group(2).startswith("week") else 1)
+            assert days >= 3, f"{path}: minimumReleaseAge {age!r} is under 3 days"
+        assert config.get("internalChecksFilter") == "strict"
+
+    def test_its_branches_are_not_agent_branches(self, config):
+        """`agent/*` is the worker's namespace: the guard would hold such a
+        PR against a task spec it does not have, and Renovate is not a worker."""
+        prefix = config.get("branchPrefix")
+        assert prefix, "branchPrefix must be stated, not left to the default"
+        assert not prefix.startswith("agent/")
+        for path, node in self._walk(config):
+            if isinstance(node, dict) and "branchPrefix" in node:
+                assert not node["branchPrefix"].startswith("agent/"), path
+
+    def test_action_pins_stay_pinned(self, config):
+        """Deliverable 1 pins every action to a full SHA; this keeps the SHA
+        and its `# vN` comment current instead of loosening it to a tag."""
+        assert "helpers:pinGitHubActionDigests" in config.get("extends", [])
 
 
 class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:

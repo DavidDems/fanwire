@@ -45,8 +45,7 @@ merged (#117–#130) and `MEDIA-002` ran end to end (handoff §10.5).
    returned a 200 with `confidence` the same day (run 38422783284,
    $0.0000184), so automations 2 and 3 may ask it in shadow.
 
-11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`. The CLI pin
-    moved to `Prompts/09` deliverable 2 (2026-10-19).
+11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`.
 12. `director`: The CI half of bug 17.
 14. `director`: **Cheap automations** on `claude-haiku-5-5` or `jev`: spec drift check;
     CI failure summary on a red task PR; criteria coverage check on a task
