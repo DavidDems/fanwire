@@ -39,7 +39,7 @@ from app.posts.facade import (
     PublishPostFacade,
 )
 from app.posts.models import Post
-from app.posts.moderation import PostRejected
+from app.posts.moderation import PostRejected, RateLimitExceeded
 from app.posts.schemas import CreatePostRequest, PostOut
 from app.posts.service import (
     AlreadyLikedError,
@@ -58,7 +58,20 @@ from app.users.models import User
 router = APIRouter(prefix="/posts", tags=["posts"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=PostOut)
+# Both routes that publish a post answer 429 when the author's rate limit
+# (app.posts.moderation.RateLimitCheck) refuses it, 400 for any other
+# moderation refusal.
+_RATE_LIMITED: dict[int | str, dict[str, object]] = {
+    status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Post rate limit exceeded"}
+}
+
+
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PostOut,
+    responses=_RATE_LIMITED,
+)
 def create_post(
     body: CreatePostRequest,
     current_user: User = Depends(get_current_user),
@@ -76,6 +89,10 @@ def create_post(
     )
     try:
         return facade.publish(request)
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=exc.reason
+        ) from exc
     except PostRejected as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
     except MediaNotFoundError as exc:
@@ -142,7 +159,10 @@ def unlike(
     "/{post_id}/repost",
     status_code=status.HTTP_201_CREATED,
     response_model=PostOut,
-    responses={status.HTTP_200_OK: {"model": PostOut, "description": "Already reposted"}},
+    responses={
+        status.HTTP_200_OK: {"model": PostOut, "description": "Already reposted"},
+        **_RATE_LIMITED,
+    },
 )
 def repost(
     post_id: int,
@@ -158,6 +178,10 @@ def repost(
         post, created = repost_post(session, facade, user_id=current_user.id, post_id=post_id)
     except PostNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=exc.reason
+        ) from exc
     except PostRejected as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
     if not created:
