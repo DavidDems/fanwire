@@ -12,6 +12,13 @@
       "from": "DRAFT",
       "note": "hand run started",
       "to": "HAND_RUNNING"
+    },
+    {
+      "at": "2026-10-19T23:50:37Z",
+      "event": "HAND_FINISHED",
+      "from": "HAND_RUNNING",
+      "note": "hand run finished, PR #182",
+      "to": "COMPLETE"
     }
   ],
   "last_ci": null,
@@ -20,10 +27,11 @@
   "manager_invocations": 0,
   "max_attempts": 3,
   "mode": "hand",
+  "pr": 182,
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {},
-  "state": "HAND_RUNNING",
+  "state": "COMPLETE",
   "task_id": "INFRA-004",
-  "updated_at": "2026-10-19T23:25:38Z"
+  "updated_at": "2026-10-19T23:50:37Z"
 }
