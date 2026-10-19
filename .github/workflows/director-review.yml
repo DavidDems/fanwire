@@ -1,0 +1,158 @@
+name: director-review
+
+# Prompts/09-supply-chain-and-trust.md deliverable 5: when a Director PR that
+# touches .ai/ or .github/ opens or updates, one advisory comment listing the
+# places its diff weakens a safety control, each with the enforcement grade it
+# falls from and to (philosophy.md §4), updated in place on later pushes. A
+# Director PR is reviewed by one human, the same one who directed it, and
+# merges through the admin bypass (github-automation-setup.md §3); this is a
+# second reader, not a gate. It fails nothing and approves nothing, and it can
+# be misled by the diff it reads. .ai/agentlib/directorreview.py builds the
+# request, checks the answer and renders; .ai/bin/director_review.py makes the
+# one model call, on claude-sonnet-5-5 (the human, 2026-10-19,
+# human-decisions.md §8), about $0.05 a PR.
+#
+# It holds the Anthropic key, so it is shaped to give it nothing to reach
+# (work-modes.md "Constraints every automation must keep"):
+#   - pull_request_target, not pull_request. A pull_request_target job runs
+#     the workflow file of main, never the branch's, and the code that runs is
+#     main's too: main's tip (github.sha) is checked out at tools/, every
+#     script runs from there with python -I, and philosophy.md and
+#     threat-model.md are read from there, so a PR cannot rewrite the yardstick
+#     it is measured by. The PR's head is checked out beside it at pr/ as
+#     data: its diff is taken, and nothing in it is run.
+#   - the job's if: admits only a PR from this repository (a fork's PR gets
+#     nothing), whose branch is not agent/* (a worker's branch is held by
+#     agent-guard and read by the other automations), and whose author is not
+#     a bot. A bot's PR (Renovate's) is not a Director's change: the human
+#     can approve it for real, so it has the review this one stands in for.
+#   - the token can read the repository and write PR comments, and nothing
+#     else. No checkout keeps a credential.
+#   - the key is in one step's env, the one that makes the call, and that
+#     step holds no GitHub token. The step that holds the token sees no key,
+#     and the step that takes the diff holds neither.
+#   - no event value is pasted into a script: each reaches the shell through
+#     env:, as data.
+#   - the diff and the model's answer are text a branch or a model wrote.
+#     director_review.py fences the diff as data in the request, keeps a
+#     finding only if it names a path the diff showed and a grade that drops,
+#     and escapes everything in the comment, so the comment cannot mention,
+#     link, or close the marker it is found by.
+#   - one call, no retry, and on any error no comment at all: the script
+#     deletes any old comment file first and writes a new one only on
+#     success. The call and the post may fail without failing the job, and
+#     nothing here is under gate: a required check never waits on a model.
+#
+# What the tests cannot show, and only a live run proves: that
+# pull_request_target fires for a Director PR with this paths: filter; that
+# this token, with pull-requests: write, may comment on it; that Sonnet 5.5
+# accepts the request as built (thinking between_tools, max_tokens 2000) and
+# answers within that cap; and what a real Director diff costs. A
+# pull_request_target run always uses main's copy of this file, so the PR that
+# adds it does not trigger it: its first live run is the first Director PR
+# touching .ai/ or .github/ after this merges.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+    paths: [".ai/**", ".github/**"]
+
+permissions: {}
+
+jobs:
+  review:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      github.event.pull_request.user.type != 'Bot'
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One review per PR at a time, so two pushes cannot both create a comment.
+    # Never cancelled: the later run simply updates it.
+    concurrency:
+      group: director-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+    steps:
+      # main's copy: the code that runs with the key, and the two documents
+      # the diff is judged against. github.sha, not the PR's base.sha: GitHub
+      # does not refresh base.sha on a reopen, so it can predate fixes the
+      # workflow file (main's tip) already has.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+
+      # The PR, as data. Full history, so the diff against the base can be
+      # taken locally.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      # What the PR changes, from the two SHAs. No key and no token here. The
+      # branch can set .gitattributes, so no external diff driver or textconv
+      # runs, and --text keeps a -diff attribute from hiding a change as
+      # "Binary files differ". --no-renames: a rename shows its whole content.
+      - name: Take the PR's diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git -C pr diff --no-ext-diff --no-textconv --text --no-renames \
+            "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/pr.diff"
+          echo "$(wc -c < "$RUNNER_TEMP/pr.diff") byte(s) of diff"
+
+      # The only step with the Anthropic key, and it holds no GitHub token.
+      # One call, no retry; on any error it writes no comment, and its
+      # failure is not the job's.
+      - name: Ask which controls the diff weakens
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: >-
+          python -I "$TOOLS/.ai/bin/director_review.py"
+          --diff "$RUNNER_TEMP/pr.diff"
+          --head-sha "$HEAD_SHA"
+          --run-url "$RUN_URL"
+          --comment-out "$RUNNER_TEMP/comment.md"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      # One comment per PR: the bot's own comment that starts with the marker
+      # is edited in place, or a new one is made. The body is read from the
+      # file the script wrote, never from an expression.
+      - name: Post or update the PR comment
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -s "$RUNNER_TEMP/comment.md" ]; then
+            echo "::notice::no comment was written; nothing to post"
+            exit 0
+          fi
+          IDS=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- fanwire-director-review -->"))) | .id')
+          ID=${IDS%%$'\n'*}
+          if [ -n "$ID" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              -F body=@"$RUNNER_TEMP/comment.md" > /dev/null
+          fi

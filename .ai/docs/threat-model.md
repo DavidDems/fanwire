@@ -92,6 +92,15 @@ by hand, (2) still fails the PR.
   not intent. Human review is the control.
 - **A poisoned task spec.** `task.json` is trusted input. It is also
   human-reviewed before it lands, and cannot grant the always-forbidden set.
+- **A Director change is reviewed by one human.** The Director has no path
+  restrictions (`permissions.md`), and its PR is read by the same human who
+  directed it, then merged through the admin bypass because that human cannot
+  approve their own PR. The only other reader is `director-review.yml`, an
+  advisory model that lists the controls a diff touching `.ai/` or `.github/`
+  weakens, judged against this file and `philosophy.md` as they stand on
+  `main`. It fails nothing, and it can be misled by the diff it reads, so a
+  regression it misses, or one the diff talks it out of, lands on that one
+  human's reading alone.
 - **Provider compromise.** Out of scope. A malicious provider has the code
   agent's write permission for the duration of a task branch, which is why
   that permission is narrow and why nothing merges without a human.

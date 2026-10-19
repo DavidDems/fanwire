@@ -61,7 +61,7 @@
   },
 
   "automations": {
-    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS; wikiprop.MAX_TOKENS, MAX_DIFF_CHARS).",
+    "_note": "The cheap automations of wiki/GeneralContext/Architecture/work-modes.md: one narrow model call each, from main's copy in a workflow, priced from the response's usage against telemetry.prices. Caps here can only lower agentlib's own (cisummary.MAX_TOKENS, MAX_LOG_CHARS; coverage.MAX_TOKENS, MAX_TEST_CHARS; drift.MAX_TOKENS, MAX_CONTEXT_CHARS; wikiprop.MAX_TOKENS, MAX_DIFF_CHARS; directorreview.MAX_TOKENS, MAX_DIFF_CHARS).",
     "ci_summary": {
       "_why": "Prompts/04 automation 1: one sentence naming the likely cause of a red agent/* PR run, beside ciresult's deterministic parse. .ai/bin/ci_summary.py, run by .github/workflows/ci-summary.yml.",
       "provider": "anthropic",
@@ -90,6 +90,13 @@
       "provider": "anthropic",
       "model": "claude-haiku-5-5",
       "max_tokens": 4000,
+      "max_diff_chars": 150000
+    },
+    "director_review": {
+      "_why": "Prompts/09 deliverable 5: a Director PR is reviewed by the one human who directed it and merges through the admin bypass, so an independent model reads every non-agent/*, non-bot PR of this repository touching .ai/ or .github/ against philosophy.md and threat-model.md on main, and lists safety regressions by enforcement grade; advisory, fails nothing. Sonnet 5.5, not Haiku: the human, 2026-10-19 (human-decisions.md section 8), Haiku is too light for workflow diffs. About $0.05 a PR. .ai/bin/director_review.py, run by .github/workflows/director-review.yml.",
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "max_tokens": 2000,
       "max_diff_chars": 150000
     }
   },

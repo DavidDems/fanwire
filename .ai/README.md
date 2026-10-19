@@ -75,6 +75,7 @@ Nothing depends on an agent session staying alive.
 | `.github/workflows/coverage-check.yml` | A cheap automation: when an `agent/*` PR opens or is pushed, one advisory comment listing each acceptance criterion with the test that pins it, or "not pinned" (Haiku 5.5), Fails nothing. |
 | `.github/workflows/spec-drift.yml` | A cheap automation, run once when an `agent/*` PR is opened, or dispatched on `main` (`-f task_id=<ID>`): the paths, links and names a task spec relies on that the code no longer has (Haiku 5.5 for names in prose). Job summary, and a comment on the task's open PR. |
 | `.github/workflows/wiki-proposal.yml` | A cheap automation: when an `agent/*` PR merges, one comment on it saying no documented decision changed, or holding a patch to the `wiki/CodeContext/Modules/` files its spec names (Haiku 5.5). The human applies it by hand; nothing is committed. |
+| `.github/workflows/director-review.yml` | An advisory reader of Director PRs: when a PR from this repository that is not `agent/*` and not a bot's touches `.ai/` or `.github/`, one comment listing the safety controls its diff weakens, each with the enforcement grade it falls from and to (Sonnet 5.5). Fails nothing; not under `gate`. |
 
 ## Commands worth knowing
 
