@@ -1,0 +1,73 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Prompts/09-supply-chain-and-trust.md deliverable 3. Weekly, grouped by ecosystem, nothing proposed before a release is 3 days old, and no automerge, ever (.ai/docs/philosophy.md section 8): a human merges every PR this opens.",
+    "Guarded by .ai/tests/test_workflows.py TestRenovateNeverMergesAnything. Setup and install steps: wiki/GeneralContext/Architecture/github-automation-setup.md section 7."
+  ],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "timezone": "America/Toronto",
+  "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "automerge": false,
+  "platformAutomerge": false,
+  "branchPrefix": "renovate/",
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The claude CLI version the workflows install, pinned once in .ai/config.json (providers.anthropic.cli_version, package named by cli_package). Matches nothing until that pin exists.",
+      "managerFilePatterns": ["/^\\.ai/config\\.json$/"],
+      "matchStringsStrategy": "combination",
+      "matchStrings": [
+        "\"cli_package\"\\s*:\\s*\"(?<depName>[^\"]+)\"",
+        "\"cli_version\"\\s*:\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "GitHub Actions, non-major, one PR. The digest helper keeps each SHA pin and its # vN comment current.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "github-actions non-major"
+    },
+    {
+      "description": "npm (frontend/ and infra/), non-major, one PR.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "npm non-major"
+    },
+    {
+      "description": "Python (backend/pyproject.toml, PEP 621), non-major, one PR. Matched by category, not manager: Renovate extracts this file with its poetry manager, not pep621.",
+      "matchCategories": ["python"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "pip non-major"
+    },
+    {
+      "description": "Docker base images (docker/*.Dockerfile, docker-compose.yml), non-major, one PR.",
+      "matchCategories": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "docker non-major"
+    },
+    {
+      "description": "Majors are deliberately not grouped: one PR per package, because a grouped major is an unreviewable PR.",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major"]
+    },
+    {
+      "description": "The claude CLI, its own PR. Before approving, re-check the bumped CLI still accepts --setting-sources user --strict-mcp-config (.ai/docs/handoff.md section 10.1, D2b): the worker's isolation from checkout config depends on those flags.",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["@anthropic-ai/claude-code"],
+      "groupName": "claude CLI",
+      "minimumReleaseAge": "3 days",
+      "addLabels": ["recheck-d2b-flags"],
+      "prBodyNotes": [
+        "**Re-check D2b before approving** (`.ai/docs/handoff.md` §10.1): run `npx --yes @anthropic-ai/claude-code@{{{newVersion}}} --help` and confirm it still lists `--setting-sources` and `--strict-mcp-config`. The worker relies on both to ignore `.claude/` and `.mcp.json` in the checkout."
+      ]
+    }
+  ]
+}
