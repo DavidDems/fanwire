@@ -81,6 +81,7 @@ Set by the human and read back with `gh api` on 2026-10-19:
 | Workflow permissions | **Read repository contents and packages permissions** |
 | Allow GitHub Actions to create and approve pull requests | **On**: the orchestrator opens review PRs (§4). No workflow approves anything (`TestNoWorkflowCanApprove`) |
 | Security → Advanced Security: secret scanning, push protection | **On** |
+| Security → Advanced Security: Dependabot alerts | **On** (2026-10-19), so Renovate and the Security tab see advisories. **Dependabot security updates stay off**: Renovate opens the update PRs (§7) |
 
 The pin requirement is the server-side half of
 `TestEveryActionIsPinnedToACommit`. The test stops an unpinned `uses:`
