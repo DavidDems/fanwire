@@ -363,6 +363,78 @@ class TestNoWorkflowCanApprove:
         assert "--approve" not in text
 
 
+class TestNoWorkflowGrantsWriteAtTheTopLevel:
+    """OpenSSF Scorecard, Token-Permissions (first run 2026-10-19). A
+    top-level `permissions:` block is inherited by every job in the file,
+    including any job added later that never asked for a write. So the top
+    level grants no write at all: `permissions: {}` or read-only scopes, and
+    each job that needs a write states it on itself. A file with no top-level
+    block gets the repository default, which this test does not trust either.
+    The job-level writes that remain (the worker's `land` job, the
+    orchestrator's one job) are named in threat-model.md, "OpenSSF Scorecard"."""
+
+    @staticmethod
+    def top_level_permissions(text: str) -> str | None:
+        """The top-level `permissions:` value, inline or as its block, or None."""
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if not line.startswith("permissions:"):
+                continue
+            rest = line.split(":", 1)[1].split("#", 1)[0].strip()
+            if rest:
+                return rest
+            block = []
+            for nxt in lines[i + 1 :]:
+                if nxt.strip() and not nxt.startswith(" "):
+                    break
+                if nxt.strip() and not nxt.strip().startswith("#"):
+                    block.append(nxt.split("#", 1)[0].strip())
+            return "\n".join(block)
+        return None
+
+    @staticmethod
+    def grants_write(value: str | None) -> bool:
+        if value is None:
+            return True  # the repository default, whatever it is today
+        if value in ("{}", "read-all"):
+            return False
+        if value == "write-all" or not value:
+            return True
+        return any(ln.split(":", 1)[1].strip() != "read" for ln in value.splitlines())
+
+    def test_the_check_tells_read_from_write(self):
+        parse = self.top_level_permissions
+        assert not self.grants_write(parse("on: push\npermissions: {}\njobs:\n"))
+        assert not self.grants_write(parse("permissions: read-all\n"))
+        assert not self.grants_write(parse("permissions:\n  contents: read # why\njobs:\n"))
+        assert self.grants_write(parse("permissions: write-all\n"))
+        assert self.grants_write(parse("permissions:\n  contents: read\n  actions: write\n"))
+        assert self.grants_write(parse("on: push\njobs:\n  a:\n    permissions: {}\n"))
+
+    @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
+    def test_the_top_level_grants_no_write(self, path):
+        value = self.top_level_permissions(path.read_text(encoding="utf-8"))
+        assert value is not None, f"{path.name} has no top-level permissions block"
+        assert not self.grants_write(value), (
+            f"{path.name} grants a write at the top level; move it onto the job:\n{value}"
+        )
+
+    def test_the_orchestrator_states_its_writes_on_its_one_job(self, orchestrator):
+        assert re.search(r"^permissions: \{\}$", orchestrator, re.MULTILINE)
+        block = job_block(orchestrator, "orchestrate")
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.split("#", 1)[0].strip().split(": ", 1)
+            for ln in perms.splitlines()
+            if ln.startswith("      ") and not ln.strip().startswith("#")
+        )
+        assert granted == {
+            "contents": "write",
+            "actions": "write",
+            "pull-requests": "write",
+        }
+
+
 class TestTheToolchainIsPinnedInOnePlace:
     """`Prompts/09` deliverable 2, handoff.md §5.6. The provider CLI was
     installed unpinned, so a release on npm could change the agent's behaviour,
@@ -2940,6 +3012,91 @@ class TestTheScorecardIsAdvisoryAndCanOnlyUploadSarif:
         _, needs = _timeouts_and_needs(gate)["gate"]
         assert self.JOB not in needs and "scorecard" not in needs
         assert "scorecard" not in gate
+
+
+class TestCodeQlIsAdvisorySastThatBuildsNothing:
+    """OpenSSF Scorecard, SAST (first run 2026-10-19: 0 of 30 commits
+    checked). CodeQL on every PR to main, every push to main and weekly,
+    results to the Security tab, advisory. It runs on agent/* PRs too, so it
+    must not run the PR's code: every language is analysed with
+    `build-mode: none`, which extracts source and builds nothing. It holds no
+    secret, its checkout keeps no credential, and its one write,
+    `security-events: write`, is what uploading results needs. It fails
+    nothing that is required: `gate` does not depend on it."""
+
+    PATH = WORKFLOWS / "codeql.yml"
+    JOB = "analyze"
+    LANGUAGES = {"actions", "javascript-typescript", "python"}
+
+    @pytest.fixture
+    def wf(self) -> str:
+        assert self.PATH.exists(), "codeql.yml is missing"
+        return self.PATH.read_text(encoding="utf-8")
+
+    def test_prs_and_pushes_to_main_a_schedule_or_a_dispatch_start_it(self, wf):
+        on = wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        triggers = set(re.findall(r"^  ([a-z_]+):", on, re.MULTILINE))
+        assert triggers == {"pull_request", "push", "schedule", "workflow_dispatch"}, triggers
+        assert "pull_request_target" not in wf, "a PR's code must never run with a base token"
+        for event in ("pull_request", "push"):
+            section = on.split(f"\n  {event}:\n", 1)[1].split("\n  ", 1)[0]
+            assert re.search(r"branches:\s*\[\s*main\s*\]", section), f"{event}: main only"
+        cron = re.search(r"cron:\s*['\"](\d+) (\d+) \* \* (\d)['\"]", on)
+        assert cron, "weekly, at a fixed minute"
+        assert cron.group(1) != "0", "off the hour, not on it"
+        assert cron.groups() != ("17", "6", "1"), "not Scorecard's slot"
+
+    def test_the_token_can_upload_results_and_nothing_else(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        block = job_block(wf, self.JOB)
+        perms = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+        granted = dict(
+            ln.strip().split(": ", 1) for ln in perms.splitlines() if ln.startswith("      ")
+        )
+        assert granted == {
+            "contents": "read",
+            "actions": "read",
+            "security-events": "write",
+        }
+        assert "id-token" not in wf
+
+    def test_it_holds_no_secret(self, wf):
+        assert "secrets." not in wf
+        assert "github.token" not in wf and "GITHUB_TOKEN" not in wf
+
+    def test_the_checkout_keeps_no_credential(self, wf):
+        checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
+        assert len(checkouts) == 1
+        assert "persist-credentials: false" in checkouts[0]
+        assert "ref:" not in checkouts[0] and "repository:" not in checkouts[0]
+
+    def test_every_language_is_extracted_and_nothing_is_built(self, wf):
+        block = job_block(wf, self.JOB)
+        langs = set(re.findall(r"^\s+- language:\s*([\w-]+)$", block, re.MULTILINE))
+        assert langs == self.LANGUAGES, langs
+        modes = re.findall(r"^\s+build-mode:\s*(\S+)$", block, re.MULTILINE)
+        modes = [m for m in modes if not m.startswith("${{")]
+        assert modes and set(modes) == {"none"}, modes
+        assert len(modes) == len(re.findall(r"^\s+- language:", block, re.MULTILINE))
+        assert "github/codeql-action/autobuild@" not in wf
+        assert not run_bodies(wf), "no step runs a script: nothing of the PR's is executed"
+        (init,) = [s for s in steps_in(block) if "github/codeql-action/init@" in s]
+        assert "build-mode: ${{ matrix.build-mode }}" in init
+        assert "github/codeql-action/analyze@" in wf
+
+    def test_the_job_is_bounded(self, wf):
+        assert re.search(r"^    timeout-minutes:\s*\d+", job_block(wf, self.JOB), re.MULTILINE)
+
+    def test_it_is_not_part_of_the_required_gate(self, wf):
+        gate = TEST_AGENT_WF.read_text(encoding="utf-8")
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert self.JOB not in needs and "codeql" not in needs
+        assert "codeql" not in gate
+
+    def test_the_header_says_what_only_a_live_run_proves(self, wf):
+        header = wf.split("\non:\n", 1)[0]
+        assert "only a live run proves" in header
+        assert "build-mode" in header
 
 
 class TestTheWikiProposalRunsMainsCopyAfterAMerge:
