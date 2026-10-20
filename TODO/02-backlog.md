@@ -83,6 +83,26 @@ its answer.
 | System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
 | System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
 
+## Posts: deletion, deactivation and sports-data attachments
+
+The human's feature set of 2026-10-17, agreed (`Architecture/human-decisions.md`
+§9). Ten `hand` units in six stages: USERS-003, EVENTS-009, FRONTEND-011 →
+POSTS-004 → FRONTEND-012, POSTS-005 → POSTS-006 → FRONTEND-013, FRONTEND-014 →
+FRONTEND-015. Brief, design and order: `wiki/GeneralContext/Prompts/18-posts-lifecycle-and-data-links.md`.
+It absorbs the compose game picker row below and both items under
+"Features in `business-rules.md` that are not built".
+
+## Workflow ideas, not yet designed
+
+From the human's whiteboard (2026-10-17). Each needs a design discussion
+before a brief.
+
+| Item | Mode | Notes |
+|---|---|---|
+| **A weekly review of `wiki/`** | `director` | Overlaps `Prompts/10` deliverable 4 (`wiki-health.yml`, weekly, opening a "Wiki maintenance due" issue for a Director session). Settle it there rather than build a second trigger |
+| **A weekly review of `.ai/`** | `director` | The same shape as the wiki one: a deterministic weekly report (stalled tasks, unproven-live items in handoff, telemetry and metrics from `Prompts/11`, Scorecard findings) in an issue, and a Director session acting on it. Design it after `11` |
+| **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
+
 ## Sports data
 
 NBA data from the Eoin Moore Kaggle dataset, 2003-04 onward (the human's
@@ -93,7 +113,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 |---|---|---|---|---|
 | **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (#142, deployed 2026-10-14) | Now unblocked; needs a spec. Two are `RETAIN`: the human deletes them by hand afterwards |
 | **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
-| **A narrower compose game picker** for `#GameId` mentions, now that games, teams and players have their own pages | `hand` | — | `FRONTEND-008`/`FRONTEND-009` (left unplanned) | Needs a design decision from the human first |
+| **A narrower compose game picker** for `#GameId` mentions, now that games, teams and players have their own pages | `hand` | — | `FRONTEND-008`/`FRONTEND-009` (left unplanned) | **Absorbed into `Prompts/18`** (FRONTEND-013's attachment pickers, 2026-10-20); delete this row when FRONTEND-013 merges |
 
 ## Backend and infra
 
@@ -125,7 +145,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 ## Features in `business-rules.md` that are not built
 
-Both are `hand`, with no task yet: each needs a design pass before a spec.
+Both are now **`Prompts/18`'s** (2026-10-20): the game link is the `game_final` attachment (POSTS-005, FRONTEND-014), and the post menu is FRONTEND-012's. Delete each bullet when its unit merges.
 
 - **The game stats page.** "Posts with a link to a game should be clickable
   to go to the stats page." Once it exists, `#GameId<n>` in post text becomes

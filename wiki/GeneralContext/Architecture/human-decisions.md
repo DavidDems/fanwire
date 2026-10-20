@@ -157,3 +157,31 @@ The performance test (`Prompts/16`, `PERF-001`), answered 2026-10-20:
   for the local run and its result, which is the real gate, compared on the
   same machine. The other is an advisory, non-blocking CI job on PRs touching
   `backend/app/`.
+
+## §9. Post deletion, account deactivation and sports-data attachments (2026-10-17)
+
+The human's feature set, agreed after a repository review. The design is
+in `Prompts/18-posts-lifecycle-and-data-links.md` "The agreed design" until
+its units land, then in the module files. The decisions:
+
+- **Posts become soft-deletable by their owner** (`Post.deleted_at`). This
+  reverses `0x03-posts.md`'s "a published post is immutable". Deleted posts
+  are hidden everywhere, and references left behind show a "Post deleted"
+  placeholder. Restoring individual posts is out of scope.
+- **Account deactivation is `User.deleted_at` alone.** Visibility needs an
+  active post *and* an active author. Recovery clears only the account
+  marker. Deactivated accounts get guest behaviour and can recover, nothing
+  else, enforced on every request.
+- **A non-reply post may carry one sports-data attachment**: a game's final
+  score, a player's line in one game, or a player's career averages
+  (regular season or playoffs, computed live). It is stored as real nullable
+  foreign keys with CHECK constraints, not a generic type and id pair, and it
+  coexists with an image.
+- **Legacy `#GameId` mentions stay readable.** When token insertion is
+  retired is still open, and is decided in POSTS-005's spec.
+- **Frontend:** Back steps through modal details. X and Escape close the
+  modal and return to the originating page and its scroll position. Each
+  attachment type has its own preview with a link to its detail. A post card
+  appears complete, not piece by piece.
+- **Not built:** historical stat snapshots, and revoking a media URL someone
+  already obtained. Each needs a separate design.
