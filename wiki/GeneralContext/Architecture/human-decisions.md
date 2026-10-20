@@ -143,3 +143,17 @@ roadmap"), answered by the human before any brief started:
   supplements the docs and doesn't replace them. It also enforces the
   connection rule. tempograph is not adopted, and is at most an optional
   comparison arm in the bake-off.
+
+The performance test (`Prompts/16`, `PERF-001`), answered 2026-10-20:
+
+- **Virtual users authenticate with a local test JWKS.** The verifier
+  takes a minted key's JWKS only when `ENVIRONMENT == "perf"`. It fails
+  closed, and an infra test proves no deployed function sets it. Hand-minted
+  dev pool tokens were rejected: they test Cognito and cap the run at a few
+  users.
+- **Games are synthetic**, under an id range no nba.com id uses, so the run
+  needs no download and CI can run it.
+- **"Before a prod deploy" gets both checks.** One is a PR-template line
+  for the local run and its result, which is the real gate, compared on the
+  same machine. The other is an advisory, non-blocking CI job on PRs touching
+  `backend/app/`.

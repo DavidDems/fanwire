@@ -29,6 +29,10 @@ infra/lib/**/*.js
 infra/test/**/*.js
 infra/**/*.d.ts
 
+# Load test output (PERF-001): run summaries, the per-machine baseline, and
+# the minted test JWKS and tokens. Never committed.
+perf/results/
+
 # Env / secrets
 .env
 .env.*.local
