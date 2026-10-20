@@ -12,14 +12,19 @@ before persistence, per wiki/CodeContext/Standards/security.md
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", this
 module imports only app.posts.models.Post and the SQLAlchemy Session type
--- nothing cross-module.
+-- nothing cross-module. HeuristicSpamScorer needs an author's account
+age, which is users/' to give: it takes it as an injected callable, which
+app.posts.dependencies binds to app.users.service.account_created_at, so
+this module never imports app.users.
 """
 
 from __future__ import annotations
 
 import abc
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -86,12 +91,13 @@ class ProfanityFilter(ModerationCheck):
 
 class SpamScorer(abc.ABC):
     """Narrow injected interface (Dependency Inversion, same shape as
-    app.media.pipeline.MalwareScanner) -- no real implementation exists yet
-    (no live AWS/ML service this phase, same "future work" precedent as
-    MalwareScanner/GuardDutyMalwareScanner)."""
+    app.media.pipeline.MalwareScanner). Scores the whole context, not the
+    text alone, so a scorer can weigh who is posting. The real
+    implementation is HeuristicSpamScorer (deterministic, no model call);
+    FakeSpamScorer is a test double."""
 
     @abc.abstractmethod
-    def score(self, text: str | None) -> float: ...
+    def score(self, context: ModerationContext) -> float: ...
 
 
 class FakeSpamScorer(SpamScorer):
@@ -100,8 +106,69 @@ class FakeSpamScorer(SpamScorer):
     def __init__(self, fixed_score: float) -> None:
         self._fixed_score = fixed_score
 
-    def score(self, text: str | None) -> float:
+    def score(self, context: ModerationContext) -> float:
         return self._fixed_score
+
+
+# HeuristicSpamScorer's weights. Constants, not settings (YAGNI: nobody
+# tunes them per environment); only the threshold and the new-account age
+# are Settings. Against the default threshold 0.8: three links refuse on
+# their own, a run alone never does, a run with a link does, and a new
+# account's single link does.
+#
+# Score for the post's link count: 1 link, 2 links, 3 or more.
+_LINK_SCORES = (0.0, 0.3, 0.5, 0.8)
+# A run of _RUN_LENGTH or more of the same non-whitespace character (scored
+# once, however many runs). 20, not 10: a 10-letter cheer is common.
+_RUN_LENGTH = 20
+_RUN_SCORE = 0.5
+# An account younger than the new-account age posting at least one link.
+_NEW_ACCOUNT_LINK_SCORE = 0.5
+_MAX_SCORE = 1.0
+
+# `http://`, `https://` or `www.` followed by non-whitespace, matched
+# non-overlapping, so `https://www.x` is one link. A bare domain is not one.
+_LINK = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+_RUN = re.compile(rf"(\S)\1{{{_RUN_LENGTH - 1}}}")
+
+
+class HeuristicSpamScorer(SpamScorer):
+    """Deterministic spam score, the sum of three parts capped at 1.0:
+    links, a long run of one character, and a new account posting a link.
+    Null or empty text scores 0.0.
+
+    The account's creation time comes from `account_created_at(user_id)`
+    and the clock from `now()` (timezone-aware UTC), both injected. An
+    account is new while `now() - created_at < new_account_age`; an unknown
+    author (None) is treated as new, failing safe. The account age is only
+    looked up when the post has a link."""
+
+    def __init__(
+        self,
+        *,
+        account_created_at: Callable[[int], datetime | None],
+        now: Callable[[], datetime],
+        new_account_age: timedelta,
+    ) -> None:
+        self._account_created_at = account_created_at
+        self._now = now
+        self._new_account_age = new_account_age
+
+    def score(self, context: ModerationContext) -> float:
+        if not context.text:
+            return 0.0
+
+        links = len(_LINK.findall(context.text))
+        total = _LINK_SCORES[min(links, len(_LINK_SCORES) - 1)]
+        if _RUN.search(context.text):
+            total += _RUN_SCORE
+        if links and self._is_new_account(context.author_id):
+            total += _NEW_ACCOUNT_LINK_SCORE
+        return min(total, _MAX_SCORE)
+
+    def _is_new_account(self, user_id: int) -> bool:
+        created_at = self._account_created_at(user_id)
+        return created_at is None or self._now() - created_at < self._new_account_age
 
 
 class SpamScoreCheck(ModerationCheck):
@@ -110,7 +177,7 @@ class SpamScoreCheck(ModerationCheck):
         self._threshold = threshold
 
     def check(self, context: ModerationContext) -> None:
-        if self._scorer.score(context.text) >= self._threshold:
+        if self._scorer.score(context) >= self._threshold:
             raise PostRejected("spam score at or above threshold")
 
 

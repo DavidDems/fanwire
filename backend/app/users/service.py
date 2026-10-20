@@ -272,6 +272,16 @@ def get_public_profiles(session: Session, user_ids: Collection[int]) -> dict[int
     }
 
 
+def account_created_at(session: Session, user_id: int) -> datetime | None:
+    """When user_id's account was created, for other modules to call
+    instead of querying the User table directly (posts/' spam scorer reads
+    an author's account age through it). Same exclusion rule as
+    get_public_profiles: None for an unknown or soft-deleted user."""
+    return session.scalar(
+        select(User.created_at).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+
+
 def follower_count(session: Session, user_id: int) -> int:
     """Number of active (non-soft-deleted) users following user_id. Computed
     with a simple count query, no denormalized counter column (YAGNI) --
