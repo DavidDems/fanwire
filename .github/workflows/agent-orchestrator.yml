@@ -33,10 +33,9 @@ on:
     workflows: [test-agent]
     types: [completed]
 
-permissions:
-  contents: write # commit state + telemetry to the task branch
-  actions: write # trigger test-agent.yml and agent-worker.yml
-  pull-requests: write # open the human-review PR when a task completes
+# Nothing at the top level: a job added later inherits no write. The one job
+# states its own (OpenSSF Scorecard, Token-Permissions; threat-model.md).
+permissions: {}
 
 concurrency:
   # One orchestrator at a time per task. Never cancel in flight: a half-applied
@@ -65,6 +64,10 @@ jobs:
       (startsWith(github.event.workflow_run.head_branch, 'agent/') &&
        github.event.workflow_run.event == 'workflow_dispatch' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
+    permissions:
+      contents: write # commit state + telemetry to the task branch
+      actions: write # trigger test-agent.yml and agent-worker.yml
+      pull-requests: write # open the human-review PR when a task completes
     runs-on: ubuntu-latest
     # One run does one transition and stops, so this is generous by an order of
     # magnitude. Without it the job inherits GitHub's 6-hour default and a hung

@@ -261,7 +261,8 @@ record per call), and bring it to the human.
     `allowed_paths`, then `forbidden_paths`, then the files the brief
     names. A frontend unit that forbids `backend/**` fills the cap with
     code it may not touch, ahead of the files its brief names. Proposed:
-    read the brief's files before `forbidden_paths`. Not built.
+    read the brief's files before `forbidden_paths`. Built later
+    (`director/drift-brief-first`, below).
   - Coverage (run 38639808272, after a close and reopen): still
     `max_tokens` on thinking. GitHub did not refresh
     `pull_request.base.sha` on the reopen, so `tools/` was checked out
@@ -353,15 +354,27 @@ record per call), and bring it to the human.
     `ask_jev.py --automation <name>` makes no request, and the comments say
     `jev: off`. The old records stay readable by `agentctl shadow report`.
   - Built in `director/drift-auto-jev-off`.
+- **#166 merged; the live record on #167, #169, #182 and #183, 2026-10-19:**
+  - Drift ran on each PR's opening, unasked, and every comment says
+    `jev: off`. Coverage ran on all four.
+  - Haiku listed no names on any of the four, so `assumed_to_exist` (#163)
+    is still untested live.
+  - None of the four had a red `test-agent` run, so the "Fixed" line (#164)
+    is still unproven.
+  - Drift hit its input cap on all four (94 to 209 files unread), and what
+    filled it was mostly `forbidden_paths` code: the other backend modules,
+    or `backend/**` and `frontend/**` for an infra unit. The human asked for
+    the fix: `context_files` now reads `allowed_paths`, then the files the
+    brief names, then `forbidden_paths` (`director/drift-brief-first`).
+  - Not fixed, seen on #183: the cap keeps a prefix, so one large allowed
+    file (`backend/openapi.json`) stops everything after it, the brief's
+    files included. Proposed, the human's call.
 - **Next:**
-  - Prove live on the next unit: drift fires on the PR's opening, "jev:
-    off" shows, `assumed_to_exist` is honest (#163), and a red then green
-    push gets the "Fixed" line (#164).
+  - Prove live: the "Fixed" line after a red then green push (#164), and
+    `assumed_to_exist` once Haiku lists a name (#163).
   - Then this prompt's work is done: the four automations run unattended.
     Delete this prompt per the index's lifecycle rule, once its lasting
     facts are in `work-modes.md`.
-  - Proposed, the human's call: drift reads the brief's files before
-    `forbidden_paths`.
 
 ## The four, with design notes (starting points, not decisions)
 
