@@ -17,9 +17,10 @@ Act on GuardDuty findings of **Medium or High** severity only. Low-severity find
 by design in GuardDuty and are not actioned under this runbook (revisit this threshold once real traffic
 exists and a baseline of "normal" Low findings is established).
 
-Detection is still **manual**: no SNS/EventBridge alerting is wired up, so findings are only seen by
-periodically checking the GuardDuty console in `fanwire-log-archive` (delegated admin). A push notification
-(EventBridge → SNS → email) is a planned follow-up, not yet built.
+Detection of GuardDuty findings is still **manual**: findings are only seen by periodically checking the
+GuardDuty console in `fanwire-log-archive` (delegated admin). The CloudWatch alarms (Alarms, below) email
+on operational failures, not on findings. A push notification for findings (EventBridge → SNS → email) is a
+planned follow-up, not yet built.
 
 **A malware verdict on an upload is not an incident.** GuardDuty Malware Protection returning
 `THREATS_FOUND` for a quarantine object is the media pipeline working: `app.media.lambda_handler` moves that
@@ -268,11 +269,28 @@ time-to-restore. That is the number this drill is mainly for. Clean up as in ste
 | Malware scan | `Fanwire-Storage` | GuardDuty Malware Protection plan `e0d078028fa35d2cdba2`, `ACTIVE` on `uploads/` |
 | Queues | `Fanwire-Messaging` | notifications, media scan results, ingestion retry — each with a DLQ (e.g. `Fanwire-Messaging-NotificationDlq467FCAE6-nWWbotTUIAPC`) |
 | Event bus | `Fanwire-Messaging` | `PostEventBus` |
+| Alarm topic | `Fanwire-Messaging` | `AlarmTopic`; ARN in `Fanwire-App`'s `AlarmTopicArn` output |
+
+## Alarms
+
+Since `INFRA-004` (#182, deployed 2026-10-20), 21 CloudWatch alarms send ALARM and OK to one SNS
+topic. The topic's ARN is `Fanwire-App`'s `AlarmTopicArn` output. The human subscribed an email by hand
+on 2026-10-20 and proved it with `set-alarm-state`. The address is never committed. Thresholds and
+reasons: `wiki/CodeContext/Modules/0x00-architecture.md` "Alarms". An alarm emails on a change of
+state, not every period, so one email can stand for a long outage. An OK email means it recovered.
+
+| Alarm | First look |
+|---|---|
+| A DLQ depth > 0 (Messaging) | Read the message without deleting it: `aws sqs receive-message --profile fanwire-workload --region ca-central-1 --queue-url (aws sqs get-queue-url --profile fanwire-workload --region ca-central-1 --queue-name PASTE_DLQ_NAME --query QueueUrl --output text) --visibility-timeout 0`. Then read the consumer's log group for the error. |
+| API 5xx, or p95/p99 latency | The `Api` function's log group, then RDS. A deploy just before it means "Roll back a deploy", above. |
+| A function's Errors or Throttles | That function's log group (`aws logs tail /aws/lambda/PASTE_FUNCTION_NAME --profile fanwire-workload --region ca-central-1 --since 30m`). Throttles at this volume mean a concurrency limit, not load. |
+| RDS CPU, free storage or connections | RDS console → `Fanwire-Data` `Postgres` → Monitoring. Free storage below 2 GiB means growing the allocated storage is a reviewed CDK change. |
 
 ## Known gaps
 
-- Automated alerting (SNS/EventBridge) — planned, not built.
+- **GuardDuty findings raise no alarm.** They are still checked by hand (Trigger, above). Routing them to
+  the alarm topic means an EventBridge rule on GuardDuty findings in the delegated-admin account, which is
+  not built.
 - **No S3 data events in CloudTrail** (management events only), so object-level reads and writes are not
   recorded. Cheap at this volume; not enabled.
-- **No dead-letter-queue alarm.** A message in any DLQ is invisible until someone checks the depth.
 - Security Hub — optional at this budget per `wiki/CodeContext/Standards/security.md`, not part of this runbook.

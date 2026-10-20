@@ -7,8 +7,9 @@ Prose for the Manager. Nothing parses this file; the contract is `task.json`.
 `SpamScoreCheck` is wired against `FakeSpamScorer(0.0)` as the production
 default, so it never refuses anything. **Decided by the human (2026-10-19,
 `wiki/GeneralContext/Architecture/human-decisions.md` §8): deterministic
-heuristics, no model call.** Deliverable 2 of
-`wiki/GeneralContext/Prompts/08-production-hardening.md`.
+heuristics, no model call.** Deliverable 2 of the (deleted)
+`Prompts/08-production-hardening.md`, now run from
+`wiki/GeneralContext/Prompts/17-production-hardening-finish.md`.
 
 **Run this after `POSTS-002` merges**, cut from the `main` that contains it.
 Both units edit `moderation.py`, `dependencies.py`, `settings.py`,
