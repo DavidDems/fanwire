@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app.settings import Settings
 
@@ -193,3 +194,41 @@ def test_app_starts_and_serves_health_with_no_retired_env_vars_set():
     )
     assert result.returncode == 0, result.stderr
     assert "'status': 'ok'" in result.stdout
+
+
+# --- POSTS-002: per-author post rate limits ---------------------------------
+
+_RATE_LIMIT_ENV = {
+    "post_rate_limit_per_minute": "POST_RATE_LIMIT_PER_MINUTE",
+    "post_rate_limit_per_hour": "POST_RATE_LIMIT_PER_HOUR",
+}
+
+
+@pytest.mark.parametrize(
+    ("field", "default"),
+    [("post_rate_limit_per_minute", 10), ("post_rate_limit_per_hour", 100)],
+)
+def test_settings_defaults_post_rate_limits(monkeypatch, field, default):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv(_RATE_LIMIT_ENV[field], raising=False)
+    settings = Settings()
+    assert getattr(settings, field) == default
+
+
+@pytest.mark.parametrize("field", sorted(_RATE_LIMIT_ENV))
+def test_settings_reads_post_rate_limits_from_env(monkeypatch, field):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_RATE_LIMIT_ENV[field], "250")
+    settings = Settings()
+    assert getattr(settings, field) == 250
+
+
+@pytest.mark.parametrize("field", sorted(_RATE_LIMIT_ENV))
+@pytest.mark.parametrize("bad_value", ["0", "-1", "abc", "1.5"])
+def test_settings_rejects_a_post_rate_limit_that_is_not_a_positive_integer(
+    monkeypatch, field, bad_value
+):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_RATE_LIMIT_ENV[field], bad_value)
+    with pytest.raises(ValidationError):
+        Settings()

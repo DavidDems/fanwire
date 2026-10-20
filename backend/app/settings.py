@@ -1,3 +1,4 @@
+from pydantic import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +34,12 @@ class Settings(BaseSettings):
     # app.posts.dependencies.get_moderation_chain into a
     # frozenset[str] -- empty string (the default) means no word is banned.
     moderation_banned_words: str = ""
+
+    # Per-author post rate limits for app.posts.moderation.PostCountRateLimiter
+    # (every kind of post counts). PositiveInt so zero, a negative number or a
+    # non-integer fails when Settings is built, not at the first post.
+    post_rate_limit_per_minute: PositiveInt = 10
+    post_rate_limit_per_hour: PositiveInt = 100
 
     # EventBridge PostEventBus wiring for app.dependencies.get_event_bus.
     # Empty default keeps InMemoryEventPublisher wired for local dev/tests

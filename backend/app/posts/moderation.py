@@ -21,7 +21,7 @@ import abc
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.posts.models import Post
@@ -31,6 +31,11 @@ class PostRejected(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+class RateLimitExceeded(PostRejected):
+    """Raised by RateLimitCheck. Its own type so the routes can answer 429
+    for it and keep 400 for every other rejection."""
 
 
 @dataclass(frozen=True)
@@ -110,12 +115,12 @@ class SpamScoreCheck(ModerationCheck):
 
 
 class RateLimiter(abc.ABC):
-    """Narrow injected interface. No real DynamoDB-backed implementation
-    this phase (wiki/CodeContext/Standards/security.md: "API Gateway usage
-    plan + an app-level check against the DynamoDB cache table" -- the
-    DynamoDB-cache-check half is this interface's real implementation,
-    future work, same precedent as the ingestion pipeline's idempotency
-    table)."""
+    """Narrow injected interface. The real implementation is
+    PostCountRateLimiter, which counts the author's own posts. The DynamoDB
+    cache check wiki/CodeContext/Standards/security.md mentions is not
+    built: the post count needs no new infrastructure, and the edge
+    controls (WAF per-IP rule, API stage throttle) cover per-IP and global
+    limits."""
 
     @abc.abstractmethod
     def is_allowed(self, user_id: int) -> bool: ...
@@ -134,13 +139,47 @@ class FakeRateLimiter(RateLimiter):
         return self._verdict
 
 
+# One statement over the (author_id, created_at) index: the hour count, and
+# the minute count as a FILTER over the same rows. Measured against the
+# database's now(), the clock Post.created_at defaults to, so skew between
+# the app and RDS cannot open or close a window. Strict `>`: a post exactly
+# a minute (or an hour) old no longer counts.
+_RECENT_POST_COUNTS = text(
+    "SELECT count(*) FILTER (WHERE created_at > now() - interval '1 minute'), count(*) "
+    "FROM posts "
+    "WHERE author_id = :author_id AND created_at > now() - interval '1 hour'"
+)
+
+
+class PostCountRateLimiter(RateLimiter):
+    """Sliding-window limit on the author's own posts, every kind counted
+    (originals, replies, quote and plain reposts). Allowed while the author
+    has fewer than `per_minute` posts in the last minute AND fewer than
+    `per_hour` in the last hour.
+
+    Count-then-insert is not atomic: posts racing at the limit can each see
+    the same count and all pass, overshooting by a few. Acceptable for a
+    spam limit, and simpler than a lock -- deliberately no advisory lock."""
+
+    def __init__(self, session: Session, per_minute: int, per_hour: int) -> None:
+        self._session = session
+        self._per_minute = per_minute
+        self._per_hour = per_hour
+
+    def is_allowed(self, user_id: int) -> bool:
+        minute_count, hour_count = self._session.execute(
+            _RECENT_POST_COUNTS, {"author_id": user_id}
+        ).one()
+        return bool(minute_count < self._per_minute and hour_count < self._per_hour)
+
+
 class RateLimitCheck(ModerationCheck):
     def __init__(self, rate_limiter: RateLimiter) -> None:
         self._rate_limiter = rate_limiter
 
     def check(self, context: ModerationContext) -> None:
         if not self._rate_limiter.is_allowed(context.author_id):
-            raise PostRejected("rate limit exceeded")
+            raise RateLimitExceeded("rate limit exceeded")
 
 
 class DuplicateContentCheck(ModerationCheck):
