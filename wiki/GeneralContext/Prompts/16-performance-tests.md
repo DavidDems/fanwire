@@ -9,6 +9,30 @@ environment loosens `POST_RATE_LIMIT_PER_MINUTE`/`_PER_HOUR`, and
 `POSTS-003`'s new-account rule refuses links from accounts under
 `SPAM_NEW_ACCOUNT_HOURS` old.
 
+> **Update, 2026-10-20 (first Director session).** The human answered
+> deliverables 2 and 6 and the source of the game data:
+>
+> - a local test JWKS, fail-closed;
+> - both pre-deploy checks;
+> - synthetic games.
+>
+> They are recorded in `human-decisions.md` §8. The spec is
+> `.ai/tasks/PERF-001/`.
+>
+> The spec PR also moves two things out of the unit, because
+> `.ai/policy.json` denies them to `code_agent`:
+>
+> - The compose `perf` profile (`postgres-perf`, `backend-perf`, and `k6`
+>   pinned by digest). It is in `docker-compose.yml`, because a new image is
+>   a supply-chain call.
+> - `perf/results/` in `.gitignore`.
+>
+> It also grants `perf/**` to `code_agent`. The PR-template line and the
+> advisory CI job are `.github/`, so they are a Director PR after `PERF-001`
+> merges.
+>
+> Next: `PERF-001` as a hand run, once the spec PR merges.
+
 **Objective:** the human's request (2026-10-19). Write a load test of the
 site's main paths that reports P95 and P99 latency, run before a production
 deploy, **locally**, so it generates no AWS traffic and costs nothing.
