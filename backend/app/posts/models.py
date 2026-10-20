@@ -104,6 +104,9 @@ class Post(Base):
         Index("ix_posts_parent_post_id", "parent_post_id"),
         Index("ix_posts_original_post_id", "original_post_id"),
         Index("ix_posts_search_vector", "search_vector", postgresql_using="gin"),
+        # app.posts.moderation.PostCountRateLimiter counts one author's
+        # recent posts: an index range scan, not a table scan.
+        Index("ix_posts_author_id_created_at", "author_id", "created_at"),
     )
 
 
