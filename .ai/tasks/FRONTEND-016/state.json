@@ -1,0 +1,37 @@
+{
+  "attempt": 0,
+  "branch": "agent/FRONTEND-016",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-10-20T17:45:14Z",
+      "event": "HAND_STARTED",
+      "from": "DRAFT",
+      "note": "hand run started",
+      "to": "HAND_RUNNING"
+    },
+    {
+      "at": "2026-10-20T18:02:57Z",
+      "event": "HAND_FINISHED",
+      "from": "HAND_RUNNING",
+      "note": "hand run finished, PR #195",
+      "to": "COMPLETE"
+    }
+  ],
+  "last_ci": null,
+  "last_ci_run": null,
+  "last_dispatch": null,
+  "manager_invocations": 0,
+  "max_attempts": 3,
+  "mode": "hand",
+  "pr": 195,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "COMPLETE",
+  "task_id": "FRONTEND-016",
+  "updated_at": "2026-10-20T18:02:57Z"
+}
