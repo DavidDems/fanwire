@@ -49,6 +49,7 @@ export function testBoxScorePlayer(
   overrides: Partial<BoxScorePlayerOut> = {},
 ): BoxScorePlayerOut {
   return {
+    line_id: 70001,
     player_id: 9001,
     first_name: "Test",
     last_name: "Player",
