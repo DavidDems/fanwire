@@ -75,7 +75,7 @@ its answer.
 |---|---|---|---|
 | App 1 | `08-production-hardening.md` | `hand` + `director` | The per-user post rate limit and spam score are fakes in production, there are no alarms, and no deploy is checked. These are live risks, so they start now. |
 | App 2 | `16-performance-tests.md` | `hand` | k6 locally, P95/P99 as a regression gate. Goes after `08` because the new rate limiter must be configurable for virtual users. |
-| System 1 | `09-supply-chain-and-trust.md` | `director` | Small, and first so that every workflow added later is born SHA-pinned. Absorbs item 11's CLI pin. |
+| System 1 | ~~`09-supply-chain-and-trust.md`~~ | `director` | **Done 2026-10-19** (#174–#178, brief deleted; `.ai/docs/handoff.md` §10.6). Every workflow added later is born SHA-pinned. |
 | System 2 | `10-docs-structure.md` | `director` | Every later brief writes docs. Typed docs and a ratcheted linter stop that work from adding drift. |
 | System 3 | `11-metrics-every-mode.md` | `director` | The sensor. `12` needs its record format and the pipeline version. |
 | System 4 | `12-agent-evals.md` | `director` | The test harness. Its first run is the baseline `13`–`15` are judged against. |

@@ -105,3 +105,13 @@ def test_health_check_still_works_alongside_the_new_routers():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_openapi_schema_documents_429_on_the_post_creating_routes():
+    """POSTS-002: both routes that publish a post answer 429 when the
+    author's rate limit refuses it, and the contract says so."""
+    client = TestClient(app)
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "429" in paths["/posts"]["post"]["responses"]
+    assert "429" in paths["/posts/{post_id}/repost"]["post"]["responses"]
