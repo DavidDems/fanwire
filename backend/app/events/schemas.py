@@ -86,6 +86,8 @@ class ShootingOut(BaseModel):
 class BoxScorePlayerOut(ShootingOut):
     """One player who played: has minutes, possibly zero seconds."""
 
+    # The player_game_stats row's id: a `player_game` attachment's target.
+    line_id: int
     player_id: int
     first_name: str | None
     last_name: str | None
