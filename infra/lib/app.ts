@@ -78,6 +78,7 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
     auth,
     storage,
     messaging,
+    alarmTopic: messaging.alarmTopic,
     description: 'fanwire: shared backend Lambda image, four functions, HTTP API, schedules and queue triggers',
   });
 
