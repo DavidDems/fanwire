@@ -5,13 +5,14 @@
 .DESCRIPTION
     Mints local perf ID tokens, brings up the compose `perf` profile
     (postgres-perf, backend-perf), waits for backend-perf's /health, seeds it,
-    runs k6 against it, and compares the per-endpoint P95/P99 with the
-    previous run of the same profile on this machine
-    (perf/results/baseline-<profile>.json; the first run stores it). Always
-    tears the perf services down, even on failure.
+    runs k6 against it. For the load profile only, it compares the
+    per-endpoint P95/P99 with the previous load run on this machine
+    (perf/results/baseline-load.json; the first passing run stores it).
+    smoke and stress are judged by their k6 thresholds alone and never read
+    or write a baseline. Always tears the perf services down, even on failure.
 
-    Exits non-zero when a k6 threshold fails or an endpoint regressed by more
-    than -MaxRegression percent. Works in Windows PowerShell 5.1 and pwsh 7.
+    Exits non-zero when a k6 threshold fails or, for load, an endpoint
+    regressed by more than -MaxRegression percent. Works in Windows PowerShell 5.1 and pwsh 7.
     See perf/README.md.
 
 .EXAMPLE
@@ -110,7 +111,12 @@ try {
     }
 
     $compareCode = 0
-    if ($k6Code -ne 0 -and -not (Test-Path $baselineFile)) {
+    if ($Profile -ne 'load') {
+        # Too few samples (smoke) or a variable duration (stress) for a
+        # percentage comparison: k6's thresholds are the whole verdict.
+        Write-Host "==> skipping the comparison: only load is compared ($Profile is judged by its k6 thresholds)"
+    }
+    elseif ($k6Code -ne 0 -and -not (Test-Path $baselineFile)) {
         # Never store a failed run as the baseline.
         Write-Host "==> skipping the comparison: no baseline yet, and this run failed"
     }
