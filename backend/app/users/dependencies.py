@@ -6,11 +6,20 @@ a Cognito token verified server-side on every request ... never trusted
 based on client claims alone." Client-side "am I logged in" checks are UX
 only, never the boundary (wiki/CodeContext/Standards/design-principles.md
 Security baseline).
+
+The one exception to "a Cognito token" is the local load test (PERF-001,
+perf/README.md): when Settings.perf_jwks_path is set -- which Settings only
+allows with ENVIRONMENT exactly "perf" -- get_token_verifier verifies against
+the JWKS file scripts/mint_perf_tokens.py wrote, with PERF_ISSUER and
+PERF_AUDIENCE. It is the same CognitoTokenVerifier with every check intact;
+only the key material and the expected iss/aud differ.
 """
 
 from __future__ import annotations
 
+import json
 from functools import cache
+from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -19,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_session, get_settings
 from app.settings import Settings
 from app.users.auth import (
+    CognitoTokenVerifier,
     InvalidTokenError,
     RefreshingTokenVerifier,
     TokenVerifier,
@@ -26,6 +36,13 @@ from app.users.auth import (
 )
 from app.users.jwks import JWKSProvider
 from app.users.models import User
+
+# The iss and aud of a perf ID token. Shared with scripts/mint_perf_tokens.py,
+# which imports them from here, so the minted tokens and the verifier cannot
+# drift apart. Deliberately not a Cognito issuer: a real pool's token never
+# matches, and a perf token never matches a real pool.
+PERF_ISSUER = "https://perf.fanwire.local/issuer"
+PERF_AUDIENCE = "fanwire-perf"
 
 
 def get_token_verifier(settings: Settings = Depends(get_settings)) -> TokenVerifier:
@@ -37,7 +54,15 @@ def get_token_verifier(settings: Settings = Depends(get_settings)) -> TokenVerif
     The real default is a RefreshingTokenVerifier wired from Settings'
     Cognito fields (region, user pool, app client id) — see
     _default_token_verifier.
+
+    When settings.perf_jwks_path is set (only possible with ENVIRONMENT
+    exactly "perf", app.settings.Settings refuses it otherwise), it is
+    instead a CognitoTokenVerifier over that local JWKS file, with
+    PERF_ISSUER/PERF_AUDIENCE — see _perf_token_verifier. That path never
+    constructs a JWKSProvider, so it never fetches anything over the network.
     """
+    if settings.perf_jwks_path:
+        return _perf_token_verifier(settings.perf_jwks_path)
     return _default_token_verifier(
         settings.cognito_region, settings.cognito_user_pool_id, settings.cognito_app_client_id
     )
@@ -53,6 +78,15 @@ def _default_token_verifier(region: str, user_pool_id: str, app_client_id: str) 
     provider = JWKSProvider(region=region, user_pool_id=user_pool_id)
     issuer = f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
     return RefreshingTokenVerifier(provider, audience=app_client_id, issuer=issuer)
+
+
+@cache
+def _perf_token_verifier(jwks_path: str) -> TokenVerifier:
+    # Cached by path, like _default_token_verifier: the file is read once per
+    # process (on the first verify, which is why perf/run.ps1 mints before it
+    # brings the backend up), and a different path gets its own verifier.
+    jwks = json.loads(Path(jwks_path).read_text(encoding="utf-8"))
+    return CognitoTokenVerifier(jwks, audience=PERF_AUDIENCE, issuer=PERF_ISSUER)
 
 
 def get_current_identity(
