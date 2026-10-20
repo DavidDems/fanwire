@@ -312,16 +312,19 @@ def context_files(
     "Touches" is what the spec's `allowed_paths` and `forbidden_paths` match
     (by the guard's own glob rules) and the repository paths the brief names:
     the code a unit would read first. The tests are left out, as everywhere
-    in this check. The order is the spec's, then the brief's, so a capped
-    input keeps what the spec names first.
+    in this check. The order is `allowed_paths`, then the brief's paths,
+    then `forbidden_paths`: forbidden paths are code the unit must not touch,
+    while the brief's files are what it reads first, so a capped input keeps
+    the brief's files ahead of them (seen on #155, #182, #183).
     """
     root = Path(repo_root).resolve()
     spec = spec if isinstance(spec, dict) else {}
-    patterns = _strings(spec.get("allowed_paths")) + _strings(spec.get("forbidden_paths"))
+    patterns = _strings(spec.get("allowed_paths"))
     for token in _TICKED.findall(brief or ""):
         path = _repo_path(token.strip(), root)
         if path is not None:
             patterns.append(path + "**" if path.endswith("/") else path)
+    patterns += _strings(spec.get("forbidden_paths"))
 
     files: dict[str, str] = {}
     for pattern in patterns:

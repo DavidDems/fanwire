@@ -168,8 +168,10 @@ One structure for every mode, so any session can start cold:
   spec are checked without a model; Haiku 5.5 is asked only for names in the
   prose, and a name it calls missing is kept only if Haiku marks it
   `assumed_to_exist` (a name the unit is to create is not drift) and no
-  non-test source file has it. The report
-  goes to the job summary, and to the task's open PR as a comment if there
+  non-test source file has it. The code Haiku sees is whole files under a
+  cap, read in this order: the spec's `allowed_paths`, the files the brief
+  names, then `forbidden_paths` (code the unit may not touch, read last).
+  The report goes to the job summary, and to the task's open PR as a comment if there
   is one. **Proven live 2026-10-14** on #155, $0.0087.
 - **Wiki update proposal built** (2026-10-14):
   `.github/workflows/wiki-proposal.yml` runs `main`'s copy on
