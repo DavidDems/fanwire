@@ -177,10 +177,13 @@ against the Security tab when a later run changes.
   Accepted.
 - **Maintained.** A young repository: Scorecard scores activity over 90 days
   and the repository's age. Accepted; it rises on its own.
-- **Security-Policy**, **License.** Still absent: no `SECURITY.md`, no
-  top-level licence. Not accepted and not decided: choosing a licence, and
-  where a vulnerability report goes, are the human's calls, not a
-  workflow's.
+- **Security-Policy.** `.github/SECURITY.md` (2026-10-20): reports go to
+  GitHub's private vulnerability reporting, which the human enables in
+  Settings (`github-automation-setup.md` §1). It sits in `.github/`, not a
+  docs folder, and links nothing in the repository, so a docs reorganisation
+  cannot break it (`TestTheSecurityPolicyIsWhereGitHubLooks`).
+- **License.** No top-level licence: all rights reserved by default. Not
+  decided; it is the human's call, not a workflow's.
 
 Not reported as open by the first run, though this list once expected them:
 **Signed-Releases**, **Packaging**, **Contributors**.
