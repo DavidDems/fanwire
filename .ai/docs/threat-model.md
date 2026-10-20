@@ -113,45 +113,74 @@ the result to the Security tab. It is advisory: it fails nothing, `gate` does
 not depend on it, and it is not a required check. Its job token can read, and
 write one thing, a code-scanning result; its results are not published.
 
-The checks below are **expected** to score low, and each is accepted for the
-reason given. This list is the expectation, to be confirmed against the first
-run (it can only run from `main`, after merge); correct it then.
+The list below is the **first run's** result (2026-10-19, run 39346927480,
+read from the code-scanning API), not an expectation. Each open check is
+either accepted for the reason given or says what closes it. Re-read it
+against the Security tab when a later run changes.
 
 - **Code-Review.** Solo maintainer. The human authors Director PRs and merges
   them through the ruleset's admin bypass, because GitHub never lets an author
   approve their own PR (`wiki/GeneralContext/Architecture/github-automation-setup.md`
   §3). Agent PRs, authored by `github-actions[bot]`, do get a real approval.
   So Director changes show as merged unreviewed, which they are, by a second
-  person; the human reads every one before it lands.
+  person; the human reads every one before it lands. Accepted.
 - **Branch-Protection.** The same bypass, and one more reason: reading a
   ruleset in full needs an admin token, and the job is deliberately given
   none. The score reflects what a read-only token can see, not the ruleset.
-- **Dangerous-Workflow.** Likely flags `coverage-check.yml` (it checks out the
-  PR's head under `pull_request_target`) and possibly `wiki-proposal.yml` (it
-  checks out the merged commit; spec-drift.yml checks out only the base). This
-  is the D2b pattern (`handoff.md` §10.1): `main`'s workflow file and `main`'s
-  scripts run, from a `tools/` checkout with `python -I`; the PR is checked
-  out beside them as data only, and nothing from it is executed; no checkout
-  keeps a credential, and each key sits in one step with no GitHub token.
+  Accepted.
+- **Dangerous-Workflow.** Flags `coverage-check.yml` and `director-review.yml`
+  (each checks out the PR's head under `pull_request_target`) and
+  `wiki-proposal.yml` (it checks out the merged commit). `spec-drift.yml`,
+  which checks out only the base, was not flagged. All three are the D2b
+  pattern (`handoff.md` §10.1): `main`'s workflow file and `main`'s scripts
+  run, from a `tools/` checkout with `python -I`; the PR is checked out beside
+  them as data only, and nothing from it is executed; no checkout keeps a
+  credential, and each key sits in one step with no GitHub token.
   `test_workflows.py` pins this (`TestTheCoverageCheckRunsMainsCopyAgainstAPrAsData`,
+  `TestTheDirectorReviewReadsADirectorPrAsData`,
   `TestTheWikiProposalRunsMainsCopyAfterAMerge`). A pattern match cannot see
-  that the checkout is never run; the tests can.
-- **Pinned-Dependencies.** Partial. Actions are pinned by commit SHA, but the
-  Dockerfiles name their base images by tag (`public.ecr.aws/lambda/python:3.12`
-  in `docker/backend.Dockerfile`, `node:20-alpine` in `docker/frontend.Dockerfile`
-  and `docker/cdk-deploy.Dockerfile`), `pip install` runs without `--require-hashes`
-  (the backend Dockerfile, and `test-agent.yml`), and `agent-worker.yml`
-  installs the Claude Code CLI with `npm install -g`. `npm ci` installs from
-  the lockfile, which carries integrity hashes. Inside the Scorecard action
-  itself, its docker image is named by tag. Closing the rest is deliverable 2
-  (toolchain pins) and Renovate's job, not this workflow's.
+  that the checkout is never run; the tests can. Accepted.
+- **Token-Permissions.** Two findings. `agent-orchestrator.yml` granted
+  `contents: write` and `actions: write` at the top level; those grants
+  (and `pull-requests: write`) now sit on its one job, `orchestrate`, and
+  the top level is `permissions: {}`. Same token, same job, so the run is
+  unchanged; what changes is that a job added later inherits no write.
+  `TestNoWorkflowGrantsWriteAtTheTopLevel` keeps every workflow that way.
+  The other finding, `contents: write` and `actions: write` on
+  `agent-worker.yml`'s `land` job, stays: that job is what commits the
+  patch to `agent/<ID>`, pushes the state and hands back to the
+  orchestrator. The model never runs there; it runs in `run-model`, which
+  can only read (D2b; `TestModelWrittenCodeNeverRunsWithAToken`). Accepted.
+- **Pinned-Dependencies.** Partial. Actions are pinned by commit SHA. Open:
+  the Dockerfiles (`docker/backend.Dockerfile` 7, `docker/frontend.Dockerfile`
+  3, `docker/cdk-deploy.Dockerfile` 1) name their base images by tag and run
+  `pip install` without `--require-hashes`; `test-agent.yml` (3) runs
+  `pip install` without hashes; `agent-worker.yml` (1) installs the Claude
+  Code CLI with `npm install -g`, at the one exact version
+  `TestTheToolchainIsPinnedInOnePlace` pins, but not by hash. `npm ci`
+  installs from the lockfile, which carries integrity hashes, and was not
+  flagged. Inside the Scorecard action itself, its docker image is named by
+  tag. Not accepted: base-image digests and hashed pip installs are
+  Renovate's and later work, not done yet.
+- **Vulnerabilities.** Seven npm advisories. Those in `infra/` are fixed by
+  a sibling PR, which also adds `infra/` to `npm audit` in `test-agent.yml`.
+  `react-router`'s two moderates need the v6 to v7 upgrade, queued in
+  `TODO/02-backlog.md`. Not accepted; open until those land.
+- **SAST.** Scored 0: none of the last 30 commits was analysed.
+  `.github/workflows/codeql.yml` (advisory, `build-mode: none`, so it runs
+  no PR's code) closes it once it runs; Scorecard counts analysed commits,
+  so the score rises as they accumulate.
 - **Fuzzing.** No fuzz targets. The boundaries that matter here are permission
   checks, and those are pinned by tests that try the specific escapes.
+  Accepted.
 - **CII-Best-Practices.** No OpenSSF Best Practices badge; not applied for.
-- **Signed-Releases** and **Packaging.** This is an application deployed to
-  AWS by `deploy.yml`, not a package anyone downloads; there are no releases
-  to sign or packages to publish.
-- **Contributors.** One maintainer, one organisation, by design.
-- **Maintained**, **Security-Policy**, **License.** May score low or zero: a
-  young repository with no `SECURITY.md` and no top-level licence. Not
-  addressed by this workflow; noted so a low score there is not a surprise.
+  Accepted.
+- **Maintained.** A young repository: Scorecard scores activity over 90 days
+  and the repository's age. Accepted; it rises on its own.
+- **Security-Policy**, **License.** Still absent: no `SECURITY.md`, no
+  top-level licence. Not accepted and not decided: choosing a licence, and
+  where a vulnerability report goes, are the human's calls, not a
+  workflow's.
+
+Not reported as open by the first run, though this list once expected them:
+**Signed-Releases**, **Packaging**, **Contributors**.
