@@ -69,6 +69,12 @@ call, unless the task's spec names no module file.
 **`scorecard` runs weekly** (Mondays 06:17 UTC, #177), from `main`, with no
 secret and no model call. Its results go to the Security tab; it is advisory.
 
+**`codeql` runs on every pull request to `main`, every push to `main`**, weekly
+(Wednesdays 05:41 UTC) and on dispatch, with no secret and no model call. It
+analyses `actions`, `javascript-typescript` and `python` with `build-mode: none`:
+it extracts source and builds nothing, so it runs no PR's code, `agent/*`
+included. Its results go to the Security tab; it is advisory and not in `gate`.
+
 ### Which actions may run, and how they are pinned
 
 Set by the human and read back with `gh api` on 2026-10-19:

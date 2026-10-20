@@ -3036,11 +3036,12 @@ class TestCodeQlIsAdvisorySastThatBuildsNothing:
     def test_prs_and_pushes_to_main_a_schedule_or_a_dispatch_start_it(self, wf):
         on = wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
         triggers = set(re.findall(r"^  ([a-z_]+):", on, re.MULTILINE))
+        # Exactly these: pull_request_target would run with the base's token.
         assert triggers == {"pull_request", "push", "schedule", "workflow_dispatch"}, triggers
-        assert "pull_request_target" not in wf, "a PR's code must never run with a base token"
         for event in ("pull_request", "push"):
-            section = on.split(f"\n  {event}:\n", 1)[1].split("\n  ", 1)[0]
-            assert re.search(r"branches:\s*\[\s*main\s*\]", section), f"{event}: main only"
+            assert re.search(
+                rf"^  {event}:\n    branches: \[main\]$", on, re.MULTILINE
+            ), f"{event}: main only"
         cron = re.search(r"cron:\s*['\"](\d+) (\d+) \* \* (\d)['\"]", on)
         assert cron, "weekly, at a fixed minute"
         assert cron.group(1) != "0", "off the hour, not on it"
