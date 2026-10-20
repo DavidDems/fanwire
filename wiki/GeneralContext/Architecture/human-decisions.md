@@ -185,3 +185,6 @@ its units land, then in the module files. The decisions:
   appears complete, not piece by piece.
 - **Not built:** historical stat snapshots, and revoking a media URL someone
   already obtained. Each needs a separate design.
+- **Router first (2026-10-20):** the react-router v6 → v7 migration runs
+  before the modal navigation work, as its own unit (`FRONTEND-016`), so
+  navigation is written once, against v7.

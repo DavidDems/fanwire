@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-009",
+  "objective": "Give events/ the public read interface posts/ needs for sports-data attachments: target validation for a game's final score, a player's line in one game and a player's career averages by scope, and batch preview reads for each that cost a bounded number of queries whatever the number of ids, plus the box-score line id a composer needs to pick a player's line.",
+  "acceptance_criteria": [
+    "Game gains a hybrid property completed, true exactly when home_score + away_score > 0 (the loader's 'a 0-0 game has no score' rule, 0x02-events.md), usable both on a row and in a query.",
+    "app.events.service.validate_game_final(session, game_id) returns None for a completed game, raises app.events.errors.LinkTargetNotFoundError for an unknown id, and raises GameNotCompletedError for a game whose completed is false.",
+    "validate_player_game(session, line_id) returns None for a player_game_stats row with seconds_played set (zero seconds included), raises LinkTargetNotFoundError for an unknown id, and raises PlayerDidNotPlayError for a row whose seconds_played is null.",
+    "validate_player_career(session, player_id, scope) accepts scope 'regular' or 'playoffs' only (anything else raises ValueError), raises LinkTargetNotFoundError for an unknown player, raises NoGamesInScopeError when the player has no played row in a game of that game_type, and returns None otherwise.",
+    "game_final_previews(session, game_ids) returns a dict keyed by game id of a frozen GameFinalPreview (game_id, date, season, game_type, label, sub_label, series_game_number, home_team and away_team as TeamRef, home_score, away_score); an unknown id is absent from the dict, never a placeholder record.",
+    "player_game_previews(session, line_ids) returns a dict keyed by line id of a frozen PlayerGamePreview: line_id, game_id, player_id, first_name, last_name, the player's team and the opponent as TeamRef, is_home, team_score, opponent_score, date, season, game_type, label, starter, seconds_played, points, rebounds, assists, steals, blocks, turnovers, the three made/attempted shooting pairs with their percentages, plus_minus and dnp_reason. A DNP row is returned as stored (seconds_played null, its dnp_reason), not refused and not zero-filled; an unknown id is absent.",
+    "player_career_previews(session, keys) takes (player_id, scope) pairs and returns a dict keyed by those pairs of a frozen PlayerCareerPreview: player_id, first_name, last_name, position, first_season, last_season, scope, games_played, points_per_game, rebounds_per_game, assists_per_game, minutes_per_game, field_goal_pct, three_point_pct, free_throw_pct. Its figures equal player_detail's career_regular or career_playoffs line for the same player (same counting rule: played rows of that game_type only); a scope with no games gives games_played 0 and null averages, never zeros; an unknown player is absent.",
+    "Each of the three preview reads issues 0 queries for an empty input, and the same number of queries (at most 2) for 1 id as for 25 ids, measured with a before_cursor_execute listener.",
+    "BoxScorePlayer and BoxScorePlayerOut gain line_id, the player_game_stats row's id, so GET /events/games/{id} returns it for every played player; DidNotPlayOut does not gain it.",
+    "No existing events route changes its response other than the added line_id, and the existing events suite passes unchanged.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated; the frontend's typecheck and test suite pass, with only typed BoxScorePlayerOut test fixtures gaining line_id."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/features/games/*.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/alembic/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/pyproject.toml",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

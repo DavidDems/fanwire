@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "task_id": "USERS-003",
+  "objective": "Give a deactivated account (User.deleted_at set) a state the client can see and a way back: every route resolves its caller through one of three dependency paths (public read, active account, own account), a deactivated caller is refused on the active path with a recognisable 403, and POST /users/me/recover reactivates the caller's own account.",
+  "acceptance_criteria": [
+    "get_current_user (the active-account path) answers 403 with detail exactly \"account_deactivated\" when the verified token's sub belongs to a User whose deleted_at is set, and 404 \"User profile not found\" (unchanged) when no User row has that sub.",
+    "A new dependency app.users.dependencies.get_own_account (the own-account path) returns the caller's own User row whether or not deleted_at is set, answers 404 when no row has the token's sub, and answers 401 exactly as get_current_identity does for a missing, malformed or rejected token.",
+    "get_optional_current_user (the public-read path) returns None for a deactivated caller's valid token, the same as for no Authorization header, and still answers 401 for a present but invalid token.",
+    "GET /users/me answers 403 {\"detail\": \"account_deactivated\"} for a deactivated caller, 200 MeOut for an active one and 404 for a token with no User row; the 403 is declared in the route's OpenAPI responses.",
+    "POST /users/me/recover clears deleted_at on the caller's own User row and answers 200 MeOut; called by an active account it changes nothing and answers 200 MeOut; called with a token whose sub has no User row it answers 404. It reads no user id from the path, query or body, so no caller can recover another account.",
+    "Recovery writes User.deleted_at and nothing else: every posts, follows, likes and notifications row is identical before and after a recover.",
+    "DELETE /users/me sets deleted_at on an active caller and answers 204; a second DELETE /users/me by the now-deactivated caller answers 204 and leaves the first deleted_at value unchanged.",
+    "One bearer token, issued before deactivation and unchanged throughout (the same FakeTokenVerifier token string), succeeds on POST /posts and POST /users/{id}/follow; after DELETE /users/me it gets 403 \"account_deactivated\" on both, and 200 guest behaviour on GET /feed and GET /users/{another id}; after POST /users/me/recover it succeeds on both writes again.",
+    "While an account is deactivated its GET /users/{id} answers 404 and its posts are absent from GET /feed and GET /search/posts; after recovery the profile answers 200 and the same posts appear again.",
+    "POST /users with a token whose sub already has a deactivated User row answers 409 and creates no second row.",
+    "A test walks every APIRoute registered on app.main's app and fails for any route with a method other than GET or HEAD whose dependency tree does not contain get_current_user, except an allowlist of exactly POST /users (identity only: no account exists yet), POST /users/me/recover and DELETE /users/me (own-account path). The same test fails if an allowlisted route no longer exists, and if an allowlisted route's tree contains neither get_current_identity nor get_own_account.",
+    "Every existing write route keeps its current behaviour for an active caller: the whole existing backend suite passes, with only assertions about a deactivated caller's status code changed from 404 to 403.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated (python scripts/export_openapi.py, then npm run gen:api-types) and the frontend's typecheck and test suite pass with no other frontend change."
+  ],
+  "allowed_paths": [
+    "backend/app/users/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x01-users.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/alembic/**",
+    "backend/app/users/models.py",
+    "backend/app/posts/**",
+    "backend/app/events/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/pyproject.toml",
+    "frontend/src/features/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

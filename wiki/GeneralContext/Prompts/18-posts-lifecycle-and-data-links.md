@@ -33,6 +33,28 @@ Then the unit is hand-run on `agent/<ID>` (`Architecture/director-sessions.md`
 "The loop, per unit"). Each spec PR writes `.ai/tasks/` and this brief's
 progress note: **name both in the PR body.**
 
+## Progress
+
+Update this section in every spec PR and unit PR of this thread.
+
+- **2026-10-20, decided:** the router v7 migration runs first, as
+  **FRONTEND-016** (the human, by `AskUserQuestion`). v7, not v8: react-router
+  8 needs React 19 and Node 22 (spec brief).
+- **2026-10-20, stage 1 specs written:** `USERS-003`, `EVENTS-009`,
+  `FRONTEND-016` (one Director PR). Settled in them:
+  - a deactivated caller on the active-account path gets
+    `403 {"detail": "account_deactivated"}`, `GET /users/me` included; that
+    403 is how the client learns to show recovery. No `MeOut` field is added.
+  - recovery is `POST /users/me/recover`; `DELETE /users/me` and recover
+    are both idempotent, on a new `get_own_account` dependency.
+  - `events/` exposes `validate_game_final` / `validate_player_game` /
+    `validate_player_career` and three batch preview reads (at most 2
+    queries each); `BoxScorePlayerOut` gains `line_id`, the `ref_id` of a
+    `player_game` link. No new route.
+- **Next:** hand-run the three stage 1 units (parallel; test the
+  combination before the second merges). `FRONTEND-011`'s spec is written
+  once `FRONTEND-016` merges; `POSTS-004`'s once `USERS-003` merges.
+
 ## Read first, in this order
 
 1. `Architecture/director-sessions.md` "The loop, per unit": the gates,
@@ -187,7 +209,8 @@ merged preview before the second one merges.
 |---|---|---|---|
 | 1 | **USERS-003**: account status and the three dependency paths | `users/` dependencies and routes; `GET /users/me` reports a deactivated account instead of 404; `POST /users/me/recover`; every existing write route moved onto the active-account path | — |
 | 1 | **EVENTS-009**: `events/` read interface for attachments | batch preview reads for games, player-game lines (with game, player and team context) and career averages by scope; target validation (completed game, played line); a box-score route only if a frontend unit needs one | — |
-| 1 | **FRONTEND-011**: modal navigation | one modal surface, Back vs X/Escape, restoring the origin and its scroll, the direct-URL fallback, focus restore. Thread-only for now; game and player details join in FRONTEND-014 | the router v7 unit, if the human puts it first |
+| 1 | **FRONTEND-016**: react-router v6 → v7 (the human put it first, 2026-10-20) | `react-router-dom` 7.18.4+, React 18 kept, no behaviour change; closes the backlog row | — |
+| 1b | **FRONTEND-011**: modal navigation | one modal surface, Back vs X/Escape, restoring the origin and its scroll, the direct-URL fallback, focus restore. Thread-only for now; game and player details join in FRONTEND-014 | FRONTEND-016 |
 | 2 | **POSTS-004**: post soft delete | `deleted_at` and its migration, the owner's `DELETE /posts/{id}`, visibility through `posts/`'s read interfaces (feed, search, threads, profiles, counts, notifications), placeholders, no interactions with deleted posts | USERS-003 |
 | 3 | **FRONTEND-012**: lifecycle UI | a post menu (owner: Delete with confirm; everyone: Copy link and Report, `business-rules.md`; Report only if `posts/` already exposes it, otherwise leave it for a later unit), "Post deleted" placeholders, deactivate in settings with confirm, the recovery screen, clearing caches on deactivate and refreshing on recover, disabling active-only controls | POSTS-004 |
 | 3 | **POSTS-005**: attachment schema and create | columns, CHECK constraints, migration, `data_link` validation through EVENTS-009, the reply rule, coexisting with media, the legacy-token decision | EVENTS-009, POSTS-004 |

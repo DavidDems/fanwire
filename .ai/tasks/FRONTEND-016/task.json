@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-016",
+  "objective": "Move the frontend from react-router-dom 6.30.6 to 7.18.4 or later on the 7 line (React 18 stays), clearing GHSA-337j-9hxr-rhxg and GHSA-wrjc-x8rr-h8h6, with no change in behaviour, so FRONTEND-011's modal navigation is written once against the router it will live on.",
+  "acceptance_criteria": [
+    "frontend/package.json depends on react-router-dom ^7.18.4, and frontend/package-lock.json resolves react-router-dom and react-router to the same 7.x version, at least 7.18.4 and below 8; no 6.x copy of either remains anywhere in the lockfile.",
+    "A test under frontend/src/test/ reads the installed react-router-dom and react-router package.json versions and fails unless both are major 7 at 7.18.4 or later.",
+    "npm audit --omit=dev in frontend/ lists no advisory for react-router or react-router-dom.",
+    "react, react-dom, @types/react and @types/react-dom keep their current major (18); no other dependency in package.json changes version.",
+    "Imports keep the react-router-dom package name (in v7 it re-exports react-router); no file imports from react-router directly.",
+    "No v6 future flag (v7_startTransition, v7_relativeSplatPath, v7_fetcherPersist, v7_normalizeFormMethod, v7_partialHydration, v7_skipActionErrorRevalidation) remains in src/, and a test run prints no React Router future-flag warning.",
+    "Every existing frontend test passes, and npm run typecheck, npm run lint and npm run build pass, in the frontend-test container as well as directly.",
+    "Behaviour is unchanged in the built app (vite preview, light and dark, 360 and 1280 wide): the feed loads; a card opens its thread as a modal over the feed and closing it returns to the feed at the same scroll position; a reply's timestamp opens the nested thread; /posts/<id> loaded directly shows the thread over the feed and closing it lands on /; a search with a query string survives reload; a game page and a player page open from their links; an unknown path shows the not-found view."
+  ],
+  "allowed_paths": [
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/config.ts",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/styles/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
