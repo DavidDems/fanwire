@@ -73,7 +73,7 @@ its answer.
 
 | Order | Brief | Mode | Why it's here |
 |---|---|---|---|
-| App 1 | `08-production-hardening.md` | `hand` + `director` | The per-user post rate limit and spam score are fakes in production, there are no alarms, and no deploy is checked. These are live risks, so they start now. |
+| App 1 | `17-production-hardening-finish.md` (was `08`) | `hand` + `director` | **Mostly done 2026-10-20**: the per-user rate limit (#183), 21 alarms with email (#182), the self-checking deploy and the rollback and restore runbooks (#172). Left: the spam score (`POSTS-003`) and the human's restore drill. |
 | App 2 | `16-performance-tests.md` | `hand` | k6 locally, P95/P99 as a regression gate. Goes after `08` because the new rate limiter must be configurable for virtual users. |
 | System 1 | ~~`09-supply-chain-and-trust.md`~~ | `director` | **Done 2026-10-19** (#174–#178, brief deleted; `.ai/docs/handoff.md` §10.6). Every workflow added later is born SHA-pinned. |
 | System 2 | `10-docs-structure.md` | `director` | Every later brief writes docs. Typed docs and a ratcheted linter stop that work from adding drift. |
@@ -100,7 +100,8 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
 | **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `hand` | — | `0x00-architecture.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
-| **DLQ-depth alarms**: one CloudWatch alarm per DLQ on `ApproximateNumberOfMessagesVisible > 0`, in `messaging-stack.ts` | `hand` | — | the runbook's known gap | Now part of `Prompts/08` deliverable 3 (`INFRA-004`). Grows the CloudFormation exec policy (`cloudwatch:*`, and `CloudWatch` in `cfn-exec-policy.test.ts`'s `TYPE_TO_IAM`); the human rolls the policy out **before** the deploy. **Where it notifies is a human decision** (SNS → email); build the alarm first |
+| **A GuardDuty-findings alarm**: route Medium/High findings to the alarm topic (EventBridge rule → SNS) | `director` | — | `incident-runbook.md` Known gaps, after `INFRA-004` | Findings live in the delegated-admin account (`fanwire-log-archive`), not the workload account that holds the topic, so the routing crosses accounts. Needs a design first |
+| **A friendlier 429 message**: the frontend shows a generic failure when `POST /posts` or a repost is rate-limited | `hand` | — | `POSTS-002` (#183), "Not in this task" | `createPost` treats every non-2xx alike. A "slow down" line where the composer shows errors |
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (#161), `0x03-posts.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
 
