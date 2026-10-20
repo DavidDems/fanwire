@@ -2,21 +2,26 @@
 moderation chain and PublishPostFacade.
 
 Per AGENTS.md's connection rule, this module imports from app.posts.*,
-app.eventbus, and app.dependencies only.
+app.eventbus and app.dependencies, plus
+app.users.service.account_created_at, the users module's public read of an
+account's creation time (HeuristicSpamScorer takes it as an injected
+callable, bound here to the request's session, so app.posts.moderation
+itself never imports app.users).
 
-Judgment call (manager-approved, see this unit's task brief): no real
-SpamScorer adapter exists yet (POSTS-003). SpamScoreCheck is wired against
-FakeSpamScorer(score=0.0) as the PRODUCTION default here — not just a test
-double — same precedent as app.dependencies.get_event_bus wiring
-InMemoryEventPublisher as its production default, so it can reject nothing
-today. Since POSTS-002, RateLimitCheck is wired against the real
-PostCountRateLimiter, its limits from Settings (post_rate_limit_per_minute /
-post_rate_limit_per_hour); FakeRateLimiter is a test double only.
-ProfanityFilter (config-driven via Settings), RateLimitCheck and
-DuplicateContentCheck (both DB-backed) are the checks with real teeth.
+The chain holds no fake: SpamScoreCheck is wired against the real
+HeuristicSpamScorer (POSTS-003), its threshold and new-account age from
+Settings (spam_score_threshold / spam_new_account_hours), and
+RateLimitCheck against the real PostCountRateLimiter (POSTS-002), its
+limits from Settings (post_rate_limit_per_minute /
+post_rate_limit_per_hour). FakeSpamScorer and FakeRateLimiter are test
+doubles only. ProfanityFilter is config-driven via Settings; the spam
+scorer's account age, RateLimitCheck and DuplicateContentCheck are
+DB-backed.
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -26,7 +31,7 @@ from app.eventbus import PostEventBus
 from app.posts.facade import PublishPostFacade
 from app.posts.moderation import (
     DuplicateContentCheck,
-    FakeSpamScorer,
+    HeuristicSpamScorer,
     ModerationCheck,
     PostCountRateLimiter,
     ProfanityFilter,
@@ -34,12 +39,7 @@ from app.posts.moderation import (
     SpamScoreCheck,
 )
 from app.settings import Settings
-
-# Threshold is meaningless while FakeSpamScorer always returns 0.0 (nothing
-# will ever meet/exceed it), but SpamScoreCheck still needs one -- keep it
-# out of the 0.0 the fake always returns so a future real scorer's "wired
-# in but not yet tuned" default doesn't accidentally reject everything.
-_SPAM_SCORE_THRESHOLD = 0.8
+from app.users.service import account_created_at
 
 
 def get_moderation_chain(
@@ -56,7 +56,14 @@ def get_moderation_chain(
     )
 
     profanity = ProfanityFilter(banned_words)
-    spam = SpamScoreCheck(FakeSpamScorer(0.0), _SPAM_SCORE_THRESHOLD)
+    spam = SpamScoreCheck(
+        HeuristicSpamScorer(
+            account_created_at=lambda user_id: account_created_at(session, user_id),
+            now=lambda: datetime.now(UTC),
+            new_account_age=timedelta(hours=settings.spam_new_account_hours),
+        ),
+        settings.spam_score_threshold,
+    )
     rate_limit = RateLimitCheck(
         PostCountRateLimiter(
             session,

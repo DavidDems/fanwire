@@ -1,4 +1,4 @@
-from pydantic import PositiveInt
+from pydantic import Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     # non-integer fails when Settings is built, not at the first post.
     post_rate_limit_per_minute: PositiveInt = 10
     post_rate_limit_per_hour: PositiveInt = 100
+
+    # app.posts.moderation.HeuristicSpamScorer: a post scoring at or above
+    # the threshold is refused, and an account younger than
+    # spam_new_account_hours is new (a new account posting a link scores
+    # higher). The threshold must be in (0, 1] and the age a positive
+    # integer, so a bad value fails when Settings is built, not at the first
+    # post. The scorer's weights are constants in the scorer, not settings.
+    spam_score_threshold: float = Field(default=0.8, gt=0, le=1)
+    spam_new_account_hours: PositiveInt = 24
 
     # EventBridge PostEventBus wiring for app.dependencies.get_event_bus.
     # Empty default keeps InMemoryEventPublisher wired for local dev/tests
