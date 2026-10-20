@@ -33,10 +33,10 @@ USER_FOLLOWED = "UserFollowed"
 
 
 class UserNotFoundError(ValueError):
-    """Raised by soft_delete_user when the id doesn't resolve to an active
-    (not already soft-deleted) User row. Fail fast, per
-    wiki/CodeContext/Standards/design-principles.md — soft-deleting twice is
-    a boundary error, not a silent no-op."""
+    """Raised by soft_delete_user and recover_user when the id doesn't
+    resolve to any User row. Fail fast, per wiki/CodeContext/Standards/
+    design-principles.md. A repeat deactivation or recovery is not an
+    error (USERS-003): both are idempotent no-ops."""
 
 
 class SelfFollowError(ValueError):
@@ -100,15 +100,33 @@ def create_user(
 
 
 def soft_delete_user(session: Session, user_id: int) -> None:
-    """Set deleted_at on the given User. Fails fast with UserNotFoundError
-    if the user doesn't exist or is already soft-deleted — see
-    UserNotFoundError."""
-    user = session.scalar(select(User).where(User.id == user_id, User.deleted_at.is_(None)))
-    if user is None:
-        raise UserNotFoundError(f"No active user with id={user_id!r}")
+    """Set deleted_at on the given User. Raises UserNotFoundError if no row
+    has this id. Already deactivated: a no-op that keeps the first
+    timestamp (and writes nothing)."""
+    user = _get_user(session, user_id)
+    if user.deleted_at is None:
+        user.deleted_at = datetime.now(UTC)
+        session.commit()
 
-    user.deleted_at = datetime.now(UTC)
-    session.commit()
+
+def recover_user(session: Session, user_id: int) -> User:
+    """Clear deleted_at on the given User and return it. Raises
+    UserNotFoundError if no row has this id. Writes User.deleted_at and
+    nothing else -- posts, follows, likes and notifications were never
+    touched by deactivation, so there is nothing else to restore. Already
+    active: a no-op that writes nothing (not even updated_at)."""
+    user = _get_user(session, user_id)
+    if user.deleted_at is not None:
+        user.deleted_at = None
+        session.commit()
+    return user
+
+
+def _get_user(session: Session, user_id: int) -> User:
+    user = session.get(User, user_id)
+    if user is None:
+        raise UserNotFoundError(f"No user with id={user_id!r}")
+    return user
 
 
 def follow(
