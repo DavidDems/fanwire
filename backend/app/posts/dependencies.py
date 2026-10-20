@@ -5,15 +5,15 @@ Per AGENTS.md's connection rule, this module imports from app.posts.*,
 app.eventbus, and app.dependencies only.
 
 Judgment call (manager-approved, see this unit's task brief): no real
-SpamScorer/RateLimiter adapter exists yet (no live AWS this phase).
-SpamScoreCheck/RateLimitCheck are wired against
-FakeSpamScorer(score=0.0)/FakeRateLimiter(allowed=True) as the PRODUCTION
-default here — not just a test double — same precedent as
-app.dependencies.get_event_bus wiring InMemoryEventPublisher as its
-production default. This means neither check can currently reject
-anything in production; ProfanityFilter (config-driven via Settings) and
-DuplicateContentCheck (DB-backed) are the two checks with real teeth
-today.
+SpamScorer adapter exists yet (POSTS-003). SpamScoreCheck is wired against
+FakeSpamScorer(score=0.0) as the PRODUCTION default here — not just a test
+double — same precedent as app.dependencies.get_event_bus wiring
+InMemoryEventPublisher as its production default, so it can reject nothing
+today. Since POSTS-002, RateLimitCheck is wired against the real
+PostCountRateLimiter, its limits from Settings (post_rate_limit_per_minute /
+post_rate_limit_per_hour); FakeRateLimiter is a test double only.
+ProfanityFilter (config-driven via Settings), RateLimitCheck and
+DuplicateContentCheck (both DB-backed) are the checks with real teeth.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from app.eventbus import PostEventBus
 from app.posts.facade import PublishPostFacade
 from app.posts.moderation import (
     DuplicateContentCheck,
-    FakeRateLimiter,
     FakeSpamScorer,
     ModerationCheck,
+    PostCountRateLimiter,
     ProfanityFilter,
     RateLimitCheck,
     SpamScoreCheck,
@@ -57,7 +57,13 @@ def get_moderation_chain(
 
     profanity = ProfanityFilter(banned_words)
     spam = SpamScoreCheck(FakeSpamScorer(0.0), _SPAM_SCORE_THRESHOLD)
-    rate_limit = RateLimitCheck(FakeRateLimiter(True))
+    rate_limit = RateLimitCheck(
+        PostCountRateLimiter(
+            session,
+            per_minute=settings.post_rate_limit_per_minute,
+            per_hour=settings.post_rate_limit_per_hour,
+        )
+    )
     duplicate = DuplicateContentCheck(session)
 
     profanity.set_next(spam).set_next(rate_limit).set_next(duplicate)

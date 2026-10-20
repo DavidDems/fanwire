@@ -2,9 +2,12 @@
 
 **Brief for a Director session that writes the spec, then a hand-run unit**
 (a high-tier model, driven turn by turn by the human). Self-contained: read
-this file, then what it names. **App track, step 2 of 2.** After `08`,
-because `08`'s per-user rate limiter would throttle the virtual users unless
-the test environment configures it.
+this file, then what it names. **App track, step 2 of 2.** After `17`
+(formerly `08`), because the per-user rate limiter (`POSTS-002`: 10 a
+minute, 100 an hour) would throttle the virtual users unless the test
+environment loosens `POST_RATE_LIMIT_PER_MINUTE`/`_PER_HOUR`, and
+`POSTS-003`'s new-account rule refuses links from accounts under
+`SPAM_NEW_ACCOUNT_HOURS` old.
 
 **Objective:** the human's request (2026-10-19). Write a load test of the
 site's main paths that reports P95 and P99 latency, run before a production

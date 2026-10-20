@@ -2450,6 +2450,72 @@ class TestTheStaticChecksGateEveryRun:
         assert package["scripts"]["lint"].startswith("eslint ")
         assert {"typescript", "eslint"} <= set(package["devDependencies"])
 
+class TestEveryNpmTreeIsAudited:
+    """The first OpenSSF Scorecard run (2026-10-19) reported seven known
+    vulnerabilities, every one of them npm, and four were in `infra/`, whose
+    lockfile `npm-audit` had never read: the job audited `frontend/` only, at
+    `--audit-level=critical`, and only when the frontend changed. Each check
+    below is a way the job could exist and still let a tree go unaudited."""
+
+    TREES = ("frontend", "infra")
+    # npm's levels, weakest first. Below `high` a moderate finding with no
+    # fixed release would block every PR; above it there is nothing.
+    GATING = {"high", "critical"}
+
+    @pytest.fixture
+    def gate(self) -> str:
+        if not TEST_AGENT_WF.exists():
+            pytest.skip("test-agent.yml not present")
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    @staticmethod
+    def audits(block: str) -> dict[str, list[str]]:
+        """working-directory -> every `npm audit` line run there."""
+        out: dict[str, list[str]] = {}
+        for chunk in steps_in(block):
+            m = re.search(r"^\s+working-directory:\s*(\S+)\s*$", chunk, flags=re.MULTILINE)
+            for line in live_lines(chunk):
+                if line.removeprefix("run:").strip().startswith("npm audit"):
+                    out.setdefault(m.group(1) if m else ".", []).append(line)
+        return out
+
+    @pytest.mark.parametrize("tree", TREES)
+    def test_the_tree_is_installed_and_audited(self, gate, tree):
+        block = job_block(gate, "npm-audit")
+        assert tree in self.audits(block), f"npm-audit never runs `npm audit` in {tree}/"
+        installs = [
+            c
+            for c in steps_in(block)
+            if re.search(rf"^\s+working-directory:\s*{tree}\s*$", c, flags=re.MULTILINE)
+            and "npm ci" in live_lines(c)
+        ]
+        assert installs, f"{tree}/ is audited without `npm ci` from its own lockfile"
+        assert f"{tree}/package-lock.json" in block, "the npm cache must cover this lockfile"
+
+    @pytest.mark.parametrize("tree", TREES)
+    def test_the_audit_level_is_high_or_critical(self, gate, tree):
+        """No `--audit-level` means `low`: every advisory blocks, including
+        ones with no fixed release, so the gate would be red until removed."""
+        for line in self.audits(job_block(gate, "npm-audit")).get(tree, []):
+            m = re.search(r"--audit-level[= ](\w+)", line)
+            assert m, f"`{line}` in {tree}/ sets no --audit-level"
+            assert m.group(1) in self.GATING, f"{tree}/ audits at {m.group(1)}"
+
+    def test_the_job_runs_when_either_tree_changes(self, gate):
+        """Keyed on the filter outputs, it also inherits the non-PR bypass
+        that makes a dispatched run authoritative."""
+        lines = job_block(gate, "npm-audit").splitlines()
+        cond = next((ln for ln in lines if ln.startswith("    if:")), "")
+        assert "needs.changes.outputs.frontend == 'true'" in cond
+        assert "needs.changes.outputs.infra == 'true'" in cond
+        assert " || " in cond and "&&" not in cond
+
+    def test_the_aggregate_gate_depends_on_it(self, gate):
+        """Only `gate` is required on `main`. A job outside its `needs:` can
+        fail on every PR and block nothing."""
+        _, needs = _timeouts_and_needs(gate)["gate"]
+        assert "npm-audit" in needs
+
 
 class TestTheJevSmokeIsDispatchOnly:
     """Prompts/04-cheap-automations.md Deliverable 0, step 4: the merge gate

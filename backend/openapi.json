@@ -4281,6 +4281,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Post rate limit exceeded"
           }
         },
         "summary": "Create Post",
@@ -4563,6 +4566,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Post rate limit exceeded"
           }
         },
         "summary": "Repost",
