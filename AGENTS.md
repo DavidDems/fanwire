@@ -64,7 +64,7 @@ Prefer the `docker-compose` commands below — they run in the same containers C
 
 **Agent system** (from repo root) — `cd .ai && python -m pytest -q`, and `python .ai/bin/agentctl.py selfcheck`. Stdlib only; no install step.
 
-**CI**: `.github/workflows/test-agent.yml` is the one authoritative test executor — backend and frontend test containers, `pip-audit`, `npm audit`, the CDK synth/IAM gate, and the `.ai/` suite, on every PR. Despite its name it is not an agent.
+**CI**: `.github/workflows/test-agent.yml` is the one authoritative test executor — backend and frontend test containers, `pip-audit`, `npm audit` (of both `frontend/` and `infra/`), the CDK synth/IAM gate, and the `.ai/` suite, on every PR. Despite its name it is not an agent.
 
 ## Workflow
 1. Write a failing test against the requested change first, against the intended interface even if the entity doesn't exist yet. Commit it alone.
