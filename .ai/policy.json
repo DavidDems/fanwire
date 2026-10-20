@@ -84,7 +84,14 @@
         "frontend/src/**",
         "frontend/public/**",
         "infra/lib/**",
-        "infra/bin/**"
+        "infra/bin/**",
+        "perf/**"
+      ],
+      "_perf_note": [
+        "`perf/**` is the k6 load test (PERF-001): scripts and the run entry point.",
+        "The k6 image and the compose `perf` profile it runs in are not in it: they are",
+        "in docker-compose.yml, denied below (_dependency_changes). perf/results/ is",
+        "git-ignored, so nothing a run writes is ever in a diff."
       ],
       "deny": [
         "backend/tests/**",

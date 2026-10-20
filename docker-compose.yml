@@ -111,3 +111,66 @@ services:
       - ./backend/app:/var/task/app
     ports:
       - "${BACKEND_DEV_PORT:-8001}:8001"
+
+  # ---------------------------------------------------------------- perf
+  # The local load test (PERF-001, wiki/GeneralContext/Prompts/
+  # 16-performance-tests.md). Only `--profile perf` starts these, never a
+  # plain `up`; `perf/run.ps1` drives them. It generates no AWS or Cognito
+  # traffic, and k6 only ever targets backend-perf.
+  #
+  # Its own Postgres, with no volume and no host port: `down` discards it,
+  # so every run seeds from empty and runs stay comparable.
+  postgres-perf:
+    profiles: ["perf"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fanwire
+      POSTGRES_PASSWORD: fanwire
+      POSTGRES_DB: fanwire
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fanwire"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # The backend under load: the dev image without --reload (a reloader's
+  # file watching would be measured too), against the working tree.
+  # ENVIRONMENT=perf is the only value that lets Settings accept
+  # PERF_JWKS_PATH, the local test JWKS perf/run.ps1 mints before `up`; no
+  # deployed stack sets either (an infra test pins that). The rate limits are
+  # raised far above any run, because every virtual user is one author.
+  backend-perf:
+    profiles: ["perf"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: dev
+    depends_on:
+      postgres-perf:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://fanwire:fanwire@postgres-perf:5432/fanwire
+      ENVIRONMENT: perf
+      PERF_JWKS_PATH: /var/task/perf-results/jwks.json
+      POST_RATE_LIMIT_PER_MINUTE: "1000000"
+      POST_RATE_LIMIT_PER_HOUR: "1000000"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2"]
+    volumes:
+      - ./backend/app:/var/task/app:ro
+      - ./backend/scripts:/var/task/scripts:ro
+      - ./perf/results:/var/task/perf-results:ro
+    ports:
+      - "${BACKEND_PERF_PORT:-8002}:8001"
+
+  # k6 pinned by digest (2.3.0, 2026-09-21), so no local install and no
+  # drifting tag. Scripts and results are under ./perf.
+  k6:
+    profiles: ["perf"]
+    image: grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+    depends_on:
+      - backend-perf
+    environment:
+      BASE_URL: http://backend-perf:8001
+    working_dir: /perf
+    volumes:
+      - ./perf:/perf

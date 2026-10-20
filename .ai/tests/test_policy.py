@@ -117,6 +117,9 @@ CODE_AGENT_MUST_WRITE = [
     "frontend/src/features/feed/FeedPage.tsx",
     "infra/lib/app-stack.ts",
     "infra/bin/fanwire.ts",
+    # PERF-001: the k6 scripts and perf/run.ps1.
+    "perf/scenarios.js",
+    "perf/run.ps1",
 ]
 
 CODE_AGENT_MUST_NOT_WRITE = [
