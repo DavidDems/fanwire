@@ -71,6 +71,10 @@ Routes:
 - `GET /users/{user_id}` — public, no auth, per "viewing other users' account pages" above. Returns `PublicUserOut` (no DOB — see PII fix above).
 - `POST /users/{user_id}/follow` / `DELETE /users/{user_id}/follow` — protected; the acting user is always resolved server-side from the verified token (`get_current_user`, a dependency resolving `cognito_sub` → the local `User` row, 404 if no profile exists yet for an otherwise-valid token), never from a client-supplied "who is following" field. `{user_id}` in the path is always the *target*.
 - Real `CognitoTokenVerifier` is wired behind `get_token_verifier` (JWKS fetched from Cognito's well-known endpoint via `app.users.jwks.JWKSProvider`, TTL-cached; `audience`/`issuer`/`region` come from `Settings` fields `cognito_app_client_id`/`cognito_user_pool_id`/`cognito_region`). Route tests still override `get_token_verifier` with `FakeTokenVerifier`.
+- **The local load test's verifier** (`PERF-001`, `perf/README.md`): when `Settings.perf_jwks_path` (`PERF_JWKS_PATH`) is set, `get_token_verifier` returns the same `CognitoTokenVerifier`, built from that JWKS file and cached per path, with `PERF_ISSUER`/`PERF_AUDIENCE` from `app.users.dependencies`. Every RS256, required-claim and `token_use` check is unchanged, and it never fetches over the network. `scripts/mint_perf_tokens.py` mints the key and the ID tokens (sub `perf-user-<n>`). The key exists only in that script's memory. This path fails closed:
+  - `Settings` refuses to build with `PERF_JWKS_PATH` set unless `ENVIRONMENT` is exactly `perf`.
+  - Only the compose `perf` profile sets `ENVIRONMENT=perf`.
+  - `infra/test/perf-env.test.ts` proves no deployed function sets either variable.
 
 ### `users/`'s public read interface (for `feed/`, `search/`, etc.)
 Per the Connection rule, other modules never query the `User`/`Follow` tables directly — they call these typed functions in `app.users.service` instead:
