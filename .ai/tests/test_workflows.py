@@ -3166,6 +3166,39 @@ class TestCodeQlIsAdvisorySastThatBuildsNothing:
         assert "build-mode" in header
 
 
+class TestTheSecurityPolicyIsWhereGitHubLooks:
+    """OpenSSF Scorecard, Security-Policy (first run 2026-10-19: absent).
+    `.github/SECURITY.md` sends a report to GitHub's private vulnerability
+    reporting, never a public issue. It lives in `.github/`, GitHub's own
+    folder, and links nothing inside the repository, so a reorganisation of
+    the project's docs can neither move it out of GitHub's sight nor leave it
+    pointing at a page that has gone."""
+
+    PATH = WORKFLOWS.parent / "SECURITY.md"
+    ROOT = WORKFLOWS.parents[1]
+
+    @pytest.fixture
+    def policy(self) -> str:
+        assert self.PATH.exists(), ".github/SECURITY.md is missing"
+        return self.PATH.read_text(encoding="utf-8")
+
+    def test_there_is_exactly_one_copy(self, policy):
+        # GitHub reads the first of .github/, the root, docs/; a second copy drifts.
+        for other in (self.ROOT / "SECURITY.md", self.ROOT / "docs" / "SECURITY.md"):
+            assert not other.exists(), f"{other} competes with .github/SECURITY.md"
+
+    def test_a_report_goes_to_private_reporting_not_an_issue(self, policy):
+        assert "https://github.com/DavidDems/fanwire/security/advisories/new" in policy
+        assert "public issue" in policy
+
+    def test_it_links_nothing_inside_the_repository(self, policy):
+        targets = re.findall(r"\]\(([^)]+)\)", policy) + re.findall(r"<([^>\s]+)>", policy)
+        assert targets, "the reporting link is a link"
+        for t in targets:
+            assert t.startswith("https://"), f"{t}: a repo path breaks when the docs move"
+        assert "wiki/" not in policy and ".ai/" not in policy
+
+
 class TestTheWikiProposalRunsMainsCopyAfterAMerge:
     """Prompts/04-cheap-automations.md automation 4, and the trigger and
     output the human decided on 2026-10-13: `pull_request_target`, closed and
