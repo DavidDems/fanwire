@@ -586,6 +586,10 @@
           ],
           "title": "Last Name"
         },
+        "line_id": {
+          "title": "Line Id",
+          "type": "integer"
+        },
         "offensive_rebounds": {
           "title": "Offensive Rebounds",
           "type": "integer"
@@ -677,6 +681,7 @@
         "turnovers",
         "personal_fouls",
         "points",
+        "line_id",
         "player_id",
         "first_name",
         "last_name",
