@@ -242,6 +242,39 @@ class TestTheModelIsAskedOnlyAboutProse:
         assert all(len(text) <= 50 for text in context.values())
         assert "backend/app/media/state.py" in omitted
 
+    def test_the_files_the_brief_names_come_before_the_forbidden_ones(self, tmp_path):
+        """On #155, #182 and #183 the cap filled with `forbidden_paths` code
+        (`backend/**` for a frontend unit, the other modules for a backend
+        one) ahead of the files the brief names. The forbidden paths are
+        code the unit must not touch; the brief's are what it reads first."""
+        root = tmp_path / "repo"
+        write(root, "infra/lib/alarms.ts", "a" * 40)
+        write(root, "infra/lib/messaging-stack.ts", "b" * 40)
+        write(root, "backend/app/big.py", "c" * 400)
+        spec = {"allowed_paths": ["infra/lib/alarms.ts"], "forbidden_paths": ["backend/**"]}
+        brief = "Read `infra/lib/messaging-stack.ts` first.\n"
+
+        context, omitted = drift.context_files(spec, brief, root)
+        assert list(context) == [
+            "infra/lib/alarms.ts",
+            "infra/lib/messaging-stack.ts",
+            "backend/app/big.py",
+        ]
+
+        context, omitted = drift.context_files(spec, brief, root, max_chars=100)
+        assert list(context) == ["infra/lib/alarms.ts", "infra/lib/messaging-stack.ts"]
+        assert omitted == ["backend/app/big.py"]
+
+    def test_a_forbidden_file_the_brief_names_is_read_in_the_briefs_place(self, tmp_path):
+        root = tmp_path / "repo"
+        write(root, "backend/app/aa_other.py", "o" * 40)
+        write(root, "backend/app/zz_named.py", "n" * 40)
+        spec = {"allowed_paths": [], "forbidden_paths": ["backend/**"]}
+        brief = "See `backend/app/zz_named.py`.\n"
+
+        context, _ = drift.context_files(spec, brief, root)
+        assert list(context) == ["backend/app/zz_named.py", "backend/app/aa_other.py"]
+
     def test_the_default_cap_keeps_the_input_far_below_100k_tokens(self):
         assert drift.MAX_CONTEXT_CHARS <= 240_000
 
