@@ -73,8 +73,8 @@ its answer.
 
 | Order | Brief | Mode | Why it's here |
 |---|---|---|---|
-| App 1 | `17-production-hardening-finish.md` (was `08`) | `hand` + `director` | **Mostly done 2026-10-20**: the per-user rate limit (#183), 21 alarms with email (#182), the self-checking deploy and the rollback and restore runbooks (#172). Left: the spam score (`POSTS-003`) and the human's restore drill. |
-| App 2 | `16-performance-tests.md` | `hand` | k6 locally, P95/P99 as a regression gate. Goes after `08` because the new rate limiter must be configurable for virtual users. |
+| App 1 | ~~`17-production-hardening-finish.md`~~ (was `08`) | `hand` + `director` | **Done 2026-10-20** (brief deleted): the per-user rate limit (#183), 21 alarms with email (#182), the self-checking deploy and the rollback and restore runbooks (#172), the spam score `POSTS-003` (#188), and the first restore drill, 20 min 42 s (`Architecture/incident-runbook.md`). |
+| App 2 | `16-performance-tests.md` | `hand` | k6 locally, P95/P99 as a regression gate. Goes after App 1 because the rate limiter and the spam score's new-account rule must be loosened for virtual users. |
 | System 1 | ~~`09-supply-chain-and-trust.md`~~ | `director` | **Done 2026-10-19** (#174–#178, brief deleted; `.ai/docs/handoff.md` §10.6). Every workflow added later is born SHA-pinned. |
 | System 2 | `10-docs-structure.md` | `director` | Every later brief writes docs. Typed docs and a ratcheted linter stop that work from adding drift. |
 | System 3 | `11-metrics-every-mode.md` | `director` | The sensor. `12` needs its record format and the pipeline version. |

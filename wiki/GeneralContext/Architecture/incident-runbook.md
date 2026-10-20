@@ -156,11 +156,17 @@ CMK, in the same data subnets.
 **Cost: one `db.t4g.micro` and 20 GiB of gp3 for about an hour, a few US cents.** Delete it when you're
 done: a forgotten one costs about USD $15 a month.
 
-**Rehearsed: never yet.** After the drill, fill in this table:
+**Rehearsed once, 2026-10-20: 20 min 42 s to restore.** After each drill, add a row:
 
 | Date | Restore point | Restore started → available | Time to restore | Rows (users / posts / games) | Head revision |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| 2026-10-20 | Latest restorable at 15:24 UTC (step 2 read 15:05:48 UTC) | 15:24:03 → 15:44:46 UTC | 20 min 42 s | 2 / 6 / 29,646 | `a8c4e1f7b3d9` |
+
+The first drill hit two traps. The steps below now avoid both:
+- **Pasted ids.** The ids were once pasted by hand from steps 2 and 3, and the temporary group's id went
+  where the NAT group's belonged. Steps 2 and 3 now set `$src`, `$subnets`, `$natId` and `$nat`, so no step
+  takes a pasted id.
+- **The egress revoke.** It was skipped in step 13, so deleting the group failed with `DependencyViolation`.
 
 The database is in data subnets with no route out, and its security group admits the Lambda SG only. The
 drill reaches the copy through a Session Manager port forward on the NAT instance. The copy gets its own
@@ -176,39 +182,50 @@ gets a second. Run them in order. Steps 1–3 only read.
    ```powershell
    aws rds describe-db-instances --region ca-central-1 --profile fanwire-workload --query "DBInstances[].{id:DBInstanceIdentifier,subnets:DBSubnetGroup.DBSubnetGroupName,latest:LatestRestorableTime}" --output table
    ```
+   Then keep the source's id and subnet group for steps 7 and 14:
+   ```powershell
+   $src, $subnets = (aws rds describe-db-instances --region ca-central-1 --profile fanwire-workload --query "DBInstances[0].[DBInstanceIdentifier,DBSubnetGroup.DBSubnetGroupName]" --output text) -split "\s+"; $src; $subnets
+   ```
 3. The NAT instance and its security group:
    ```powershell
    aws ec2 describe-instances --region ca-central-1 --profile fanwire-workload --filters "Name=tag:aws:cloudformation:stack-name,Values=Fanwire-Network" "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{id:InstanceId,sg:SecurityGroups[0].GroupId}" --output table
+   ```
+   Then keep both. `$nat` is the NAT's **security group** (`sg-…`), and `$natId` is the instance (`i-…`):
+   ```powershell
+   $natId, $nat = (aws ec2 describe-instances --region ca-central-1 --profile fanwire-workload --filters "Name=tag:aws:cloudformation:stack-name,Values=Fanwire-Network" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].[InstanceId,SecurityGroups[0].GroupId]" --output text) -split "\s+"; $natId; $nat
    ```
 4. A temporary security group for the copy. `$sg` holds its id for the steps below:
    ```powershell
    $sg = aws ec2 create-security-group --region ca-central-1 --profile fanwire-workload --vpc-id vpc-0259c7c65d0a58371 --group-name fanwire-restore-drill --description "Temporary: database restore drill. Delete after." --query GroupId --output text; $sg
    ```
-5. Let the NAT instance in (on the temporary group only):
+5. Let the NAT instance in (on the temporary group only). In the output, `GroupId` is `$sg` and
+   `ReferencedGroupInfo` is `$nat`:
    ```powershell
-   aws ec2 authorize-security-group-ingress --region ca-central-1 --profile fanwire-workload --group-id $sg --protocol tcp --port 5432 --source-group PASTE_NAT_SG
+   aws ec2 authorize-security-group-ingress --region ca-central-1 --profile fanwire-workload --group-id $sg --protocol tcp --port 5432 --source-group $nat
    ```
-6. Let the NAT instance out to it:
+6. Let the NAT instance out to it. In the output, `GroupId` is `$nat`:
    ```powershell
-   aws ec2 authorize-security-group-egress --region ca-central-1 --profile fanwire-workload --group-id PASTE_NAT_SG --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$sg}]"
+   aws ec2 authorize-security-group-egress --region ca-central-1 --profile fanwire-workload --group-id $nat --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$sg}]"
    ```
 7. **Start the clock and restore.** Note the time this prints:
    ```powershell
-   Get-Date -Format o; aws rds restore-db-instance-to-point-in-time --region ca-central-1 --profile fanwire-workload --source-db-instance-identifier PASTE_SOURCE_ID --target-db-instance-identifier fanwire-restore-drill --use-latest-restorable-time --db-instance-class db.t4g.micro --db-subnet-group-name PASTE_SUBNET_GROUP --vpc-security-group-ids $sg --no-multi-az --no-publicly-accessible --no-deletion-protection --query "DBInstance.DBInstanceStatus" --output text
+   Get-Date -Format o; aws rds restore-db-instance-to-point-in-time --region ca-central-1 --profile fanwire-workload --source-db-instance-identifier $src --target-db-instance-identifier fanwire-restore-drill --use-latest-restorable-time --db-instance-class db.t4g.micro --db-subnet-group-name $subnets --vpc-security-group-ids $sg --no-multi-az --no-publicly-accessible --no-deletion-protection --query "DBInstance.DBInstanceStatus" --output text
    ```
 8. **Wait, and stop the clock.** The waiter gives up after 30 minutes. If it prints `Max attempts exceeded`,
    run the line again. The second time it prints is the end of the restore:
    ```powershell
    aws rds wait db-instance-available --region ca-central-1 --profile fanwire-workload --db-instance-identifier fanwire-restore-drill; Get-Date -Format o
    ```
-9. The copy's endpoint:
+9. The copy's endpoint. The second line prints step 10's command with every id filled in. Copy it:
    ```powershell
-   aws rds describe-db-instances --region ca-central-1 --profile fanwire-workload --db-instance-identifier fanwire-restore-drill --query "DBInstances[0].Endpoint.Address" --output text
+   $endpoint = aws rds describe-db-instances --region ca-central-1 --profile fanwire-workload --db-instance-identifier fanwire-restore-drill --query "DBInstances[0].Endpoint.Address" --output text; $endpoint
    ```
-10. **In a second window**, forward local port 15432 to the copy. Leave it running:
-    ```powershell
-    aws ssm start-session --region ca-central-1 --profile fanwire-workload --target PASTE_NAT_INSTANCE_ID --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters "host=PASTE_ENDPOINT,portNumber=5432,localPortNumber=15432"
-    ```
+   ```powershell
+   "aws ssm start-session --region ca-central-1 --profile fanwire-workload --target $natId --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters `"host=$endpoint,portNumber=5432,localPortNumber=15432`""
+   ```
+10. **In a second window**, paste and run the command step 9 printed. It prints `Waiting for connections...`
+    and then **never returns**: that is the open tunnel, working. Leave it running and go back to the first
+    window. Step 13 stops it.
 11. Back in the first window, put the master password in this window's environment without printing it. The
     secret is `Fanwire-Data`'s `FanwireDataPostgresSecret…`. The restored copy has the same password as production:
     ```powershell
@@ -232,19 +249,25 @@ gets a second. Run them in order. Steps 1–3 only read.
     aws rds wait db-instance-deleted --region ca-central-1 --profile fanwire-workload --db-instance-identifier fanwire-restore-drill
     ```
     ```powershell
-    aws ec2 revoke-security-group-egress --region ca-central-1 --profile fanwire-workload --group-id PASTE_NAT_SG --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$sg}]"
+    aws ec2 revoke-security-group-egress --region ca-central-1 --profile fanwire-workload --group-id $nat --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,UserIdGroupPairs=[{GroupId=$sg}]"
     ```
     ```powershell
     aws ec2 delete-security-group --region ca-central-1 --profile fanwire-workload --group-id $sg
     ```
-14. **Check nothing is left.** The first command should list the production instance only, and the second should list nothing:
+    `DependencyViolation` on the last line means the egress rule above is still in place: run the revoke, then
+    the delete again.
+14. **Check nothing is left.** The first command should list the production instance only, the second
+    nothing, and the third only the 443 rules (no 5432 left on the NAT group):
     ```powershell
     aws rds describe-db-instances --region ca-central-1 --profile fanwire-workload --query "DBInstances[].DBInstanceIdentifier" --output text
     ```
     ```powershell
     aws ec2 describe-security-groups --region ca-central-1 --profile fanwire-workload --filters "Name=group-name,Values=fanwire-restore-drill" --query "SecurityGroups[].GroupId" --output text
     ```
-15. Fill in the table above: the date, the restore point (step 2's `latest`), the two times from steps 7 and 8
+    ```powershell
+    aws ec2 describe-security-group-rules --region ca-central-1 --profile fanwire-workload --filters "Name=group-id,Values=$nat" --query "SecurityGroupRules[].[IsEgress,FromPort,ReferencedGroupInfo.GroupId,CidrIpv4]" --output text
+    ```
+15. Add a row to the table above: the date, the restore point (step 2's `latest`), the two times from steps 7 and 8
     and the difference between them, the counts and the head revision from step 12.
 
 **If the port forward fails** (`TargetNotConnected`, or the session opens and psql times out): the NAT

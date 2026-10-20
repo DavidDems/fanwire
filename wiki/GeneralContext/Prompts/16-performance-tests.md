@@ -2,8 +2,8 @@
 
 **Brief for a Director session that writes the spec, then a hand-run unit**
 (a high-tier model, driven turn by turn by the human). Self-contained: read
-this file, then what it names. **App track, step 2 of 2.** After `17`
-(formerly `08`), because the per-user rate limiter (`POSTS-002`: 10 a
+this file, then what it names. **App track, step 2 of 2.** `17` (formerly
+`08`) is done (2026-10-20). It came first because the per-user rate limiter (`POSTS-002`: 10 a
 minute, 100 an hour) would throttle the virtual users unless the test
 environment loosens `POST_RATE_LIMIT_PER_MINUTE`/`_PER_HOUR`, and
 `POSTS-003`'s new-account rule refuses links from accounts under
