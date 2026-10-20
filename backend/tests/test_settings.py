@@ -232,3 +232,57 @@ def test_settings_rejects_a_post_rate_limit_that_is_not_a_positive_integer(
     monkeypatch.setenv(_RATE_LIMIT_ENV[field], bad_value)
     with pytest.raises(ValidationError):
         Settings()
+
+
+# --- POSTS-003: the heuristic spam scorer's threshold and new-account age ---
+
+_SPAM_ENV = {
+    "spam_score_threshold": "SPAM_SCORE_THRESHOLD",
+    "spam_new_account_hours": "SPAM_NEW_ACCOUNT_HOURS",
+}
+
+
+@pytest.mark.parametrize(
+    ("field", "default"),
+    [("spam_score_threshold", 0.8), ("spam_new_account_hours", 24)],
+)
+def test_settings_defaults_spam_settings(monkeypatch, field, default):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv(_SPAM_ENV[field], raising=False)
+    settings = Settings()
+    assert getattr(settings, field) == pytest.approx(default)
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "expected"),
+    [
+        ("spam_score_threshold", "0.5", 0.5),
+        ("spam_score_threshold", "1", 1.0),
+        ("spam_score_threshold", "0.01", 0.01),
+        ("spam_new_account_hours", "48", 48),
+        ("spam_new_account_hours", "1", 1),
+    ],
+)
+def test_settings_reads_spam_settings_from_env(monkeypatch, field, raw, expected):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_SPAM_ENV[field], raw)
+    settings = Settings()
+    assert getattr(settings, field) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("bad_value", ["0", "-0.1", "1.01", "2", "abc"])
+def test_settings_rejects_a_spam_score_threshold_outside_zero_to_one(monkeypatch, bad_value):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_SPAM_ENV["spam_score_threshold"], bad_value)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+@pytest.mark.parametrize("bad_value", ["0", "-1", "abc", "1.5"])
+def test_settings_rejects_a_spam_new_account_hours_that_is_not_a_positive_integer(
+    monkeypatch, bad_value
+):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_SPAM_ENV["spam_new_account_hours"], bad_value)
+    with pytest.raises(ValidationError):
+        Settings()
