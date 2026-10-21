@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Link,
   useLocation,
-  useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom";
@@ -13,6 +12,7 @@ import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { useModalFlow } from "../../routes/modal-flow";
 import { InlineComposer } from "../compose/InlineComposer";
 import {
   FEED_KEY_ROOT,
@@ -29,12 +29,16 @@ import styles from "./ThreadModal.module.css";
  * `/posts/:postId` — a post's thread, in a modal over the page it was opened
  * from (`FRONTEND-010`).
  *
- * **A route, rendered over another one.** A card links here with
- * `state.background`, the page it was on; `routes/BackgroundRoutes.tsx` keeps
- * that page rendered, unchanged, under this modal. Opened with no background
- * (a reload, a shared link), the feed is underneath. Closing goes back one
- * entry when there is a background, which is that page as it was, and
- * otherwise replaces this entry with the feed, so Back does not reopen it.
+ * **A route, rendered over another one.** A card links here as a step of a
+ * modal flow (`routes/modal-flow.tsx`) over the page it was on, which
+ * `routes/BackgroundRoutes.tsx` keeps rendered, unchanged, under this modal.
+ * Opened with no origin (a reload, a shared link), the feed is underneath.
+ *
+ * **One flow, one modal** (`FRONTEND-011`). A reply's thread opens in this same
+ * `Dialog`, which stays mounted while the details switch inside it: Back steps
+ * to the previous detail, and Close and Escape leave the whole flow, back to
+ * the origin as the reader left it (or to `/` with none), with focus on what
+ * opened the first detail. The flow's rules are the module's, not this one's.
  *
  * **Assembled, not rebuilt.** The root and every reply are the feed's own
  * `PostNode` cards, with their controls and counts; the reply box is
@@ -49,21 +53,12 @@ import styles from "./ThreadModal.module.css";
  */
 export function ThreadModal() {
   const { postId: raw } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const postId = postIdFrom(raw);
-  const hasBackground =
-    (location.state as { background?: unknown } | null)?.background !==
-    undefined;
-
-  function close(): void {
-    if (hasBackground) navigate(-1);
-    else navigate("/", { replace: true });
-  }
+  const { back, close } = useModalFlow();
 
   return (
-    <Dialog open onClose={close} title="Thread">
+    <Dialog open onClose={close} onBack={back} title="Thread">
       {postId === null ? (
         <NotFound />
       ) : (

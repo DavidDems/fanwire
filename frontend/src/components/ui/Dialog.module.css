@@ -67,12 +67,26 @@
   font-size: var(--font-size-lg);
 }
 
-/* Pushed right; Button's md size already makes it a full touch target. */
-.close {
+/* With Back leading, the header's start edge matches Close's end edge. */
+.withBack {
+  padding-inline-start: var(--space-2);
+}
+
+/* Back and Close: square, and a full touch target each (Button's md size). */
+.iconButton {
   min-width: var(--target-min);
   min-height: var(--target-min);
-  margin-inline-start: auto;
   padding: var(--space-2);
+}
+
+/* Close is pushed right, past the title. */
+.close {
+  margin-inline-start: auto;
+}
+
+/* lucide's chevron-down, turned a quarter clockwise: it points back. */
+.backIcon {
+  transform: rotate(90deg);
 }
 
 .body {

@@ -76,9 +76,33 @@ export function renderAppAt(
   as: Visitor,
   handlers: RequestHandler[] = [],
 ): RenderResult & { router: AppRouter } {
+  return renderAppWithHistory({ initialEntries: [path] }, as, handlers);
+}
+
+/** A memory history of more than one entry, for `renderAppWithHistory`. */
+export interface AppHistory {
+  initialEntries: string[];
+  /** The entry the app starts on; the last one when omitted. */
+  initialIndex?: number;
+}
+
+/**
+ * `renderAppAt` with a history of several entries, so a test can start the app
+ * on an entry that has others before it — e.g. `["/unrelated", "/posts/5"]`
+ * at index 1, a direct load of a thread with somebody else's page behind it,
+ * which no way out of the thread modal may ever reach (`FRONTEND-011`).
+ */
+export function renderAppWithHistory(
+  history: AppHistory,
+  as: Visitor,
+  handlers: RequestHandler[] = [],
+): RenderResult & { router: AppRouter } {
   const authService = arrangeVisitor(as);
   if (handlers.length > 0) server.use(...handlers);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(routes, {
+    initialEntries: history.initialEntries,
+    initialIndex: history.initialIndex,
+  });
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },

@@ -9,7 +9,7 @@ import {
 
 import { buttonClass } from "./Button";
 import styles from "./Dialog.module.css";
-import { XIcon } from "./icons";
+import { ChevronDownIcon, XIcon } from "./icons";
 
 export interface DialogProps {
   /** Whether the dialog is open. A closed one renders nothing at all. */
@@ -23,6 +23,12 @@ export interface DialogProps {
   onClose: () => void;
   /** The visible heading, which is also the dialog's accessible name. */
   title: string;
+  /**
+   * A step back inside the dialog (`FRONTEND-011`: the previous detail of a
+   * modal flow). When given, a Back button leads the header; when not, there
+   * is none. Back is not a way out: the dialog stays open.
+   */
+  onBack?: () => void;
   children: ReactNode;
 }
 
@@ -47,13 +53,23 @@ export interface DialogProps {
  *
  * **Focus returns to whatever opened it.** The element that had focus when the
  * dialog opened is remembered, and focused again when it closes, if it is still
- * on the page.
+ * on the page. The caller keeps one `Dialog` mounted while what it shows
+ * changes (a modal flow's details), so the opener is still the first one.
+ *
+ * **Back, when there is somewhere to step back to** (`onBack`): an icon button
+ * before the title. It goes when the caller stops passing `onBack`, and focus
+ * that was on it moves to Close rather than out of the dialog.
  */
 export function Dialog({ open, ...rest }: DialogProps) {
   return open ? <OpenDialog {...rest} /> : null;
 }
 
-function OpenDialog({ onClose, title, children }: Omit<DialogProps, "open">) {
+function OpenDialog({
+  onClose,
+  title,
+  onBack,
+  children,
+}: Omit<DialogProps, "open">) {
   const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -88,6 +104,15 @@ function OpenDialog({ onClose, title, children }: Omit<DialogProps, "open">) {
       if (opener !== null && opener.isConnected) opener.focus();
     };
   }, []);
+
+  // Back removed while it had focus leaves focus on nothing; Close is the
+  // control in the same place that is always there.
+  const hasBack = onBack !== undefined;
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    if (dialog === null || hasBack) return;
+    if (!dialog.contains(document.activeElement)) closeRef.current?.focus();
+  }, [hasBack]);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
     event.preventDefault();
@@ -131,7 +156,20 @@ function OpenDialog({ onClose, title, children }: Omit<DialogProps, "open">) {
       onClick={handleClick}
     >
       <div className={styles.content}>
-        <header className={styles.header}>
+        <header
+          className={`${styles.header} ${hasBack ? styles.withBack : ""}`}
+        >
+          {hasBack ? (
+            <button
+              type="button"
+              className={`${buttonClass("ghost", "md")} ${styles.iconButton}`}
+              aria-label="Back"
+              onClick={onBack}
+            >
+              {/* lucide's chevron-down, turned to point back. */}
+              <ChevronDownIcon className={styles.backIcon} />
+            </button>
+          ) : null}
           <h2 id={titleId} className={styles.title}>
             {title}
           </h2>
@@ -142,7 +180,7 @@ function OpenDialog({ onClose, title, children }: Omit<DialogProps, "open">) {
           <button
             ref={closeRef}
             type="button"
-            className={`${buttonClass("ghost", "md")} ${styles.close}`}
+            className={`${buttonClass("ghost", "md")} ${styles.iconButton} ${styles.close}`}
             aria-label="Close"
             onClick={onClose}
           >
