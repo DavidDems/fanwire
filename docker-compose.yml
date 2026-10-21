@@ -113,10 +113,9 @@ services:
       - "${BACKEND_DEV_PORT:-8001}:8001"
 
   # ---------------------------------------------------------------- perf
-  # The local load test (PERF-001, wiki/GeneralContext/Prompts/
-  # 16-performance-tests.md). Only `--profile perf` starts these, never a
-  # plain `up`; `perf/run.ps1` drives them. It generates no AWS or Cognito
-  # traffic, and k6 only ever targets backend-perf.
+  # The local load test (PERF-001, perf/README.md). Only `--profile perf`
+  # starts these, never a plain `up`; `perf/run.ps1` drives them. It
+  # generates no AWS or Cognito traffic, and k6 only ever targets backend-perf.
   #
   # Its own Postgres, with no volume and no host port: `down` discards it,
   # so every run seeds from empty and runs stay comparable.
