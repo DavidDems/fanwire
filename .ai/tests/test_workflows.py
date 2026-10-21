@@ -1133,6 +1133,18 @@ class TestEveryActionIsPinnedToACommit:
         movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
         assert not movable, "movable action refs:\n" + "\n".join(movable)
 
+    def test_no_test_names_a_particular_pin(self):
+        """Renovate moves every SHA. A test that names one fails every bump
+        it should pass, as #205 and #207 did (2026-10-21). Check the form,
+        here, and the action's name, never the commit."""
+        hits = [
+            f"{p.name}:{n}"
+            for p in sorted(Path(__file__).parent.glob("test_*.py"))
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if re.search(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", line)
+        ]
+        assert not hits, "tests name a specific action commit:\n" + "\n".join(hits)
+
 
 class TestNoDispatchInputReachesTheShellAsCode:
     """handoff.md §10, D2. `${{ }}` is expanded into the script text before bash
@@ -2355,6 +2367,7 @@ NOT_A_CHECK = {
     "openapi-drift",
     "npm-audit",
     "infra-synth",
+    "perf-advisory",
     "gate",
 }
 
@@ -3353,8 +3366,9 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
     it is not under `gate`, and its own failure is not the PR's."""
 
     JOB = "review"
-    CHECKOUT = "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5"
-    SETUP_PYTHON = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6"
+    # Which actions, not which commits: Renovate moves the SHAs, and
+    # TestEveryActionIsPinnedToACommit checks their form.
+    ACTIONS = {"actions/checkout", "actions/setup-python"}
 
     @pytest.fixture
     def wf(self) -> str:
@@ -3408,7 +3422,10 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
             for ln in wf.splitlines()
             if "uses:" in ln and not ln.lstrip().startswith("#")
         ]
-        assert uses and set(uses) <= {self.CHECKOUT, self.SETUP_PYTHON}
+        assert uses
+        for ref in uses:
+            m = re.fullmatch(r"([\w.-]+/[\w.-]+)@[0-9a-f]{40} # v\d+\S*", ref)
+            assert m and m.group(1) in self.ACTIONS, ref
 
     def test_the_tools_are_mains_and_the_pr_is_beside_them_as_data(self, wf):
         checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
@@ -3484,3 +3501,68 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
         header = wf.split("\non:\n", 1)[0]
         assert "only a live run proves" in header
         assert "first live run" in header
+
+
+# --------------------------------------------------------------------------- PERF-001
+
+
+class TestThePerfRunIsAdvisory:
+    """The human's decision for "before a prod deploy" (human-decisions.md §8,
+    Prompts/16 deliverable 6): a PR-template line for the local `load` run,
+    which is the real gate because it is compared on one machine, and the
+    same compose run as an advisory job here. A shared runner's timing is
+    noise, and a fresh runner has no baseline, so the job runs `smoke`, which
+    k6's thresholds judge alone, and nothing may wait on it."""
+
+    JOB = "perf-advisory"
+    TEMPLATE = WORKFLOWS.parent / "pull_request_template.md"
+
+    @pytest.fixture
+    def gate(self) -> str:
+        path = WORKFLOWS / "test-agent.yml"
+        if not path.exists():
+            pytest.skip("test-agent.yml not present")
+        return path.read_text(encoding="utf-8")
+
+    def head(self, gate: str) -> str:
+        return job_block(gate, self.JOB).split("    steps:\n", 1)[0]
+
+    def test_nothing_waits_on_it(self, gate):
+        """Outside `gate`, the one required check, and `continue-on-error` at
+        the job level, so a red run neither blocks a merge nor turns the
+        workflow red (which would also wake ci-summary.yml for noise)."""
+        assert self.JOB not in job_block(gate, "gate")
+        assert re.search(r"^    continue-on-error: true$", self.head(gate), re.MULTILINE)
+
+    def test_it_is_bounded(self, gate):
+        assert re.search(r"^    timeout-minutes:\s*\d+", self.head(gate), re.MULTILINE)
+
+    def test_it_runs_on_pull_requests_that_touch_backend_app_only(self, gate):
+        """Never on the orchestrator's workflow_dispatch: that run is a
+        verdict, and an advisory number has no place in one."""
+        condition = next(
+            line.strip() for line in self.head(gate).splitlines() if line.strip().startswith("if:")
+        )
+        assert "github.event_name == 'pull_request'" in condition
+        assert "needs.changes.outputs.backend_app == 'true'" in condition
+        changes = job_block(gate, "changes")
+        assert "backend_app: ${{ steps.filter.outputs.backend_app }}" in changes
+        assert '"backend_app": ("backend/app/",)' in changes
+
+    def test_it_runs_the_smoke_profile_through_the_one_entry_point(self, gate):
+        bodies = run_bodies(job_block(gate, self.JOB))
+        (runner,) = [b for b in bodies if "perf/run.ps1" in b]
+        assert runner.startswith("pwsh ")
+        assert "-Profile smoke" in runner
+
+    def test_it_holds_no_credential(self, gate):
+        """The run is local by construction: no AWS, no Cognito, no secret."""
+        block = job_block(gate, self.JOB)
+        assert "secrets." not in block
+        assert "id-token" not in block
+        assert "aws-actions/" not in block
+
+    def test_the_pr_template_asks_for_the_local_load_run(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        assert "perf/run.ps1 -Profile load" in text
+        assert "backend/app/" in text

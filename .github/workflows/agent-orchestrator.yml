@@ -124,7 +124,7 @@ jobs:
           echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
           echo "BRANCH=agent/$TASK_ID" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.task.outputs.branch }}
           path: task
@@ -132,7 +132,7 @@ jobs:
 
       # The trusted copy (handoff.md §10, D2b): `main` at the commit this
       # run's workflow file came from.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           path: tools
@@ -234,7 +234,7 @@ jobs:
           fi
           echo ".ai/ matches main apart from this task's bookkeeping"
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
 
