@@ -112,6 +112,8 @@ _POST_VIEW_FIELDS = {
     "repost_count",
     "reposted_by_viewer",
     "reposted_post",
+    # POSTS-004: the placeholder flag for a repost whose original is deleted.
+    "reposted_post_deleted",
 }
 
 
