@@ -24,8 +24,8 @@ from app.dependencies import get_event_bus, get_session
 from app.eventbus import InMemoryEventPublisher, PostEventBus
 from app.events.models import Team
 from app.media.models import Media, MediaStatus
-from app.users.auth import VerifiedIdentity
-from app.users.dependencies import get_current_identity, get_current_user
+from app.users.auth import FakeTokenVerifier, VerifiedIdentity
+from app.users.dependencies import get_current_identity, get_current_user, get_token_verifier
 from app.users.models import User
 from app.users.routes import router
 from app.users.service import create_user, follow, soft_delete_user
@@ -422,9 +422,13 @@ def test_delete_me_soft_deletes_caller_and_then_404s(app, client, session_factor
     with session_factory() as session:
         user = _create(session, "sub-self-delete", "self_delete_user")
 
-    _as_user(app, user)
+    # Authenticated through the real token chain rather than by overriding
+    # get_current_user: USERS-003 moves DELETE /users/me to get_own_account.
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-self-delete")
+    )
 
-    response = client.delete("/users/me")
+    response = client.delete("/users/me", headers={"Authorization": "Bearer good-token"})
     assert response.status_code == 204
 
     get_response = client.get(f"/users/{user.id}")
