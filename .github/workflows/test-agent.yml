@@ -382,12 +382,13 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      # `moderate` since react-router 7 (FRONTEND-016, #195) cleared the two
-      # moderate advisories that held it at `high`; the audit was clean at
-      # every level when this was lowered (2026-10-21).
-      - name: Audit frontend for known CVEs (blocks on moderate)
+      # `high`, not lower: below it a moderate advisory with no fixed release
+      # would block every PR (.ai/tests/test_workflows.py
+      # TestEveryNpmTreeIsAudited). The react-router 6 residue that used to
+      # be named here is gone since react-router 7 (FRONTEND-016, #195).
+      - name: Audit frontend for known CVEs (blocks on high)
         working-directory: frontend
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=high
       - name: Install infra dependencies
         working-directory: infra
         run: npm ci

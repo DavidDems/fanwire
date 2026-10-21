@@ -59,8 +59,9 @@ Update this section in every spec PR and unit PR of this thread.
   deleted" card with its surviving replies under it (the human, by
   `AskUserQuestion`), so `ThreadView.root` becomes nullable.
 - **2026-10-21, stage 2 specs written:** `POSTS-004`, `FRONTEND-011` (one
-  Director PR, which also lowers the frontend `npm-audit` gate to
-  `moderate`). Settled in them:
+  Director PR). The frontend `npm-audit` gate stays at `high` on purpose
+  (`.ai/tests/test_workflows.py`: below it, an unfixable moderate advisory
+  would block every PR); only its stale react-router comment changed. Settled in them:
   - `DELETE /posts/{id}`: owner only, 403 for another's post, idempotent,
     409 on a plain repost (its hard delete stays `DELETE /posts/{id}/repost`).
   - placeholders are additive: `PostView.reposted_post_deleted`, and
