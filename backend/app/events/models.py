@@ -76,6 +76,17 @@ class Game(Base):
     home_line_score: Mapped[list[int] | None] = mapped_column(ARRAY(Integer), nullable=True)
     away_line_score: Mapped[list[int] | None] = mapped_column(ARRAY(Integer), nullable=True)
 
+    @hybrid_property
+    def completed(self) -> bool:
+        """Whether the game has a result: any score at all. The loader's rule
+        (0x02-events.md): a 0-0 game has no score."""
+        return self.home_score + self.away_score > 0
+
+    @completed.inplace.expression
+    @classmethod
+    def _completed_expression(cls) -> ColumnElement[bool]:
+        return cls.home_score + cls.away_score > 0
+
 
 class Player(Base):
     """An NBA player, keyed by nba.com's personId. Attributes are as the

@@ -7,6 +7,9 @@ game_ids_for_team/games_by_ids are events/'s public read interface for
 feed/ (a later unit, per wiki/CodeContext/Modules/0x06-feed.md's Connection
 rule): feed/ owns no tables of its own, so it reads Game through here
 instead of querying app.events.models directly.
+
+validate_*/*_previews are the same for posts/' sports-data attachments
+(EVENTS-009): posts/ never imports app.events.models.
 """
 
 from __future__ import annotations
@@ -31,6 +34,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.events.errors import (
+    GameNotCompletedError,
+    LinkTargetNotFoundError,
+    NoGamesInScopeError,
+    PlayerDidNotPlayError,
+)
 from app.events.models import Game, Player, PlayerGameStats, Team
 
 # Allow-list for search/'s position filter (wiki/CodeContext/Modules/
@@ -178,6 +187,8 @@ class Shooting:
 
 @dataclass(frozen=True)
 class BoxScorePlayer(Shooting):
+    # The player_game_stats row's id: a `player_game` attachment's target.
+    line_id: int
     player_id: int
     first_name: str | None
     last_name: str | None
@@ -289,6 +300,7 @@ def _team_box_score(rows: Sequence[tuple[PlayerGameStats, Player]]) -> TeamBoxSc
         players=[
             BoxScorePlayer(
                 **asdict(_shooting([line])),
+                line_id=line.id,
                 player_id=player.id,
                 first_name=player.first_name,
                 last_name=player.last_name,
@@ -1119,3 +1131,292 @@ def team_season(session: Session, team_id: int, season: str) -> TeamSeason | Non
             )
         )
     return TeamSeason(season=season, team=team, record=record, games=games)
+
+
+# -------------------------------------------------------------- attachments
+#
+# EVENTS-009. posts/' sports-data attachments: `game_final` (a game id),
+# `player_game` (a player_game_stats id) and `player_career` (a player id
+# and a scope, computed live). Create validates one target with a precise
+# refusal (app.events.errors); reads take previews in batches and leave out
+# an id with no row, so one odd target never fails a page.
+
+# A career attachment's scopes: the game types a career line counts.
+CAREER_SCOPES: tuple[str, ...] = LINE_GAME_TYPES
+
+
+@dataclass(frozen=True)
+class GameFinalPreview:
+    """A `game_final` attachment's preview: the game and its final score."""
+
+    game_id: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    sub_label: str | None
+    series_game_number: int | None
+    home_team: TeamRef
+    away_team: TeamRef
+    home_score: int
+    away_score: int
+
+
+@dataclass(frozen=True)
+class PlayerGamePreview:
+    """A `player_game` attachment's preview: one box-score line and its
+    game, from the player's side. A DNP line is as stored: no minutes, its
+    reason, zeros."""
+
+    line_id: int
+    game_id: int
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    team: TeamRef
+    opponent: TeamRef
+    is_home: bool
+    team_score: int
+    opponent_score: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    starter: bool
+    seconds_played: int | None
+    points: int
+    rebounds: int
+    assists: int
+    steals: int
+    blocks: int
+    turnovers: int
+    field_goals_made: int
+    field_goals_attempted: int
+    field_goal_pct: float | None
+    three_pointers_made: int
+    three_pointers_attempted: int
+    three_point_pct: float | None
+    free_throws_made: int
+    free_throws_attempted: int
+    free_throw_pct: float | None
+    plus_minus: int
+    dnp_reason: str | None
+
+
+# The box-score figures a line preview carries: every counting stat and
+# percentage but the rebound split and fouls.
+_PLAYER_GAME_STATS: tuple[str, ...] = tuple(
+    stat
+    for stat in (*_COUNTING_STATS, *_PCTS)
+    if stat not in ("offensive_rebounds", "defensive_rebounds", "personal_fouls")
+)
+
+# The StatLine figures a career preview carries.
+_CAREER_FIGURES: tuple[str, ...] = (
+    "games_played",
+    "points_per_game",
+    "rebounds_per_game",
+    "assists_per_game",
+    "minutes_per_game",
+    *_PCTS,
+)
+
+
+@dataclass(frozen=True)
+class PlayerCareerPreview:
+    """A `player_career` attachment's preview: the player and the career
+    line of one scope, player_detail's career_regular or career_playoffs."""
+
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    position: str | None
+    first_season: str | None
+    last_season: str | None
+    scope: str
+    games_played: int
+    points_per_game: float | None
+    rebounds_per_game: float | None
+    assists_per_game: float | None
+    minutes_per_game: float | None
+    field_goal_pct: float | None
+    three_point_pct: float | None
+    free_throw_pct: float | None
+
+
+def validate_game_final(session: Session, game_id: int) -> None:
+    """A `game_final` target must be a completed game."""
+    game = session.get(Game, game_id)
+    if game is None:
+        raise LinkTargetNotFoundError(f"no game {game_id}")
+    if not game.completed:
+        raise GameNotCompletedError(f"game {game_id} has no result")
+
+
+def validate_player_game(session: Session, line_id: int) -> None:
+    """A `player_game` target must be a played line (zero seconds counts)."""
+    line = session.get(PlayerGameStats, line_id)
+    if line is None:
+        raise LinkTargetNotFoundError(f"no box-score line {line_id}")
+    if not line.played:
+        raise PlayerDidNotPlayError(f"box-score line {line_id} did not play")
+
+
+def validate_player_career(session: Session, player_id: int, scope: str) -> None:
+    """A `player_career` target must be a player with a played row in a game
+    of `scope`'s type, player_detail's counting rule. A scope outside
+    CAREER_SCOPES is a plain ValueError: the request is wrong, not the
+    target, so it is checked before any query."""
+    if scope not in CAREER_SCOPES:
+        raise ValueError(f"unknown career scope {scope!r}")
+    if session.get(Player, player_id) is None:
+        raise LinkTargetNotFoundError(f"no player {player_id}")
+    has_games = session.scalar(
+        select(
+            exists().where(
+                PlayerGameStats.player_id == player_id,
+                PlayerGameStats.played,
+                Game.id == PlayerGameStats.game_id,
+                Game.game_type == scope,
+            )
+        )
+    )
+    if not has_games:
+        raise NoGamesInScopeError(f"player {player_id} has no {scope} game")
+
+
+def game_final_previews(session: Session, game_ids: Collection[int]) -> dict[int, GameFinalPreview]:
+    """Previews keyed by game id; an unknown id is absent. One query
+    whatever the number of ids (the games with both teams), none for none."""
+    if not game_ids:
+        return {}
+
+    home, away = aliased(Team), aliased(Team)
+    rows = session.execute(
+        select(Game, home, away)
+        .join(home, home.id == Game.home_team_id)
+        .join(away, away.id == Game.away_team_id)
+        .where(Game.id.in_(game_ids))
+    ).tuples()
+    return {
+        game.id: GameFinalPreview(
+            game_id=game.id,
+            date=game.date,
+            season=game.season,
+            game_type=game.game_type,
+            label=game.label,
+            sub_label=game.sub_label,
+            series_game_number=game.series_game_number,
+            home_team=_team_ref(home_team),
+            away_team=_team_ref(away_team),
+            home_score=game.home_score,
+            away_score=game.away_score,
+        )
+        for game, home_team, away_team in rows
+    }
+
+
+def player_game_previews(
+    session: Session, line_ids: Collection[int]
+) -> dict[int, PlayerGamePreview]:
+    """Previews keyed by line id; an unknown id is absent, a DNP line is
+    returned as stored. One query whatever the number of ids (the lines with
+    their game, player and both teams), none for none."""
+    if not line_ids:
+        return {}
+
+    team, opponent = aliased(Team), aliased(Team)
+    is_home = Game.home_team_id == PlayerGameStats.team_id
+    rows = session.execute(
+        select(PlayerGameStats, Game, Player, team, opponent)
+        .join(Game, Game.id == PlayerGameStats.game_id)
+        .join(Player, Player.id == PlayerGameStats.player_id)
+        .join(team, team.id == PlayerGameStats.team_id)
+        .join(
+            opponent,
+            opponent.id == case((is_home, Game.away_team_id), else_=Game.home_team_id),
+        )
+        .where(PlayerGameStats.id.in_(line_ids))
+    ).tuples()
+
+    previews: dict[int, PlayerGamePreview] = {}
+    for line, game, player, own, other in rows:
+        home = game.home_team_id == line.team_id
+        shooting = _shooting([line])
+        previews[line.id] = PlayerGamePreview(
+            **{stat: getattr(shooting, stat) for stat in _PLAYER_GAME_STATS},
+            line_id=line.id,
+            game_id=game.id,
+            player_id=player.id,
+            first_name=player.first_name,
+            last_name=player.last_name,
+            team=_team_ref(own),
+            opponent=_team_ref(other),
+            is_home=home,
+            team_score=game.home_score if home else game.away_score,
+            opponent_score=game.away_score if home else game.home_score,
+            date=game.date,
+            season=game.season,
+            game_type=game.game_type,
+            label=game.label,
+            starter=line.starter,
+            seconds_played=line.seconds_played,
+            plus_minus=line.plus_minus,
+            dnp_reason=line.dnp_reason,
+        )
+    return previews
+
+
+def player_career_previews(
+    session: Session, keys: Collection[tuple[int, str]]
+) -> dict[tuple[int, str], PlayerCareerPreview]:
+    """Previews keyed by (player_id, scope); an unknown player, or a scope
+    outside CAREER_SCOPES, is absent. The figures are player_detail's career
+    line by construction (_line_columns, _stat_line, played rows of
+    LINE_GAME_TYPES games only); a scope with no games is _NO_GAMES' null
+    averages. Two queries whatever the number of keys: the players, then one
+    GROUP BY player and game type over all of them; none for none."""
+    wanted = [key for key in keys if key[1] in CAREER_SCOPES]
+    if not wanted:
+        return {}
+
+    players = {
+        player.id: player
+        for player in session.scalars(
+            select(Player).where(Player.id.in_({player_id for player_id, _ in wanted}))
+        )
+    }
+    if not players:
+        return {}
+
+    lines = {
+        (row.player_id, row.game_type): _stat_line(_line_values(row._mapping))
+        for row in session.execute(
+            select(PlayerGameStats.player_id, Game.game_type, *_line_columns())
+            .join(Game, Game.id == PlayerGameStats.game_id)
+            .where(
+                PlayerGameStats.player_id.in_(players),
+                PlayerGameStats.played,
+                Game.game_type.in_(LINE_GAME_TYPES),
+            )
+            .group_by(PlayerGameStats.player_id, Game.game_type)
+        )
+    }
+
+    previews: dict[tuple[int, str], PlayerCareerPreview] = {}
+    for player_id, scope in wanted:
+        player = players.get(player_id)
+        if player is None:
+            continue
+        line = lines.get((player_id, scope)) or _stat_line(_NO_GAMES)
+        previews[(player_id, scope)] = PlayerCareerPreview(
+            **{figure: getattr(line, figure) for figure in _CAREER_FIGURES},
+            player_id=player.id,
+            first_name=player.first_name,
+            last_name=player.last_name,
+            position=player.position,
+            first_season=player.first_season,
+            last_season=player.last_season,
+            scope=scope,
+        )
+    return previews

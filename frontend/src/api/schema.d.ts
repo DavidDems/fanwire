@@ -781,6 +781,8 @@ export interface components {
             free_throws_made: number;
             /** Last Name */
             last_name: string | null;
+            /** Line Id */
+            line_id: number;
             /** Offensive Rebounds */
             offensive_rebounds: number;
             /** Personal Fouls */
