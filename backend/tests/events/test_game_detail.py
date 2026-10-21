@@ -223,7 +223,7 @@ def test_player_row_carries_every_stat_and_computed_percentages(client, session_
     game_id, home_id, _ = matchup
     with session_factory() as session:
         tatum = _add_player(session, "Jayson", "Tatum")
-        _add_line(
+        line = _add_line(
             session,
             game_id=game_id,
             team_id=home_id,
@@ -250,11 +250,13 @@ def test_player_row_carries_every_stat_and_computed_percentages(client, session_
         )
         session.commit()
         tatum_id = tatum.id
+        line_id = line.id
 
     rows = _detail(client, game_id)["home_box_score"]["players"]
 
     assert rows == [
         {
+            "line_id": line_id,
             "player_id": tatum_id,
             "first_name": "Jayson",
             "last_name": "Tatum",

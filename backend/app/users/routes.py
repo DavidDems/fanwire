@@ -22,13 +22,19 @@ signup confirms -- it depends on get_current_identity (not get_current_user
 Post-Confirmation Lambda trigger, keeps everything in the one
 Mangum-wrapped app.
 
-GET /users/me 404s exactly when get_current_user does (a verified token
-with no matching User row) -- the frontend uses that 404 to route a
-freshly-confirmed signup to profile creation.
+GET /users/me is on the active-account path (get_current_user), so it
+answers 404 for a verified token with no matching User row -- the frontend
+uses that 404 to route a freshly-confirmed signup to profile creation --
+and 403 {"detail": "account_deactivated"} for a deactivated account, which
+the frontend uses to show recovery instead.
 
-DELETE /users/me soft-deletes only the *caller's own* profile -- there is
-no DELETE /users/{id} for an arbitrary id. Least-privilege: nothing lets
-one user soft-delete another's row. `{user_id}` in the follow routes is
+DELETE /users/me and POST /users/me/recover are the only routes on the
+own-account path (get_own_account, see app.users.dependencies): a
+deactivated caller must reach recovery, and a repeat deactivation is a 204
+no-op that keeps the first deleted_at. Both act only on the *caller's own*
+row -- there is no DELETE /users/{id} or recover-by-id, and neither reads a
+user id from the path, query or body. Least-privilege: nothing lets one
+user deactivate or recover another's row. `{user_id}` in the follow routes is
 always the *target* of the action, never the actor -- who is acting always
 comes from get_current_user (the verified token), never a client-supplied
 id.
@@ -53,7 +59,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_event_bus, get_session
 from app.eventbus import PostEventBus
 from app.users.auth import VerifiedIdentity
-from app.users.dependencies import get_current_identity, get_current_user
+from app.users.dependencies import get_current_identity, get_current_user, get_own_account
 from app.users.models import User
 from app.users.schemas import CreateUserRequest, MeOut, PublicUserOut, UpdateMeRequest
 from app.users.service import (
@@ -67,6 +73,7 @@ from app.users.service import (
     followed_user_ids,
     follower_count,
     following_count,
+    recover_user,
     soft_delete_user,
     unfollow,
     update_profile,
@@ -120,7 +127,15 @@ def create_profile(
 # --- /me routes: declared before /{user_id} — see module docstring --------
 
 
-@router.get("/me", response_model=MeOut)
+_ACCOUNT_DEACTIVATED_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_403_FORBIDDEN: {
+        "description": 'Account deactivated: {"detail": "account_deactivated"}. '
+        "POST /users/me/recover reactivates it."
+    }
+}
+
+
+@router.get("/me", response_model=MeOut, responses=_ACCOUNT_DEACTIVATED_RESPONSE)
 def get_me(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -164,10 +179,18 @@ def get_my_following(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_me(
-    current_user: User = Depends(get_current_user),
+    own_account: User = Depends(get_own_account),
     session: Session = Depends(get_session),
 ) -> None:
-    soft_delete_user(session, current_user.id)
+    soft_delete_user(session, own_account.id)
+
+
+@router.post("/me/recover", response_model=MeOut)
+def recover_me(
+    own_account: User = Depends(get_own_account),
+    session: Session = Depends(get_session),
+) -> MeOut:
+    return _me_out(session, recover_user(session, own_account.id))
 
 
 # --- /{user_id} routes ------------------------------------------------

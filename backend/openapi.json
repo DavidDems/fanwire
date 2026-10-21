@@ -176,6 +176,10 @@
             ],
             "title": "Last Name"
           },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
           "offensive_rebounds": {
             "title": "Offensive Rebounds",
             "type": "integer"
@@ -267,6 +271,7 @@
           "turnovers",
           "personal_fouls",
           "points",
+          "line_id",
           "player_id",
           "first_name",
           "last_name",
@@ -4903,6 +4908,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Account deactivated: {\"detail\": \"account_deactivated\"}. POST /users/me/recover reactivates it."
           }
         },
         "summary": "Get Me",
@@ -4970,6 +4978,27 @@
           }
         },
         "summary": "Get My Following",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/recover": {
+      "post": {
+        "operationId": "recover_me_users_me_recover_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Recover Me",
         "tags": [
           "users"
         ]

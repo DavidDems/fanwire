@@ -7,6 +7,22 @@ based on client claims alone." Client-side "am I logged in" checks are UX
 only, never the boundary (wiki/CodeContext/Standards/design-principles.md
 Security baseline).
 
+Every route resolves its caller through one of three paths (USERS-003),
+which differ only in how they treat a deactivated account (User.deleted_at
+set):
+
+- public read, get_optional_current_user: a deactivated caller is a guest
+  (None), same as no Authorization header.
+- active account, get_current_user (every write, private reads): a
+  deactivated caller gets 403 {"detail": "account_deactivated"} -- a machine
+  code the client branches on, distinct from the 404 for "no profile yet".
+- own account, get_own_account (POST /users/me/recover, DELETE /users/me):
+  the caller's own row whether or not it is deactivated.
+
+All three query the row on every request, so a token issued before
+deactivation can't outlive it. tests/test_route_auth.py enforces that every
+write route is on the active path unless explicitly allowlisted.
+
 The one exception to "a Cognito token" is the local load test (PERF-001,
 perf/README.md): when Settings.perf_jwks_path is set -- which Settings only
 allows with ENVIRONMENT exactly "perf" -- get_token_verifier verifies against
@@ -120,22 +136,33 @@ def get_current_identity(
         ) from exc
 
 
-def get_current_user(
+def get_own_account(
     identity: VerifiedIdentity = Depends(get_current_identity),
     session: Session = Depends(get_session),
 ) -> User:
-    """Resolves the verified token's `sub` to this app's local User row.
-    404s (not 401 — the token itself is valid, there's just no profile yet)
-    if no active User exists for this cognito_sub — e.g. a Cognito-confirmed
-    signup that never completed POST /users. Callers needing the internal
-    User.id (follow/unfollow, soft-delete-self) depend on this instead of
-    get_current_identity directly.
+    """The own-account path: resolves the verified token's `sub` to the
+    caller's User row whether or not it is deactivated -- only the routes
+    acting on the caller's own account status (recover, deactivate) depend
+    on this. 404s if no User row exists for this cognito_sub; 401s come from
+    get_current_identity unchanged.
     """
-    user = session.scalar(
-        select(User).where(User.cognito_sub == identity.sub, User.deleted_at.is_(None))
-    )
+    user = session.scalar(select(User).where(User.cognito_sub == identity.sub))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found")
+    return user
+
+
+def get_current_user(user: User = Depends(get_own_account)) -> User:
+    """The active-account path: the caller's User row, refused with 403
+    "account_deactivated" if it is deactivated (not 404 -- the client must
+    tell "deactivated, offer recovery" apart from "no profile yet, offer
+    creation"). 404s via get_own_account if no User row exists for this
+    cognito_sub -- e.g. a Cognito-confirmed signup that never completed
+    POST /users. Callers needing the internal User.id (every write route)
+    depend on this instead of get_current_identity directly.
+    """
+    if user.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account_deactivated")
     return user
 
 
@@ -154,7 +181,8 @@ def get_optional_current_user(
     otherwise-valid Cognito account that never completed POST /users) also
     returns None -- there's no profile to attach, but it's not this
     dependency's job to force a 404 the way get_current_user does for
-    write-path routes that require one.
+    write-path routes that require one. A deactivated caller's valid token
+    returns None too (a guest), never get_current_user's 403.
 
     Deliberately duplicates get_current_identity's header-parsing (rather
     than calling it directly) because get_current_identity always raises on

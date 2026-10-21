@@ -189,7 +189,9 @@ def test_get_current_user_404s_when_no_user_row_matches_the_sub(session_factory)
     assert response.status_code == 404
 
 
-def test_get_current_user_404s_when_the_matching_row_is_soft_deleted(session_factory):
+def test_get_current_user_403s_when_the_matching_row_is_soft_deleted(session_factory):
+    # USERS-003: a deactivated account is refused on the active-account path
+    # with a recognisable 403, no longer the "no profile yet" 404.
     with session_factory() as session:
         user = create_user(
             session,
@@ -205,7 +207,19 @@ def test_get_current_user_404s_when_the_matching_row_is_soft_deleted(session_fac
 
     response = client.get("/me", headers={"Authorization": "Bearer good-token"})
 
+    assert response.status_code == 403
+    assert response.json() == {"detail": "account_deactivated"}
+
+
+def test_get_current_user_404_detail_is_unchanged_when_no_row_matches(session_factory):
+    identity = VerifiedIdentity(sub="sub-with-no-profile-detail")
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
     assert response.status_code == 404
+    assert response.json() == {"detail": "User profile not found"}
 
 
 # --- get_optional_current_user -----------------------------------------
@@ -303,3 +317,141 @@ def test_get_optional_current_user_resolves_the_active_user(session_factory):
 
     assert response.status_code == 200
     assert response.json() == {"authenticated": True, "id": user_id}
+
+
+def test_get_optional_current_user_returns_none_for_a_deactivated_callers_valid_token(
+    session_factory,
+):
+    """USERS-003: the public-read path treats a deactivated caller as a guest."""
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-optional-deactivated",
+            username="optionaldeactivated",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-deactivated")
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+# --- get_own_account (USERS-003) -----------------------------------------
+#
+# The own-account path: the caller's own User row whether or not deleted_at is
+# set, 404 with no row, 401 exactly as get_current_identity. Imported inside
+# the helper so this module still collects before the dependency exists.
+
+
+def _make_own_account_app(*, session_factory, verifier):
+    from app.users.dependencies import get_own_account
+
+    app = FastAPI()
+
+    @app.get("/own")
+    def own(user: User = Depends(get_own_account)):
+        return {"id": user.id, "deactivated": user.deleted_at is not None}
+
+    @app.get("/whoami")
+    def whoami(identity: VerifiedIdentity = Depends(get_current_identity)):
+        return {"sub": identity.sub}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_token_verifier] = lambda: verifier
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_own_account_returns_an_active_callers_row(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-own-active",
+            username="ownactive",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-active")),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "deactivated": False}
+
+
+def test_get_own_account_returns_a_deactivated_callers_row(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-own-deactivated",
+            username="owndeactivated",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+        user_id = user.id
+
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-deactivated")),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "deactivated": True}
+
+
+def test_get_own_account_404s_when_no_user_row_matches_the_sub(session_factory):
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-no-profile")),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("headers", "verifier"),
+    [
+        pytest.param({}, FakeTokenVerifier(VerifiedIdentity(sub="irrelevant")), id="missing"),
+        pytest.param(
+            {"Authorization": "good-token-no-scheme"},
+            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant")),
+            id="malformed",
+        ),
+        pytest.param({"Authorization": "Bearer bad-token"}, FakeTokenVerifier(None), id="rejected"),
+    ],
+)
+def test_get_own_account_401s_exactly_as_get_current_identity(session_factory, headers, verifier):
+    app = _make_own_account_app(session_factory=session_factory, verifier=verifier)
+    client = TestClient(app)
+
+    own = client.get("/own", headers=headers)
+    identity = client.get("/whoami", headers=headers)
+
+    assert identity.status_code == 401
+    assert own.status_code == 401
+    assert own.json() == identity.json()

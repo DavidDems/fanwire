@@ -66,6 +66,11 @@ differs, code does not, and `App` is the single place that chooses it.
   re-read on every request so a sign-out lands on the next call), and mounts
   `AuthProvider` *outside* `RouterProvider` — a session does not belong to a
   route.
+- **The router is `react-router-dom` 7** (`FRONTEND-016`, 2026-10-20), on
+  React 18. Imports keep the `react-router-dom` name, which re-exports
+  `react-router` in v7. v7's defaults are v6's `future.v7_*` flags, so none is
+  set (`src/test/router-version.test.ts` keeps them out). Not 8: it needs
+  React 19 and Node 22.
 - **`useAuth().status` has three values**, not two. `"loading"` is distinct from
   `"anonymous"`: collapsing them shows a signed-in user the sign-in page on
   every reload, and the guards render a `role="status"` rather than guess.
