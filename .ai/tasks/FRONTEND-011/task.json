@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-011",
+  "objective": "Make the thread modal one navigation flow over the page it was opened from: Back steps to the previous detail in the flow, X and Escape close the whole flow and return to the originating page exactly as it was (address, filters, loaded pages, scroll, focus), and a direct URL or reload with no origin falls back to home, never to an unrelated history entry; built so FRONTEND-014 can add game and player details to the same flow.",
+  "acceptance_criteria": [
+    "Opened from the feed at a scroll offset, a card's thread then a reply's timestamp (a nested thread) then another reply's timestamp gives three detail entries; the Close button returns the router to the feed's own history entry (same pathname and search, the history index the flow started from), no dialog is open, and the feed's scroll offset and loaded pages are what they were.",
+    "Escape at any depth of the flow does exactly what the Close button does.",
+    "An in-modal Back control is shown only when the flow has a previous detail; it navigates to that previous detail (one history entry back) and the dialog stays open. The browser's own Back also steps one detail at a time and, from the first detail, returns to the origin.",
+    "Opened from /search with a query string and a second page of results loaded, closing the flow from a nested thread restores /search with the same query string, both loaded pages of results, and the scroll offset.",
+    "Loaded directly at /posts/<id> (no origin in the history state), Close and Escape land on / with no dialog, at depth 1 and after nesting; with a memory history whose earlier entry is an unrelated path, that entry is never reached by Close or Escape.",
+    "Focus returns to the control that opened the flow (the first detail's opener), not to a control inside the modal, after closing from any depth.",
+    "Exactly one dialog element is open at any time during the flow: details switch inside the one modal surface and are never stacked.",
+    "Each detail keeps its real URL (/posts/<id>, ?reply=1 unchanged), so a copied address opens the same thread directly.",
+    "The flow's state (origin, depth) lives in one module under src/routes/ with a typed API that the thread modal and the post card links use, and that a game or player detail can use later without changing it; no component reads location.state's shape directly except through it.",
+    "Every existing frontend test passes, and typecheck, lint and build pass; FrontendUI/components.md and 0x08-frontend.md describe the flow and the Back control.",
+    "Browser rows (vite preview, light and dark, 360 and 1280 wide): feed then thread then two nested threads then Close returns to the feed at the same scroll; the same with Escape; Back steps one detail; a search origin is restored with its query and scroll; a direct /posts/<id> load then Close lands on /; focus is visible on the opener after closing."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/**",
+    "frontend/src/features/thread/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/search/**",
+    "frontend/src/components/ui/Dialog.tsx",
+    "frontend/src/components/ui/Dialog.module.css",
+    "frontend/src/components/ui/Dialog.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/components.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

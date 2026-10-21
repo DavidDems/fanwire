@@ -382,9 +382,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      # Residue (moderate, so below this level): react-router 6.30.6,
-      # GHSA-337j-9hxr-rhxg and GHSA-wrjc-x8rr-h8h6, fixed only in v7
-      # (TODO/02-backlog.md, the react-router v7 upgrade).
+      # `high`, not lower: below it a moderate advisory with no fixed release
+      # would block every PR (.ai/tests/test_workflows.py
+      # TestEveryNpmTreeIsAudited). The react-router 6 residue that used to
+      # be named here is gone since react-router 7 (FRONTEND-016, #195).
       - name: Audit frontend for known CVEs (blocks on high)
         working-directory: frontend
         run: npm audit --audit-level=high

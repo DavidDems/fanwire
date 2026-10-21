@@ -51,9 +51,28 @@ Update this section in every spec PR and unit PR of this thread.
     `validate_player_career` and three batch preview reads (at most 2
     queries each); `BoxScorePlayerOut` gains `line_id`, the `ref_id` of a
     `player_game` link. No new route.
-- **Next:** hand-run the three stage 1 units (parallel; test the
-  combination before the second merges). `FRONTEND-011`'s spec is written
-  once `FRONTEND-016` merges; `POSTS-004`'s once `USERS-003` merges.
+- **2026-10-21, stage 1 merged:** `FRONTEND-016` as Director PR #195 (the
+  role policy denies dependency manifests to every unit role, so a
+  dependency bump is never an `agent/*` unit), `USERS-003` #197,
+  `EVENTS-009` #198. `main` CI green after all three.
+- **2026-10-21, decided:** the thread of a deleted post shows a "Post
+  deleted" card with its surviving replies under it (the human, by
+  `AskUserQuestion`), so `ThreadView.root` becomes nullable.
+- **2026-10-21, stage 2 specs written:** `POSTS-004`, `FRONTEND-011` (one
+  Director PR). The frontend `npm-audit` gate stays at `high` on purpose
+  (`.ai/tests/test_workflows.py`: below it, an unfixable moderate advisory
+  would block every PR); only its stale react-router comment changed. Settled in them:
+  - `DELETE /posts/{id}`: owner only, 403 for another's post, idempotent,
+    409 on a plain repost (its hard delete stays `DELETE /posts/{id}/repost`).
+  - placeholders are additive: `PostView.reposted_post_deleted`, and
+    `ThreadView.root` null with `root_deleted` true. POSTS-004 makes the one
+    minimal frontend change a nullable root needs.
+  - the modal flow is `{background, depth}` in history state, owned by one
+    module; Close/Escape go back `depth` entries, or to `/` with no origin.
+- **Next:** hand-run `POSTS-004` and `FRONTEND-011` in parallel (both touch
+  `ThreadModal.tsx`; the second PR resolves the conflict). Then
+  `FRONTEND-012` and `POSTS-005` (needs `EVENTS-009` and `POSTS-004`; ask
+  the human when `#GameId` insertion is retired).
 
 ## Read first, in this order
 
@@ -210,7 +229,7 @@ merged preview before the second one merges.
 | 1 | **USERS-003**: account status and the three dependency paths | `users/` dependencies and routes; `GET /users/me` reports a deactivated account instead of 404; `POST /users/me/recover`; every existing write route moved onto the active-account path | — |
 | 1 | **EVENTS-009**: `events/` read interface for attachments | batch preview reads for games, player-game lines (with game, player and team context) and career averages by scope; target validation (completed game, played line); a box-score route only if a frontend unit needs one | — |
 | 1 | **FRONTEND-016**: react-router v6 → v7 (the human put it first, 2026-10-20) | `react-router-dom` 7.18.4+, React 18 kept, no behaviour change; closes the backlog row | — |
-| 1b | **FRONTEND-011**: modal navigation | one modal surface, Back vs X/Escape, restoring the origin and its scroll, the direct-URL fallback, focus restore. Thread-only for now; game and player details join in FRONTEND-014 | FRONTEND-016 |
+| 2 | **FRONTEND-011**: modal navigation | one modal surface, Back vs X/Escape, restoring the origin and its scroll, the direct-URL fallback, focus restore. Thread-only for now; game and player details join in FRONTEND-014 | FRONTEND-016 |
 | 2 | **POSTS-004**: post soft delete | `deleted_at` and its migration, the owner's `DELETE /posts/{id}`, visibility through `posts/`'s read interfaces (feed, search, threads, profiles, counts, notifications), placeholders, no interactions with deleted posts | USERS-003 |
 | 3 | **FRONTEND-012**: lifecycle UI | a post menu (owner: Delete with confirm; everyone: Copy link and Report, `business-rules.md`; Report only if `posts/` already exposes it, otherwise leave it for a later unit), "Post deleted" placeholders, deactivate in settings with confirm, the recovery screen, clearing caches on deactivate and refreshing on recover, disabling active-only controls | POSTS-004 |
 | 3 | **POSTS-005**: attachment schema and create | columns, CHECK constraints, migration, `data_link` validation through EVENTS-009, the reply rule, coexisting with media, the legacy-token decision | EVENTS-009, POSTS-004 |
