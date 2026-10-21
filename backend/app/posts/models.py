@@ -7,9 +7,10 @@ wiki/CodeContext/Modules/0x00-architecture.md "Cross-cutting conventions".
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", posts/
 may only reach into users/ through its User table (a real FK target for
-author_id/user_id/reporter_id) and into events/ through its Game table (a
-real FK target for EventMention.game_id) — it never imports either module's
-internal classes or any other table.
+author_id/user_id/reporter_id) and into events/ through its tables as FK
+targets only (EventMention.game_id, and Post's data-link columns naming
+games, player_game_stats and players by string) — it never imports either
+module's internal classes for a read.
 
 No separate "quote repost" flag: `is_repost=True` with non-empty `text` is
 a quote-repost, `is_repost=True` with null/empty `text` is a plain repost —
@@ -42,7 +43,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.db import Base
-from app.events.models import Game  # noqa: F401 — real FK target for EventMention.game_id
+from app.events.models import Game  # noqa: F401 — registers events/' FK targets on Base.metadata
+from app.posts.data_link import DataLink
 from app.users.models import User  # noqa: F401 — real FK target for author_id/user_id/reporter_id
 
 
@@ -83,6 +85,20 @@ class Post(Base):
     # The owner's soft delete (POSTS-004); null for a live post. Read only
     # through app.posts.service's visibility predicate and deleted_post_ids.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The post's one sports-data attachment (POSTS-005): at most one id set,
+    # none on a reply, the scope exactly with linked_player_id (the CHECKs
+    # below). Written and read only through app.posts.data_link.DataLink.
+    # No index: nothing queries by them yet.
+    linked_game_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("games.id"), nullable=True
+    )
+    linked_player_game_stats_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("player_game_stats.id"), nullable=True
+    )
+    linked_player_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("players.id"), nullable=True
+    )
+    linked_player_scope: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Full-text search index for search/'s post search
     # (wiki/CodeContext/Modules/0x07-search.md) -- search/ owns no tables,
     # so this column (and its GIN index below) lives here, the schema's
@@ -104,6 +120,23 @@ class Post(Base):
             "NOT is_repost OR original_post_id IS NOT NULL",
             name="ck_posts_repost_requires_original",
         ),
+        CheckConstraint(
+            "num_nonnulls(linked_game_id, linked_player_game_stats_id, linked_player_id) <= 1",
+            name="ck_posts_one_data_link",
+        ),
+        CheckConstraint(
+            "NOT is_reply OR (linked_game_id IS NULL AND linked_player_game_stats_id IS NULL "
+            "AND linked_player_id IS NULL AND linked_player_scope IS NULL)",
+            name="ck_posts_no_data_link_on_reply",
+        ),
+        CheckConstraint(
+            "(linked_player_id IS NULL) = (linked_player_scope IS NULL)",
+            name="ck_posts_player_scope_pairing",
+        ),
+        CheckConstraint(
+            "linked_player_scope IS NULL OR linked_player_scope IN ('regular', 'playoffs')",
+            name="ck_posts_player_scope_values",
+        ),
         # Both self-referential FKs indexed for thread-traversal reads, per
         # wiki/CodeContext/Modules/0x03-posts.md "AWS mapping".
         Index("ix_posts_parent_post_id", "parent_post_id"),
@@ -113,6 +146,17 @@ class Post(Base):
         # recent posts: an index range scan, not a table scan.
         Index("ix_posts_author_id_created_at", "author_id", "created_at"),
     )
+
+    @property
+    def data_link(self) -> DataLink | None:
+        """The attachment the link columns store, or None (read by
+        app.posts.schemas.PostOut)."""
+        return DataLink.from_columns(
+            linked_game_id=self.linked_game_id,
+            linked_player_game_stats_id=self.linked_player_game_stats_id,
+            linked_player_id=self.linked_player_id,
+            linked_player_scope=self.linked_player_scope,
+        )
 
 
 class PostLike(Base):

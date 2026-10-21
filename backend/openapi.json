@@ -353,6 +353,35 @@
       },
       "CreatePostRequest": {
         "properties": {
+          "data_link": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "game_final": "#/components/schemas/GameFinalLink",
+                    "player_career": "#/components/schemas/PlayerCareerLink",
+                    "player_game": "#/components/schemas/PlayerGameLink"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GameFinalLink"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PlayerGameLink"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PlayerCareerLink"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Link"
+          },
           "is_reply": {
             "default": false,
             "title": "Is Reply",
@@ -496,6 +525,46 @@
           "date_of_birth"
         ],
         "title": "CreateUserRequest",
+        "type": "object"
+      },
+      "DataLinkOut": {
+        "description": "A stored attachment: `scope` is null except for a player_career.",
+        "properties": {
+          "ref_id": {
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "regular",
+                  "playoffs"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "type": {
+            "enum": [
+              "game_final",
+              "player_game",
+              "player_career"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ref_id",
+          "scope"
+        ],
+        "title": "DataLinkOut",
         "type": "object"
       },
       "DidNotPlayOut": {
@@ -765,6 +834,28 @@
           "positions"
         ],
         "title": "GameFiltersOut",
+        "type": "object"
+      },
+      "GameFinalLink": {
+        "additionalProperties": false,
+        "description": "A game's final score; `ref_id` is a games.id.",
+        "properties": {
+          "ref_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "type": {
+            "const": "game_final",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ref_id"
+        ],
+        "title": "GameFinalLink",
         "type": "object"
       },
       "GameOut": {
@@ -1255,6 +1346,37 @@
         "title": "NotificationType",
         "type": "string"
       },
+      "PlayerCareerLink": {
+        "additionalProperties": false,
+        "description": "A player's career averages over one scope; `ref_id` is a players.id.",
+        "properties": {
+          "ref_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "scope": {
+            "enum": [
+              "regular",
+              "playoffs"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "type": {
+            "const": "player_career",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ref_id",
+          "scope"
+        ],
+        "title": "PlayerCareerLink",
+        "type": "object"
+      },
       "PlayerDetailOut": {
         "description": "GET /events/players/{id}: a read model built by\napp.events.service.player_detail. Only played rows of `regular` and\n`playoffs` games count towards a line.",
         "properties": {
@@ -1452,6 +1574,28 @@
           "seasons"
         ],
         "title": "PlayerDetailOut",
+        "type": "object"
+      },
+      "PlayerGameLink": {
+        "additionalProperties": false,
+        "description": "A player's line in one game; `ref_id` is a player_game_stats.id.",
+        "properties": {
+          "ref_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ref Id",
+            "type": "integer"
+          },
+          "type": {
+            "const": "player_game",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "ref_id"
+        ],
+        "title": "PlayerGameLink",
         "type": "object"
       },
       "PlayerGameOut": {
@@ -1792,6 +1936,16 @@
             "title": "Created At",
             "type": "string"
           },
+          "data_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataLinkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -1851,7 +2005,8 @@
           "is_repost",
           "original_post_id",
           "reported",
-          "created_at"
+          "created_at",
+          "data_link"
         ],
         "title": "PostOut",
         "type": "object"
@@ -4274,6 +4429,7 @@
     },
     "/posts": {
       "post": {
+        "description": "A refused data_link (app.posts.data_link.DataLinkRefused) answers 422\nwith its machine code as the detail; a malformed one is Pydantic's own\n422.",
         "operationId": "create_post_posts_post",
         "requestBody": {
           "content": {

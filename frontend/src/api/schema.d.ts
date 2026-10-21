@@ -439,7 +439,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Post */
+        /**
+         * Create Post
+         * @description A refused data_link (app.posts.data_link.DataLinkRefused) answers 422
+         *     with its machine code as the detail; a malformed one is Pydantic's own
+         *     422.
+         */
         post: operations["create_post_posts_post"];
         delete?: never;
         options?: never;
@@ -851,6 +856,8 @@ export interface components {
         };
         /** CreatePostRequest */
         CreatePostRequest: {
+            /** Data Link */
+            data_link?: (components["schemas"]["GameFinalLink"] | components["schemas"]["PlayerGameLink"] | components["schemas"]["PlayerCareerLink"]) | null;
             /**
              * Is Reply
              * @default false
@@ -906,6 +913,21 @@ export interface components {
             preferred_team_id?: number | null;
             /** Username */
             username: string;
+        };
+        /**
+         * DataLinkOut
+         * @description A stored attachment: `scope` is null except for a player_career.
+         */
+        DataLinkOut: {
+            /** Ref Id */
+            ref_id: number;
+            /** Scope */
+            scope: ("regular" | "playoffs") | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "game_final" | "player_game" | "player_career";
         };
         /** DidNotPlayOut */
         DidNotPlayOut: {
@@ -981,6 +1003,19 @@ export interface components {
             positions: string[];
             /** Seasons */
             seasons: string[];
+        };
+        /**
+         * GameFinalLink
+         * @description A game's final score; `ref_id` is a games.id.
+         */
+        GameFinalLink: {
+            /** Ref Id */
+            ref_id: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "game_final";
         };
         /** GameOut */
         GameOut: {
@@ -1163,6 +1198,24 @@ export interface components {
          */
         NotificationType: "follow" | "reply" | "repost";
         /**
+         * PlayerCareerLink
+         * @description A player's career averages over one scope; `ref_id` is a players.id.
+         */
+        PlayerCareerLink: {
+            /** Ref Id */
+            ref_id: number;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "regular" | "playoffs";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "player_career";
+        };
+        /**
          * PlayerDetailOut
          * @description GET /events/players/{id}: a read model built by
          *     app.events.service.player_detail. Only played rows of `regular` and
@@ -1203,6 +1256,19 @@ export interface components {
             seasons: components["schemas"]["SeasonLineOut"][];
             /** Weight Lbs */
             weight_lbs: number | null;
+        };
+        /**
+         * PlayerGameLink
+         * @description A player's line in one game; `ref_id` is a player_game_stats.id.
+         */
+        PlayerGameLink: {
+            /** Ref Id */
+            ref_id: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "player_game";
         };
         /**
          * PlayerGameOut
@@ -1310,6 +1376,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            data_link: components["schemas"]["DataLinkOut"] | null;
             /** Id */
             id: number;
             /** Is Reply */
