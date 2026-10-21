@@ -1133,6 +1133,18 @@ class TestEveryActionIsPinnedToACommit:
         movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
         assert not movable, "movable action refs:\n" + "\n".join(movable)
 
+    def test_no_test_names_a_particular_pin(self):
+        """Renovate moves every SHA. A test that names one fails every bump
+        it should pass, as #205 and #207 did (2026-10-21). Check the form,
+        here, and the action's name, never the commit."""
+        hits = [
+            f"{p.name}:{n}"
+            for p in sorted(Path(__file__).parent.glob("test_*.py"))
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if re.search(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", line)
+        ]
+        assert not hits, "tests name a specific action commit:\n" + "\n".join(hits)
+
 
 class TestNoDispatchInputReachesTheShellAsCode:
     """handoff.md §10, D2. `${{ }}` is expanded into the script text before bash
