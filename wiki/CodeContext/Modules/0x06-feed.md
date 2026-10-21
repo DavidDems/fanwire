@@ -41,10 +41,11 @@ author: { id, username, profile_picture_media_id }
 like_count, liked_by_viewer   # liked_by_viewer is always false for a guest
 reply_count, repost_count, reposted_by_viewer   # reposted_by_viewer: a plain repost; false for a guest
 reposted_post: PostView | null   # one level deep: its own reposted_post is always null
+reposted_post_deleted: bool      # POSTS-004: the original was deleted by its owner (reposted_post is then null)
 media: [ { id, s3_key_public, s3_key_thumbnail } ]
 mentioned_game_ids: [int]
 ```
-**`reposted_post` without N+1 (`POSTS-001`).** The page's `original_post_id`s are fetched in one `posts_by_ids` query, every batched read then runs once over the page and those originals together, and the reposts' `reposted_post` is filled from the views built in that same pass. It is null for a non-repost and for a repost whose original's author is soft-deleted. The statement count for a page of 2 posts equals that for 20 (`tests/feed/test_post_view_queries.py`, `before_cursor_execute`).
+**`reposted_post` without N+1 (`POSTS-001`).** The page's `original_post_id`s are fetched in one `posts_by_ids` query, every batched read then runs once over the page and those originals together, and the reposts' `reposted_post` is filled from the views built in that same pass. It is null for a non-repost, for a repost whose original's author is soft-deleted, and for one whose original is deleted, which alone also sets `reposted_post_deleted` (one `deleted_post_ids` query for the page, `POSTS-004`). The statement count for a page of 2 posts equals that for 20 (`tests/feed/test_post_view_queries.py`, `before_cursor_execute`).
 
 A post whose author can't be resolved (soft-deleted) is silently dropped from the result rather than raised on — normally already excluded upstream by `query_feed_posts`/`replies_to`, but handled defensively here too against a soft-delete racing the call.
 
@@ -55,7 +56,7 @@ A post whose author can't be resolved (soft-deleted) is silently dropped from th
 ## Routes (implemented, Phase 3)
 `app.feed.routes` (`APIRouter(prefix="/feed")`), wired into `app.main`. Both use `get_optional_current_user` (`users/`'s dependency): no `Authorization` header is a guest request, a valid token personalizes, and a *present but invalid* token still 401s (inherited, not re-implemented here) — matching the guest-read precedent already established for posts/events.
 - `GET /feed?before_id=&limit=` → `FeedPage { items: [PostView], next_before_id: int | None }`. `limit` defaults to 20, max 50, validated by FastAPI's `Query(ge=1, le=50)`. `next_before_id` is the last *queried* post's id when a full page came back (`len(posts) == limit`), else `null` — the cursor is keyed off the underlying query page, not however many `PostView`s survived view assembly, so it stays correct even if a soft-delete race silently drops one.
-- `GET /feed/thread/{post_id}` → `ThreadView { root: PostView, replies: [PostView] }` — direct replies only (`replies_to`), 404 if the post doesn't exist. The frontend renders `Post`/`Thread` via one Composite interface (see GoF tie-in) and lazily expands deeper replies by calling this endpoint again on a reply's id.
+- `GET /feed/thread/{post_id}` → `ThreadView { root: PostView | null, root_deleted: bool, replies: [PostView] }` — direct replies only (`replies_to`), 404 if the post doesn't exist or its author is deactivated. **A root its owner deleted is `root` null and `root_deleted` true, with the surviving replies** (`POSTS-004`, the human's decision 2026-10-21): the conversation stays readable under a "Post deleted" card. The frontend renders `Post`/`Thread` via one Composite interface (see GoF tie-in) and lazily expands deeper replies by calling this endpoint again on a reply's id.
 
 ## Design principles tie-ins
 - **YAGNI** ([[wiki/CodeContext/Standards/design-principles|Design principles]]): no scored/weighted ranking algorithm, no denormalized feed table — both would be building for a scale/complexity this project doesn't have yet.
