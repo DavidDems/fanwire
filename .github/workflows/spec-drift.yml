@@ -114,7 +114,7 @@ jobs:
       # that runs with the keys. No ref:, so on a dispatch it is main (the job
       # refuses any other) and on pull_request_target it is the base branch,
       # main, never the PR's head.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
