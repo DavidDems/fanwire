@@ -1,4 +1,6 @@
-from pydantic import Field, PositiveInt
+from typing import Self
+
+from pydantic import Field, PositiveInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -69,3 +71,23 @@ class Settings(BaseSettings):
     # infra/lib/app-stack.ts on that function only. Empty means unset, and
     # the handler fails fast on it.
     sports_data_bucket: str = ""
+
+    # The local load test (PERF-001, perf/README.md). PERF_JWKS_PATH points
+    # app.users.dependencies.get_token_verifier at a JWKS file minted by
+    # scripts/mint_perf_tokens.py instead of the Cognito pool, so it must be
+    # impossible anywhere but the compose perf profile: Settings refuses to
+    # build when it is set and ENVIRONMENT is anything but exactly "perf"
+    # (case-sensitive, no surrounding whitespace) -- fail closed at
+    # construction, not at the first request. No deployed stack sets either
+    # (infra/test/perf-env.test.ts pins that). Empty means unset.
+    environment: str = ""
+    perf_jwks_path: str = ""
+
+    @model_validator(mode="after")
+    def _perf_jwks_only_in_perf(self) -> Self:
+        if self.perf_jwks_path and self.environment != "perf":
+            raise ValueError(
+                "PERF_JWKS_PATH is set but ENVIRONMENT is "
+                f"{self.environment!r}; it is only accepted when ENVIRONMENT is exactly 'perf'"
+            )
+        return self

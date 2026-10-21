@@ -1,0 +1,37 @@
+{
+  "attempt": 0,
+  "branch": "agent/PERF-001",
+  "consecutive_failures": 0,
+  "control": "RUN",
+  "distilled": null,
+  "escalation_reason": null,
+  "history": [
+    {
+      "at": "2026-10-20T17:45:35Z",
+      "event": "HAND_STARTED",
+      "from": "DRAFT",
+      "note": "hand run started",
+      "to": "HAND_RUNNING"
+    },
+    {
+      "at": "2026-10-20T21:34:23Z",
+      "event": "HAND_FINISHED",
+      "from": "HAND_RUNNING",
+      "note": "hand run finished, PR #200",
+      "to": "COMPLETE"
+    }
+  ],
+  "last_ci": null,
+  "last_ci_run": null,
+  "last_dispatch": null,
+  "manager_invocations": 0,
+  "max_attempts": 3,
+  "mode": "hand",
+  "pr": 200,
+  "require_red_baseline": true,
+  "schema": 1,
+  "sessions": {},
+  "state": "COMPLETE",
+  "task_id": "PERF-001",
+  "updated_at": "2026-10-20T21:34:23Z"
+}
