@@ -113,7 +113,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: agent/${{ github.event.inputs.task_id }}
           path: task
@@ -124,7 +124,7 @@ jobs:
 
       # The trusted copy every agentctl call below runs from (handoff.md §10,
       # D2b): `main` at the commit this run's workflow file came from.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           path: tools
@@ -422,7 +422,7 @@ jobs:
 
       # A fresh runner and a fresh checkout: nothing the model touched in
       # `run-model` exists here except the patch, which is data.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: agent/${{ github.event.inputs.task_id }}
           path: task
@@ -430,7 +430,7 @@ jobs:
           # The one network operation, the push, authenticates for itself.
           persist-credentials: false
 
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.sha }}
           path: tools
