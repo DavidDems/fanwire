@@ -1133,6 +1133,18 @@ class TestEveryActionIsPinnedToACommit:
         movable = [f"{path.name}:{n}: {r}" for n, r in self._refs(path) if not self._pinned(r)]
         assert not movable, "movable action refs:\n" + "\n".join(movable)
 
+    def test_no_test_names_a_particular_pin(self):
+        """Renovate moves every SHA. A test that names one fails every bump
+        it should pass, as #205 and #207 did (2026-10-21). Check the form,
+        here, and the action's name, never the commit."""
+        hits = [
+            f"{p.name}:{n}"
+            for p in sorted(Path(__file__).parent.glob("test_*.py"))
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if re.search(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", line)
+        ]
+        assert not hits, "tests name a specific action commit:\n" + "\n".join(hits)
+
 
 class TestNoDispatchInputReachesTheShellAsCode:
     """handoff.md §10, D2. `${{ }}` is expanded into the script text before bash
@@ -3354,8 +3366,9 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
     it is not under `gate`, and its own failure is not the PR's."""
 
     JOB = "review"
-    CHECKOUT = "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5"
-    SETUP_PYTHON = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6"
+    # Which actions, not which commits: Renovate moves the SHAs, and
+    # TestEveryActionIsPinnedToACommit checks their form.
+    ACTIONS = {"actions/checkout", "actions/setup-python"}
 
     @pytest.fixture
     def wf(self) -> str:
@@ -3409,7 +3422,10 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
             for ln in wf.splitlines()
             if "uses:" in ln and not ln.lstrip().startswith("#")
         ]
-        assert uses and set(uses) <= {self.CHECKOUT, self.SETUP_PYTHON}
+        assert uses
+        for ref in uses:
+            m = re.fullmatch(r"([\w.-]+/[\w.-]+)@[0-9a-f]{40} # v\d+\S*", ref)
+            assert m and m.group(1) in self.ACTIONS, ref
 
     def test_the_tools_are_mains_and_the_pr_is_beside_them_as_data(self, wf):
         checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
