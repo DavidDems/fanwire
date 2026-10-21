@@ -4,16 +4,12 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  type Location,
-} from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
 import { Button, buttonClass } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import type { ModalFlowState } from "../../routes/modal-flow";
 import styles from "./PostAction.module.css";
 import {
   FEED_KEY_ROOT,
@@ -54,8 +50,8 @@ export interface PostActionProps {
   to?: string;
   /** The count as a link to here (the thread), rather than plain text. */
   countTo?: string;
-  /** Router state for both links: the page to keep under the thread modal. */
-  state?: { background?: Location };
+  /** Router state for both links: the modal flow's next step. */
+  state?: ModalFlowState;
   /** A toggle's state, as `aria-pressed`; omitted for a link. */
   pressed?: boolean;
   onClick?: () => void;
