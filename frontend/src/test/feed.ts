@@ -100,6 +100,7 @@ export function testPostView(overrides: Partial<PostView> = {}): PostView {
     media: [],
     mentioned_game_ids: [],
     reposted_post: null,
+    reposted_post_deleted: false,
     ...overrides,
   };
 }
@@ -153,12 +154,31 @@ export function feedPage(
   return { items, next_before_id: nextBeforeId };
 }
 
-/** `GET /feed/thread/{post_id}`'s body: the root plus its **direct** replies. */
+/**
+ * `GET /feed/thread/{post_id}`'s body: the root plus its **direct** replies.
+ *
+ * A `root` of `null` is a thread whose root the owner deleted (POSTS-004): the
+ * API answers 200 with `root: null`, `root_deleted: true` and the surviving
+ * replies, so the conversation stays readable under a "Post deleted" line.
+ */
 export function threadView(
-  root: PostView,
+  root: PostView | null,
   replies: PostView[] = [],
 ): ThreadView {
-  return { root, replies };
+  return { root, replies, root_deleted: root === null };
+}
+
+/**
+ * The post id a thread fixture answers for: its root's, or, when the root was
+ * deleted (`root: null`), the post its replies reply to. A deleted root with no
+ * replies names no post, so a stub cannot key it and says so.
+ */
+export function threadIdOf(thread: ThreadView): number {
+  const id = thread.root?.id ?? thread.replies[0]?.parent_post_id ?? null;
+  if (id === null) {
+    throw new Error("a thread with a deleted root needs a reply to key it by");
+  }
+  return id;
 }
 
 export interface FeedRequest {
@@ -244,7 +264,9 @@ export interface ThreadStub {
  */
 export function threadStub(threads: ThreadView[]): ThreadStub {
   const requests: number[] = [];
-  const byRootId = new Map(threads.map((thread) => [thread.root.id, thread]));
+  const byRootId = new Map(
+    threads.map((thread) => [threadIdOf(thread), thread]),
+  );
 
   return {
     handler: http.get<{ post_id: string }>(

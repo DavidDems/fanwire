@@ -295,7 +295,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Thread */
+        /**
+         * Get Thread
+         * @description A root its owner deleted answers 200 with `root` null and its
+         *     surviving replies; a root hidden only by a deactivated author is 404,
+         *     as an unknown one is.
+         */
         get: operations["get_thread_feed_thread__post_id__get"];
         put?: never;
         post?: never;
@@ -449,11 +454,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Post */
+        /**
+         * Get Post
+         * @description 404 for an unknown post and for one hidden by app.posts.service's
+         *     visibility rule (deleted, or its author deactivated).
+         */
         get: operations["get_post_posts__post_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete
+         * @description The owner's soft delete (app.posts.service.delete_post): 204, again
+         *     on a repeat; 403 for someone else's post; 409 for a plain repost, which
+         *     DELETE /posts/{original}/repost removes instead.
+         */
+        delete: operations["delete_posts__post_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -486,11 +501,12 @@ export interface paths {
         };
         /**
          * List Replies
-         * @description Direct replies only, oldest first (natural thread reading order).
-         *     Returns an empty list both when the post has no replies and when the
-         *     post doesn't exist at all -- those two cases look the same here, and
-         *     that's fine (a caller who needs to know the post itself exists already
-         *     has GET /posts/{post_id} for that).
+         * @description Direct replies only, oldest first (natural thread reading order),
+         *     under the same visibility rule as the thread (app.posts.service.
+         *     replies_to). Returns an empty list both when the post has no replies
+         *     and when the post doesn't exist at all -- those two cases look the same
+         *     here, and that's fine (a caller who needs to know the post itself
+         *     exists already has GET /posts/{post_id} for that).
          */
         get: operations["list_replies_posts__post_id__replies_get"];
         put?: never;
@@ -1322,7 +1338,11 @@ export interface components {
          *     whether the viewer has a *plain* repost of this post (false for a
          *     guest). `reposted_post` is, on a repost, the view of the post it
          *     reposts, one level deep (its own `reposted_post` is always null); null
-         *     on every other post and when the original's author is soft-deleted.
+         *     on every other post and when the original is hidden.
+         *     `reposted_post_deleted` is true on a repost whose original its owner
+         *     deleted (its `reposted_post` is then null, and the client shows a "Post
+         *     deleted" placeholder); false everywhere else, including a repost whose
+         *     original is hidden only because its author is deactivated.
          */
         PostView: {
             author: components["schemas"]["AuthorView"];
@@ -1356,6 +1376,8 @@ export interface components {
             /** Reposted By Viewer */
             reposted_by_viewer: boolean;
             reposted_post: components["schemas"]["PostView"] | null;
+            /** Reposted Post Deleted */
+            reposted_post_deleted: boolean;
             /** Text */
             text: string | null;
         };
@@ -1722,11 +1744,18 @@ export interface components {
             season: string;
             team: components["schemas"]["TeamOut"];
         };
-        /** ThreadView */
+        /**
+         * ThreadView
+         * @description A post and its direct replies. `root` is null, and `root_deleted`
+         *     true, only when its owner deleted the root (POSTS-004): the surviving
+         *     replies stay readable under a "Post deleted" placeholder.
+         */
         ThreadView: {
             /** Replies */
             replies: components["schemas"]["PostView"][];
-            root: components["schemas"]["PostView"];
+            root: components["schemas"]["PostView"] | null;
+            /** Root Deleted */
+            root_deleted: boolean;
         };
         /**
          * UpdateMeRequest
@@ -2472,6 +2501,56 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PostOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_posts__post_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not the caller's post */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Post not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A plain repost: use DELETE .../repost */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

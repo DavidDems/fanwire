@@ -529,3 +529,50 @@ describe("a signed-out reader (criterion 9)", () => {
     expect(state?.from?.pathname).toBe("/posts/101");
   });
 });
+
+/**
+ * POSTS-004: a thread whose root the owner deleted. `GET /feed/thread/{id}`
+ * answers 200 with `root: null`, `root_deleted: true` and the surviving direct
+ * replies; the modal shows a single "Post deleted" line where the root card
+ * would be (no author, text, media or controls), then the replies as usual.
+ * Replying to a deleted post is refused by the API (404), so no reply box is
+ * offered for it either.
+ */
+describe("a thread whose root was deleted (POSTS-004)", () => {
+  async function openDeleted(as: Visitor) {
+    const feed = feedStub([feedPage([], null)]);
+    const thread = threadServer([threadView(null, [EARLY, LATE])]);
+    renderAppAt("/posts/101", as, [feed.handler, thread.handler, gamesAre()]);
+    const dialog = await threadDialog();
+    await within(dialog).findByText(LATE_TEXT);
+    return dialog;
+  }
+
+  it("shows Post deleted above both surviving replies, oldest first", async () => {
+    const dialog = await openDeleted("anonymous");
+
+    const placeholder = within(dialog).getByText("Post deleted");
+    const early = cardIn(dialog, EARLY_TEXT);
+    const late = cardIn(dialog, LATE_TEXT);
+    expect(precedes(placeholder, early), "the placeholder is first").toBe(true);
+    expect(precedes(early, late), "replies are oldest first").toBe(true);
+    expect(within(dialog).queryByText("Post not found")).toBeNull();
+  });
+
+  it("gives the deleted root no author, text, media or controls", async () => {
+    const dialog = await openDeleted("member");
+
+    expect(within(dialog).queryByText(ROOT_TEXT)).toBeNull();
+    expect(within(dialog).queryByText(/courtside11/)).toBeNull();
+    expect(within(dialog).queryAllByRole("img")).toHaveLength(0);
+    // Every control and timestamp left in the dialog is a reply's.
+    expect(
+      within(dialog).getAllByRole("button", { name: "Like" }),
+    ).toHaveLength(2);
+    expect(within(dialog).getAllByRole("link", { name: "Reply" })).toHaveLength(
+      2,
+    );
+    expect(dialog.querySelectorAll("time")).toHaveLength(2);
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+  });
+});

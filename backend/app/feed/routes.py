@@ -23,7 +23,7 @@ from app.feed.schemas import FeedPage, ThreadView
 from app.feed.strategies import strategy_for
 from app.feed.views import assemble_post_views
 from app.posts.models import Post
-from app.posts.service import replies_to
+from app.posts.service import deleted_post_ids, replies_to
 from app.users.dependencies import get_optional_current_user
 from app.users.models import User
 
@@ -62,24 +62,27 @@ def get_thread(
     viewer: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ) -> ThreadView:
+    """A root its owner deleted answers 200 with `root` null and its
+    surviving replies; a root hidden only by a deactivated author is 404,
+    as an unknown one is."""
     root_post = session.get(Post, post_id)
     if root_post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    root_deleted = post_id in deleted_post_ids(session, [post_id])
 
     replies = replies_to(session, post_id)
     views = assemble_post_views(
         session,
-        [root_post, *replies],
+        replies if root_deleted else [root_post, *replies],
         viewer_id=viewer.id if viewer is not None else None,
     )
     views_by_id = {view.id: view for view in views}
 
     root_view = views_by_id.get(post_id)
-    if root_view is None:
-        # The root existed at session.get() above but assemble_post_views
-        # dropped it (its author was soft-deleted in between) -- same
-        # not-found outcome a caller would see either way.
+    if root_view is None and not root_deleted:
+        # The root exists but assemble_post_views dropped it (its author is
+        # soft-deleted) -- same not-found outcome as an unknown post.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
     reply_views = [views_by_id[reply.id] for reply in replies if reply.id in views_by_id]
-    return ThreadView(root=root_view, replies=reply_views)
+    return ThreadView(root=root_view, root_deleted=root_deleted, replies=reply_views)

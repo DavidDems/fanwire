@@ -11,19 +11,23 @@ under distinct names -- `CreatePostRequest` (schemas, the body) and
 `FacadePostRequest` (facade, what gets passed to `facade.publish`) -- to
 stay unambiguous.
 
-Security: POST /posts, the like/unlike routes, the repost/un-repost
-routes, and the report route all
+Security: POST /posts, DELETE /posts/{post_id}, the like/unlike routes,
+the repost/un-repost routes, and the report route all
 require a verified caller (get_current_user) -- author_id/user_id/
 reporter_id are always resolved server-side, never trusted from the
 client. GET /posts/{post_id} and GET /posts/{post_id}/replies are public
 reads, no auth -- matching GET /events/... and GET /users/{id}'s guest-read
 precedent (reading a post doesn't require being logged in).
+
+A post its owner deleted (POSTS-004) is "Post not found" to every route
+here except DELETE /posts/{post_id} itself, which stays idempotent for the
+owner; 403 for anyone else, since the post is public and there is nothing
+to hide by answering 404.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,6 +40,7 @@ from app.posts.facade import (
 from app.posts.facade import (
     MediaNotFoundError,
     MediaNotProcessedError,
+    PostNotFoundError,
     PublishPostFacade,
 )
 from app.posts.models import Post
@@ -44,18 +49,27 @@ from app.posts.schemas import CreatePostRequest, PostOut
 from app.posts.service import (
     AlreadyLikedError,
     NotLikedError,
-    PostNotFoundError,
+    NotPostOwnerError,
+    PlainRepostDeleteError,
     RepostInUseError,
+    delete_post,
     like_post,
+    replies_to,
     report_post,
     repost_post,
     unlike_post,
     unrepost_post,
+    visible_post,
 )
 from app.users.dependencies import get_current_user
 from app.users.models import User
 
 router = APIRouter(prefix="/posts", tags=["posts"])
+
+
+def _post_not_found() -> HTTPException:
+    """The one 404 body for an unknown or deleted post, on every route."""
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
 
 # Both routes that publish a post answer 429 when the author's rate limit
@@ -95,6 +109,8 @@ def create_post(
         ) from exc
     except PostRejected as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
+    except PostNotFoundError as exc:
+        raise _post_not_found() from exc
     except MediaNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except MediaNotProcessedError as exc:
@@ -110,25 +126,50 @@ def create_post(
 
 @router.get("/{post_id}", response_model=PostOut)
 def get_post(post_id: int, session: Session = Depends(get_session)) -> Post:
-    post = session.get(Post, post_id)
+    """404 for an unknown post and for one hidden by app.posts.service's
+    visibility rule (deleted, or its author deactivated)."""
+    post = visible_post(session, post_id)
     if post is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+        raise _post_not_found()
     return post
+
+
+@router.delete(
+    "/{post_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_403_FORBIDDEN: {"description": "Not the caller's post"},
+        status.HTTP_404_NOT_FOUND: {"description": "Post not found"},
+        status.HTTP_409_CONFLICT: {"description": "A plain repost: use DELETE .../repost"},
+    },
+)
+def delete(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """The owner's soft delete (app.posts.service.delete_post): 204, again
+    on a repeat; 403 for someone else's post; 409 for a plain repost, which
+    DELETE /posts/{original}/repost removes instead."""
+    try:
+        delete_post(session, user_id=current_user.id, post_id=post_id)
+    except PostNotFoundError as exc:
+        raise _post_not_found() from exc
+    except NotPostOwnerError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except PlainRepostDeleteError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get("/{post_id}/replies", response_model=list[PostOut])
 def list_replies(post_id: int, session: Session = Depends(get_session)) -> list[Post]:
-    """Direct replies only, oldest first (natural thread reading order).
-    Returns an empty list both when the post has no replies and when the
-    post doesn't exist at all -- those two cases look the same here, and
-    that's fine (a caller who needs to know the post itself exists already
-    has GET /posts/{post_id} for that)."""
-    stmt = (
-        select(Post)
-        .where(Post.parent_post_id == post_id)
-        .order_by(Post.created_at.asc())
-    )
-    return list(session.scalars(stmt).all())
+    """Direct replies only, oldest first (natural thread reading order),
+    under the same visibility rule as the thread (app.posts.service.
+    replies_to). Returns an empty list both when the post has no replies
+    and when the post doesn't exist at all -- those two cases look the same
+    here, and that's fine (a caller who needs to know the post itself
+    exists already has GET /posts/{post_id} for that)."""
+    return replies_to(session, post_id)
 
 
 @router.post("/{post_id}/like", status_code=status.HTTP_204_NO_CONTENT)
@@ -139,6 +180,8 @@ def like(
 ) -> None:
     try:
         like_post(session, user_id=current_user.id, post_id=post_id)
+    except PostNotFoundError as exc:
+        raise _post_not_found() from exc
     except AlreadyLikedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -151,6 +194,8 @@ def unlike(
 ) -> None:
     try:
         unlike_post(session, user_id=current_user.id, post_id=post_id)
+    except PostNotFoundError as exc:
+        raise _post_not_found() from exc
     except NotLikedError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -177,7 +222,7 @@ def repost(
     try:
         post, created = repost_post(session, facade, user_id=current_user.id, post_id=post_id)
     except PostNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise _post_not_found() from exc
     except RateLimitExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=exc.reason
@@ -221,4 +266,4 @@ def report(
     try:
         report_post(session, event_bus, post_id=post_id, reporter_id=current_user.id)
     except PostNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise _post_not_found() from exc

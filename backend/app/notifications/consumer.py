@@ -37,8 +37,8 @@ source.
 
 A row an event names that does not exist (the post, its parent or original,
 the recipient) raises MissingReferenceError, before anything is committed.
-Posts are never deleted and users only soft-deleted, so that is a malformed
-event, not a race a retry would win: it fails the record, and SQS dead-letters
+A post its owner deletes keeps its row and users are only soft-deleted, so
+that is a malformed event, not a race a retry would win: it fails the record, and SQS dead-letters
 it for a human. The recipient is looked up before the commit for the same
 reason -- after it, failing the record would commit a duplicate row on
 redelivery (see "Email is best-effort" in the module wiki).

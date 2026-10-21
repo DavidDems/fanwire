@@ -3,7 +3,7 @@ import { HttpResponse, http, type RequestHandler } from "msw";
 import type { components } from "../api/schema";
 import type { AppRouter } from "./app-route";
 import { testPost } from "./compose";
-import type { ThreadView } from "./feed";
+import { threadIdOf, type ThreadView } from "./feed";
 
 /**
  * The thread modal's network kit (`FRONTEND-010`): a `GET /feed/thread/{id}`
@@ -45,7 +45,7 @@ export interface ThreadServer {
   handler: RequestHandler;
   /** The `post_id` of every `GET /feed/thread/{post_id}`, in order. */
   readonly requests: number[];
-  /** Add or replace the thread answered for `thread.root.id`. */
+  /** Add or replace the thread answered for its root's id (`threadIdOf`). */
   set(thread: ThreadView): void;
   /** Hold every read open until the returned function is called. */
   hold(): () => void;
@@ -62,7 +62,9 @@ export interface ThreadServer {
  */
 export function threadServer(threads: ThreadView[] = []): ThreadServer {
   const requests: number[] = [];
-  const byRootId = new Map(threads.map((thread) => [thread.root.id, thread]));
+  const byRootId = new Map(
+    threads.map((thread) => [threadIdOf(thread), thread]),
+  );
   const held = gate();
   let failing = false;
 
@@ -88,7 +90,7 @@ export function threadServer(threads: ThreadView[] = []): ThreadServer {
     ),
     requests,
     set(thread: ThreadView): void {
-      byRootId.set(thread.root.id, thread);
+      byRootId.set(threadIdOf(thread), thread);
     },
     hold: held.hold,
     fail(): void {

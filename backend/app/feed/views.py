@@ -16,7 +16,9 @@ A repost's `reposted_post` (POSTS-001) is built in the same pass: the
 page's reposted originals are fetched in one query, added to the set every
 batched read runs over, and their views built alongside the page's own --
 one level deep, never recursing, so a page of 20 costs the same number of
-statements as a page of 2.
+statements as a page of 2. Which of those originals their owner deleted
+(POSTS-004's `reposted_post_deleted`) is one more batched read,
+app.posts.service.deleted_post_ids, in the same pass.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.media.service import processed_media_for_posts
 from app.posts.models import Post
 from app.posts.service import (
+    deleted_post_ids,
     like_counts,
     liked_post_ids,
     mentioned_game_ids_by_post,
@@ -65,7 +68,11 @@ class PostView(BaseModel):
     whether the viewer has a *plain* repost of this post (false for a
     guest). `reposted_post` is, on a repost, the view of the post it
     reposts, one level deep (its own `reposted_post` is always null); null
-    on every other post and when the original's author is soft-deleted."""
+    on every other post and when the original is hidden.
+    `reposted_post_deleted` is true on a repost whose original its owner
+    deleted (its `reposted_post` is then null, and the client shows a "Post
+    deleted" placeholder); false everywhere else, including a repost whose
+    original is hidden only because its author is deactivated."""
 
     id: int
     text: str | None
@@ -83,6 +90,7 @@ class PostView(BaseModel):
     media: list[MediaItemView]
     mentioned_game_ids: list[int]
     reposted_post: PostView | None
+    reposted_post_deleted: bool
 
 
 def assemble_post_views(
@@ -107,6 +115,7 @@ def assemble_post_views(
     # The page's own rows win over a refetched copy of the same id.
     every_post: dict[int, Post] = {**posts_by_ids(session, original_ids)}
     every_post.update({post.id: post for post in posts})
+    deleted_originals = deleted_post_ids(session, original_ids)
 
     post_ids = list(every_post)
     author_ids = {post.author_id for post in every_post.values()}
@@ -156,6 +165,7 @@ def assemble_post_views(
             ],
             mentioned_game_ids=mentions_by_post.get(post.id, []),
             reposted_post=None,
+            reposted_post_deleted=False,
         )
 
     views: list[PostView] = []
@@ -164,8 +174,9 @@ def assemble_post_views(
         if view is None:
             continue
         if post.is_repost and post.original_post_id is not None:
-            inner = flat.get(post.original_post_id)
-            if inner is not None:
+            if post.original_post_id in deleted_originals:
+                view = view.model_copy(update={"reposted_post_deleted": True})
+            elif (inner := flat.get(post.original_post_id)) is not None:
                 view = view.model_copy(update={"reposted_post": inner})
         views.append(view)
     return views

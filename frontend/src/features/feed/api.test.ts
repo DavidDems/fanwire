@@ -162,7 +162,7 @@ describe("mapCachedPosts reaches the post inside a repost", () => {
       likeOriginal,
     ) as ReturnType<typeof threadView>;
 
-    expect(value.root.reposted_post?.like_count).toBe(6);
+    expect(value.root?.reposted_post?.like_count).toBe(6);
     expect(value.replies[0].reposted_post?.like_count).toBe(6);
     expect(value.replies[1]).toEqual(OTHER);
   });
@@ -216,5 +216,33 @@ describe("cacheHolds finds a post inside a repost", () => {
 
     expect(cacheHolds(value, PLAIN.id)).toBe(true);
     expect(cacheHolds(undefined, PLAIN.id)).toBe(false);
+  });
+});
+
+describe("the cache helpers accept a thread whose root was deleted (POSTS-004)", () => {
+  // `GET /feed/thread/{id}` answers `root: null, root_deleted: true` for a
+  // deleted root, with the surviving replies; a cached copy of that thread
+  // holds no root to walk.
+  const DELETED_ROOT = threadView(null, [
+    testPostView({ id: 411, is_reply: true, parent_post_id: 410 }),
+    testPlainRepost(ORIGINAL, { id: 412, is_reply: true, parent_post_id: 410 }),
+  ]);
+
+  it("cacheHolds finds a reply, or a reply's original, and nothing else", () => {
+    expect(cacheHolds(DELETED_ROOT, 411)).toBe(true);
+    expect(cacheHolds(DELETED_ROOT, ORIGINAL.id)).toBe(true);
+    expect(cacheHolds(DELETED_ROOT, 410)).toBe(false);
+    expect(cacheHolds(DELETED_ROOT, OTHER.id)).toBe(false);
+  });
+
+  it("mapCachedPosts keeps the root null and updates the replies", () => {
+    const value = mapCachedPosts(DELETED_ROOT, likeOriginal) as ReturnType<
+      typeof threadView
+    >;
+
+    expect(value.root).toBeNull();
+    expect(value.root_deleted).toBe(true);
+    expect(value.replies[0]).toEqual(DELETED_ROOT.replies[0]);
+    expect(value.replies[1].reposted_post?.like_count).toBe(6);
   });
 });
