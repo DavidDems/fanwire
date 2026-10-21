@@ -221,6 +221,7 @@ export function testPost(overrides: Partial<PostOut> = {}): PostOut {
     original_post_id: null,
     reported: false,
     created_at: "2026-09-28T00:00:00Z",
+    data_link: null,
     ...overrides,
   };
 }

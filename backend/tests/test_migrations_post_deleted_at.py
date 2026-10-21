@@ -19,6 +19,7 @@ from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _PARENT_REVISION = "a8c4e1f7b3d9"  # add_posts_author_created_at_index, head before POSTS-004
+_REVISION = "b2d6f9a3c8e5"  # add_posts_deleted_at: POSTS-005's revision adds columns on top
 
 
 @pytest.fixture()
@@ -96,7 +97,9 @@ def test_upgrade_adds_deleted_at_and_nothing_else(alembic_config, engine):
     before = set(_posts_columns(engine))
     objects_before = _posts_indexes_and_constraints(engine)
 
-    command.upgrade(alembic_config, "head")
+    # This revision by name, not "head": a later revision (POSTS-005's data
+    # links) adds columns and constraints of its own.
+    command.upgrade(alembic_config, _REVISION)
 
     assert set(_posts_columns(engine)) - before == {"deleted_at"}
     assert before - set(_posts_columns(engine)) == set()
