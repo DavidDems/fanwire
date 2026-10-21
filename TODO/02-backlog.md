@@ -140,7 +140,6 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components.md` §5, `FRONTEND-007` | `src/components/` |
 | **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, `MentionAutocomplete`, search), sharing one cache key | `hand` | — | `FRONTEND-007` | Move into `api/`; needs all four features in scope |
 | **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `hand` | — | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
-| **react-router v6 → v7**: 6.30.6 has GHSA-337j-9hxr-rhxg and GHSA-wrjc-x8rr-h8h6 (both moderate), fixed only in 7.18.0 | `hand` | — | the first OpenSSF Scorecard run (2026-10-19) | Exposure judged low by the Director: an SPA with no SSR hydration and no URL-controlled navigation target. A major migration, so its own frontend unit (`react-router-dom` and every route in `src/routes/**`); see the v7 upgrade guide's future flags first. Until then `npm-audit` gates `frontend/` at `high` and these two sit below it |
 | **A username character rule** (look-alike usernames) | `director` | — | `typography.md` §1 | A product decision first. **Director** |
 
 ## Features in `business-rules.md` that are not built
