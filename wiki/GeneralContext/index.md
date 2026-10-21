@@ -78,6 +78,7 @@ Live:
 
 - **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).
 - **`04-cheap-automations.md`**: the spec drift check, CI failure summary, criteria coverage check and wiki update proposal on Haiku 5.5 or `jev` (`TODO/02` item 14). Its prerequisite, D4–D7, is met.
+- **`19-dependency-upkeep.md`** (2026-10-21): Renovate's first PRs. It covers the `claude CLI` flag check and the `npm non-major` stack diff, both due Monday 2026-10-26, and the red Node 24 runtime PR #202 (multipart uploads under MSW). It continues `09`'s supply-chain thread (handoff §10.6).
 - **`18-posts-lifecycle-and-data-links.md`** (2026-10-20): post soft delete, account deactivation and recovery, sports-data attachments on posts, and the frontend for them (previews, Back vs X modal navigation, complete-card reveal). Ten `hand` units; `TODO/02-backlog.md` has the order.
 - **`10`–`16`, the improvement roadmap (2026-10-19)**, in two tracks. Order and the reason for it: `TODO/02-backlog.md` "Improvement roadmap".
   - App track (hand-run units): `16-performance-tests.md` (k6, locally, P95/P99). Production hardening (`08`, then `17`) is done.
