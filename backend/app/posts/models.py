@@ -48,9 +48,11 @@ from app.users.models import User  # noqa: F401 — real FK target for author_id
 
 class Post(Base):
     """Original posts, replies, and reposts as one table, distinguished by
-    flags — not three tables or a subclass per kind. Immutable once
-    published: no `updated_at`/`deleted_at`, no "edit a post" business rule
-    exists. See wiki/CodeContext/Modules/0x03-posts.md."""
+    flags — not three tables or a subclass per kind. Never edited (no
+    `updated_at`, no "edit a post" business rule), but its owner may
+    soft-delete it (POSTS-004): `deleted_at` is set once, by
+    app.posts.service.delete_post, and every read leaves the post out from
+    then on. Nothing cascades. See wiki/CodeContext/Modules/0x03-posts.md."""
 
     __tablename__ = "posts"
 
@@ -78,6 +80,9 @@ class Post(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # The owner's soft delete (POSTS-004); null for a live post. Read only
+    # through app.posts.service's visibility predicate and deleted_post_ids.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Full-text search index for search/'s post search
     # (wiki/CodeContext/Modules/0x07-search.md) -- search/ owns no tables,
     # so this column (and its GIN index below) lives here, the schema's

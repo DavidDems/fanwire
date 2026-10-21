@@ -29,6 +29,12 @@ POST_CREATED = "PostCreated"
 POST_MENTIONED = "PostMentionedEvent"
 
 
+class PostNotFoundError(ValueError):
+    """Raised when a post_id doesn't resolve to an existing, undeleted Post:
+    here, for a reply's parent or a quote's original its owner deleted
+    (app.posts.service raises it for the other interactions)."""
+
+
 class MediaNotFoundError(Exception):
     """Raised when a requested media_id doesn't resolve to an existing
     Media row."""
@@ -52,8 +58,8 @@ class CreatePostRequest:
 
 class PublishPostFacade:
     """The single entry point for creating a post (wiki/CodeContext/
-    Modules/0x00-architecture.md Connection rule). Sequences: moderation
-    chain -> confirm every attached Media is Processed -> persist Post ->
+    Modules/0x00-architecture.md Connection rule). Sequences: refuse a
+    deleted parent/original -> moderation chain -> confirm every attached Media is Processed -> persist Post ->
     attach Media (set Media.post_id) -> resolve #GameId mentions -> commit
     -> fan-out on PostEventBus. This is the ONE place posts/ touches
     media/'s Media rows and events/'s Game rows directly -- everywhere else
@@ -70,6 +76,15 @@ class PublishPostFacade:
         self._event_bus = event_bus
 
     def publish(self, request: CreatePostRequest) -> Post:
+        # 0. A deleted parent/original takes no new reply or repost (POSTS-004).
+        # An unknown id is left to the FK, an IntegrityError, as before.
+        for referenced_id in (request.parent_post_id, request.original_post_id):
+            if referenced_id is None:
+                continue
+            referenced = self._session.get(Post, referenced_id)
+            if referenced is not None and referenced.deleted_at is not None:
+                raise PostNotFoundError(f"No Post with id={referenced_id!r}")
+
         # 1. Moderation chain -- raises PostRejected to halt; propagates
         # uncaught, a future route decides how to turn it into an HTTP
         # response.
@@ -118,9 +133,7 @@ class PublishPostFacade:
         self._session.commit()
 
         # 7. Fan-out.
-        self._event_bus.publish(
-            POST_CREATED, {"post_id": post.id, "author_id": post.author_id}
-        )
+        self._event_bus.publish(POST_CREATED, {"post_id": post.id, "author_id": post.author_id})
         if resolved:
             self._event_bus.publish(
                 POST_MENTIONED,

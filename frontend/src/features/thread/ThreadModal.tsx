@@ -125,6 +125,16 @@ function Thread({ postId, replying }: ThreadProps) {
   if (thread.data === null) return <NotFound />;
 
   const { root } = thread.data;
+  if (root === null) {
+    // The owner deleted the root (POSTS-004): its surviving replies stay
+    // readable under a plain line, and there is nothing left to reply to.
+    return (
+      <div className={styles.thread}>
+        <p>Post deleted</p>
+        <Replies replies={thread.data.replies} />
+      </div>
+    );
+  }
 
   function refreshAfterReply(): void {
     // The exact keys that hold the parent, not the whole root prefix: every

@@ -78,7 +78,8 @@ export async function fetchFeedPage(
  *
  * A 404 is `null`, not a failure: the post is unknown, or its author was
  * removed, and that is an answer the thread modal shows ("Post not found")
- * rather than an error it offers to retry.
+ * rather than an error it offers to retry. A root its owner deleted is a 200
+ * with `root: null` and `root_deleted: true`, its surviving replies kept.
  */
 export async function fetchThread(postId: number): Promise<ThreadView | null> {
   const { data, response } = await apiClient.GET("/feed/thread/{post_id}", {
@@ -165,7 +166,7 @@ export function cacheHolds(
     );
   }
   return (
-    holds(value.root, postId) ||
+    (value.root !== null && holds(value.root, postId)) ||
     value.replies.some((post) => holds(post, postId))
   );
 }
@@ -198,7 +199,11 @@ export function mapCachedPosts(
       })),
     };
   }
-  return { ...value, root: deep(value.root), replies: value.replies.map(deep) };
+  return {
+    ...value,
+    root: value.root === null ? null : deep(value.root),
+    replies: value.replies.map(deep),
+  };
 }
 
 /**

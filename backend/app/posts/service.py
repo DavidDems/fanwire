@@ -29,27 +29,42 @@ Processed, PublishPostFacade refuses anything else), never by querying
 media/'s table. A new repost publishes through PublishPostFacade (the one
 publish path); un-reposting is the first delete of a post, limited to the
 caller's own plain reposts (wiki/CodeContext/Modules/0x03-posts.md).
+
+delete_post (POSTS-004) is an owner's soft delete: it sets Post.deleted_at
+and nothing else, and _visible() -- not deleted, author not deactivated --
+is the one visibility rule every read here applies. The repost toggle's own
+lookups (_repost_target, _plain_reposts_by) deliberately read rows
+unfiltered, so un-reposting a deleted original still works. No new
+interaction (like, unlike, repost, report, reply, quote) is accepted on a
+deleted post. deleted_post_ids is how feed/ and notifications/ learn which
+posts are deleted, never by reading the column themselves.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
+from datetime import UTC, datetime
 
-from sqlalchemy import ColumnElement, delete, func, or_, select
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.eventbus import PostEventBus
 from app.media.service import processed_media_for_posts
-from app.posts.facade import CreatePostRequest, PublishPostFacade
+from app.posts.facade import CreatePostRequest, PostNotFoundError, PublishPostFacade
 from app.posts.models import EventMention, Post, PostLike, Report
 from app.users.models import User
 
 POST_REPORTED = "PostReported"
 
 
-class PostNotFoundError(ValueError):
-    """Raised by report_post when post_id doesn't resolve to an existing
-    Post."""
+class NotPostOwnerError(ValueError):
+    """Raised by delete_post when the caller is not the post's author."""
+
+
+class PlainRepostDeleteError(ValueError):
+    """Raised by delete_post for a plain repost: that is removed by
+    unrepost_post (DELETE /posts/{original}/repost), a hard delete, never
+    soft-deleted."""
 
 
 class AlreadyLikedError(ValueError):
@@ -79,10 +94,8 @@ def report_post(
     only the very first one for a post, since each new report is itself
     meaningful information even though the Post.reported flag only flips
     once. Raises PostNotFoundError if post_id doesn't resolve to an
-    existing Post."""
-    post = session.get(Post, post_id)
-    if post is None:
-        raise PostNotFoundError(f"No Post with id={post_id!r}")
+    existing, undeleted Post."""
+    post = _undeleted_post(session, post_id)
 
     existing = session.scalar(
         select(Report).where(Report.post_id == post_id, Report.reporter_id == reporter_id)
@@ -103,7 +116,9 @@ def report_post(
 def like_post(session: Session, *, user_id: int, post_id: int) -> PostLike:
     """Same fail-fast-on-duplicate shape as app.users.service.follow():
     raises AlreadyLikedError (checked first, for a clearer error than a raw
-    IntegrityError) if (user_id, post_id) already exists."""
+    IntegrityError) if (user_id, post_id) already exists. Raises
+    PostNotFoundError, first, for an unknown or deleted post."""
+    _undeleted_post(session, post_id)
     existing = session.scalar(
         select(PostLike).where(PostLike.user_id == user_id, PostLike.post_id == post_id)
     )
@@ -119,7 +134,9 @@ def like_post(session: Session, *, user_id: int, post_id: int) -> PostLike:
 def unlike_post(session: Session, *, user_id: int, post_id: int) -> None:
     """Same shape as app.users.service.unfollow(): raises NotLikedError if
     the pair doesn't exist, else hard-deletes the PostLike row (no
-    soft-delete on likes, same as Follow)."""
+    soft-delete on likes, same as Follow). Raises PostNotFoundError, first,
+    for an unknown or deleted post: a deleted post's likes stay as they were."""
+    _undeleted_post(session, post_id)
     row = session.scalar(
         select(PostLike).where(PostLike.user_id == user_id, PostLike.post_id == post_id)
     )
@@ -144,13 +161,8 @@ def query_feed_posts(
     duplicates (the mention condition is expressed as a `Post.id.in_(...)`
     subquery, not a join, specifically to avoid row multiplication from a
     post with several EventMention rows). Both None means no filter at all
-    (the guest feed: all posts). Posts whose author is soft-deleted are
-    excluded."""
-    stmt = (
-        select(Post)
-        .join(User, User.id == Post.author_id)
-        .where(Post.is_reply.is_(False), User.deleted_at.is_(None))
-    )
+    (the guest feed: all posts). Only _visible() posts."""
+    stmt = select(Post).where(Post.is_reply.is_(False), _visible())
 
     conditions = []
     if author_ids is not None:
@@ -223,13 +235,12 @@ def search_posts(session: Session, query: str, *, limit: int, offset: int) -> li
     below passes `query` as a bind parameter, never interpolated into SQL
     text, and websearch_to_tsquery itself tolerates arbitrary user input
     (quotes, operators, etc.) without raising. Replies are included (no
-    is_reply filter); posts whose author is soft-deleted are excluded.
-    Ordered by rank desc, then newest first."""
+    is_reply filter); only _visible() posts. Ordered by rank desc, then
+    newest first."""
     tsquery = func.websearch_to_tsquery("english", query)
     stmt = (
         select(Post)
-        .join(User, User.id == Post.author_id)
-        .where(User.deleted_at.is_(None))
+        .where(_visible())
         .where(Post.search_vector.op("@@")(tsquery))
         .order_by(func.ts_rank(Post.search_vector, tsquery).desc(), Post.created_at.desc())
         .limit(limit)
@@ -240,25 +251,56 @@ def search_posts(session: Session, query: str, *, limit: int, offset: int) -> li
 
 def replies_to(session: Session, post_id: int) -> list[Post]:
     """Direct replies only, oldest first (natural thread reading order),
-    excluding soft-deleted authors -- same author-visibility rule as
-    query_feed_posts. Not wired into GET /posts/{id}/replies: that route's
-    existing behaviour doesn't exclude soft-deleted authors, so reusing this
-    here would be a behaviour change, not a pure refactor (see this unit's
-    task brief)."""
+    only _visible() ones -- the thread's and GET /posts/{id}/replies' read
+    alike."""
     stmt = (
         select(Post)
-        .join(User, User.id == Post.author_id)
-        .where(Post.parent_post_id == post_id, User.deleted_at.is_(None))
+        .where(Post.parent_post_id == post_id, _visible())
         .order_by(Post.created_at.asc())
     )
     return list(session.scalars(stmt).all())
 
 
 def _live_author() -> ColumnElement[bool]:
-    """`Post.author_id` names a user who is not soft-deleted -- the same
-    visibility rule as replies_to, as an `IN (subquery)` so the GROUP BY
-    counts below need no join."""
+    """`Post.author_id` names a user who is not soft-deleted, as an
+    `IN (subquery)` so the GROUP BY counts below need no join."""
     return Post.author_id.in_(select(User.id).where(User.deleted_at.is_(None)))
+
+
+def _visible() -> ColumnElement[bool]:
+    """The one visibility rule every read applies: the owner has not
+    deleted the post and its author is not deactivated. Recovering an
+    account lifts only the second half, so a deleted post stays gone."""
+    return and_(Post.deleted_at.is_(None), _live_author())
+
+
+def visible_post(session: Session, post_id: int) -> Post | None:
+    """One post by id under _visible() -- GET /posts/{id}'s read."""
+    return session.scalar(select(Post).where(Post.id == post_id, _visible()))
+
+
+def _undeleted_post(session: Session, post_id: int) -> Post:
+    """The post a new interaction names; PostNotFoundError for an unknown
+    or deleted one. Only the owner's delete counts here: interacting with a
+    deactivated author's post is unchanged."""
+    post = session.get(Post, post_id)
+    if post is None or post.deleted_at is not None:
+        raise PostNotFoundError(f"No Post with id={post_id!r}")
+    return post
+
+
+def deleted_post_ids(session: Session, post_ids: Collection[int]) -> set[int]:
+    """Which of `post_ids` their owner has deleted, one query -- for feed/'s
+    `reposted_post_deleted` and notifications/' list. An unknown id is
+    simply absent."""
+    if not post_ids:
+        return set()
+
+    return set(
+        session.scalars(
+            select(Post.id).where(Post.id.in_(post_ids), Post.deleted_at.is_not(None))
+        ).all()
+    )
 
 
 def _has_no_text() -> ColumnElement[bool]:
@@ -266,15 +308,14 @@ def _has_no_text() -> ColumnElement[bool]:
 
 
 def reply_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
-    """Direct replies per post, excluding replies whose author is
-    soft-deleted, so the count matches the thread replies_to shows. Absent
-    means zero, as like_counts."""
+    """Direct replies per post, only _visible() ones, so the count matches
+    the thread replies_to shows. Absent means zero, as like_counts."""
     if not post_ids:
         return {}
 
     rows = session.execute(
         select(Post.parent_post_id, func.count())
-        .where(Post.parent_post_id.in_(post_ids), Post.is_reply.is_(True), _live_author())
+        .where(Post.parent_post_id.in_(post_ids), Post.is_reply.is_(True), _visible())
         .group_by(Post.parent_post_id)
     ).all()
     # The IN filter already excludes NULL; the guard narrows the nullable FK for mypy.
@@ -282,14 +323,14 @@ def reply_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
 
 
 def repost_counts(session: Session, post_ids: Collection[int]) -> dict[int, int]:
-    """Reposts per post, plain and quote alike, excluding reposts whose
-    author is soft-deleted. Absent means zero, as like_counts."""
+    """Reposts per post, plain and quote alike, only _visible() ones.
+    Absent means zero, as like_counts."""
     if not post_ids:
         return {}
 
     rows = session.execute(
         select(Post.original_post_id, func.count())
-        .where(Post.original_post_id.in_(post_ids), Post.is_repost.is_(True), _live_author())
+        .where(Post.original_post_id.in_(post_ids), Post.is_repost.is_(True), _visible())
         .group_by(Post.original_post_id)
     ).all()
     # The IN filter already excludes NULL; the guard narrows the nullable FK for mypy.
@@ -308,7 +349,8 @@ def _without_media(session: Session, posts: list[Post]) -> list[Post]:
 
 def _plain_reposts_by(session: Session, user_id: int, original_id: int) -> list[Post]:
     """`user_id`'s plain reposts of `original_id`, oldest first. /compose
-    never prevented duplicates, so there can be more than one."""
+    never prevented duplicates, so there can be more than one. Not under
+    _visible(): un-reposting a deleted original must still find them."""
     candidates = session.scalars(
         select(Post)
         .where(
@@ -345,13 +387,13 @@ def reposted_post_ids(session: Session, user_id: int, post_ids: Collection[int])
 
 
 def posts_by_ids(session: Session, post_ids: Collection[int]) -> dict[int, Post]:
-    """Batch Post lookup keyed by id, posts whose author is soft-deleted
-    left out -- for feed/'s `reposted_post`, one query for a page's
-    originals."""
+    """Batch Post lookup keyed by id, only _visible() posts -- for feed/'s
+    `reposted_post`, one query for a page's originals (deleted_post_ids
+    tells a deleted original from one hidden by its author)."""
     if not post_ids:
         return {}
 
-    rows = session.scalars(select(Post).where(Post.id.in_(post_ids), _live_author())).all()
+    rows = session.scalars(select(Post).where(Post.id.in_(post_ids), _visible())).all()
     return {post.id: post for post in rows}
 
 
@@ -363,9 +405,13 @@ def _repost_target(session: Session, post_id: int) -> Post | None:
     """What a repost of `post_id` points at: the post itself, or, for a
     plain repost, what it reposts -- so a new repost never points at a plain
     repost. Loops because rows made through /compose may already chain
-    plain reposts; an original always has a smaller id, so it ends."""
+    plain reposts; an original always has a smaller id, so it ends. Reads
+    rows whether deleted or not, so unrepost_post resolves a deleted
+    original exactly as repost_post resolved it while it was live."""
     post = session.get(Post, post_id)
-    while post is not None and post.original_post_id is not None and _is_plain_repost(session, post):
+    while (
+        post is not None and post.original_post_id is not None and _is_plain_repost(session, post)
+    ):
         post = session.get(Post, post.original_post_id)
     return post
 
@@ -388,11 +434,12 @@ def repost_post(
     """Idempotent plain repost: returns (the repost, whether it was created
     by this call). Reposting a plain repost reposts its original; a quote
     repost is reposted as itself. Raises PostNotFoundError for an unknown
-    post. A new repost goes through PublishPostFacade.publish, so
-    moderation, the commit and PostCreated behave exactly as for
-    POST /posts; the facade's own exceptions propagate unchanged."""
+    post, or when what it resolves to is deleted. A new repost goes through
+    PublishPostFacade.publish, so moderation, the commit and PostCreated
+    behave exactly as for POST /posts; the facade's own exceptions
+    propagate unchanged."""
     target = _repost_target(session, post_id)
-    if target is None:
+    if target is None or target.deleted_at is not None:
         raise PostNotFoundError(f"No Post with id={post_id!r}")
     target_id = target.id
 
@@ -448,3 +495,25 @@ def unrepost_post(session: Session, *, user_id: int, post_id: int) -> None:
     session.execute(delete(EventMention).where(EventMention.post_id.in_(ids)))
     session.execute(delete(Post).where(Post.id.in_(ids)))
     session.commit()
+
+
+def delete_post(session: Session, *, user_id: int, post_id: int) -> None:
+    """The owner's soft delete (POSTS-004): sets Post.deleted_at and nothing
+    else -- likes, reports, mentions, media, replies and reposts all stay.
+    Idempotent: a repeat keeps the first timestamp. Raises
+    PostNotFoundError for an unknown post, NotPostOwnerError when `user_id`
+    is not its author, and PlainRepostDeleteError for a plain repost (that
+    is unrepost_post's hard delete)."""
+    post = session.get(Post, post_id)
+    if post is None:
+        raise PostNotFoundError(f"No Post with id={post_id!r}")
+    if post.author_id != user_id:
+        raise NotPostOwnerError(f"User {user_id!r} is not the author of post {post_id!r}")
+    if _is_plain_repost(session, post):
+        raise PlainRepostDeleteError(
+            "A plain repost is removed with DELETE /posts/{original}/repost, not deleted"
+        )
+
+    if post.deleted_at is None:
+        post.deleted_at = datetime.now(UTC)
+        session.commit()

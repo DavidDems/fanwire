@@ -1857,7 +1857,7 @@
         "type": "object"
       },
       "PostView": {
-        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original's author is soft-deleted.",
+        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original is hidden.\n`reposted_post_deleted` is true on a repost whose original its owner\ndeleted (its `reposted_post` is then null, and the client shows a \"Post\ndeleted\" placeholder); false everywhere else, including a repost whose\noriginal is hidden only because its author is deactivated.",
         "properties": {
           "author": {
             "$ref": "#/components/schemas/AuthorView"
@@ -1945,6 +1945,10 @@
               }
             ]
           },
+          "reposted_post_deleted": {
+            "title": "Reposted Post Deleted",
+            "type": "boolean"
+          },
           "text": {
             "anyOf": [
               {
@@ -1973,7 +1977,8 @@
           "reposted_by_viewer",
           "media",
           "mentioned_game_ids",
-          "reposted_post"
+          "reposted_post",
+          "reposted_post_deleted"
         ],
         "title": "PostView",
         "type": "object"
@@ -3019,6 +3024,7 @@
         "type": "object"
       },
       "ThreadView": {
+        "description": "A post and its direct replies. `root` is null, and `root_deleted`\ntrue, only when its owner deleted the root (POSTS-004): the surviving\nreplies stay readable under a \"Post deleted\" placeholder.",
         "properties": {
           "replies": {
             "items": {
@@ -3028,11 +3034,23 @@
             "type": "array"
           },
           "root": {
-            "$ref": "#/components/schemas/PostView"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "root_deleted": {
+            "title": "Root Deleted",
+            "type": "boolean"
           }
         },
         "required": [
           "root",
+          "root_deleted",
           "replies"
         ],
         "title": "ThreadView",
@@ -3966,6 +3984,7 @@
     },
     "/feed/thread/{post_id}": {
       "get": {
+        "description": "A root its owner deleted answers 200 with `root` null and its\nsurviving replies; a root hidden only by a deactivated author is 404,\nas an unknown one is.",
         "operationId": "get_thread_feed_thread__post_id__get",
         "parameters": [
           {
@@ -4298,7 +4317,51 @@
       }
     },
     "/posts/{post_id}": {
+      "delete": {
+        "description": "The owner's soft delete (app.posts.service.delete_post): 204, again\non a repeat; 403 for someone else's post; 409 for a plain repost, which\nDELETE /posts/{original}/repost removes instead.",
+        "operationId": "delete_posts__post_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "Not the caller's post"
+          },
+          "404": {
+            "description": "Post not found"
+          },
+          "409": {
+            "description": "A plain repost: use DELETE .../repost"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete",
+        "tags": [
+          "posts"
+        ]
+      },
       "get": {
+        "description": "404 for an unknown post and for one hidden by app.posts.service's\nvisibility rule (deleted, or its author deactivated).",
         "operationId": "get_post_posts__post_id__get",
         "parameters": [
           {
@@ -4409,7 +4472,7 @@
     },
     "/posts/{post_id}/replies": {
       "get": {
-        "description": "Direct replies only, oldest first (natural thread reading order).\nReturns an empty list both when the post has no replies and when the\npost doesn't exist at all -- those two cases look the same here, and\nthat's fine (a caller who needs to know the post itself exists already\nhas GET /posts/{post_id} for that).",
+        "description": "Direct replies only, oldest first (natural thread reading order),\nunder the same visibility rule as the thread (app.posts.service.\nreplies_to). Returns an empty list both when the post has no replies\nand when the post doesn't exist at all -- those two cases look the same\nhere, and that's fine (a caller who needs to know the post itself\nexists already has GET /posts/{post_id} for that).",
         "operationId": "list_replies_posts__post_id__replies_get",
         "parameters": [
           {

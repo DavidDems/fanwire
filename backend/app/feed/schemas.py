@@ -17,5 +17,10 @@ class FeedPage(BaseModel):
 
 
 class ThreadView(BaseModel):
-    root: PostView
+    """A post and its direct replies. `root` is null, and `root_deleted`
+    true, only when its owner deleted the root (POSTS-004): the surviving
+    replies stay readable under a "Post deleted" placeholder."""
+
+    root: PostView | None
+    root_deleted: bool
     replies: list[PostView]
