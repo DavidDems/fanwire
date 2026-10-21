@@ -5,6 +5,8 @@ import {
   type RouteObject,
 } from "react-router-dom";
 
+import { ModalFlowScope, useFlowBackground } from "./modal-flow";
+
 export interface BackgroundRoutesProps {
   /** The app's pages: what fills `main`. */
   pages: RouteObject[];
@@ -19,10 +21,12 @@ const FEED: Partial<Location> = { pathname: "/" };
  * The page in `main`, and a modal over it when the address is a modal's —
  * react-router's background-location recipe (`FRONTEND-010`).
  *
- * A link into the thread modal carries `state: { background: location }`, the
- * page it was on. While an overlay route matches, the pages are matched
- * against that background (or the feed, for a direct load) instead of the real
- * address, so the page underneath is the one the reader left.
+ * A link into the thread modal carries the page it was on as the flow's
+ * background (`modal-flow.tsx`, the one reader of that state). While an
+ * overlay route matches, the pages are matched against that background (or the
+ * feed, for a direct load) instead of the real address, so the page underneath
+ * is the one the reader left. The overlays render inside `ModalFlowScope`, so a
+ * link in the modal continues the flow rather than starting one over it.
  *
  * **The page is never re-mounted for it.** The pages are always rendered here,
  * at this one position, and always against an explicit location — the real
@@ -38,15 +42,14 @@ const FEED: Partial<Location> = { pathname: "/" };
 export function BackgroundRoutes({ pages, overlays }: BackgroundRoutesProps) {
   const location = useLocation();
   const overlay = useRoutes(overlays);
-  const background = (location.state as { background?: Location } | null)
-    ?.background;
+  const background = useFlowBackground();
   const underneath = overlay === null ? location : (background ?? FEED);
   const page = useRoutes(pages, underneath);
 
   return (
     <>
       {page}
-      {overlay}
+      <ModalFlowScope>{overlay}</ModalFlowScope>
     </>
   );
 }

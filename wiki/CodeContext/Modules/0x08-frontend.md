@@ -649,7 +649,8 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
 the reader was on. Public: a thread is a read path; replying needs a session.
 
 - **The background-location pattern, without a re-mount.** Every link into a
-  thread carries `state: { background: location }`. `routes.tsx` keeps the
+  thread carries the page it left as `background` (now inside the flow state,
+  below). `routes.tsx` keeps the
   table as data in two lists, `pages` and `overlays`, under one pathless
   `AppLayout` route whose only child is a splat rendering
   `BackgroundRoutes`. That component always renders the pages with
@@ -669,10 +670,32 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   and no wrapping link. Reply goes to `/posts/<id>?reply=1`, and the reply
   count is a link to the thread too. A link from inside the modal carries the
   **original** background, so the page underneath never becomes a thread.
-- **Closing.** Close, Escape, a backdrop click and Back: `navigate(-1)` with a
-  background, `navigate("/", { replace: true })` without, so a shared link
-  closes onto the feed. After opening a reply's thread inside the modal,
-  Close steps back to the previous thread, as Back does.
+- **One flow, not a stack (`FRONTEND-011`).** A detail's history entry
+  carries `{ background?, depth }`, read and written only by
+  `src/routes/modal-flow.tsx`: `useDetailLinkState()` (a link on a page
+  starts a flow at depth 1 with this page as background; a link inside
+  `ModalFlowScope`, which `BackgroundRoutes` wraps every overlay in,
+  continues it at depth + 1 with the same background), `useFlowBackground()`
+  (the page to keep underneath) and `useModalFlow()` (`{ depth, back, close
+  }`). No other file reads `location.state`; `src/routes/modal-flow.test.tsx`
+  scans for it. A game or player detail (`FRONTEND-014`) joins the flow by
+  being another overlay route; the module does not change.
+- **Closing leaves the whole flow.** Close, Escape and a backdrop click go
+  back `depth` entries with a background, which is the origin's own entry:
+  its address, query string, loaded pages and scroll are as the reader left
+  them. With no background (a direct load or reload) they go back `depth -
+  1` entries and replace the first one with `/`, so nothing of the flow is
+  left behind home and an earlier, unrelated history entry is never
+  reached. A second press before the step lands is ignored.
+- **Back steps one detail.** `Dialog`'s optional `onBack` shows a 44 px
+  "Back" icon button before the title when `depth > 1` (`navigate(-1)`); the
+  browser's Back does the same and, from the first detail, returns to the
+  origin. The one `Dialog` stays mounted across details, so focus returns to
+  the first opener when the flow closes.
+- **Known gap:** opening a nested thread from a reply's timestamp removes the
+  focused link, and focus falls to `body` with the modal still open (Tab
+  re-enters the dialog). Moving focus to the dialog's heading on a detail
+  change is a follow-up (`FRONTEND-014`, which adds more details).
 - **`components/ui/Dialog`**: a native `<dialog>` opened with `showModal()`
   (top layer, inert page, focus kept inside), the title as its heading and
   accessible name, a Close button, the prevented `cancel` event as Escape,

@@ -1,12 +1,6 @@
 import { format, parseISO } from "date-fns";
 import type { MouseEvent } from "react";
-import {
-  Link,
-  matchPath,
-  useLocation,
-  useNavigate,
-  type Location,
-} from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Avatar } from "../../components/ui/Avatar";
 import { Card } from "../../components/ui/Card";
@@ -17,6 +11,7 @@ import {
   Repeat2FilledIcon,
   Repeat2Icon,
 } from "../../components/ui/icons";
+import { useDetailLinkState } from "../../routes/modal-flow";
 import { PostAction, TogglePostAction } from "./PostAction";
 import { PostMedia } from "./PostMedia";
 import styles from "./PostNode.module.css";
@@ -48,9 +43,10 @@ import { likesText, repliesText, repostsText } from "./counts";
  * selection, opens the same thread — a mouse convenience, not a second focus
  * stop, so the card has no `tabindex` and is never wrapped in a link. The reply
  * count is a link to the thread too, and Reply opens it to reply
- * (`/posts/<id>?reply=1`). Every one of them carries `state.background`, the
- * page the card is on, which is what keeps that page rendered under the modal
- * (`routes/BackgroundRoutes.tsx`).
+ * (`/posts/<id>?reply=1`). Every one of them carries the modal flow's state
+ * from `routes/modal-flow.tsx`: on a page it starts a flow over that page,
+ * which is what keeps the page rendered under the modal; inside the modal it
+ * is the next detail of the same flow, so Close still returns to that page.
  *
  * **A repost is rendered as what it is** (UI-009). A *plain* repost — no text
  * and no media of its own — stands for the original: a line naming who
@@ -68,36 +64,9 @@ export interface PostNodeProps {
   post: PostView;
 }
 
-/** The thread modal's address pattern, as `routes/routes.tsx` declares it. */
-const THREAD_PATH = "/posts/:postId";
-
 /** The address of a post's thread, or of the thread opened to reply. */
 function threadPath(postId: number, reply = false): string {
   return `/posts/${postId}${reply ? "?reply=1" : ""}`;
-}
-
-/** What a link into a thread carries: the page to keep underneath, if any. */
-interface ThreadState {
-  background?: Location;
-}
-
-/**
- * The `state` every link into a thread carries: the page underneath.
- *
- * On an ordinary page that is the page itself. Inside the thread modal it is
- * whatever the modal is already open over — carried on, never replaced by the
- * modal's own address, so opening a reply's thread keeps the same page
- * underneath and closing still returns to it. A modal opened directly by URL
- * has no background, and so neither has one opened from inside it: the feed is
- * what is rendered under both.
- */
-function useThreadState(): ThreadState {
-  const location = useLocation();
-  if (matchPath(THREAD_PATH, location.pathname) === null) {
-    return { background: location };
-  }
-  const carried = (location.state as ThreadState | null)?.background;
-  return carried === undefined ? {} : { background: carried };
 }
 
 /**
@@ -108,7 +77,7 @@ function useThreadState(): ThreadState {
 function useOpenThreadOnClick(postId: number) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const state = useThreadState();
+  const state = useDetailLinkState();
   return (event: MouseEvent<HTMLElement>): void => {
     if (event.defaultPrevented) return;
     const target = event.target;
@@ -124,7 +93,7 @@ function useOpenThreadOnClick(postId: number) {
     // its own thread as well.
     event.preventDefault();
     // Already open (the root's own card in the modal): a second entry for the
-    // same thread would make the next Close, which goes back one, look dead.
+    // same thread would be a step of the flow that shows nothing new.
     if (pathname === threadPath(postId)) return;
     navigate(threadPath(postId), { state });
   };
@@ -135,7 +104,7 @@ export function PostNode({ post }: PostNodeProps) {
   // The post this card is about: what its header, text, controls and thread
   // belong to. For a plain repost that is the original, or nothing at all.
   const subject = plain ? post.reposted_post : post;
-  const state = useThreadState();
+  const state = useDetailLinkState();
   const openThread = useOpenThreadOnClick(subject?.id ?? post.id);
 
   const repostedBy = !plain ? null : (
@@ -310,7 +279,7 @@ function QuotedOriginal({ post }: { post: PostView }) {
 
 /** A post's time, as the link to its thread: the keyboard path to it. */
 function ThreadTimeLink({ post }: { post: PostView }) {
-  const state = useThreadState();
+  const state = useDetailLinkState();
   return (
     <Link className={styles.timeLink} to={threadPath(post.id)} state={state}>
       <time className={styles.time} dateTime={post.created_at}>
