@@ -88,7 +88,7 @@ Set by the human and read back with `gh api` on 2026-10-19:
 | Allow GitHub Actions to create and approve pull requests | **On**: the orchestrator opens review PRs (§4). No workflow approves anything (`TestNoWorkflowCanApprove`) |
 | Security → Advanced Security: secret scanning, push protection | **On** |
 | Security → Advanced Security: Dependabot alerts | **On** (2026-10-19), so Renovate and the Security tab see advisories. **Dependabot security updates stay off**: Renovate opens the update PRs (§7) |
-| Security → Advanced Security: Private vulnerability reporting | **On**: `.github/SECURITY.md` sends reporters to it. *Read off on 2026-10-20; the human enables it.* |
+| Security → Advanced Security: Private vulnerability reporting | **On**: `.github/SECURITY.md` sends reporters to it. Enabled by the human 2026-10-20, read back with `gh api`. |
 
 The pin requirement is the server-side half of
 `TestEveryActionIsPinnedToACommit`. The test stops an unpinned `uses:`
@@ -254,11 +254,10 @@ one.
 ## 7. Renovate
 
 **Added 2026-10-19** (#176). **The app is installed** (the human, 2026-10-19,
-on Mend's free plan). On 2026-10-20 it had still never touched the
-repository: no issue, branch, PR or commit by `renovate[bot]`. With our config
-on `main`, its first run opens the Dependency Dashboard whatever the schedule,
-so the app is not running here yet; see step 8 below. That issue appearing is
-the proof it runs. The config is
+on Mend's free plan). **It runs since 2026-10-20**: the Dependency Dashboard is
+issue #194. Until then it had opened nothing, because Mend's repo setting
+"Dependency Updates (Renovate)" was **Silent**, which scans and opens nothing;
+the human switched it to Interactive (step 8). The config is
 `.github/renovate.json`; `TestRenovateNeverMergesAnything` in
 `.ai/tests/test_workflows.py` holds its safety properties.
 
@@ -272,7 +271,8 @@ requests updating dependencies:
 | `pip non-major` | `backend/pyproject.toml`, exact pins (ruff, mypy) included. |
 | `docker non-major` | The base images in `docker/*.Dockerfile` and `docker-compose.yml`. |
 | `claude CLI` | `providers.anthropic.cli_version` in `.ai/config.json`, via a custom regex manager. Labelled `recheck-d2b-flags`: before approving, confirm the new CLI still accepts `--setting-sources user --strict-mcp-config` (`.ai/docs/handoff.md` §10.1 D2b). The PR body says how. |
-| one per package | Every major update. Majors are never grouped: a PR carrying several majors is unreviewable. (Renovate's monorepo preset still keeps one monorepo's packages together, e.g. `@vitest/*`.) |
+| one per package | Every major update, **only once you tick it in the Dashboard** (`dependencyDashboardApproval`). Majors are never grouped: a PR carrying several majors is unreviewable. (Renovate's monorepo preset still keeps one monorepo's packages together, e.g. `@vitest/*`.) |
+| `python runtime`, `node runtime`, `postgres runtime` | The language and database versions, **only once you tick them**, each its own PR, never inside a non-major group. They follow what AWS runs, which Renovate cannot see: Python moves with `lambda.Runtime.PYTHON_3_12` in `infra/lib/app-stack.ts`, Postgres with `PostgresEngineVersion.VER_16` in `infra/lib/data-stack.ts`. Edit those in the same PR. |
 
 Nothing is proposed until a release is **3 days old**, and `internalChecksFilter:
 strict` means the branch is not even created before then, so a compromised
@@ -319,7 +319,8 @@ with `agent/`. `gate` (the test suites) still runs and is still required.
    immediately.
 7. If a Renovate PR shows no checks, look in the Actions tab for a run waiting
    on approval and approve it as in §4.
-8. If no Dashboard appears, the app is installed but Mend is not running it.
+8. If no Dashboard appears, the app is installed but Mend is not running it
+   (the cause here on 2026-10-20: the mode was Silent).
    Sign in at <https://developer.mend.io> with GitHub, open `DavidDems` →
    `fanwire`. Its settings must have Renovate **enabled** for the repository
    and the mode **Interactive** (Silent mode scans but opens nothing). Then

@@ -2634,6 +2634,47 @@ class TestRenovateNeverMergesAnything:
         and its `# vN` comment current instead of loosening it to a tag."""
         assert "helpers:pinGitHubActionDigests" in config.get("extends", [])
 
+    def test_no_major_opens_until_the_human_ticks_it(self, config):
+        """The first Dependency Dashboard (2026-10-20) listed 15 majors. Each
+        is its own piece of work, scheduled by the human, not the calendar."""
+        majors = [
+            r
+            for r in config.get("packageRules", [])
+            if r.get("matchUpdateTypes") == ["major"] and len(r) > 2
+        ]
+        assert majors and all(r.get("dependencyDashboardApproval") is True for r in majors)
+
+    RUNTIMES = {"python", "node", "postgres"}
+
+    def _runtime_rules(self, config) -> dict:
+        found = {}
+        for i, r in enumerate(config.get("packageRules", [])):
+            for name in r.get("matchDepNames", []) + r.get("matchPackageNames", []):
+                base = name.rsplit("/", 1)[-1]
+                if base in self.RUNTIMES:
+                    found.setdefault(base, []).append((i, r))
+        return found
+
+    def test_runtimes_move_only_when_asked_and_never_inside_a_non_major_group(self, config):
+        """A runtime is chosen by what AWS runs: the Lambda is PYTHON_3_12 and
+        RDS is Postgres 16 (infra/lib). The first Dashboard put Python 3.15
+        inside "github-actions non-major" and the Lambda base image 3.14
+        inside "docker non-major": a routine bump would have tested and
+        shipped a Python the zip Lambda does not run. Each runtime gets its
+        own group, after every non-major group so it wins, and waits for the
+        human's tick."""
+        rules = config.get("packageRules", [])
+        last_group = max(i for i, r in enumerate(rules) if "non-major" in r.get("groupName", ""))
+        found = self._runtime_rules(config)
+        assert set(found) == self.RUNTIMES, sorted(found)
+        for name, hits in found.items():
+            for i, r in hits:
+                assert i > last_group, f"{name}: a later non-major group would take it back"
+                assert r.get("dependencyDashboardApproval") is True, name
+                assert name in r.get("groupName", ""), f"{name}: its own group"
+        names = [n for hits in found.values() for _, r in hits for n in r.get("matchDepNames", [])]
+        assert "@types/node" not in names, "typings are not the runtime"
+
 
 class TestTheCiSummaryRunsMainsCopyAgainstAFailedRun:
     """Prompts/04-cheap-automations.md automation 1, and the trigger the human

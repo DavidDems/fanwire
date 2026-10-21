@@ -103,13 +103,17 @@ def test_soft_delete_user_raises_for_unknown_user(session_factory):
         soft_delete_user(session, 999_999)
 
 
-def test_soft_delete_user_raises_when_already_deleted(session_factory):
+def test_soft_delete_user_is_a_no_op_when_already_deleted(session_factory):
+    """USERS-003: a repeat deactivation is safe, and keeps the first timestamp."""
     with session_factory() as session:
         user = _create(session, "sub-d", "twice_deleted")
         soft_delete_user(session, user.id)
+        first = user.deleted_at
 
-        with pytest.raises(UserNotFoundError):
-            soft_delete_user(session, user.id)
+        soft_delete_user(session, user.id)
+
+        session.refresh(user)
+        assert user.deleted_at == first
 
 
 def _event_bus():
