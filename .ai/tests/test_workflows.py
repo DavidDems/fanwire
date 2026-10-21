@@ -3365,8 +3365,9 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
     it is not under `gate`, and its own failure is not the PR's."""
 
     JOB = "review"
-    CHECKOUT = "actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5"
-    SETUP_PYTHON = "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6"
+    # Which actions, not which commits: Renovate moves the SHAs, and
+    # TestEveryActionIsPinnedToACommit checks their form.
+    ACTIONS = {"actions/checkout", "actions/setup-python"}
 
     @pytest.fixture
     def wf(self) -> str:
@@ -3420,7 +3421,10 @@ class TestTheDirectorReviewReadsADirectorPrAsData:
             for ln in wf.splitlines()
             if "uses:" in ln and not ln.lstrip().startswith("#")
         ]
-        assert uses and set(uses) <= {self.CHECKOUT, self.SETUP_PYTHON}
+        assert uses
+        for ref in uses:
+            m = re.fullmatch(r"([\w.-]+/[\w.-]+)@[0-9a-f]{40} # v\d+\S*", ref)
+            assert m and m.group(1) in self.ACTIONS, ref
 
     def test_the_tools_are_mains_and_the_pr_is_beside_them_as_data(self, wf):
         checkouts = [s for s in steps_in(job_block(wf, self.JOB)) if "actions/checkout@" in s]
