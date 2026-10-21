@@ -133,6 +133,14 @@ One Director PR each, in order.
   the run length on the real corpus so link lists and tables don't trip it.
 - **Size budgets**: measure the current distribution first, then set budgets
   that the median file already meets.
+- **Two files outside `wiki/` must not move with it** (added 2026-10-21).
+  `.github/SECURITY.md` is where GitHub finds the security policy; it links
+  nothing inside the repository on purpose, and
+  `TestTheSecurityPolicyIsWhereGitHubLooks` fails if it moves or gains a repo
+  link. `.github/renovate.json` names
+  `wiki/GeneralContext/Architecture/github-automation-setup.md` §7 in its
+  `description`, as do the docstrings of the Renovate, Scorecard and
+  `director-review` tests: if §7 moves, update those references in the same PR.
 
 ## Limits
 

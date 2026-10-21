@@ -872,18 +872,24 @@ pinned exactly; #176 Renovate; #177 OpenSSF Scorecard; #178 `director-review`,
 an advisory Sonnet 5.5 reader of Director PRs. The settings are recorded in
 `wiki/GeneralContext/Architecture/github-automation-setup.md` §1.
 
-Proven live: the pinned deploy actions under the selected-actions allowlist
-(deploy runs 39309832485 and 39317008407, both green).
+Proven live:
+- the pinned deploy actions under the selected-actions allowlist (deploy runs
+  39309832485 and 39317008407, both green);
+- **Scorecard** (run 39346927480, 2026-10-20). `threat-model.md` was
+  rewritten against its real results (#185);
+- **CodeQL** (#185) on PRs, on push to `main` and on its schedule
+  (39585406289);
+- **`director-review`**, on #196 and on `director/stage2-specs`: one comment
+  each, Sonnet 5.5 with `between_tools`, **about $0.03 a PR** (#196: 15201
+  input / 9 output tokens, $0.030492). It skips Renovate's PRs by design
+  (bot author);
+- **Renovate** (2026-10-20), once Mend's repo mode was switched from Silent
+  to Interactive. Dashboard #194; #196 holds majors and the Python, Node and
+  Postgres runtimes for the human's tick. Its first PRs are #202 and #203.
 
 **Unproven until it happens:**
 - **The pinned CLI install** and its `claude --version` check on a hosted
-  runner. The first worker run will exercise them.
-- **Renovate actually running.** The app is installed. The proof is the
-  Dependency Dashboard issue, then a first grouped PR and the CLI regex
-  manager's PR.
-- **Scorecard's first run** (never dispatched), and whether
-  `threat-model.md`'s list of expected failures matches it.
-- **`director-review`'s first run**, on the next Director PR touching `.ai/`
-  or `.github/`. That run proves `between_tools` with a 2000-token cap on
-  Sonnet 5.5, the `paths:` filter, and the real cost. A `refusal` from Sonnet
-  5.5's classifiers would post no comment, and the job summary would say why.
+  runner. No worker has run since 2026-10-09, so the first one will exercise
+  them.
+- **Renovate's scheduled PRs** (`claude CLI`, `npm non-major`), first due
+  before 6am Toronto on Monday 2026-10-26. Follow-up: `Prompts/19`.

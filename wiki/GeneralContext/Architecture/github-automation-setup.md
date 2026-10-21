@@ -280,6 +280,12 @@ release pulled within days never reaches a PR. At most 5 PRs are open at once,
 each labelled `dependencies`. The **Dependency Dashboard** issue lists what is
 pending, waiting out its age, or blocked.
 
+`pip non-major` rarely has anything to do: `backend/pyproject.toml` states
+`>=` ranges, which every release already satisfies, and only ruff and mypy
+are exact. **`director-review` skips Renovate's PRs** by design, even the
+`claude CLI` one that edits `.ai/`: its `if:` excludes bot authors, because
+the human's own approval is the review (below).
+
 **No automerge, ever** (`.ai/docs/philosophy.md` §8). `automerge` and
 `platformAutomerge` are both `false`, and the test fails if any
 `automerge`-like key is turned on anywhere, or a preset brings one in. A
