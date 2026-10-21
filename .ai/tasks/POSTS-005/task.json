@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-005",
+  "objective": "Let a non-reply post carry one sports-data attachment, stored as real nullable foreign keys on posts with CHECK constraints and created through one discriminated data_link on POST /posts that is shape-checked at the boundary and target-checked through events/' EVENTS-009 validators, coexisting with an image and refused alongside a #GameId token.",
+  "acceptance_criteria": [
+    "An Alembic revision adds to posts: linked_game_id (bigint, nullable, FK games.id), linked_player_game_stats_id (bigint, nullable, FK player_game_stats.id), linked_player_id (bigint, nullable, FK players.id) and linked_player_scope (text, nullable), plus CHECK constraints ck_posts_one_data_link (at most one of the three ids set), ck_posts_no_data_link_on_reply (all four null when is_reply), ck_posts_player_scope_pairing (linked_player_scope is set exactly when linked_player_id is set) and ck_posts_player_scope_values (linked_player_scope is null, 'regular' or 'playoffs'); upgrade, downgrade, upgrade succeeds and every existing row has all four null.",
+    "Direct inserts that violate each constraint raise IntegrityError: two ids set; any id on a reply; linked_player_id without a scope; a scope without linked_player_id; a scope of 'play-in'; and each of the three ids naming a row that does not exist.",
+    "POST /posts accepts an optional data_link: {\"type\": \"game_final\", \"ref_id\": <games.id>}, {\"type\": \"player_game\", \"ref_id\": <player_game_stats.id>} or {\"type\": \"player_career\", \"ref_id\": <players.id>, \"scope\": \"regular\"|\"playoffs\"}; an unknown type, a missing or non-positive ref_id, a scope on game_final or player_game, a missing or unknown scope on player_career, or any extra key answers 422 and creates nothing.",
+    "A valid game_final, player_game or player_career link answers 201 and the stored row has exactly the matching column (and scope) set and the other columns null; PostOut gains data_link, the same {type, ref_id, scope} shape (scope null except for player_career), and null for a post without one.",
+    "A target that fails its EVENTS-009 validator answers 422 with detail exactly link_target_not_found, game_not_completed, player_did_not_play or no_games_in_scope, creates no row, attaches no media and publishes no event.",
+    "A data_link on a reply answers 422 detail data_link_on_reply; on a repost without text (a plain repost) 422 detail data_link_needs_quote_text; a quote repost (repost with text) with a data_link answers 201.",
+    "A post whose text contains a #GameId token and that also has a data_link answers 422 detail data_link_with_game_mention and creates nothing; a post with #GameId tokens and no data_link still creates its EventMention rows exactly as before.",
+    "A post with both a data_link and an attached Processed image answers 201 with both stored.",
+    "posts/ reaches events/ only through app.events.service's validate_* functions and app.events.errors: no module under app/posts imports app.events.models except the existing mention resolver, pinned by a test that scans app/posts for that import.",
+    "Every existing posts, feed, search and notifications test passes; the plain-repost toggle, rate limits and the spam scorer behave as before.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated, typed PostOut test fixtures gain data_link: null, and the frontend typecheck and test suite pass."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x03-posts.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/events/**",
+    "backend/app/users/**",
+    "backend/app/media/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/app/notifications/**",
+    "backend/pyproject.toml",
+    "frontend/src/features/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

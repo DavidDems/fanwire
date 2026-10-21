@@ -191,3 +191,10 @@ its units land, then in the module files. The decisions:
 - **A deleted post's thread (2026-10-21):** it shows a "Post deleted" card
   in the root's place with the surviving replies under it, rather than
   answering not found.
+- **`#GameId` retirement (2026-10-21):** new posts stop turning tokens into
+  mentions in `POSTS-006`, the stage `FRONTEND-013` replaces the composer's
+  `#` autocomplete; until then a post can't have both a token and an
+  attachment. Old posts keep their mentions.
+- **Stats page and compose reworked together (2026-10-21):** the game page,
+  box score and player page get "Post about this" entry points
+  (`FRONTEND-017`) alongside the composer's pickers.
