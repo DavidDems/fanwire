@@ -68,6 +68,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
       agent: ${{ steps.filter.outputs.agent }}
+      backend_app: ${{ steps.filter.outputs.backend_app }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -82,7 +83,7 @@ jobs:
           set -euo pipefail
           if [ "$EVENT" != "pull_request" ]; then
             echo "$EVENT is not a pull request - running the whole gate"
-            printf 'backend=true\nfrontend=true\ninfra=true\nagent=true\n' >> "$GITHUB_OUTPUT"
+            printf 'backend=true\nfrontend=true\ninfra=true\nagent=true\nbackend_app=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git diff --name-only "$BASE_SHA"...HEAD > /tmp/changed.txt
@@ -106,6 +107,7 @@ jobs:
               "frontend": ("frontend/",),
               "infra": ("infra/",),
               "agent": (".ai/",),
+              "backend_app": ("backend/app/",),
           }
 
           if any(p.startswith(EVERYTHING) for p in changed):
@@ -427,6 +429,32 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run synth
+
+  # Advisory only. The human's decision (wiki/GeneralContext/Architecture/
+  # human-decisions.md §8): the real pre-deploy check is the local
+  # `load` run recorded in the PR template, compared against the previous run
+  # on the same machine. A shared runner's timing is noise and a fresh runner
+  # has no baseline, so this job runs `smoke`, which k6's thresholds judge
+  # alone (perf/README.md).
+  #
+  # It sits outside `gate` and is `continue-on-error`, so nothing waits on it
+  # and a red run doesn't turn the workflow red (which would also wake
+  # ci-summary.yml for noise). It never runs on workflow_dispatch: the
+  # orchestrator's dispatched run is a verdict, and an advisory number has no
+  # place in one. It holds no secret and makes no AWS or Cognito call: the
+  # compose `perf` profile, ENVIRONMENT=perf and a locally minted JWKS.
+  # pwsh is preinstalled on ubuntu-latest; the first live run of this job is
+  # also its first pwsh run.
+  perf-advisory:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.backend_app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Run the k6 smoke profile against the local perf stack (advisory)
+        run: pwsh -File perf/run.ps1 -Profile smoke
 
   # One check that always reports, whatever the filter decided.
   #

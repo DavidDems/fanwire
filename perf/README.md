@@ -60,6 +60,16 @@ Only `load` is compared with a baseline. `smoke` gives about 50 samples per
 endpoint, so its p99 is roughly the single slowest request and any hiccup reads
 as a regression. `stress` aborts, so its duration varies from run to run.
 
+### Where it is required
+
+- **Before a production deploy, `load`.** A PR that touches `backend/app/` records
+  a local `load` run in the PR template (`.github/pull_request_template.md`): the
+  PASS/FAIL line and the comparison table. This is the real gate.
+- **In CI, `smoke`, advisory.** The `perf-advisory` job in `test-agent.yml` runs
+  `smoke` on pull requests that touch `backend/app/`. A shared runner's timing is
+  noisy and it has no baseline, so k6's thresholds alone judge it. It is outside
+  `gate` and `continue-on-error`, so it never blocks a merge.
+
 ## How virtual users sign in
 
 The backend accepts tokens signed by the local key only when `ENVIRONMENT` is
