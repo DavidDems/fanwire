@@ -75,6 +75,18 @@ run with the previous run **on the same machine**. It is never compared with a p
     then wait for `/health`, then seed, k6 and compare.
   - Exit non-zero on a k6 threshold failure or a regression.
 
+## Amendment, 2026-10-20: the gate compares `load` only
+
+**The human decided this after the first hand-run smoke runs.**
+- **What happened.** Two smoke runs back to back, on unchanged code, failed the comparison: `post_create` p99 went from 24 to 84 ms, and `feed` p99 from 53 to 79 ms.
+- **Why.** 1 VU for 1 minute gives about 50 samples per endpoint, so its p99 is roughly the single slowest request. Any hiccup on a busy machine reads as a regression.
+- **The decision.**
+  - smoke is a sanity run, judged by its thresholds and error rate only.
+  - stress is judged by its thresholds only. It aborts, so its duration varies.
+  - Only `load` is compared with its baseline.
+
+The teardown is limited to the perf services (`rm -fsv` then `down` on `postgres-perf`, `backend-perf` and `k6`). A bare `--profile perf down` would also stop a running `backend-dev`, and without `-v` it leaks the throwaway database's volume on every run.
+
 ## Traps
 
 - **`DuplicateContentCheck` refuses repeated text from one author**, so post text must be unique per VU

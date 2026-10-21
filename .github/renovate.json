@@ -56,7 +56,8 @@
     {
       "description": "Majors are deliberately not grouped: one PR per package, because a grouped major is an unreviewable PR.",
       "matchUpdateTypes": ["major"],
-      "addLabels": ["major"]
+      "addLabels": ["major"],
+      "dependencyDashboardApproval": true
     },
     {
       "description": "The claude CLI, its own PR. Before approving, re-check the bumped CLI still accepts --setting-sources user --strict-mcp-config (.ai/docs/handoff.md section 10.1, D2b): the worker's isolation from checkout config depends on those flags.",
@@ -68,6 +69,24 @@
       "prBodyNotes": [
         "**Re-check D2b before approving** (`.ai/docs/handoff.md` §10.1): run `npx --yes @anthropic-ai/claude-code@{{{newVersion}}} --help` and confirm it still lists `--setting-sources` and `--strict-mcp-config`. The worker relies on both to ignore `.claude/` and `.mcp.json` in the checkout."
       ]
+    },
+    {
+      "description": "Python runtime: setup-python's python-version and the Lambda base image, one PR, only when ticked. Must match lambda.Runtime.PYTHON_3_12 in infra/lib/app-stack.ts, which Renovate does not track: move that in the same PR.",
+      "matchDepNames": ["python", "public.ecr.aws/lambda/python"],
+      "groupName": "python runtime",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Node runtime: setup-node's node-version, the node base images and package.json engines, one PR, only when ticked. @types/node is not the runtime and stays in npm.",
+      "matchDepNames": ["node"],
+      "groupName": "node runtime",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Postgres in docker-compose.yml, only when ticked. Must match rds.PostgresEngineVersion in infra/lib/data-stack.ts (VER_16), which Renovate does not track: local tests should run the version RDS runs.",
+      "matchDepNames": ["postgres"],
+      "groupName": "postgres runtime",
+      "dependencyDashboardApproval": true
     }
   ]
 }
