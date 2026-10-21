@@ -2355,6 +2355,7 @@ NOT_A_CHECK = {
     "openapi-drift",
     "npm-audit",
     "infra-synth",
+    "perf-advisory",
     "gate",
 }
 
