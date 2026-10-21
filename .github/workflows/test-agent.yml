@@ -382,12 +382,12 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      # Residue (moderate, so below this level): react-router 6.30.6,
-      # GHSA-337j-9hxr-rhxg and GHSA-wrjc-x8rr-h8h6, fixed only in v7
-      # (TODO/02-backlog.md, the react-router v7 upgrade).
-      - name: Audit frontend for known CVEs (blocks on high)
+      # `moderate` since react-router 7 (FRONTEND-016, #195) cleared the two
+      # moderate advisories that held it at `high`; the audit was clean at
+      # every level when this was lowered (2026-10-21).
+      - name: Audit frontend for known CVEs (blocks on moderate)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
       - name: Install infra dependencies
         working-directory: infra
         run: npm ci

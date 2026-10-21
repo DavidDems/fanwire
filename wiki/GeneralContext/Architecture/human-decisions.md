@@ -188,3 +188,6 @@ its units land, then in the module files. The decisions:
 - **Router first (2026-10-20):** the react-router v6 → v7 migration runs
   before the modal navigation work, as its own unit (`FRONTEND-016`), so
   navigation is written once, against v7.
+- **A deleted post's thread (2026-10-21):** it shows a "Post deleted" card
+  in the root's place with the surviving replies under it, rather than
+  answering not found.

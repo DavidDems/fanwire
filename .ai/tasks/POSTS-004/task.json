@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-004",
+  "objective": "Let an owner soft-delete their own original posts, replies and quote reposts (Post.deleted_at, DELETE /posts/{id}), hide a deleted post from every read and count, refuse every new interaction with it, and leave a 'Post deleted' placeholder where a surviving repost or thread references it, without changing the plain-repost hard delete.",
+  "acceptance_criteria": [
+    "An Alembic revision adds posts.deleted_at (timestamptz, nullable, no default) and nothing else; upgrade then downgrade then upgrade succeeds, and every existing row has deleted_at null after upgrade.",
+    "DELETE /posts/{id} by the post's author sets deleted_at and answers 204; a second DELETE of the same post by its author answers 204 and leaves the first deleted_at unchanged; the post row, its likes, reports, event mentions, media links, replies and reposts all still exist afterwards (nothing cascades).",
+    "DELETE /posts/{id} answers 403 for an active caller who is not the author (deleted_at stays null), 404 for an unknown id, 401 without a token and 403 \"account_deactivated\" for a deactivated author; it is on get_current_user, so tests/test_route_auth.py passes unchanged.",
+    "DELETE /posts/{id} on the caller's own plain repost (is_repost, no text, no media) answers 409 and changes nothing; DELETE /posts/{original}/repost still hard-deletes the caller's plain reposts, including when the original has been soft-deleted.",
+    "A deleted post is absent from GET /feed (every strategy, guest and signed in), GET /search/posts, GET /posts/{id}/replies and the replies of GET /feed/thread/{parent}; GET /posts/{id} answers 404 for it.",
+    "reply_count and repost_count no longer count deleted replies or deleted quote/plain reposts; the counts on the surviving parent drop by exactly the number deleted.",
+    "POST /posts/{id}/like, DELETE /posts/{id}/like, POST /posts/{id}/repost and POST /posts/{id}/report on a deleted post answer 404 \"Post not found\" and write nothing; POST /posts with parent_post_id or original_post_id naming a deleted post answers 404 and creates no row and publishes no event.",
+    "A repost (plain or quote) whose original is deleted still appears in feeds with reposted_post null and the new PostView field reposted_post_deleted true; reposted_post_deleted is false on every other view, including a repost whose original is hidden only because its author is deactivated.",
+    "GET /feed/thread/{id} for a deleted post answers 200 with root null, root_deleted true and the surviving direct replies in their usual order; for a live post root_deleted is false and root is its view; an unknown id is still 404, and a root hidden only by a deactivated author is still 404.",
+    "GET /notifications leaves out reply and repost notifications whose reference_id names a deleted post; follow notifications and notifications for live posts are unchanged. notifications/ learns which posts are deleted through a posts/ read-interface function, never by querying posts.deleted_at itself.",
+    "Recovering an account (POST /users/me/recover) shows its live posts again but never a post the owner deleted before or during deactivation: that post stays absent from the feed and GET /posts/{id} stays 404.",
+    "The feed page and thread query counts stay the same for a page of 2 and of 20 (tests/feed/test_post_view_queries.py's pattern), with some of the posts and originals deleted.",
+    "The frontend thread modal renders a root of null as a single 'Post deleted' line (no author, text, media or controls) above the surviving replies; the cache helpers in features/feed/api.ts accept a thread whose root is null; typecheck, lint and the whole frontend suite pass.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated, and typed PostView/ThreadView test fixtures gain the new fields."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/app/notifications/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/features/thread/**",
+    "frontend/src/features/feed/api.ts",
+    "frontend/src/features/feed/api.test.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x06-feed.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/events/**",
+    "backend/app/media/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/src/features/feed/PostNode.tsx",
+    "frontend/src/components/**",
+    "frontend/src/styles/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/security.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
