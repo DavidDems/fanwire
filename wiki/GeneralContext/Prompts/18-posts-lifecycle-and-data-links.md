@@ -69,10 +69,26 @@ Update this section in every spec PR and unit PR of this thread.
     minimal frontend change a nullable root needs.
   - the modal flow is `{background, depth}` in history state, owned by one
     module; Close/Escape go back `depth` entries, or to `/` with no origin.
-- **Next:** hand-run `POSTS-004` and `FRONTEND-011` in parallel (both touch
-  `ThreadModal.tsx`; the second PR resolves the conflict). Then
-  `FRONTEND-012` and `POSTS-005` (needs `EVENTS-009` and `POSTS-004`; ask
-  the human when `#GameId` insertion is retired).
+- **2026-10-21, stage 2 merged:** `FRONTEND-011` #210, `POSTS-004` #211 (no
+  conflict in `ThreadModal.tsx` after all). `FrontendUI/components.md`'s
+  FRONTEND-011 rows went in the stage 3 spec PR: no unit role may write
+  `FrontendUI/`.
+- **2026-10-21, decided:** `#GameId` parsing for new posts ends in
+  `POSTS-006`, alongside `FRONTEND-013`'s pickers; until then `POSTS-005`
+  refuses a post with both a `data_link` and a token (the human, by
+  `AskUserQuestion`).
+- **2026-10-21, new unit:** `FRONTEND-017`, the stats-page entry points (a
+  "Post about this" action on the game page, each played box-score row and
+  the player page, opening compose with the attachment filled in). The
+  human asked for the stats page and compose to be reworked together.
+- **2026-10-21, stage 3 spec written:** `POSTS-005`. Settled in it: 422
+  machine codes for the post-level and target refusals; no `data_link` on a
+  plain repost; FKs to `events/` tables by string, no index until
+  `POSTS-006` needs one; `PostOut.data_link` mirrors the request.
+- **Next:** hand-run `POSTS-005`. `FRONTEND-012` (lifecycle UI) is
+  unblocked but off the linking path; spec it when there's room. After
+  `POSTS-005`: one spec PR for `POSTS-006`, `FRONTEND-013`, `FRONTEND-017`
+  and `FRONTEND-014`.
 
 ## Read first, in this order
 
@@ -235,6 +251,7 @@ merged preview before the second one merges.
 | 3 | **POSTS-005**: attachment schema and create | columns, CHECK constraints, migration, `data_link` validation through EVENTS-009, the reply rule, coexisting with media, the legacy-token decision | EVENTS-009, POSTS-004 |
 | 4 | **POSTS-006**: previews in read responses | assembled previews in feed, search and thread responses (batched), reposts carrying their original's preview, preferred-team relevance for the new link types, legacy mentions still shown | POSTS-005 |
 | 5 | **FRONTEND-013**: composer attachments | a type selector and pickers (a game; a game then a player; a player and a scope), a preview, removal before publishing, hidden for replies | POSTS-005 |
+| 5 | **FRONTEND-017**: stats-page entry points (added 2026-10-21) | a "Post about this" action on the game page (`game_final`), on each played box-score row (`player_game`) and on the player page (`player_career`, with the scope), opening compose with that attachment filled in | FRONTEND-013 |
 | 5 | **FRONTEND-014**: the three preview components | links to the detail opening in FRONTEND-011's modal surface, and a player-game destination that highlights the player's line | POSTS-006, FRONTEND-011 |
 | 6 | **FRONTEND-015**: complete-card reveal | preload and decode, skeleton, reserved dimensions, bounded failure, a window ahead, keeping the previous card on refetch | FRONTEND-014 |
 
