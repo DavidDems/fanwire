@@ -129,7 +129,13 @@
  * and no taller than a line of the table's text, so a row with a link is the
  * same height as one without.
  */
+/*
+ * The containing block for the cell's hidden name: `.visually-hidden` is
+ * absolutely positioned, and without a positioned ancestor inside the scroll
+ * region it escapes the region's overflow clip and widens the page.
+ */
 .table .postCell {
+  position: relative;
   width: 1%;
   text-align: left;
 }
