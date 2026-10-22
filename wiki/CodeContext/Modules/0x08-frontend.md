@@ -907,6 +907,29 @@ the generated schema; each feature has its own `api.ts`.
   fetches them). They share the `["events", "teams"]` cache key; moving
   the fetch into `api/` is the fix, for a unit with all four in scope.
 
+### "Post about this" (`FRONTEND-017`)
+
+- **Signed-in only** (the human, 2026-10-22), from `useAuth()`: a guest would
+  go through `RequireAuth`'s sign-in and could lose the attachment on the way.
+  A guest's page and tables are exactly what they were.
+- **Offered only where `POST /posts` would accept it**, by FRONTEND-013's
+  picker rules: the game page's result link for a completed game (not 0–0),
+  one per played box-score row (`seconds_played` not null), one per career row
+  whose scope has games.
+- **Links, to FRONTEND-013's address** (Compose, above), built in one helper
+  per feature, `features/games/postLinks.ts` and
+  `features/players/postLinks.ts`. Not a shared one in `features/stats/`: the
+  isolation tests keep both folders from importing it. Each is the only file
+  in its folder that names `/compose`, which `postLinks.test.ts` pins. The
+  links carry no flow state, so from the modal they simply leave it.
+- **Placement.** The result link sits under the score heading. In the box
+  score and the career table it is a trailing column, only for a signed-in
+  viewer (a visually hidden "Post" header), so the row header keeps its one
+  link and the stat columns stay put; the column scrolls with the table at
+  360 px. The visible text is "Post" with `SquarePenIcon`; the accessible
+  name says what about ("Post about Scottie Barnes’s game", "… LeBron James’s
+  playoffs").
+
 ## Open decisions
 
 - Whether the frontend wiki grows past this file into per-feature sections, or
