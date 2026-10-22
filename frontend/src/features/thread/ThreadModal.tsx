@@ -8,11 +8,9 @@ import {
 
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
-import { Dialog } from "../../components/ui/Dialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { useModalFlow } from "../../routes/modal-flow";
 import { InlineComposer } from "../compose/InlineComposer";
 import {
   FEED_KEY_ROOT,
@@ -23,6 +21,7 @@ import {
   type PostView,
 } from "../feed/api";
 import { PostNode } from "../feed/PostNode";
+import { useDetailTitle } from "./DetailModal";
 import styles from "./ThreadModal.module.css";
 
 /**
@@ -34,11 +33,13 @@ import styles from "./ThreadModal.module.css";
  * `routes/BackgroundRoutes.tsx` keeps rendered, unchanged, under this modal.
  * Opened with no origin (a reload, a shared link), the feed is underneath.
  *
- * **One flow, one modal** (`FRONTEND-011`). A reply's thread opens in this same
- * `Dialog`, which stays mounted while the details switch inside it: Back steps
- * to the previous detail, and Close and Escape leave the whole flow, back to
- * the origin as the reader left it (or to `/` with none), with focus on what
- * opened the first detail. The flow's rules are the module's, not this one's.
+ * **One flow, one modal** (`FRONTEND-011`). This is the thread's body; the
+ * `Dialog` around it is `DetailModal`'s, shared with the game and player
+ * details (`FRONTEND-014`), which stays mounted while the details switch inside
+ * it: Back steps to the previous detail, and Close and Escape leave the whole
+ * flow, back to the origin as the reader left it (or to `/` with none), with
+ * focus on what opened the first detail. The flow's rules are the module's,
+ * not this one's.
  *
  * **Assembled, not rebuilt.** The root and every reply are the feed's own
  * `PostNode` cards, with their controls and counts; the reply box is
@@ -55,16 +56,12 @@ export function ThreadModal() {
   const { postId: raw } = useParams();
   const [searchParams] = useSearchParams();
   const postId = postIdFrom(raw);
-  const { back, close } = useModalFlow();
+  useDetailTitle("Thread");
 
-  return (
-    <Dialog open onClose={close} onBack={back} title="Thread">
-      {postId === null ? (
-        <NotFound />
-      ) : (
-        <Thread postId={postId} replying={searchParams.get("reply") === "1"} />
-      )}
-    </Dialog>
+  return postId === null ? (
+    <NotFound />
+  ) : (
+    <Thread postId={postId} replying={searchParams.get("reply") === "1"} />
   );
 }
 

@@ -161,3 +161,17 @@
 .dnpName {
   font-weight: var(--font-weight-semibold);
 }
+
+/*
+ * The row a player-game link names (?line=, FRONTEND-014), aria-current: a
+ * rule on its leading edge and a heavier name, not the tint alone, plus a
+ * tint of the accent behind it.
+ */
+.table tbody .current {
+  background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.table tbody .current > th {
+  box-shadow: inset 0.25rem 0 0 var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
