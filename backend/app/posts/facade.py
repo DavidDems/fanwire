@@ -2,14 +2,17 @@
 pattern, per wiki/CodeContext/Standards/gof-patterns.md), per
 wiki/CodeContext/Modules/0x00-architecture.md "Connection rule":
 the data_link refusals (POSTS-005: post-level rules, then the target through
-events/' validators) -> validation (moderation chain) -> mention resolution
-against events/ -> confirm attached media/ items are Processed ->
-persistence -> fan-out via PostEventBus.
+events/' validators) -> validation (moderation chain) -> confirm attached
+media/ items are Processed -> persistence (the link's columns, a line's game
+included) -> fan-out via PostEventBus. `#GameId` tokens in new text are no
+longer parsed (POSTS-006): the text is stored as typed, no EventMention row
+is created and no PostMentionedEvent published; legacy EventMention rows
+stay readable through app.posts.service.mentioned_game_ids_by_post.
 
 Per wiki/CodeContext/Modules/0x00-architecture.md "Connection rule", this
-module imports app.posts.models, app.posts.mentions, app.posts.moderation,
-app.posts.data_link (which alone reaches app.events.service's validators),
-app.eventbus, and app.media.models.{Media, MediaStatus} -- the one place
+module imports app.posts.models, app.posts.moderation, app.posts.data_link
+(which alone reaches app.events.service, for its validators and a line's
+game), app.eventbus, and app.media.models.{Media, MediaStatus} -- the one place
 posts/ touches media/'s Media rows directly. It reads Media.status via the
 MediaStatus enum only (never app.media.state.transition -- posts/ never
 mutates Media's pipeline state, only media/'s own pipeline does).
@@ -24,12 +27,10 @@ from sqlalchemy.orm import Session
 from app.eventbus import PostEventBus
 from app.media.models import Media, MediaStatus
 from app.posts.data_link import DataLink, DataLinkRefused
-from app.posts.mentions import parse_mentions, resolve_mentions
-from app.posts.models import EventMention, Post
+from app.posts.models import Post
 from app.posts.moderation import ModerationCheck, ModerationContext
 
 POST_CREATED = "PostCreated"
-POST_MENTIONED = "PostMentionedEvent"
 
 
 class PostNotFoundError(ValueError):
@@ -64,12 +65,13 @@ class PublishPostFacade:
     """The single entry point for creating a post (wiki/CodeContext/
     Modules/0x00-architecture.md Connection rule). Sequences: refuse a
     deleted parent/original -> refuse a data_link (DataLinkRefused: on a
-    reply, on a plain repost, beside a #GameId token, or a target events/'
+    reply, on a plain repost, or when a target events/'
     validator refuses) -> moderation chain -> confirm every attached Media
-    is Processed -> persist Post -> attach Media (set Media.post_id) -> resolve #GameId mentions -> commit
-    -> fan-out on PostEventBus. This is the ONE place posts/ touches
-    media/'s Media rows and events/'s Game rows directly -- everywhere else
-    in posts/ goes through this same boundary."""
+    is Processed -> persist Post (with the link's columns) -> attach Media
+    (set Media.post_id) -> commit -> fan-out on PostEventBus. This is the
+    ONE place posts/ touches media/'s Media rows directly, and creates a
+    post's link through app.posts.data_link -- everywhere else in posts/
+    goes through this same boundary."""
 
     def __init__(
         self,
@@ -125,7 +127,7 @@ class PublishPostFacade:
             parent_post_id=request.parent_post_id,
             is_repost=request.is_repost,
             original_post_id=request.original_post_id,
-            **(request.data_link.columns() if request.data_link is not None else {}),
+            **(request.data_link.columns(self._session) if request.data_link is not None else {}),
         )
         self._session.add(post)
         self._session.flush()
@@ -134,36 +136,20 @@ class PublishPostFacade:
         for media in media_rows:
             media.post_id = post.id
 
-        # 5. Resolve #GameId mentions.
-        tokens = parse_mentions(request.text)
-        resolved = resolve_mentions(self._session, tokens)
-        for token, game in resolved:
-            self._session.add(
-                EventMention(post_id=post.id, game_id=game.id, raw_token=token.raw_token)
-            )
-
-        # 6. Commit.
+        # 5. Commit.
         self._session.commit()
 
-        # 7. Fan-out.
+        # 6. Fan-out.
         self._event_bus.publish(POST_CREATED, {"post_id": post.id, "author_id": post.author_id})
-        if resolved:
-            self._event_bus.publish(
-                POST_MENTIONED,
-                {"post_id": post.id, "game_ids": [game.id for _, game in resolved]},
-            )
 
         return post
 
     def _check_data_link(self, request: CreatePostRequest, data_link: DataLink) -> None:
-        """A data_link is refused on a reply, on a plain repost (no text of
-        its own), and beside a #GameId token (one attachment per post until
-        POSTS-006 retires the tokens); then its target must pass events/'
-        validator."""
+        """A data_link is refused on a reply and on a plain repost (no text
+        of its own); then its target must pass events/' validator. A
+        #GameId token beside it is just text (POSTS-006)."""
         if request.is_reply:
             raise DataLinkRefused("data_link_on_reply")
         if request.is_repost and not request.text:
             raise DataLinkRefused("data_link_needs_quote_text")
-        if parse_mentions(request.text):
-            raise DataLinkRefused("data_link_with_game_mention")
         data_link.validate_target(self._session)

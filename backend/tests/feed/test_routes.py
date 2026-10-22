@@ -114,6 +114,9 @@ _POST_VIEW_FIELDS = {
     "reposted_post",
     # POSTS-004: the placeholder flag for a repost whose original is deleted.
     "reposted_post_deleted",
+    # POSTS-006: the post's sports-data attachment and its assembled preview.
+    "data_link",
+    "data_link_preview",
 }
 
 

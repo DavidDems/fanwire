@@ -157,21 +157,29 @@ def query_feed_posts(
 ) -> list[Post]:
     """Top-level posts only (`is_reply=False`; reposts included -- a repost
     row also has `is_reply=False`), newest first by id, `id < before_id`
-    when given. `author_ids`/`mentioned_game_ids` are OR'd, never producing
-    duplicates (the mention condition is expressed as a `Post.id.in_(...)`
-    subquery, not a join, specifically to avoid row multiplication from a
-    post with several EventMention rows). Both None means no filter at all
-    (the guest feed: all posts). Only _visible() posts."""
+    when given. `mentioned_game_ids` are the games a post is relevant
+    through (POSTS-006): a legacy EventMention of one, a game_final link to
+    one (`linked_game_id`) or a player_game link to a line in one
+    (`linked_line_game_id`); a player_career link never counts. They are
+    OR'd with `author_ids`, never producing duplicates (the mention
+    condition is expressed as a `Post.id.in_(...)` subquery, not a join,
+    specifically to avoid row multiplication from a post with several
+    EventMention rows). Both None means no filter at all (the guest feed:
+    all posts). Only _visible() posts."""
     stmt = select(Post).where(Post.is_reply.is_(False), _visible())
 
     conditions = []
     if author_ids is not None:
         conditions.append(Post.author_id.in_(author_ids))
     if mentioned_game_ids is not None:
-        conditions.append(
-            Post.id.in_(
-                select(EventMention.post_id).where(EventMention.game_id.in_(mentioned_game_ids))
-            )
+        conditions.extend(
+            [
+                Post.id.in_(
+                    select(EventMention.post_id).where(EventMention.game_id.in_(mentioned_game_ids))
+                ),
+                Post.linked_game_id.in_(mentioned_game_ids),
+                Post.linked_line_game_id.in_(mentioned_game_ids),
+            ]
         )
     if conditions:
         stmt = stmt.where(or_(*conditions))

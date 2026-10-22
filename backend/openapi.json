@@ -858,6 +858,103 @@
         "title": "GameFinalLink",
         "type": "object"
       },
+      "GameFinalPreviewView": {
+        "description": "A game_final link's preview: every field of\napp.events.service.GameFinalPreview.",
+        "properties": {
+          "away_score": {
+            "title": "Away Score",
+            "type": "integer"
+          },
+          "away_team": {
+            "$ref": "#/components/schemas/TeamRefView"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "game_id": {
+            "title": "Game Id",
+            "type": "integer"
+          },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
+          "home_score": {
+            "title": "Home Score",
+            "type": "integer"
+          },
+          "home_team": {
+            "$ref": "#/components/schemas/TeamRefView"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "series_game_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Game Number"
+          },
+          "sub_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Label"
+          },
+          "type": {
+            "const": "game_final",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "game_id",
+          "date",
+          "season",
+          "game_type",
+          "label",
+          "sub_label",
+          "series_game_number",
+          "home_team",
+          "away_team",
+          "home_score",
+          "away_score"
+        ],
+        "title": "GameFinalPreviewView",
+        "type": "object"
+      },
       "GameOut": {
         "properties": {
           "away_score": {
@@ -1377,6 +1474,180 @@
         "title": "PlayerCareerLink",
         "type": "object"
       },
+      "PlayerCareerPreviewView": {
+        "description": "A player_career link's preview: every field of\napp.events.service.PlayerCareerPreview, computed at read time, not a\nsnapshot from the post's creation; a scope with no games has null\naverages.",
+        "properties": {
+          "assists_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assists Per Game"
+          },
+          "field_goal_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Goal Pct"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "first_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Season"
+          },
+          "free_throw_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Throw Pct"
+          },
+          "games_played": {
+            "title": "Games Played",
+            "type": "integer"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "last_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Season"
+          },
+          "minutes_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Per Game"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "points_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Per Game"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "rebounds_per_game": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rebounds Per Game"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "three_point_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Three Point Pct"
+          },
+          "type": {
+            "const": "player_career",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "player_id",
+          "first_name",
+          "last_name",
+          "position",
+          "first_season",
+          "last_season",
+          "scope",
+          "games_played",
+          "points_per_game",
+          "rebounds_per_game",
+          "assists_per_game",
+          "minutes_per_game",
+          "field_goal_pct",
+          "three_point_pct",
+          "free_throw_pct"
+        ],
+        "title": "PlayerCareerPreviewView",
+        "type": "object"
+      },
       "PlayerDetailOut": {
         "description": "GET /events/players/{id}: a read model built by\napp.events.service.player_detail. Only played rows of `regular` and\n`playoffs` games count towards a line.",
         "properties": {
@@ -1827,6 +2098,248 @@
         "title": "PlayerGameOut",
         "type": "object"
       },
+      "PlayerGamePreviewView": {
+        "description": "A player_game link's preview: every field of\napp.events.service.PlayerGamePreview. A DNP line is as stored (null\nseconds_played, its dnp_reason, zeros).",
+        "properties": {
+          "assists": {
+            "title": "Assists",
+            "type": "integer"
+          },
+          "blocks": {
+            "title": "Blocks",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "dnp_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dnp Reason"
+          },
+          "field_goal_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Goal Pct"
+          },
+          "field_goals_attempted": {
+            "title": "Field Goals Attempted",
+            "type": "integer"
+          },
+          "field_goals_made": {
+            "title": "Field Goals Made",
+            "type": "integer"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "free_throw_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Throw Pct"
+          },
+          "free_throws_attempted": {
+            "title": "Free Throws Attempted",
+            "type": "integer"
+          },
+          "free_throws_made": {
+            "title": "Free Throws Made",
+            "type": "integer"
+          },
+          "game_id": {
+            "title": "Game Id",
+            "type": "integer"
+          },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
+          "is_home": {
+            "title": "Is Home",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "line_id": {
+            "title": "Line Id",
+            "type": "integer"
+          },
+          "opponent": {
+            "$ref": "#/components/schemas/TeamRefView"
+          },
+          "opponent_score": {
+            "title": "Opponent Score",
+            "type": "integer"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "plus_minus": {
+            "title": "Plus Minus",
+            "type": "integer"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rebounds": {
+            "title": "Rebounds",
+            "type": "integer"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "seconds_played": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Played"
+          },
+          "starter": {
+            "title": "Starter",
+            "type": "boolean"
+          },
+          "steals": {
+            "title": "Steals",
+            "type": "integer"
+          },
+          "team": {
+            "$ref": "#/components/schemas/TeamRefView"
+          },
+          "team_score": {
+            "title": "Team Score",
+            "type": "integer"
+          },
+          "three_point_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Three Point Pct"
+          },
+          "three_pointers_attempted": {
+            "title": "Three Pointers Attempted",
+            "type": "integer"
+          },
+          "three_pointers_made": {
+            "title": "Three Pointers Made",
+            "type": "integer"
+          },
+          "turnovers": {
+            "title": "Turnovers",
+            "type": "integer"
+          },
+          "type": {
+            "const": "player_game",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "line_id",
+          "game_id",
+          "player_id",
+          "first_name",
+          "last_name",
+          "team",
+          "opponent",
+          "is_home",
+          "team_score",
+          "opponent_score",
+          "date",
+          "season",
+          "game_type",
+          "label",
+          "starter",
+          "seconds_played",
+          "points",
+          "rebounds",
+          "assists",
+          "steals",
+          "blocks",
+          "turnovers",
+          "field_goals_made",
+          "field_goals_attempted",
+          "field_goal_pct",
+          "three_pointers_made",
+          "three_pointers_attempted",
+          "three_point_pct",
+          "free_throws_made",
+          "free_throws_attempted",
+          "free_throw_pct",
+          "plus_minus",
+          "dnp_reason"
+        ],
+        "title": "PlayerGamePreviewView",
+        "type": "object"
+      },
       "PlayerListItemOut": {
         "description": "One player in GET /events/players' list.",
         "properties": {
@@ -2012,7 +2525,7 @@
         "type": "object"
       },
       "PostView": {
-        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original is hidden.\n`reposted_post_deleted` is true on a repost whose original its owner\ndeleted (its `reposted_post` is then null, and the client shows a \"Post\ndeleted\" placeholder); false everywhere else, including a repost whose\noriginal is hidden only because its author is deactivated.",
+        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original is hidden.\n`reposted_post_deleted` is true on a repost whose original its owner\ndeleted (its `reposted_post` is then null, and the client shows a \"Post\ndeleted\" placeholder); false everywhere else, including a repost whose\noriginal is hidden only because its author is deactivated.\n\n`data_link` is the post's own attachment in PostOut's shape (a plain\nrepost has none; its `reposted_post` carries the original's), and\n`data_link_preview` that attachment's events/ preview: null without a\nlink, or when its target has no preview. Legacy EventMention rows\nproduce `mentioned_game_ids` only, never either field.",
         "properties": {
           "author": {
             "$ref": "#/components/schemas/AuthorView"
@@ -2021,6 +2534,45 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "data_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataLinkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_link_preview": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "game_final": "#/components/schemas/GameFinalPreviewView",
+                    "player_career": "#/components/schemas/PlayerCareerPreviewView",
+                    "player_game": "#/components/schemas/PlayerGamePreviewView"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GameFinalPreviewView"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PlayerGamePreviewView"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PlayerCareerPreviewView"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Link Preview"
           },
           "id": {
             "title": "Id",
@@ -2133,7 +2685,9 @@
           "media",
           "mentioned_game_ids",
           "reposted_post",
-          "reposted_post_deleted"
+          "reposted_post_deleted",
+          "data_link",
+          "data_link_preview"
         ],
         "title": "PostView",
         "type": "object"
@@ -3066,6 +3620,29 @@
           "abbreviation"
         ],
         "title": "TeamRefOut",
+        "type": "object"
+      },
+      "TeamRefView": {
+        "properties": {
+          "abbreviation": {
+            "title": "Abbreviation",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "abbreviation"
+        ],
+        "title": "TeamRefView",
         "type": "object"
       },
       "TeamSeasonGameOut": {

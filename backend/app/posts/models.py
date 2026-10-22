@@ -38,6 +38,7 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
 )
+from sqlalchemy import text as sql_text  # Post.text shadows `text` in its class body
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -88,7 +89,6 @@ class Post(Base):
     # The post's one sports-data attachment (POSTS-005): at most one id set,
     # none on a reply, the scope exactly with linked_player_id (the CHECKs
     # below). Written and read only through app.posts.data_link.DataLink.
-    # No index: nothing queries by them yet.
     linked_game_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("games.id"), nullable=True
     )
@@ -99,6 +99,13 @@ class Post(Base):
         BigInteger, ForeignKey("players.id"), nullable=True
     )
     linked_player_scope: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The game of a player_game link's line (POSTS-006), stored beside it at
+    # create so preferred-team relevance can match it without reading
+    # events/' tables; set exactly with linked_player_game_stats_id (the
+    # CHECK below). Posts are immutable, so it can't drift from the line.
+    linked_line_game_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("games.id"), nullable=True
+    )
     # Full-text search index for search/'s post search
     # (wiki/CodeContext/Modules/0x07-search.md) -- search/ owns no tables,
     # so this column (and its GIN index below) lives here, the schema's
@@ -137,6 +144,10 @@ class Post(Base):
             "linked_player_scope IS NULL OR linked_player_scope IN ('regular', 'playoffs')",
             name="ck_posts_player_scope_values",
         ),
+        CheckConstraint(
+            "(linked_player_game_stats_id IS NULL) = (linked_line_game_id IS NULL)",
+            name="ck_posts_line_game_pairing",
+        ),
         # Both self-referential FKs indexed for thread-traversal reads, per
         # wiki/CodeContext/Modules/0x03-posts.md "AWS mapping".
         Index("ix_posts_parent_post_id", "parent_post_id"),
@@ -145,6 +156,18 @@ class Post(Base):
         # app.posts.moderation.PostCountRateLimiter counts one author's
         # recent posts: an index range scan, not a table scan.
         Index("ix_posts_author_id_created_at", "author_id", "created_at"),
+        # app.posts.service.query_feed_posts matches a team's game ids
+        # against both game columns (POSTS-006); most posts have neither.
+        Index(
+            "ix_posts_linked_game_id",
+            "linked_game_id",
+            postgresql_where=sql_text("linked_game_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_posts_linked_line_game_id",
+            "linked_line_game_id",
+            postgresql_where=sql_text("linked_line_game_id IS NOT NULL"),
+        ),
     )
 
     @property
@@ -180,10 +203,12 @@ class PostLike(Base):
 
 
 class EventMention(Base):
-    """Join table linking a Post to a Game row via a parsed mention token
-    (e.g. `#GameId123`, `$LAL`). `Game` is owned by events/ — referenced
-    only by FK, never by importing events/'s internal classes. See
-    wiki/CodeContext/Modules/0x03-posts.md."""
+    """Join table linking a Post to a Game row via a parsed `#GameId123`
+    token. Legacy since POSTS-006: new posts no longer create rows (a post's
+    attachment is its data link), but existing rows stay readable through
+    app.posts.service.mentioned_game_ids_by_post. `Game` is owned by
+    events/ — referenced only by FK, never by importing events/'s internal
+    classes. See wiki/CodeContext/Modules/0x03-posts.md."""
 
     __tablename__ = "event_mentions"
 

@@ -1017,6 +1017,41 @@ export interface components {
              */
             type: "game_final";
         };
+        /**
+         * GameFinalPreviewView
+         * @description A game_final link's preview: every field of
+         *     app.events.service.GameFinalPreview.
+         */
+        GameFinalPreviewView: {
+            /** Away Score */
+            away_score: number;
+            away_team: components["schemas"]["TeamRefView"];
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Game Id */
+            game_id: number;
+            /** Game Type */
+            game_type: string | null;
+            /** Home Score */
+            home_score: number;
+            home_team: components["schemas"]["TeamRefView"];
+            /** Label */
+            label: string | null;
+            /** Season */
+            season: string;
+            /** Series Game Number */
+            series_game_number: number | null;
+            /** Sub Label */
+            sub_label: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "game_final";
+        };
         /** GameOut */
         GameOut: {
             /** Away Score */
@@ -1216,6 +1251,50 @@ export interface components {
             type: "player_career";
         };
         /**
+         * PlayerCareerPreviewView
+         * @description A player_career link's preview: every field of
+         *     app.events.service.PlayerCareerPreview, computed at read time, not a
+         *     snapshot from the post's creation; a scope with no games has null
+         *     averages.
+         */
+        PlayerCareerPreviewView: {
+            /** Assists Per Game */
+            assists_per_game: number | null;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** First Name */
+            first_name: string | null;
+            /** First Season */
+            first_season: string | null;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Games Played */
+            games_played: number;
+            /** Last Name */
+            last_name: string | null;
+            /** Last Season */
+            last_season: string | null;
+            /** Minutes Per Game */
+            minutes_per_game: number | null;
+            /** Player Id */
+            player_id: number;
+            /** Points Per Game */
+            points_per_game: number | null;
+            /** Position */
+            position: string | null;
+            /** Rebounds Per Game */
+            rebounds_per_game: number | null;
+            /** Scope */
+            scope: string;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "player_career";
+        };
+        /**
          * PlayerDetailOut
          * @description GET /events/players/{id}: a read model built by
          *     app.events.service.player_detail. Only played rows of `regular` and
@@ -1346,6 +1425,86 @@ export interface components {
             turnovers: number;
         };
         /**
+         * PlayerGamePreviewView
+         * @description A player_game link's preview: every field of
+         *     app.events.service.PlayerGamePreview. A DNP line is as stored (null
+         *     seconds_played, its dnp_reason, zeros).
+         */
+        PlayerGamePreviewView: {
+            /** Assists */
+            assists: number;
+            /** Blocks */
+            blocks: number;
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Dnp Reason */
+            dnp_reason: string | null;
+            /** Field Goal Pct */
+            field_goal_pct: number | null;
+            /** Field Goals Attempted */
+            field_goals_attempted: number;
+            /** Field Goals Made */
+            field_goals_made: number;
+            /** First Name */
+            first_name: string | null;
+            /** Free Throw Pct */
+            free_throw_pct: number | null;
+            /** Free Throws Attempted */
+            free_throws_attempted: number;
+            /** Free Throws Made */
+            free_throws_made: number;
+            /** Game Id */
+            game_id: number;
+            /** Game Type */
+            game_type: string | null;
+            /** Is Home */
+            is_home: boolean;
+            /** Label */
+            label: string | null;
+            /** Last Name */
+            last_name: string | null;
+            /** Line Id */
+            line_id: number;
+            opponent: components["schemas"]["TeamRefView"];
+            /** Opponent Score */
+            opponent_score: number;
+            /** Player Id */
+            player_id: number;
+            /** Plus Minus */
+            plus_minus: number;
+            /** Points */
+            points: number;
+            /** Rebounds */
+            rebounds: number;
+            /** Season */
+            season: string;
+            /** Seconds Played */
+            seconds_played: number | null;
+            /** Starter */
+            starter: boolean;
+            /** Steals */
+            steals: number;
+            team: components["schemas"]["TeamRefView"];
+            /** Team Score */
+            team_score: number;
+            /** Three Point Pct */
+            three_point_pct: number | null;
+            /** Three Pointers Attempted */
+            three_pointers_attempted: number;
+            /** Three Pointers Made */
+            three_pointers_made: number;
+            /** Turnovers */
+            turnovers: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "player_game";
+        };
+        /**
          * PlayerListItemOut
          * @description One player in GET /events/players' list.
          */
@@ -1410,6 +1569,12 @@ export interface components {
          *     deleted (its `reposted_post` is then null, and the client shows a "Post
          *     deleted" placeholder); false everywhere else, including a repost whose
          *     original is hidden only because its author is deactivated.
+         *
+         *     `data_link` is the post's own attachment in PostOut's shape (a plain
+         *     repost has none; its `reposted_post` carries the original's), and
+         *     `data_link_preview` that attachment's events/ preview: null without a
+         *     link, or when its target has no preview. Legacy EventMention rows
+         *     produce `mentioned_game_ids` only, never either field.
          */
         PostView: {
             author: components["schemas"]["AuthorView"];
@@ -1418,6 +1583,9 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            data_link: components["schemas"]["DataLinkOut"] | null;
+            /** Data Link Preview */
+            data_link_preview: (components["schemas"]["GameFinalPreviewView"] | components["schemas"]["PlayerGamePreviewView"] | components["schemas"]["PlayerCareerPreviewView"]) | null;
             /** Id */
             id: number;
             /** Is Reply */
@@ -1763,6 +1931,15 @@ export interface components {
          * @description A team as a game detail embeds it.
          */
         TeamRefOut: {
+            /** Abbreviation */
+            abbreviation: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** TeamRefView */
+        TeamRefView: {
             /** Abbreviation */
             abbreviation: string;
             /** Id */

@@ -101,6 +101,8 @@ export function testPostView(overrides: Partial<PostView> = {}): PostView {
     mentioned_game_ids: [],
     reposted_post: null,
     reposted_post_deleted: false,
+    data_link: null,
+    data_link_preview: null,
     ...overrides,
   };
 }

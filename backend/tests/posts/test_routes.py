@@ -213,21 +213,26 @@ def test_create_quote_repost_succeeds(app, client, session_factory):
     assert body["text"] == "quoting this!"
 
 
-def test_create_post_with_game_mention_resolves_event_mention(app, client, session_factory):
+def test_create_post_with_game_mention_stores_the_text_and_no_event_mention(
+    app, client, session_factory
+):
+    """POSTS-006 retired #GameId parsing for new posts (this test used to
+    pin the EventMention it created): the token is kept as typed text."""
     with session_factory() as session:
         author = _make_user(session, cognito_sub="sub-mention", username="mention_author")
         game = _seed_game(session)
         game_id = game.id
     _as_user(app, author)
 
-    response = client.post("/posts", json={"text": f"what a game #GameId{game_id}"})
+    text = f"what a game #GameId{game_id}"
+    response = client.post("/posts", json={"text": text})
 
     assert response.status_code == 201
+    assert response.json()["text"] == text
     post_id = response.json()["id"]
     with session_factory() as session:
         mention = session.query(EventMention).filter(EventMention.post_id == post_id).first()
-        assert mention is not None
-        assert mention.game_id == game_id
+        assert mention is None
 
 
 def test_create_post_with_processed_media_attaches_it(app, client, session_factory):

@@ -19,18 +19,36 @@ one level deep, never recursing, so a page of 20 costs the same number of
 statements as a page of 2. Which of those originals their owner deleted
 (POSTS-004's `reposted_post_deleted`) is one more batched read,
 app.posts.service.deleted_post_ids, in the same pass.
+
+A post's sports-data attachment (POSTS-006) is carried as `data_link`, read
+from the Post row itself, and `data_link_preview`, assembled from events/'
+batch reads: the links of every post in the pass, reposted originals
+included, are gathered into three key sets, and app.events.service's
+game_final_previews, player_game_previews and player_career_previews are
+each called once, and not at all when their set is empty. So links cost a
+fixed number of statements whatever the page size, and a page without
+links reads no events/ table.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import dataclasses
+from collections.abc import Collection, Sequence
 from datetime import datetime
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.events.service import (
+    game_final_previews,
+    player_career_previews,
+    player_game_previews,
+)
 from app.media.service import processed_media_for_posts
+from app.posts.data_link import DataLink
 from app.posts.models import Post
+from app.posts.schemas import DataLinkOut
 from app.posts.service import (
     deleted_post_ids,
     like_counts,
@@ -56,6 +74,101 @@ class MediaItemView(BaseModel):
     s3_key_thumbnail: str | None
 
 
+class TeamRefView(BaseModel):
+    id: int
+    name: str
+    abbreviation: str
+
+
+class GameFinalPreviewView(BaseModel):
+    """A game_final link's preview: every field of
+    app.events.service.GameFinalPreview."""
+
+    type: Literal["game_final"]
+    game_id: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    sub_label: str | None
+    series_game_number: int | None
+    home_team: TeamRefView
+    away_team: TeamRefView
+    home_score: int
+    away_score: int
+
+
+class PlayerGamePreviewView(BaseModel):
+    """A player_game link's preview: every field of
+    app.events.service.PlayerGamePreview. A DNP line is as stored (null
+    seconds_played, its dnp_reason, zeros)."""
+
+    type: Literal["player_game"]
+    line_id: int
+    game_id: int
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    team: TeamRefView
+    opponent: TeamRefView
+    is_home: bool
+    team_score: int
+    opponent_score: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    starter: bool
+    seconds_played: int | None
+    points: int
+    rebounds: int
+    assists: int
+    steals: int
+    blocks: int
+    turnovers: int
+    field_goals_made: int
+    field_goals_attempted: int
+    field_goal_pct: float | None
+    three_pointers_made: int
+    three_pointers_attempted: int
+    three_point_pct: float | None
+    free_throws_made: int
+    free_throws_attempted: int
+    free_throw_pct: float | None
+    plus_minus: int
+    dnp_reason: str | None
+
+
+class PlayerCareerPreviewView(BaseModel):
+    """A player_career link's preview: every field of
+    app.events.service.PlayerCareerPreview, computed at read time, not a
+    snapshot from the post's creation; a scope with no games has null
+    averages."""
+
+    type: Literal["player_career"]
+    player_id: int
+    first_name: str | None
+    last_name: str | None
+    position: str | None
+    first_season: str | None
+    last_season: str | None
+    scope: str
+    games_played: int
+    points_per_game: float | None
+    rebounds_per_game: float | None
+    assists_per_game: float | None
+    minutes_per_game: float | None
+    field_goal_pct: float | None
+    three_point_pct: float | None
+    free_throw_pct: float | None
+
+
+DataLinkPreview = Annotated[
+    GameFinalPreviewView | PlayerGamePreviewView | PlayerCareerPreviewView,
+    Field(discriminator="type"),
+]
+
+
 class PostView(BaseModel):
     """feed/'s (and, per this unit's brief, search/'s) response shape for a
     single post. Deliberately its own schema, not app.posts.schemas.PostOut
@@ -72,7 +185,13 @@ class PostView(BaseModel):
     `reposted_post_deleted` is true on a repost whose original its owner
     deleted (its `reposted_post` is then null, and the client shows a "Post
     deleted" placeholder); false everywhere else, including a repost whose
-    original is hidden only because its author is deactivated."""
+    original is hidden only because its author is deactivated.
+
+    `data_link` is the post's own attachment in PostOut's shape (a plain
+    repost has none; its `reposted_post` carries the original's), and
+    `data_link_preview` that attachment's events/ preview: null without a
+    link, or when its target has no preview. Legacy EventMention rows
+    produce `mentioned_game_ids` only, never either field."""
 
     id: int
     text: str | None
@@ -91,6 +210,43 @@ class PostView(BaseModel):
     mentioned_game_ids: list[int]
     reposted_post: PostView | None
     reposted_post_deleted: bool
+    data_link: DataLinkOut | None
+    data_link_preview: DataLinkPreview | None
+
+
+class _Previews:
+    """The events/ previews of every link in one assemble_post_views pass:
+    one batch read per link type, skipped when no link has that type."""
+
+    def __init__(self, session: Session, links: Collection[DataLink]) -> None:
+        game_ids = {link.ref_id for link in links if link.type == "game_final"}
+        line_ids = {link.ref_id for link in links if link.type == "player_game"}
+        career_keys = {
+            (link.ref_id, link.scope or "") for link in links if link.type == "player_career"
+        }
+        self._games = game_final_previews(session, game_ids) if game_ids else {}
+        self._lines = player_game_previews(session, line_ids) if line_ids else {}
+        self._careers = player_career_previews(session, career_keys) if career_keys else {}
+
+    def for_link(self, link: DataLink | None) -> DataLinkPreview | None:
+        """`link`'s preview: the dataclass's fields plus the link's type, a
+        TeamRef as a nested object. None without a link or a preview."""
+        if link is None:
+            return None
+        if link.type == "game_final":
+            game = self._games.get(link.ref_id)
+            if game is None:
+                return None
+            return GameFinalPreviewView(type="game_final", **dataclasses.asdict(game))
+        if link.type == "player_game":
+            line = self._lines.get(link.ref_id)
+            if line is None:
+                return None
+            return PlayerGamePreviewView(type="player_game", **dataclasses.asdict(line))
+        career = self._careers.get((link.ref_id, link.scope or ""))
+        if career is None:
+            return None
+        return PlayerCareerPreviewView(type="player_career", **dataclasses.asdict(career))
 
 
 def assemble_post_views(
@@ -119,6 +275,7 @@ def assemble_post_views(
 
     post_ids = list(every_post)
     author_ids = {post.author_id for post in every_post.values()}
+    links = {post.id: post.data_link for post in every_post.values()}
 
     authors = get_public_profiles(session, author_ids)
     likes = like_counts(session, post_ids)
@@ -128,6 +285,7 @@ def assemble_post_views(
     reposted = reposted_post_ids(session, viewer_id, post_ids) if viewer_id is not None else set()
     mentions_by_post = mentioned_game_ids_by_post(session, post_ids)
     media_by_post = processed_media_for_posts(session, post_ids)
+    previews = _Previews(session, [link for link in links.values() if link is not None])
 
     # Every view without its reposted_post first: these are both the page's
     # views and the one-level-deep inner views.
@@ -137,6 +295,7 @@ def assemble_post_views(
         if author is None:
             continue
 
+        link = links[post.id]
         flat[post.id] = PostView(
             id=post.id,
             text=post.text,
@@ -166,6 +325,8 @@ def assemble_post_views(
             mentioned_game_ids=mentions_by_post.get(post.id, []),
             reposted_post=None,
             reposted_post_deleted=False,
+            data_link=None if link is None else DataLinkOut.model_validate(link),
+            data_link_preview=previews.for_link(link),
         )
 
     views: list[PostView] = []

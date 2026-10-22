@@ -4,9 +4,10 @@ for creating a post per wiki/CodeContext/Modules/0x00-architecture.md
 app/posts/facade.py exists.
 
 Sequence under test: moderation chain -> confirm attached Media is
-Processed -> persist Post -> attach Media -> resolve #GameId mentions ->
-commit -> fan-out on PostEventBus (PostCreated always, PostMentionedEvent
-only when at least one mention resolved).
+Processed -> persist Post -> attach Media -> commit -> fan-out on
+PostEventBus (PostCreated only). POSTS-006 retired #GameId parsing for new
+posts: a token in new text creates no EventMention and publishes no
+PostMentionedEvent.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from app.events.models import Game, Team
 from app.media.models import Media, MediaStatus
 from app.posts.facade import (
     POST_CREATED,
-    POST_MENTIONED,
     CreatePostRequest,
     MediaNotFoundError,
     MediaNotProcessedError,
@@ -125,9 +125,11 @@ def test_publish_plain_post_persists_and_fires_post_created(session_factory):
         assert created_event.detail["author_id"] == author.id
 
 
-def test_publish_with_resolvable_mention_creates_event_mention_and_fires_both_events(
+def test_publish_with_resolvable_mention_creates_no_event_mention_and_only_fires_post_created(
     session_factory,
 ):
+    """POSTS-006: this test used to pin the EventMention and the
+    PostMentionedEvent a resolvable token produced."""
     with session_factory() as session:
         author = _make_user()
         session.add(author)
@@ -138,19 +140,15 @@ def test_publish_with_resolvable_mention_creates_event_mention_and_fires_both_ev
         bus = PostEventBus(publisher)
         facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
 
-        request = CreatePostRequest(author_id=author.id, text=f"great game #GameId{game.id}")
+        text = f"great game #GameId{game.id}"
+        request = CreatePostRequest(author_id=author.id, text=text)
         post = facade.publish(request)
 
-        mention = session.scalar(select(EventMention).where(EventMention.post_id == post.id))
-        assert mention is not None
-        assert mention.game_id == game.id
-        assert mention.raw_token == f"#GameId{game.id}"
+        assert session.scalar(select(EventMention).where(EventMention.post_id == post.id)) is None
+        assert session.get(Post, post.id).text == text
 
         event_names = [e.name for e in publisher.published]
-        assert event_names == [POST_CREATED, POST_MENTIONED]
-        mentioned_event = publisher.published[1]
-        assert mentioned_event.detail["post_id"] == post.id
-        assert mentioned_event.detail["game_ids"] == [game.id]
+        assert event_names == [POST_CREATED]
 
 
 def test_publish_with_unresolvable_mention_creates_no_event_mention_and_only_fires_post_created(
