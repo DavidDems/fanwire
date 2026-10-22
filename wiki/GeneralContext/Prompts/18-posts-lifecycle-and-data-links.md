@@ -143,8 +143,8 @@ Update this section in every spec PR and unit PR of this thread.
     games, five players and seven lines inserted into `backend-dev`'s
     database. A fresh database also needs the test account's profile
     created on first sign-in.
-  - **`FrontendUI/components.md` rows** for both units are still to write:
-    a Director PR, with or after the units.
+  - **`FrontendUI/components.md` rows** for both units: Director PR #223,
+    merged with or after them.
 - **2026-10-22, decided (the human, by `AskUserQuestion`):**
   - **FRONTEND-012:**
     - A deactivated account browses as a guest under a banner, and a
@@ -168,8 +168,8 @@ Update this section in every spec PR and unit PR of this thread.
   - one `useAccount()` state hook for the whole app.
 - **Next:**
   1. The human merges #220, then #221 after its `main` merge.
-  2. Write the `components.md` rows for FRONTEND-014 and FRONTEND-017, and
-     delete the backlog's game-link bullet (FRONTEND-014 closes it).
+  2. Merge #223 (the `components.md` rows), and delete the backlog's
+     game-link bullet (FRONTEND-014 closes it).
   3. Hand-run **`FRONTEND-015`** and **`FRONTEND-012`**, both cut after #220
      and #221 merge. They both touch `PostNode` and the feed caches, so test
      them on a merged preview.
