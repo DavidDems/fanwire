@@ -8,9 +8,14 @@ import styles from "./ComposeTextBox.module.css";
  * The text box.
  *
  * It reports what was typed to the mediator and renders what the mediator
- * publishes — including text it did not produce, such as the token a chosen
- * suggestion inserted. It imports neither of the other two compose controls, and
- * `component-isolation.test.ts` reads this file from disk to keep it that way.
+ * publishes — including text it did not produce, such as a template's opening
+ * or the text an Undo restored. It imports neither of the other two compose
+ * controls, and `component-isolation.test.ts` reads this file from disk to keep
+ * it that way.
+ *
+ * It has no standing hint since `FRONTEND-013`: the "Type # to mention a game,
+ * or $ to mention a team" line went with the dropdown it described. A typed
+ * `#GameId123` is plain text now; stats are attached with Attach stats.
  */
 
 export interface ComposeTextBoxProps {
@@ -19,7 +24,7 @@ export interface ComposeTextBoxProps {
   label?: string;
   /**
    * The id of an element elsewhere that describes the box too — the inline
-   * composer's "Replying to @username" — announced before the standing hint.
+   * composer's "Replying to @username".
    */
   describedBy?: string;
   /** Focus the box once it is on screen (a thread opened to reply). */
@@ -36,10 +41,7 @@ export function ComposeTextBox({
 }: ComposeTextBoxProps) {
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const field = describeField(TEXT_BOX_ID, { hint: true });
-  const description = [describedBy, field["aria-describedby"]]
-    .filter((token) => token !== undefined)
-    .join(" ");
+  const field = describeField(TEXT_BOX_ID);
 
   // A passive effect rather than the `autoFocus` attribute: it runs after the
   // dialog the box may sit in has opened, so the browser's own dialog
@@ -49,14 +51,10 @@ export function ComposeTextBox({
   }, [autoFocus]);
 
   return (
-    <Field
-      id={TEXT_BOX_ID}
-      label={label}
-      hintText="Type # to mention a game, or $ to mention a team."
-    >
+    <Field id={TEXT_BOX_ID} label={label}>
       <textarea
         {...field}
-        aria-describedby={description}
+        aria-describedby={describedBy}
         ref={ref}
         className={styles.text}
         name="post-text"

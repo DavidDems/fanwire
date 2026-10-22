@@ -10,6 +10,15 @@ import { copyDraft, type Draft } from "./draft";
  * draft afterwards — and nothing done to a restored draft — can reach the stored
  * one. A snapshot that kept the caller's object looks correct right up to the
  * first mutation, which is the only moment anyone would ever need it.
+ *
+ * `ComposeMediator` captures one before each attach or replace of a data link
+ * (`FRONTEND-013`), and the link is part of what is captured: `copyDraft`
+ * detaches it the way it detaches the media ids.
+ *
+ * The snapshot still captures the whole draft, but the mediator's `undo()`
+ * takes back only its `dataLink`: text typed and media attached after the
+ * attach are newer than the snapshot, and restoring them away would lose the
+ * user's words — the failure `ComposePage` names as the worst it can have.
  */
 export class DraftSnapshot {
   private readonly state: Draft;

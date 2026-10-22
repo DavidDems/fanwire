@@ -25,7 +25,7 @@
   gap: var(--space-3);
 }
 
-/* Undo mention on the left, Reply on the right; they wrap if they must. */
+/* Reply on the right of its row. */
 .actions {
   display: flex;
   flex-wrap: wrap;

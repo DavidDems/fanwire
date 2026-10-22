@@ -17,7 +17,7 @@
  *   post id, reads "Post not found" inside the modal; a failed read is an
  *   `InlineAlert` with "Try again", which reads again. Neither throws.
  * - **The composer** (criteria 6, 7, 8) is `features/compose`'s
- *   `InlineComposer`: the same text box, `#`/`$` suggestions and media widget
+ *   `InlineComposer`: the same text box and media widget
  *   as `/compose`, labelled "Replying to @<author>" by `aria-describedby`,
  *   focused when the modal was opened to reply (`?reply=1`) and not otherwise.
  *   A reply is `POST /posts` with `is_reply: true` and the root's id; the
@@ -338,30 +338,17 @@ describe("the reply composer (criteria 6 and 7)", () => {
     expect(box).not.toHaveFocus();
   });
 
-  it("offers # game suggestions as /compose does", async () => {
+  it("offers no # or $ suggestions and no Attach stats: a reply carries no attachment (FRONTEND-013)", async () => {
     const { dialog, user } = await openDirect("member");
 
-    await user.type(within(dialog).getByRole("textbox"), "Called it #12");
+    await user.type(within(dialog).getByRole("textbox"), "Called it #12 $Tor");
 
-    const panel = await within(dialog).findByRole("region", {
-      name: "Game suggestions",
-    });
     expect(
-      await within(panel).findByRole("button", { name: /Game 123/ }),
-    ).toBeInTheDocument();
-  });
-
-  it("offers $ team suggestions as /compose does", async () => {
-    const { dialog, user } = await openDirect("member");
-
-    await user.type(within(dialog).getByRole("textbox"), "Go $Tor");
-
-    const panel = await within(dialog).findByRole("region", {
-      name: "Team suggestions",
-    });
+      within(dialog).queryByRole("region", { name: /suggestions/i }),
+    ).not.toBeInTheDocument();
     expect(
-      await within(panel).findByRole("button", { name: /Toronto Raptors/ }),
-    ).toBeInTheDocument();
+      within(dialog).queryByRole("button", { name: /attach stats/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("offers media attachment as /compose does", async () => {

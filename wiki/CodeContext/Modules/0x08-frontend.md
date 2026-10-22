@@ -314,8 +314,8 @@ each owns one piece:
 | Piece | Pattern |
 |---|---|
 | Assembling `CreatePostRequest` across steps | `PostBuilder`, validation in `build()` |
-| Text box ↔ autocomplete ↔ media widget | `ComposeMediator` |
-| Undo after a mention is inserted | `DraftSnapshot` (Memento) |
+| Text box ↔ attachment picker ↔ media widget | `ComposeMediator` |
+| Undo after a sports-data link is attached or replaced | `DraftSnapshot` (Memento) |
 | Quick-post templates | `PostTemplate.clone()` (Prototype) |
 
 - **The mediator's isolation is enforced from disk**, by
@@ -373,17 +373,12 @@ each owns one piece:
   Lambda's Pillow parse are the real gates and run regardless. `max_bytes` exists
   only in the ticket response, so the size check necessarily comes *after*
   `POST /media/uploads` and necessarily before the bucket POST.
-- **`#` inserts `#GameId<id>`, which the backend resolves; `$TOR` is carried in
-  the text and deliberately resolves to nothing.** `app.posts.mentions` implements
-  `#GameId<digits>` only — a bare team abbreviation does not identify one `Game`
-  and `EventMention.game_id` is `NOT NULL`, so an unresolvable token is dropped
-  from mention creation while the post text is kept exactly as authored
-  ([[0x03-posts]] `EventMention` → Open decisions, "Scope note"). This unit does
-  not invent a resolution rule or a different `$` format.
-- **Game suggestions filter on the id.** `GameOut` carries team *ids*, scores and
-  a date and no human-readable name, so the id the user is typing is the only
-  thing to match against; the date and score are what tell two games apart in the
-  label. A data-model limit, not a UI choice.
+- **The `#`/`$` mention dropdown is gone (`FRONTEND-013`, the human, 2026-10-22).**
+  `POSTS-006` stops parsing `#GameId` in new posts, so a token inserted by a
+  dropdown would silently do nothing, and `$TEAM` never resolved to anything. A
+  typed `#GameId123` is sent as plain text. Old posts' resolved mentions still
+  render as links in the feed (`PostText`, unchanged). `MentionAutocomplete`,
+  `mentions.ts`, the `mention-inserted` event and Undo mention are deleted.
 - **The address is how another feature opens the composer in a context.**
   `/compose?reply_to=<id>` and `/compose?repost_of=<id>` are read by
   `ComposePage` and handed to the `ComposeMediator` it builds; the mediator has
@@ -398,8 +393,8 @@ each owns one piece:
   `parent_post_id: null` on a post still claiming `is_reply: true`. The context
   is asserted through the `POST /posts` body, because reply context is not
   content — `canBuild()` says so — and the composer renders nothing for it.
-- **Nothing is fetched when the page mounts.** Games and teams are asked for when
-  the user types `#` or `$`, templates are stored in the app, and the media poll
+- **Nothing is fetched when the page mounts.** The pickers fetch when they open,
+  a pre-filled link when the address names one, templates are stored in the app, and the media poll
   starts at the first upload. `routes.test.tsx` renders `/compose` under
   `onUnhandledRequest: "error"`, so a query on mount would break a file this unit
   is not allowed to touch.
@@ -419,12 +414,44 @@ each owns one piece:
   because `components/ui` was outside its paths; the prop replaced it. The
   description is the message alone, because the alert's icon is `aria-hidden`;
   `compose-style.test.tsx` pins both that and that the target is the alert.
-- **Mention suggestions sit in the form's flow, not over it** (`UI-006`). An
-  overlay needs a positioned ancestor that the suggestions control doesn't own,
-  and would cover the image field on a phone. The panel is still relatively
-  positioned on `--z-dropdown`, so its shadow paints over what follows. Each of
-  the three colleagues has its own module CSS and imports no other, which
+- **The attachment picker sits in the form's flow, not over it**, as the mention
+  panel did (`UI-006`): the composer may itself be open over a page. Each of the
+  three colleagues has its own module CSS and imports no other, which
   `component-isolation.test.ts` reads from disk.
+
+### Sports-data attachments (`FRONTEND-013`)
+
+`AttachmentPicker` is the third colleague. "Attach stats" (`aria-expanded`)
+opens a panel with three choices. Each sends `POST /posts`' `data_link`
+([[0x03-posts]] "Sports-data attachments"):
+
+| Choice | Reads | Not offered | Sends |
+|---|---|---|---|
+| Game result | `GET /events/teams`, `/events/seasons`, `/events/games?team_id&season` | a game at 0–0 (the backend's `Game.completed` rule; `GameOut` has no flag) | `{type: "game_final", ref_id: <game id>}` |
+| Player's game | the same game finder, then `GET /events/games/{id}` | a row with `seconds_played` null (did not play) | `{type: "player_game", ref_id: <line_id>}` |
+| Player career | `GET /events/players?q=` (debounced), then `GET /events/players/{id}` | a scope whose career line has `games_played` 0 | `{type: "player_career", ref_id: <player id>, scope}` |
+
+- **Only what the server accepts is offered**, but the six POSTS-005 422 codes
+  still get their own messages (`dataLink.ts` `refusalMessage`), because data
+  can change between picking and posting. The draft and its link are kept.
+- **The summary is the composer's own** ("Attached stats" region, with Remove
+  attached stats). It is one line, built from the responses the picker already
+  holds, and is not `FRONTEND-014`'s feed preview.
+- **Undo restores the previous link, and only the link.** A `DraftSnapshot` is
+  captured before every attach or replace, and Undo attach steps back through
+  them. It leaves text and media as they are now: losing typed text is the
+  worst thing the composer can do. Remove clears the link without a snapshot.
+- **No link on a reply.** Attach stats is absent with `?reply_to=` and from
+  `InlineComposer`. A repost with a link needs text, and a link alone is not
+  content (`canBuild()`).
+- **The pre-filled address is the contract `FRONTEND-017` links to**:
+  `/compose?link=game_final&ref=<game id>`,
+  `?link=player_game&ref=<line_id>&game=<game id>` (the game is only for finding
+  the line to summarise, since there is no read of a line by id) and
+  `?link=player_career&ref=<player id>&scope=regular|playoffs`. `dataLinkIn`
+  (exported from `ComposePage.tsx`) parses it and refuses anything malformed,
+  missing or stray. The picker then checks the target, and a refusal opens a
+  plain composer with a note, never a half-attached link.
 
 ## Notifications (`FRONTEND-006`)
 
