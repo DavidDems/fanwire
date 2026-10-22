@@ -161,3 +161,35 @@
 .dnpName {
   font-weight: var(--font-weight-semibold);
 }
+
+/*
+ * "Post about this" (FRONTEND-017, signed in only): one link by the score
+ * header, and a compact pen-and-"Post" link in the box score's trailing
+ * column, its full name for assistive technology in hidden text. Inline and
+ * no taller than a line of the table's text, so a played row is the same
+ * height as a did-not-play one.
+ */
+.postGame {
+  margin: 0;
+}
+
+.table .postCell {
+  width: 1%;
+  text-align: left;
+}
+
+.postLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-link);
+  border-radius: var(--radius-sm);
+}
+
+.postLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 
 import { EmptyState } from "../../components/ui/EmptyState";
+import { SquarePenIcon } from "../../components/ui/icons";
+import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import type {
   BoxScorePlayerOut,
   DidNotPlayOut,
@@ -14,6 +16,7 @@ import {
   formatPlusMinus,
 } from "./format";
 import styles from "./Games.module.css";
+import { postAboutLineHref } from "./postLinks";
 
 /** The eighteen columns, with the full name of each abbreviation. */
 const COLUMNS: ReadonlyArray<readonly [string, string | null]> = [
@@ -46,14 +49,25 @@ function fullName(player: BoxScorePlayerOut | DidNotPlayOut): string {
 export interface BoxScoreProps {
   team: TeamRefOut;
   boxScore: TeamBoxScoreOut;
+  /** The game the box score belongs to, for each row's post link. */
+  gameId: number;
+  /**
+   * Whether the viewer is signed in: if so, the table gains a trailing
+   * "Post" column, a link in each played row (`FRONTEND-017`).
+   */
+  canPost: boolean;
 }
 
 /**
  * One team's box score: its table in a focusable scroll container (so a
  * keyboard user can scroll it sideways on a phone), then who did not play.
  * Starters come first and the bench after, each in the order the API sent.
+ *
+ * The post links sit in a trailing column of their own, not in the name cell,
+ * so the row header keeps its one link and the eighteen stat columns stay
+ * where they are; a guest's table has no such column at all.
  */
-export function BoxScore({ team, boxScore }: BoxScoreProps) {
+export function BoxScore({ team, boxScore, gameId, canPost }: BoxScoreProps) {
   const { players, did_not_play: didNotPlay, totals } = boxScore;
   const headingId = `box-score-${team.id}`;
   const starters = players.filter((player) => player.starter);
@@ -89,17 +103,27 @@ export function BoxScore({ team, boxScore }: BoxScoreProps) {
                     )}
                   </th>
                 ))}
+                {canPost ? (
+                  <th scope="col" className={styles.postCell}>
+                    <VisuallyHidden>Post</VisuallyHidden>
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {starters.map((player) => (
-                <PlayerRow key={player.player_id} player={player} />
+                <PlayerRow
+                  key={player.player_id}
+                  player={player}
+                  postHref={rowPostHref(player, gameId, canPost)}
+                />
               ))}
               {bench.map((player, index) => (
                 <PlayerRow
                   key={player.player_id}
                   player={player}
                   firstOfBench={index === 0 && starters.length > 0}
+                  postHref={rowPostHref(player, gameId, canPost)}
                 />
               ))}
             </tbody>
@@ -140,6 +164,7 @@ export function BoxScore({ team, boxScore }: BoxScoreProps) {
                 <td>{totals.personal_fouls}</td>
                 <td />
                 <td>{totals.points}</td>
+                {canPost ? <td /> : null}
               </tr>
             </tfoot>
           </table>
@@ -163,12 +188,29 @@ export function BoxScore({ team, boxScore }: BoxScoreProps) {
   );
 }
 
+/**
+ * The row's post-link address: `undefined` for a guest (no column), `null`
+ * for a row stored as did-not-play (an empty cell), else the line's address.
+ */
+function rowPostHref(
+  player: BoxScorePlayerOut,
+  gameId: number,
+  canPost: boolean,
+): string | null | undefined {
+  if (!canPost) return undefined;
+  // The schema types it as a number, but a stored DNP row carries null.
+  const seconds = player.seconds_played as number | null;
+  return seconds === null ? null : postAboutLineHref(player.line_id, gameId);
+}
+
 function PlayerRow({
   player,
   firstOfBench = false,
+  postHref,
 }: {
   player: BoxScorePlayerOut;
   firstOfBench?: boolean;
+  postHref: string | null | undefined;
 }) {
   return (
     <tr className={firstOfBench ? styles.benchStart : undefined}>
@@ -210,6 +252,19 @@ function PlayerRow({
       <td>{player.personal_fouls}</td>
       <td>{formatPlusMinus(player.plus_minus)}</td>
       <td>{player.points}</td>
+      {postHref === undefined ? null : (
+        <td className={styles.postCell}>
+          {postHref === null ? null : (
+            <Link to={postHref} className={styles.postLink}>
+              <SquarePenIcon size={16} />
+              Post
+              <VisuallyHidden>
+                {` about ${fullName(player)}’s game`}
+              </VisuallyHidden>
+            </Link>
+          )}
+        </td>
+      )}
     </tr>
   );
 }
