@@ -206,7 +206,11 @@ function revealRow(row: HTMLElement) {
       return;
     }
   }
-  row.scrollIntoView({ block: "center" });
+  // In the modal with nothing overflowing, the row is already in view:
+  // "nearest" leaves every ancestor where it is.
+  row.scrollIntoView({
+    block: row.closest("dialog") === null ? "center" : "nearest",
+  });
 }
 
 function PlayerRow({
