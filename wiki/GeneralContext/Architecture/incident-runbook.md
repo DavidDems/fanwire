@@ -124,8 +124,27 @@ reaches the database) and the SPA root, through `https://fanwire.daviddems.com`,
 minutes. A red smoke check means the stacks deployed and the site does not answer as it should.
 
 1. **Rule out the migration first.** If the commit adds an Alembic revision, the new code may be waiting for
-   its schema. Invoke the Migration function (`build-deployment.md` → "Automated deploy"), then re-run the
-   failed run's job from its page. If it goes green, it was never a bad deploy.
+   its schema: the usual sign is `/api/health` passing and `/api/feed?limit=1` answering 500. The deploy role
+   cannot invoke the Migration function, so run these in order, in one PowerShell window (the same commands as
+   `build-deployment.md` → "Automated deploy" → "Run migrations"):
+   1. Sign in:
+      ```powershell
+      aws sso login --profile fanwire-workload
+      ```
+   2. Find the function. `$migration` then prints a name containing `Migration`:
+      ```powershell
+      $migration = aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'Migration')].FunctionName" --output text; $migration
+      ```
+   3. Invoke it. The answer must name the commit's new head revision, `{"revision": "<id>"}`:
+      ```powershell
+      aws lambda invoke --profile fanwire-workload --region ca-central-1 --function-name $migration "$env:TEMP\migrate.json"; Get-Content "$env:TEMP\migrate.json"
+      ```
+   4. Re-run the failed deploy run. It waits for the environment's reviewer again:
+      ```powershell
+      gh run rerun PASTE_RUN_ID --failed
+      ```
+
+   If it goes green, it was never a bad deploy (POSTS-005's deploy, 2026-10-22, was exactly this).
 2. **Otherwise, re-run the last good deploy.** A `workflow_dispatch` can't target an old commit. The
    `production` environment admits `main` only, so a dispatch either deploys `main`'s head again or is refused.
    Re-running an earlier *run* keeps that run's commit and its `main` ref, which the environment admits. List

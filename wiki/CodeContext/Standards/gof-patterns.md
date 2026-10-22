@@ -22,7 +22,7 @@ fanwire/
 - **Singleton** — `AppConfig` and `Logger`. One instance per process, injected everywhere else.
 - **Factory Method** — `NotificationFactory.create(type)` returns `EmailNotification`, `PushNotification`, or `InAppNotification`. `notifications/` depends only on the `Notification` interface, never a concrete class.
 - **Abstract Factory** — `SportsProviderFactory` produces a matched family per data vendor: `GameFetcher` + `TeamResolver` + `ScoreNormalizer` for API-SPORTS vs. a fallback provider. Swapping vendor swaps the whole family atomically — `events/` never depends on one vendor's response shape.
-- **Builder** — `PostBuilder` assembles a `Post` from text, media, and one or more `EventMention`s across a multi-step compose flow before a single immutable `Post` is emitted.
+- **Builder** — `PostBuilder` assembles a `Post` from text, media, and at most one sports-data link (`data_link`, POSTS-005) across a multi-step compose flow before a single immutable `Post` is emitted.
 - **Prototype** — `PostTemplate.clone()` — quick-post templates ("final score reaction", "pre-game hype") are cloned from a stored template and customized, instead of built from scratch.
 
 ## Structural patterns
@@ -39,11 +39,11 @@ fanwire/
 
 - **Chain of Responsibility** — moderation pipeline: `ProfanityFilter → SpamScoreCheck → RateLimitCheck → DuplicateContentCheck`, each a handler that can halt the chain. `PublishPostFacade` owns the chain, not individual checks.
 - **Command** — `DeletePostCommand`, `HidePostCommand`, `ReportPostCommand` are objects with `execute()`/`undo()`, queued and logged — required for the moderation audit trail and admin undo.
-- **Interpreter** — `MentionParser` parses `@user`, `#GameId`, `$TEAM` tokens out of raw post text into a mention AST, defined as data-driven grammar rules so a new mention syntax doesn't require a rewrite.
+- **Interpreter** — `MentionParser` parses `@user`, `#GameId`, `$TEAM` tokens out of raw post text into a mention AST, defined as data-driven grammar rules so a new mention syntax doesn't require a rewrite. Only `#GameId` was built, and new posts stop being parsed in POSTS-006 (human-decisions §9): existing `EventMention` rows stay readable, and the parser goes if nothing reads it.
 - **Iterator** — `ThreadIterator` traverses a post's reply thread uniformly for `feed/` and `reporting/`, independent of whether it's backed by a list or a paginated cursor.
-- **Mediator** — `ComposeMediator` coordinates the text box, mention-autocomplete dropdown, and media-upload widget in the compose UI so they never reference each other directly.
+- **Mediator** — `ComposeMediator` coordinates the text box, sports-data attachment picker (FRONTEND-013, which replaced the mention-autocomplete dropdown), and media-upload widget in the compose UI so they never reference each other directly.
 - **Memento** — `DraftSnapshot` captures an in-progress post draft before a risky action (attaching live event data) so the compose UI can roll back without exposing `Post` internals.
-- **Observer** — `PostEventBus`: `posts/` publishes `PostCreated`, `PostMentionedEvent`, `PostReported`; `feed/`, `notifications/`, `moderation/`, and `reporting/` subscribe independently. `posts/` has zero knowledge of its subscribers.
+- **Observer** — `PostEventBus`: `posts/` publishes `PostCreated`, `PostReported` (and `PostMentionedEvent` until POSTS-006 retires `#GameId` parsing); `feed/`, `notifications/`, `moderation/`, and `reporting/` subscribe independently. `posts/` has zero knowledge of its subscribers.
 - **State** — `Post.moderationStatus` (`Visible → UnderReview → Hidden/Removed`) and `Media.status` (`Uploaded → Scanning → Processed/Rejected`) are each a `State` object per status defining legal transitions. A post cannot attach anything but `Processed` media, and a removed post cannot be silently re-shown, by construction rather than by an `if` check someone forgot.
 - **Strategy** — `FeedRankingStrategy` (chronological, engagement-weighted, following-only) and `MentionResolutionStrategy` (exact team match, fuzzy match) are swapped at runtime without branching in `feed/`.
 - **Template Method** — `AbstractEventIngestionPipeline.run()` fixes the skeleton (`fetchRawEvents → normalize → dedupe → matchToMentions → publish`); `LiveGameIngestion` and `FinalScoreIngestion` override only the steps that differ. `media/`'s upload pipeline (`validateType → scanForMalware → stripMetadata → generateVariants → publish`) is the same shape, one level down.

@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-013",
+  "objective": "Let the composer attach one sports-data link (a completed game, a player's played line in one game, or a player's career in one scope) through pickers built on the existing events/ routes, with a summary of the attachment, Undo and Remove before publishing, a documented /compose address that opens it pre-filled, and the #/$ mention dropdown removed.",
+  "acceptance_criteria": [
+    "On /compose with no reply context, an 'Attach stats' control opens a picker with three choices: Game result, Player's game, Player career. It is absent from InlineComposer (the thread's reply box) and from /compose?reply_to=<id>.",
+    "Game result: the user narrows by team and season (GET /events/teams, /events/seasons, /events/games?team_id&season); a game whose home and away scores are both 0 is not offered; choosing one attaches {type: 'game_final', ref_id: <game id>}.",
+    "Player's game: after choosing a game the same way, the picker lists that game's box-score players from GET /events/games/{id} with their line_id; did-not-play players are not offered; choosing one attaches {type: 'player_game', ref_id: <line_id>}.",
+    "Player career: the user searches players by name (GET /events/players?q=), chooses one, then a scope, Regular season or Playoffs, from GET /events/players/{id}; a scope whose career line has games_played 0 is not offered; choosing attaches {type: 'player_career', ref_id: <player id>, scope}.",
+    "An attached link shows a summary in the composer naming what it is (teams, score and date; player, team, opponent, date and points; player, scope and games played), with Remove (clears it) and Undo (restores the draft from before the last attach or replace, via DraftSnapshot); attaching again replaces the link.",
+    "Post sends data_link exactly as attached (no scope key except for player_career) alongside text and media_ids; a draft with only a link and no text or image cannot be posted; on /compose?repost_of=<id> a link can be attached and the post needs text.",
+    "A 422 whose detail is one of POSTS-005's machine codes (link_target_not_found, game_not_completed, player_did_not_play, no_games_in_scope, data_link_on_reply, data_link_needs_quote_text) keeps the draft and its attachment and shows a specific message for it; any other failure keeps the existing generic message.",
+    "/compose?link=game_final&ref=<game id>, /compose?link=player_game&ref=<line_id>&game=<game id> and /compose?link=player_career&ref=<player id>&scope=regular|playoffs open the composer with that link attached and its summary shown; a missing, malformed or unknown parameter set, a line not in that game's box score, a DNP line, an incomplete game or a scope with no games opens it with no attachment and an inline note; the parsing is one exported function, validated at the boundary like postIdIn.",
+    "The #/$ mention dropdown is gone: MentionAutocomplete, mentions.ts, the mention-inserted event and the Undo mention control are deleted, typing # or $ fetches nothing, and a typed #GameId123 is sent as plain text; the composer still makes no request on mount.",
+    "ComposeMediator stays the only wiring between text box, attachment picker and media widget; Draft gains the link; PostBuilder and the quick-post Prototype clone handle it without sharing objects.",
+    "Every existing frontend test passes except those pinning the removed dropdown, which the test commit deletes or rewrites and names in its message; typecheck, lint and build pass; 0x08-frontend.md and FrontendUI/components.md describe the picker and the summary.",
+    "Browser rows (vite preview against backend-dev with seeded data, signed in, light and dark, 360 and 1280 wide): attach each of the three types and post it, the post appears in the feed; Remove and Undo; a DNP player and a 0-0 game are not offered; a pre-filled /compose address shows its summary; keyboard-only: the picker opens, every choice is reachable, focus returns to Attach stats on close."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/compose/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/components.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/routes/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

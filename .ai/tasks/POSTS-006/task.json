@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-006",
+  "objective": "Carry each post's sports-data attachment into feed, search and thread responses as data_link plus an assembled typed preview built by events/' batch reads in a bounded number of queries, count game_final and player_game links in preferred-team relevance through a stored linked_line_game_id, and end #GameId parsing for new posts while legacy mentions stay readable.",
+  "acceptance_criteria": [
+    "An Alembic revision (down_revision c7e3a5d9f1b4) adds posts.linked_line_game_id (bigint, nullable, FK games.id), backfills it from player_game_stats.game_id for every existing row with linked_player_game_stats_id set, then adds CHECK ck_posts_line_game_pairing ((linked_player_game_stats_id IS NULL) = (linked_line_game_id IS NULL)) and the indexes ix_posts_linked_game_id and ix_posts_linked_line_game_id, each partial WHERE the column IS NOT NULL; upgrade, downgrade, upgrade succeeds, and a row seeded with a player_game link before the upgrade has the line's game id after it.",
+    "A direct insert with linked_player_game_stats_id set and linked_line_game_id null, or linked_line_game_id set and linked_player_game_stats_id null, raises IntegrityError.",
+    "POST /posts with a player_game data_link stores linked_line_game_id equal to that line's game id, read through app.events.service (no import of app.events.models outside the two files the existing scan allows); game_final and player_career posts and posts without a link store it null; PostOut is unchanged.",
+    "PostView (feed, search, thread root and replies, and a repost's reposted_post) gains data_link ({type, ref_id, scope} or null, the PostOut shape) and data_link_preview: null when data_link is null or its target has no preview, otherwise a discriminated union on type of game_final (every GameFinalPreview field), player_game (every PlayerGamePreview field) and player_career (every PlayerCareerPreview field), each carrying the destination ids game_id / line_id / player_id (and scope for a career).",
+    "A plain repost has data_link null and its reposted_post carries the original's data_link and data_link_preview; a quote repost with its own link carries its own, and its reposted_post its original's.",
+    "A player_game preview of a DNP line, and a career preview whose figures are null, are returned as stored (no invented values); a player_career preview reflects a new box-score line added after the post was created (computed live, not a snapshot).",
+    "assemble_post_views issues the same number of statements for a page of 2 and a page of 20 posts that between them carry all three link types plus reposts of linked originals, and no preview statement at all for a page with no links: asserted on GET /feed, GET /search/posts and GET /feed/thread/{id} with the statement counter tests/feed/test_post_view_queries.py already uses.",
+    "The preferred-team feed (a viewer with preferred_team_id) includes a post by an unfollowed author whose linked_game_id, or linked_line_game_id, is a game of that team, and a legacy EventMention of one as before; it excludes an unfollowed author's player_career link to a player of that team and a link to another team's game; each post appears once.",
+    "A post created after this unit whose text contains #GameId<id> creates no EventMention row and publishes only PostCreated (no PostMentionedEvent); a data_link alongside such text is accepted (201), so data_link_with_game_mention is no longer raised; the text is stored as typed.",
+    "Existing EventMention rows still produce mentioned_game_ids in feed, search and thread responses, including an old reply with mentions and an old post mentioning several games, and never populate data_link or data_link_preview.",
+    "Every existing posts, feed, search and notifications test passes, except tests pinning the retired #GameId parsing for new posts or data_link_with_game_mention, which the test commit rewrites to the new rule and names in its message.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated, typed PostView fixtures under frontend/src/test gain data_link: null and data_link_preview: null, and the frontend typecheck and test suite pass."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "backend/app/events/**",
+    "backend/app/users/**",
+    "backend/app/media/**",
+    "backend/app/search/**",
+    "backend/app/notifications/**",
+    "backend/pyproject.toml",
+    "frontend/src/features/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

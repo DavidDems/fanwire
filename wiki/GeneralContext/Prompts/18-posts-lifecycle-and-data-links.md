@@ -85,10 +85,40 @@ Update this section in every spec PR and unit PR of this thread.
   machine codes for the post-level and target refusals; no `data_link` on a
   plain repost; FKs to `events/` tables by string, no index until
   `POSTS-006` needs one; `PostOut.data_link` mirrors the request.
-- **Next:** hand-run `POSTS-005`. `FRONTEND-012` (lifecycle UI) is
-  unblocked but off the linking path; spec it when there's room. After
-  `POSTS-005`: one spec PR for `POSTS-006`, `FRONTEND-013`, `FRONTEND-017`
-  and `FRONTEND-014`.
+- **2026-10-22, stage 3 merged:** `POSTS-005` as #213. Its deploy's smoke
+  check failed until the human invoked the Migration function: expected for
+  a new revision, and `incident-runbook.md` "Roll back a deploy" step 1 now
+  carries the commands inline (the stage 4 spec PR).
+  - The import scan allows `app.events.models` in `posts/models.py` (FK
+    registration) as well as `mentions.py`.
+- **2026-10-22, decided (the human, by `AskUserQuestion`; `human-decisions.md`
+  §9):**
+  - preferred-team relevance for a `player_game` link uses a stored
+    `posts.linked_line_game_id`, not a cross-module query;
+  - the composer's `#`/`$` dropdown goes entirely;
+  - "Post about this" is signed-in only.
+- **2026-10-22, stage 4 specs written:** `POSTS-006`, `FRONTEND-013`,
+  `FRONTEND-017`, `FRONTEND-014` (one Director PR, which also updates
+  `Standards/gof-patterns.md`'s Builder, Mediator, Interpreter and Observer
+  lines). Settled in them:
+  - `PostView.data_link` is the `PostOut` shape, and `data_link_preview` is a
+    discriminated union with every `events/` preview field, null when
+    there's no link or no preview row.
+  - `#GameId` parsing and `PostMentionedEvent` stop for new posts, and so
+    does `data_link_with_game_mention`.
+  - The pre-filled compose address is
+    `/compose?link=<type>&ref=<id>[&game=<id>|&scope=<scope>]`, FRONTEND-013's
+    contract for FRONTEND-017.
+  - Game and player details join the modal flow as overlay routes, and
+    `?line=<line_id>` highlights a box-score row.
+- **Next:** hand-run `FRONTEND-013` and `POSTS-006`, in parallel. They
+  depend only on POSTS-005. Merge FRONTEND-013 first or together, so the
+  live composer never inserts tokens that do nothing, and test the pair on a
+  merged preview.
+  - Then `FRONTEND-017` (needs FRONTEND-013) and `FRONTEND-014` (needs
+    POSTS-006), whose specs are already merged.
+  - `FRONTEND-012` (lifecycle UI) is still unblocked and still unspecced.
+  - `FRONTEND-015` (stage 6) is specced after FRONTEND-014.
 
 ## Read first, in this order
 
