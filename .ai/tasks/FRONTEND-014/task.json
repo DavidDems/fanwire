@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-014",
+  "objective": "Render POSTS-006's data_link_preview as three distinct post-card components (game result, player game line, player career), each with an accessible link to its detail kept separate from the card's thread navigation, and open game and player details inside FRONTEND-011's one modal flow, a player-game destination highlighting that player's line.",
+  "acceptance_criteria": [
+    "A post card (feed, search, thread root and replies) whose data_link_preview is game_final shows a GamePreview: both teams, the final score, the date and, for a playoff game, its label; player_game shows a PlayerGamePreview: player, team, opponent, result, date and the line (minutes, points, rebounds, assists, shooting), a DNP line showing its reason instead of figures; player_career shows a PlayerCareerPreview: player, the scope's label (Regular season / Playoffs), games played and per-game figures, a null figure shown as an em dash.",
+    "A card whose data_link is set but data_link_preview is null shows a neutral 'Stats unavailable' line, never an empty box or a crash; a card with neither shows nothing new.",
+    "A plain repost shows the original's preview inside the reposted card; a quote repost shows its own preview and its reposted card shows the original's.",
+    "Each preview has exactly one link to its detail: game_final to /games/<game_id>, player_game to /games/<game_id>?line=<line_id>, player_career to /players/<player_id>; activating it does not also open the post's thread, and the card's own thread control is unchanged.",
+    "Opened from a post card (on a page or inside the modal), /games/<id> and /players/<id> render inside the one modal surface as details of the same flow: Back returns to the previous detail, Close and Escape return to the origin page with its scroll, focus returns to the opener, exactly one dialog is open; loaded directly they still render as full pages, unchanged.",
+    "Legacy #GameId links in post text and the links inside a game or player detail (box-score player names, a player's game log) continue the same flow when activated inside the modal, through modal-flow's existing API with no change to its state shape.",
+    "/games/<id>?line=<line_id> marks that player's box-score row (a visible highlight that is not colour alone, and aria-current or an equivalent accessible cue) and scrolls it into view, on the page and in the modal; an unknown line id highlights nothing.",
+    "The three components live in one folder, take the generated preview types, and share no markup with the composer's attachment summary; FrontendUI/components.md gains a row for each, and 0x08-frontend.md records the game and player overlays.",
+    "Every existing frontend test passes; typecheck, lint and build pass.",
+    "Browser rows (vite preview against backend-dev with seeded posts carrying each link type, light and dark, 360 and 1280 wide): each preview renders; its link opens the detail in the modal; thread then game then player then Back then Close returns to the feed at its scroll; a player-game link highlights the line; keyboard-only, the preview link and the card's thread control are separate tab stops with visible focus."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/players/**",
+    "frontend/src/features/thread/**",
+    "frontend/src/features/search/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/Dialog.tsx",
+    "frontend/src/components/ui/Dialog.module.css",
+    "frontend/src/components/ui/Dialog.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/components.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

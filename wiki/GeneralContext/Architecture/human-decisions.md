@@ -198,3 +198,11 @@ its units land, then in the module files. The decisions:
 - **Stats page and compose reworked together (2026-10-21):** the game page,
   box score and player page get "Post about this" entry points
   (`FRONTEND-017`) alongside the composer's pickers.
+- **Preferred-team relevance for a player's game (2026-10-22):** posts store
+  the line's game as `linked_line_game_id` (`POSTS-006`), set at create and
+  backfilled, rather than posts querying `events/`' line table or `events/`
+  handing posts a subquery.
+- **The composer's mention dropdown (2026-10-22):** removed entirely, `#`
+  and `$` and Undo mention (`FRONTEND-013`); the attachment picker is the
+  one way to reference sports data in a new post.
+- **"Post about this" (2026-10-22):** shown to signed-in viewers only.
