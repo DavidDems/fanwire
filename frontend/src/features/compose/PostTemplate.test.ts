@@ -9,9 +9,14 @@
  * hardest: **a shallow copy that shares the media-id array looks correct until
  * the second template is used**. Every test below is some form of "edit what
  * `clone()` returned; the stored template is still what it was".
+ *
+ * FRONTEND-013 (criterion 10): a draft now carries one `dataLink`. A clone's
+ * link is `null` or a copy — never the template's own object, which is the
+ * media-id defect again in a new field.
  */
 import { describe, expect, it } from "vitest";
 
+import type { DataLink } from "../../test/attach";
 import { PostTemplate, QUICK_POST_TEMPLATES } from "./PostTemplate";
 
 describe("PostTemplate.clone()", () => {
@@ -25,6 +30,7 @@ describe("PostTemplate.clone()", () => {
       mediaIds: [],
       replyToPostId: null,
       repostOfPostId: null,
+      dataLink: null,
     });
   });
 
@@ -34,6 +40,7 @@ describe("PostTemplate.clone()", () => {
       mediaIds: [],
       replyToPostId: null,
       repostOfPostId: null,
+      dataLink: null,
     });
   });
 
@@ -51,6 +58,7 @@ describe("PostTemplate.clone()", () => {
       mediaIds: [],
       replyToPostId: null,
       repostOfPostId: null,
+      dataLink: null,
     });
   });
 
@@ -83,17 +91,22 @@ describe("PostTemplate.clone()", () => {
       mediaIds: [5],
       replyToPostId: null,
       repostOfPostId: null,
+      dataLink: null,
     });
   });
 
   it("names the template, so the composer has something to label a control with", () => {
-    expect(new PostTemplate("Final score reaction", {}).name).toBe("Final score reaction");
+    expect(new PostTemplate("Final score reaction", {}).name).toBe(
+      "Final score reaction",
+    );
   });
 });
 
 describe("the stored quick-post templates", () => {
   it("offers more than one, each with a distinct name", () => {
-    const names = QUICK_POST_TEMPLATES.map((template: PostTemplate) => template.name);
+    const names = QUICK_POST_TEMPLATES.map(
+      (template: PostTemplate) => template.name,
+    );
 
     expect(names.length).toBeGreaterThan(1);
     expect(new Set(names).size).toBe(names.length);
@@ -118,7 +131,47 @@ describe("the stored quick-post templates", () => {
       draft.mediaIds.push(1);
       draft.replyToPostId = 3;
 
-      expect(template.clone(), `${template.name} was changed by editing its clone`).toEqual(before);
+      expect(
+        template.clone(),
+        `${template.name} was changed by editing its clone`,
+      ).toEqual(before);
     }
+  });
+});
+
+describe("a template's data link (FRONTEND-013)", () => {
+  const GAME: DataLink = Object.freeze({ type: "game_final", ref_id: 501 });
+
+  it("clones with no link unless the template sets one", () => {
+    expect(new PostTemplate("Bare", { text: "x" }).clone().dataLink).toBeNull();
+    for (const template of QUICK_POST_TEMPLATES) {
+      expect(template.clone().dataLink, template.name).toBeNull();
+    }
+  });
+
+  it("clones a link it does set as a copy, never the template's own", () => {
+    const template = new PostTemplate("Recap", {
+      text: "Recap: ",
+      dataLink: { ...GAME },
+    });
+
+    const first = template.clone();
+    expect(first.dataLink).toEqual(GAME);
+    (first.dataLink as DataLink).ref_id = 999;
+
+    expect(template.clone().dataLink).toEqual(GAME);
+    expect(template.clone().dataLink).not.toBe(template.clone().dataLink);
+  });
+
+  it("does not keep the link object it was constructed from", () => {
+    const link: DataLink = { type: "game_final", ref_id: 501 };
+    const template = new PostTemplate("Recap", {
+      text: "Recap: ",
+      dataLink: link,
+    });
+
+    link.ref_id = 999;
+
+    expect(template.clone().dataLink).toEqual(GAME);
   });
 });

@@ -41,13 +41,17 @@ export const TEST_MEDIA_ID = 4242;
 export const TEST_THUMBNAIL_KEY = "media/4242/thumb.jpg";
 
 /** A small in-memory file. Keep sizes tiny and shrink `max_bytes` instead. */
-export function testFile(options: { name?: string; type?: string; bytes?: number } = {}): File {
+export function testFile(
+  options: { name?: string; type?: string; bytes?: number } = {},
+): File {
   const { name = "photo.jpg", type = "image/jpeg", bytes = 16 } = options;
   return new File([new Uint8Array(bytes)], name, { type });
 }
 
 /** The `POST /media/uploads` 201 body: the presigned POST, its fields and the cap. */
-export function testUpload(overrides: Partial<CreateUploadResponse> = {}): CreateUploadResponse {
+export function testUpload(
+  overrides: Partial<CreateUploadResponse> = {},
+): CreateUploadResponse {
   return {
     media_id: TEST_MEDIA_ID,
     upload_url: TEST_UPLOAD_URL,
@@ -74,14 +78,19 @@ export interface UploadTicketOptions {
 }
 
 /** `POST /media/uploads` — the presigned ticket. */
-export function uploadTicket(options: UploadTicketOptions = {}): RequestHandler {
+export function uploadTicket(
+  options: UploadTicketOptions = {},
+): RequestHandler {
   const { response = testUpload(), status = 201, onRequest } = options;
 
   return http.post("*/media/uploads", async ({ request }) => {
     const body = (await request.clone().json()) as CreateUploadRequest;
     onRequest?.(body, request);
     if (status !== 201) {
-      return HttpResponse.json({ detail: "upload could not be started" }, { status });
+      return HttpResponse.json(
+        { detail: "upload could not be started" },
+        { status },
+      );
     }
     return HttpResponse.json<CreateUploadResponse>(response, { status: 201 });
   });
@@ -230,18 +239,28 @@ export interface CreatePostOptions {
   /** Anything but 201 is the failure the draft has to survive. */
   status?: number;
   post?: PostOut;
+  /**
+   * The failure's `detail`. POSTS-005 answers a refused `data_link` with a
+   * machine code here (`"game_not_completed"`); Pydantic's own 422 is a list.
+   */
+  detail?: unknown;
   onRequest?: (body: CreatePostRequest) => void;
 }
 
 /** `POST /posts` — what a built draft is submitted to. */
 export function createPost(options: CreatePostOptions = {}): RequestHandler {
-  const { status = 201, post = testPost(), onRequest } = options;
+  const {
+    status = 201,
+    post = testPost(),
+    detail = "the post could not be saved",
+    onRequest,
+  } = options;
 
   return http.post("*/posts", async ({ request }) => {
     const body = (await request.clone().json()) as CreatePostRequest;
     onRequest?.(body);
     if (status !== 201) {
-      return HttpResponse.json({ detail: "the post could not be saved" }, { status });
+      return HttpResponse.json({ detail }, { status });
     }
     return HttpResponse.json<PostOut>(post, { status: 201 });
   });
@@ -286,7 +305,7 @@ export interface GamesOptions {
   onRequest?: () => void;
 }
 
-/** `GET /events/games` — what a `#` offers. `$` is `teamsAre` in `./auth`. */
+/** `GET /events/games`, answering the same list whatever the query. */
 export function gamesAre(options: GamesOptions = {}): RequestHandler {
   const { games = testGames(), onRequest } = options;
 

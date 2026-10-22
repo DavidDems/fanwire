@@ -1,4 +1,5 @@
 import type { components } from "../../api/schema";
+import { copyDataLink, copyDataLinkOrNull, type DataLink } from "./dataLink";
 import { copyDraft, emptyDraft, type Draft } from "./draft";
 
 /**
@@ -13,6 +14,14 @@ import { copyDraft, emptyDraft, type Draft } from "./draft";
  * `canBuild()` is the same decision without the throw, because the submit control
  * needs it *before* the user presses the button, and a second copy of the rule in
  * the page is how the two drift apart.
+ *
+ * **The data link (`FRONTEND-013`).** `withDataLink` sets or clears the one
+ * link, and `build()` sends it as `data_link` with only its own keys. With no
+ * link the key is left out altogether rather than sent as `null`: a reply body
+ * is pinned with `toEqual` in `ThreadModal.test.tsx`, and `null` would be a
+ * different body. A link is not content on its own, so it never makes an
+ * empty draft postable, and a quote repost that carries one needs text of its
+ * own (the server's `data_link_needs_quote_text`), even beside an image.
  */
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
@@ -34,7 +43,8 @@ export class PostBuilder {
   }
 
   addMediaId(mediaId: number): this {
-    if (!this.state.mediaIds.includes(mediaId)) this.state.mediaIds.push(mediaId);
+    if (!this.state.mediaIds.includes(mediaId))
+      this.state.mediaIds.push(mediaId);
     return this;
   }
 
@@ -53,6 +63,12 @@ export class PostBuilder {
     return this;
   }
 
+  /** Attach one link, replacing any before it, or clear it with `null`. Copied. */
+  withDataLink(link: DataLink | null): this {
+    this.state.dataLink = copyDataLinkOrNull(link);
+    return this;
+  }
+
   /** What has been accumulated so far, as a copy. */
   draft(): Draft {
     return copyDraft(this.state);
@@ -62,18 +78,32 @@ export class PostBuilder {
    * Whether there is anything to post.
    *
    * Reply and repost context are *context*, not content: a draft whose only
-   * content is a reply target is still an empty post.
+   * content is a reply target is still an empty post. So is a data link: it
+   * is something the post is about, not something it says.
+   *
+   * The one rule the link adds is the server's: a quote repost with a link
+   * needs text. An image does not stand in for it there, as it does anywhere
+   * else.
    */
   canBuild(): boolean {
-    return this.state.text.trim() !== "" || this.state.mediaIds.length > 0;
+    if (this.state.text.trim() !== "") return true;
+    if (this.state.mediaIds.length === 0) return false;
+    return !(
+      this.state.repostOfPostId !== null && this.state.dataLink !== null
+    );
   }
 
   build(): CreatePostRequest {
     if (!this.canBuild()) {
-      throw new Error("A post needs some text or at least one image.");
+      throw new Error(
+        this.state.repostOfPostId !== null && this.state.dataLink !== null
+          ? "A repost with stats attached needs some text."
+          : "A post needs some text or at least one image.",
+      );
     }
 
     const text = this.state.text.trim();
+    const link = this.state.dataLink;
 
     return {
       // `Post.text` is nullable and a post may be image-only. An empty string is
@@ -84,6 +114,8 @@ export class PostBuilder {
       parent_post_id: this.state.replyToPostId,
       is_repost: this.state.repostOfPostId !== null,
       original_post_id: this.state.repostOfPostId,
+      // Absent, not `null`, when there is none (see the class comment).
+      ...(link === null ? {} : { data_link: copyDataLink(link) }),
     };
   }
 }

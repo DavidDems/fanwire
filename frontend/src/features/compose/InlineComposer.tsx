@@ -12,7 +12,6 @@ import { InlineAlert } from "../../components/ui/InlineAlert";
 import { ComposeMediator } from "./ComposeMediator";
 import { ComposeTextBox } from "./ComposeTextBox";
 import { MediaWidget } from "./MediaWidget";
-import { MentionAutocomplete } from "./MentionAutocomplete";
 import { PostBuilder } from "./PostBuilder";
 import { createPost } from "./createPost";
 import styles from "./InlineComposer.module.css";
@@ -36,11 +35,15 @@ export interface InlineComposerProps {
  * The reply box under a post in the thread modal (`FRONTEND-010`).
  *
  * **The same composer as `/compose`, not a second one.** One
- * `ComposeMediator`, opened in the reply's context, handed to the same three
- * colleagues `ComposePage` uses — the text box, the `#`/`$` suggestions and the
- * media widget — and turned into the request by the same `PostBuilder`. So a
- * reply is `POST /posts` with `is_reply: true` and the parent's id, built by
- * the code that builds every other post.
+ * `ComposeMediator`, opened in the reply's context, handed to the same text
+ * box and media widget `ComposePage` uses, and turned into the request by the
+ * same `PostBuilder`. So a reply is `POST /posts` with `is_reply: true` and the
+ * parent's id, built by the code that builds every other post.
+ *
+ * **No Attach stats** (`FRONTEND-013`): the server refuses a `data_link` on a
+ * reply (`data_link_on_reply`), so the third colleague, `AttachmentPicker`, is
+ * not here, and with nothing to attach there is nothing to undo either. The
+ * `#`/`$` dropdown that used to sit in its place is gone from both composers.
  *
  * **What is being replied to is said, and tied to the box.** "Replying to
  * @username" is visible above it and is the text box's `aria-describedby`, so
@@ -103,24 +106,11 @@ export function InlineComposer({
         describedBy={contextId}
         autoFocus={autoFocus}
       />
-      <MentionAutocomplete mediator={mediator} />
       <MediaWidget mediator={mediator} />
 
       <div className={styles.footer}>
         {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
         <div className={styles.actions}>
-          {mediator.canUndo() ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              onClick={() => {
-                mediator.undo();
-              }}
-            >
-              Undo mention
-            </Button>
-          ) : null}
           <Button
             type="submit"
             variant="primary"

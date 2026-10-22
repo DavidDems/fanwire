@@ -1,3 +1,5 @@
+import { copyDataLinkOrNull, type DataLink } from "./dataLink";
+
 /**
  * The in-progress post, as the composer holds it.
  *
@@ -21,19 +23,35 @@ export interface Draft {
   replyToPostId: number | null;
   /** The post being reposted, or `null`. */
   repostOfPostId: number | null;
+  /**
+   * The one sports-data link attached (`FRONTEND-013`), or `null` for none.
+   * Attaching another replaces it: a post carries at most one.
+   */
+  dataLink: DataLink | null;
 }
 
 /** A brand-new, empty draft. A fresh object — and a fresh array — every call. */
 export function emptyDraft(): Draft {
-  return { text: "", mediaIds: [], replyToPostId: null, repostOfPostId: null };
+  return {
+    text: "",
+    mediaIds: [],
+    replyToPostId: null,
+    repostOfPostId: null,
+    dataLink: null,
+  };
 }
 
 /**
  * A detached copy.
  *
- * `mediaIds` is copied explicitly: a spread alone shares the array, which every
- * "is it really independent?" test in this unit is written to catch.
+ * `mediaIds` and `dataLink` are copied explicitly: a spread alone shares the
+ * array and the link object, which every "is it really independent?" test in
+ * this unit is written to catch.
  */
 export function copyDraft(draft: Draft): Draft {
-  return { ...draft, mediaIds: [...draft.mediaIds] };
+  return {
+    ...draft,
+    mediaIds: [...draft.mediaIds],
+    dataLink: copyDataLinkOrNull(draft.dataLink),
+  };
 }

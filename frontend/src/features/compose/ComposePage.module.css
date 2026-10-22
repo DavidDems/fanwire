@@ -14,7 +14,7 @@
 }
 
 /*
- * Text box, suggestions, image field, footer. The gap is the space between
+ * Text box, attachment picker, image field, footer. The gap is the space between
  * them: none of them is a FormField sibling of another (MediaWidget wraps its
  * Field), so Field's own `.field + .field` spacing never applies here.
  */
@@ -32,7 +32,7 @@
   margin-top: var(--space-2);
 }
 
-/* Undo mention on the left, Post on the right; they wrap if they must. */
+/* Undo on the left, Post on the right; they wrap if they must. */
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -40,7 +40,7 @@
   gap: var(--space-2);
 }
 
-/* Pushed right whether or not Undo mention is there. */
+/* Pushed right whether or not Undo is there. */
 .post {
   margin-inline-start: auto;
 }

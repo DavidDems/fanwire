@@ -9,24 +9,36 @@
  * `/compose` for a `member` visitor and pins its heading as exactly `Compose`;
  * msw runs with `onUnhandledRequest: "error"`, so a page that fetched games or
  * teams when it mounted would break a test file this unit is not allowed to
- * touch. Games and teams are fetched when the user types `#` or `$`, and at no
- * other time.
+ * touch. Since `FRONTEND-013` the `#`/`$` dropdown is gone, so typing fetches
+ * nothing either; the `events/` reads happen when the "Attach stats" picker
+ * is used, or when a pre-filled address needs its summary.
+ *
+ * `FRONTEND-013` adds what the request body carries for an attachment
+ * (criterion 6), the refusals POSTS-005 answers with a machine code
+ * (criterion 7) and the dropdown's removal (criterion 9).
  *
  * **Draft preservation is the criterion most likely to be faked green**, because
  * the happy path is what gets clicked. A failed `POST /posts` keeps the text
  * *and* the attachment *and* says what happened *and* lets the user try again —
  * all four, or the user loses what they typed on a 500.
  */
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { components } from "../../api/schema";
+import {
+  attachGameResult,
+  attachLebronCareer,
+  attachServer,
+  attachedSummary,
+  summaryShown,
+  textOf,
+} from "../../test/attach";
 import { renderWithAuth } from "../../test/auth";
 import {
   TEST_MEDIA_ID,
   createPost,
-  gamesAre,
   mediaStatuses,
   recordRequests,
   s3Upload,
@@ -47,8 +59,8 @@ afterEach(() => {
   recorder = null;
 });
 
-function renderComposer() {
-  renderWithAuth(<ComposePage />);
+function renderComposer(route = "/compose") {
+  renderWithAuth(<ComposePage />, { route });
   return userEvent.setup();
 }
 
@@ -62,12 +74,17 @@ function submitButton(): HTMLElement {
 
 /** Install the three handlers an upload needs and drive it through to attached. */
 function mediaUploadSucceeds() {
-  server.use(uploadTicket(), s3Upload(), mediaStatuses({ statuses: ["processed"] }));
+  server.use(
+    uploadTicket(),
+    s3Upload(),
+    mediaStatuses({ statuses: ["processed"] }),
+  );
 }
 
 async function attachAProcessedImage(user: ReturnType<typeof userEvent.setup>) {
   await user.upload(screen.getByLabelText(/image/i), testFile());
-  const attach = await screen.findByRole("button", { name: /attach/i });
+  // Anchored: "Attach stats" is a button on this page too.
+  const attach = await screen.findByRole("button", { name: /^attach$/i });
   await waitFor(() => expect(attach).toBeEnabled());
   await user.click(attach);
   await screen.findByRole("img");
@@ -78,13 +95,15 @@ describe("the composer page", () => {
     recorder = recordRequests();
     renderComposer();
 
-    expect(await screen.findByRole("heading", { name: /^compose$/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^compose$/i }),
+    ).toBeInTheDocument();
   });
 
   it("issues no HTTP request when it mounts", async () => {
-    // Games and teams are fetched when the user types `#` or `$`. A query on
-    // mount would make `routes.test.tsx` fail with an unhandled request, in a
-    // file this unit must leave byte-for-byte unchanged.
+    // Nothing is fetched until the picker is used. A query on mount would make
+    // `routes.test.tsx` fail with an unhandled request, in a file this unit
+    // must leave byte-for-byte unchanged.
     recorder = recordRequests();
     renderComposer();
 
@@ -137,7 +156,10 @@ describe("submitting a valid draft", () => {
     await user.click(submitButton());
 
     await waitFor(() => expect(textBox()).toHaveValue(""));
-    expect(screen.queryByRole("img"), "the attachment is cleared too").toBeNull();
+    expect(
+      screen.queryByRole("img"),
+      "the attachment is cleared too",
+    ).toBeNull();
   });
 });
 
@@ -145,7 +167,9 @@ describe("a failed POST /posts does not cost the user their draft", () => {
   it("keeps the text, keeps the attachment, says what happened and allows a retry", async () => {
     const bodies: CreatePostRequest[] = [];
     mediaUploadSucceeds();
-    server.use(createPost({ status: 500, onRequest: (body) => bodies.push(body) }));
+    server.use(
+      createPost({ status: 500, onRequest: (body) => bodies.push(body) }),
+    );
     const user = renderComposer();
 
     await user.type(textBox(), "Raptors in 6");
@@ -179,16 +203,23 @@ describe("quick-post templates", () => {
     recorder = recordRequests();
     const user = renderComposer();
 
-    await user.click(await screen.findByRole("button", { name: template.name }));
+    await user.click(
+      await screen.findByRole("button", { name: template.name }),
+    );
 
     expect(textBox()).toHaveValue(template.clone().text);
-    expect(recorder.paths(), "a template is stored in the app, not fetched").toEqual([]);
+    expect(
+      recorder.paths(),
+      "a template is stored in the app, not fetched",
+    ).toEqual([]);
   });
 
   it("leaves the template itself untouched when the draft from it is edited", async () => {
     const user = renderComposer();
 
-    await user.click(await screen.findByRole("button", { name: template.name }));
+    await user.click(
+      await screen.findByRole("button", { name: template.name }),
+    );
     await user.type(textBox(), "Raptors by 12");
     await user.click(screen.getByRole("button", { name: template.name }));
 
@@ -196,29 +227,273 @@ describe("quick-post templates", () => {
   });
 });
 
-describe("undo, after live-event data is attached", () => {
-  it("offers no undo before anything has been attached", async () => {
+describe("the request carries the attachment exactly as attached (criterion 6)", () => {
+  function arrange(route = "/compose") {
+    const bodies: CreatePostRequest[] = [];
+    mediaUploadSucceeds();
+    server.use(
+      ...attachServer().handlers,
+      createPost({ onRequest: (body) => bodies.push(body) }),
+    );
+    const user = renderComposer(route);
+    return { bodies, user };
+  }
+
+  it("sends no data_link key at all when nothing is attached", async () => {
+    const { bodies, user } = arrange();
+
+    await user.type(textBox(), "Raptors in 6");
+    await user.click(submitButton());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(Object.keys(bodies[0])).not.toContain("data_link");
+  });
+
+  it("sends a game result alongside text and media_ids, with no scope key", async () => {
+    const { bodies, user } = arrange();
+
+    await user.type(textBox(), "Raptors in 6");
+    await attachAProcessedImage(user);
+    await attachGameResult(user);
+    await summaryShown();
+    await user.click(submitButton());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual({
+      text: "Raptors in 6",
+      media_ids: [TEST_MEDIA_ID],
+      is_reply: false,
+      parent_post_id: null,
+      is_repost: false,
+      original_post_id: null,
+      data_link: { type: "game_final", ref_id: 501 },
+    });
+    expect(Object.keys(bodies[0].data_link ?? {}).sort()).toEqual([
+      "ref_id",
+      "type",
+    ]);
+  });
+
+  it("sends a career with its scope", async () => {
+    const { bodies, user } = arrange();
+
+    await user.type(textBox(), "GOAT");
+    await attachLebronCareer(user);
+    await summaryShown();
+    await user.click(submitButton());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].data_link).toEqual({
+      type: "player_career",
+      ref_id: 2544,
+      scope: "regular",
+    });
+  });
+
+  it("will not post a draft whose only content is a link", async () => {
+    const { bodies, user } = arrange();
+
+    await attachGameResult(user);
+    await summaryShown();
+
+    expect(submitButton()).toBeDisabled();
+    await user.click(submitButton());
+    expect(bodies).toEqual([]);
+  });
+
+  it("posts a link with an image and no text", async () => {
+    const { bodies, user } = arrange();
+
+    await attachAProcessedImage(user);
+    await attachGameResult(user);
+    await summaryShown();
+
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    await user.click(submitButton());
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({
+      text: null,
+      media_ids: [TEST_MEDIA_ID],
+      data_link: { type: "game_final", ref_id: 501 },
+    });
+  });
+
+  it("on /compose?repost_of=<id>, a link needs text, even with an image", async () => {
+    const { bodies, user } = arrange("/compose?repost_of=7");
+
+    await attachAProcessedImage(user);
+    await attachGameResult(user);
+    await summaryShown();
+
+    expect(
+      submitButton(),
+      "a quote repost with a link and no text",
+    ).toBeDisabled();
+
+    await user.type(textBox(), "This one");
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    await user.click(submitButton());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toMatchObject({
+      text: "This one",
+      is_repost: true,
+      original_post_id: 7,
+      data_link: { type: "game_final", ref_id: 501 },
+    });
+  });
+});
+
+const GENERIC_FAILURE =
+  "We could not post that. Your draft is still here — please try again.";
+
+/** POSTS-005's refusals that this unit gives a message of their own. */
+const MACHINE_CODES = [
+  "link_target_not_found",
+  "game_not_completed",
+  "player_did_not_play",
+  "no_games_in_scope",
+  "data_link_on_reply",
+  "data_link_needs_quote_text",
+] as const;
+
+interface Failure {
+  message: string;
+  bodies: CreatePostRequest[];
+  unmount: () => void;
+  user: ReturnType<typeof userEvent.setup>;
+}
+
+/** Type, attach game 501 and post against a failing `POST /posts`. */
+async function failWith(detail: unknown, status = 422): Promise<Failure> {
+  const bodies: CreatePostRequest[] = [];
+  server.use(
+    ...attachServer().handlers,
+    createPost({ status, detail, onRequest: (body) => bodies.push(body) }),
+  );
+  const { unmount } = renderWithAuth(<ComposePage />, { route: "/compose" });
+  const user = userEvent.setup();
+
+  await user.type(textBox(), "Raptors in 6");
+  await attachGameResult(user);
+  await summaryShown();
+  await user.click(submitButton());
+  await waitFor(() => expect(bodies).toHaveLength(1));
+
+  const alerts = await screen.findAllByRole("alert");
+  const message = alerts
+    .map(textOf)
+    .filter((text) => text !== "")
+    .join(" ");
+  return { message, bodies, unmount, user };
+}
+
+describe("a refused data_link keeps the draft and says why (criterion 7)", () => {
+  it.each(MACHINE_CODES)(
+    "%s: keeps the text and the attachment and shows its own message",
+    async (code) => {
+      const { message, bodies, user } = await failWith(code);
+
+      expect(message).not.toBe("");
+      expect(
+        message,
+        "the generic message is not specific to the refusal",
+      ).not.toContain(GENERIC_FAILURE);
+      expect(message, "the machine code itself is not a message").not.toContain(
+        code,
+      );
+      expect(textBox()).toHaveValue("Raptors in 6");
+      const summary = attachedSummary();
+      expect(summary, "the attachment survives the refusal").not.toBeNull();
+      expect(textOf(summary as HTMLElement)).toMatch(/\b117\b/);
+
+      // And it can be tried again, with the same request.
+      await waitFor(() => expect(submitButton()).toBeEnabled());
+      await user.click(submitButton());
+      await waitFor(() => expect(bodies).toHaveLength(2));
+      expect(bodies[1]).toEqual(bodies[0]);
+    },
+    20_000,
+  );
+
+  it("gives each of the six codes a different message", async () => {
+    const messages: string[] = [];
+    for (const code of MACHINE_CODES) {
+      const { message, unmount } = await failWith(code);
+      messages.push(message);
+      unmount();
+    }
+
+    expect(new Set(messages).size, messages.join(" | ")).toBe(
+      MACHINE_CODES.length,
+    );
+  }, 60_000);
+
+  it.each([
+    ["a code it does not know", 422, "some_future_code"],
+    [
+      "Pydantic's own 422",
+      422,
+      [{ loc: ["body", "data_link"], msg: "bad", type: "value_error" }],
+    ],
+    ["a server error", 500, "Internal Server Error"],
+  ] as const)(
+    "keeps the generic message for %s",
+    async (_name, status, detail) => {
+      const { message } = await failWith(detail, status);
+
+      expect(message).toContain(GENERIC_FAILURE);
+      expect(textBox()).toHaveValue("Raptors in 6");
+      expect(attachedSummary()).not.toBeNull();
+    },
+    20_000,
+  );
+});
+
+describe("the #/$ mention dropdown is gone (criterion 9)", () => {
+  it("fetches nothing when # or $ is typed", async () => {
+    recorder = recordRequests();
+    const user = renderComposer();
+
+    await user.type(textBox(), "Raptors win #12 and $TO");
+    // Long enough for any debounce the old dropdown might have had.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(recorder.paths()).toEqual([]);
+    expect(screen.queryByRole("region", { name: /suggestions/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /undo/i }),
+      "no Undo mention",
+    ).toBeNull();
+  });
+
+  it("sends a typed #GameId123 as plain text, asking for nothing on the way", async () => {
+    const bodies: CreatePostRequest[] = [];
+    server.use(createPost({ onRequest: (body) => bodies.push(body) }));
+    recorder = recordRequests();
+    const user = renderComposer();
+
+    await user.type(textBox(), "Raptors win #GameId123");
+    await user.click(submitButton());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(
+      recorder.paths().filter((path) => !path.endsWith("/posts")),
+      "the only request is the post itself",
+    ).toEqual([]);
+    expect(bodies[0].text).toBe("Raptors win #GameId123");
+    expect(Object.keys(bodies[0])).not.toContain("data_link");
+  });
+
+  it("no longer tells the user to type # or $", async () => {
     renderComposer();
 
     await screen.findByRole("heading", { name: /^compose$/i });
-
-    expect(screen.queryByRole("button", { name: /undo/i })).toBeNull();
-  });
-
-  it("restores the exact draft the mention was inserted into, attachment and all", async () => {
-    mediaUploadSucceeds();
-    server.use(gamesAre());
-    const user = renderComposer();
-
-    await user.type(textBox(), "Raptors win ");
-    await attachAProcessedImage(user);
-    await user.type(textBox(), "#12");
-    await user.click(await screen.findByRole("button", { name: /123/ }));
-    await waitFor(() => expect(textBox()).toHaveValue("Raptors win #GameId123 "));
-
-    await user.click(screen.getByRole("button", { name: /undo/i }));
-
-    expect(textBox()).toHaveValue("Raptors win #12");
-    expect(screen.getByRole("img"), "undo must not drop the attachment").toBeInTheDocument();
+    expect(textBox()).not.toHaveAccessibleDescription(/#|\$/);
+    expect(
+      within(textBox().closest("form") as HTMLElement).queryByText(
+        /type #|\$ to mention/i,
+      ),
+    ).toBeNull();
   });
 });

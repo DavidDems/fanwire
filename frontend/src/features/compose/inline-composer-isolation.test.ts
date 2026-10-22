@@ -3,8 +3,10 @@
  * compose's own, built from the same parts as `/compose`.
  *
  * `InlineComposer` lives in `features/compose/` and is made of the same
- * `ComposeMediator`, `PostBuilder`, `ComposeTextBox`, `MentionAutocomplete` and
- * `MediaWidget` as `ComposePage` — not a second text box. A look-alike that
+ * `ComposeMediator`, `PostBuilder`, `ComposeTextBox` and `MediaWidget` as
+ * `ComposePage` — not a second text box. Since FRONTEND-013 it has no
+ * `MentionAutocomplete` (deleted) and no `AttachmentPicker`: it is for
+ * replies only, and a reply cannot carry a data link. A look-alike that
  * rendered its own `<textarea>` would pass every behavioural test in
  * `features/thread/ThreadModal.test.tsx`, which is why this reads the source
  * from disk. It imports no other feature: `features/thread` is what puts it
@@ -27,7 +29,6 @@ const PARTS = [
   "ComposeMediator",
   "PostBuilder",
   "ComposeTextBox",
-  "MentionAutocomplete",
   "MediaWidget",
 ] as const;
 
@@ -74,6 +75,15 @@ describe("InlineComposer", () => {
 
     expect(imported).toContain(part);
   });
+
+  it.each(["MentionAutocomplete", "AttachmentPicker"])(
+    "does not import %s",
+    (part) => {
+      const imported = importSpecifiers(source()).map(moduleName);
+
+      expect(imported).not.toContain(part);
+    },
+  );
 
   it("writes no text box of its own", () => {
     expect(withoutComments(source())).not.toMatch(/<textarea\b/);
