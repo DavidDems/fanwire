@@ -1,19 +1,25 @@
 /**
  * FRONTEND-004 acceptance criterion 2 (behavioural half) and criterion 4
- * (the undo).
+ * (the undo), rewritten for FRONTEND-013 criterion 10.
  *
  * `gof-patterns.md` assigns Mediator to `ComposeMediator`: it coordinates the
- * text box, the mention-autocomplete dropdown and the media-upload widget "so
- * they never reference each other directly". Three controls each needing to know
- * what the other two are doing is the case the pattern exists for, and the
- * alternative — each importing the others — is the connection-rule violation
- * this codebase keeps writing tests against.
+ * composer's three colleagues — since `FRONTEND-013` the text box, the
+ * attachment picker and the media-upload widget — "so they never reference
+ * each other directly". Three controls each needing to know what the other two
+ * are doing is the case the pattern exists for, and the alternative — each
+ * importing the others — is the connection-rule violation this codebase keeps
+ * writing tests against.
  *
- * The structural half of criterion 2 is `component-isolation.test.ts`, and per
- * the brief that one is worth more than this file. What is pinned here is that
- * the mediator is actually the *route* between the three: a colleague reports
- * what it did, and the shared draft — the only state any of them reads — changes
- * as a result.
+ * The colleague names are `"text"`, `"attachment"` and `"media"`. The
+ * attachment picker reports `{ kind: "link-attached", link }` (which also
+ * replaces any link already there) and `{ kind: "link-removed" }`; the old
+ * `"mentions"` colleague and its `mention-inserted` event are gone with the
+ * dropdown. The draft carries the link as `dataLink` (`null` for none).
+ *
+ * The Memento: the mediator captures a `DraftSnapshot` before each attach or
+ * replace, and `undo()` walks back one at a time — the previous link, then
+ * none (the "rollback before attaching live event data" the pattern doc
+ * names).
  *
  * `getDraft()`/`subscribe()` are the `useSyncExternalStore` pair, which is why
  * the referential-stability test below is not pedantry: a `getDraft()` that
@@ -21,13 +27,25 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+import type { DataLink } from "../../test/attach";
 import { ComposeMediator } from "./ComposeMediator";
 import { emptyDraft, type Draft } from "./draft";
 import { PostTemplate } from "./PostTemplate";
 
+// Frozen, so a mediator that kept the object it was handed cannot let one
+// test change what the next one compares against.
+const GAME: DataLink = Object.freeze({ type: "game_final", ref_id: 501 });
+const LINE: DataLink = Object.freeze({ type: "player_game", ref_id: 80001 });
+const CAREER: DataLink = Object.freeze({
+  type: "player_career",
+  ref_id: 2544,
+  scope: "regular",
+});
+
 describe("the shared draft", () => {
-  it("starts empty", () => {
+  it("starts empty, with no link", () => {
     expect(new ComposeMediator().getDraft()).toEqual(emptyDraft());
+    expect(new ComposeMediator().getDraft().dataLink).toBeNull();
   });
 
   it("can be started with reply context the composer was opened in", () => {
@@ -57,6 +75,20 @@ describe("the text box talks to the others through the mediator", () => {
     mediator.send("text", { kind: "text-changed", text: "Raptors win" });
 
     expect(mediator.getDraft().text).toBe("Raptors win");
+  });
+
+  it("leaves a typed #GameId123 exactly as typed", () => {
+    // The dropdown that rewrote mention runs is gone; text is text.
+    const mediator = new ComposeMediator();
+
+    mediator.send("text", {
+      kind: "text-changed",
+      text: "Raptors win #GameId123",
+    });
+
+    expect(mediator.getDraft().text).toBe("Raptors win #GameId123");
+    expect(mediator.getDraft().dataLink).toBeNull();
+    expect(mediator.canUndo()).toBe(false);
   });
 
   it("tells every subscriber that the draft changed", () => {
@@ -110,58 +142,69 @@ describe("the media widget talks to the others through the mediator", () => {
   });
 });
 
-describe("the autocomplete talks to the text box through the mediator", () => {
-  it("replaces the mention being typed with the chosen token", () => {
+describe("the attachment picker talks to the others through the mediator", () => {
+  it("puts an attached link on the shared draft", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "Raptors win #12" });
 
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
 
-    // Trailing space: the next thing the user types is a word, not part of the
-    // token, and `activeMentionQuery` treats the space as closing it.
-    expect(mediator.getDraft().text).toBe("Raptors win #GameId123 ");
+    expect(mediator.getDraft().dataLink).toEqual(GAME);
   });
 
-  it("replaces a team query the same way", () => {
+  it("replaces the link when another is attached", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "Big night for $to" });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
 
-    mediator.send("mentions", { kind: "mention-inserted", token: "$TOR" });
+    mediator.send("attachment", { kind: "link-attached", link: CAREER });
 
-    expect(mediator.getDraft().text).toBe("Big night for $TOR ");
+    expect(mediator.getDraft().dataLink).toEqual(CAREER);
   });
 
-  it("writes the token into an empty box", () => {
+  it("clears the link when it is removed", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "#" });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
 
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-removed" });
 
-    expect(mediator.getDraft().text).toBe("#GameId123 ");
+    expect(mediator.getDraft().dataLink).toBeNull();
   });
 
-  it("leaves an attachment alone while it rewrites the text", () => {
+  it("leaves the text and the media alone", () => {
     const mediator = new ComposeMediator();
     mediator.send("media", { kind: "media-attached", mediaId: 4242 });
-    mediator.send("text", { kind: "text-changed", text: "Raptors win #12" });
+    mediator.send("text", { kind: "text-changed", text: "Raptors win" });
 
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
 
+    expect(mediator.getDraft().text).toBe("Raptors win");
     expect(mediator.getDraft().mediaIds).toEqual([4242]);
+  });
+
+  it("holds its own copy of the link, not the picker's object", () => {
+    const mediator = new ComposeMediator();
+    const link: DataLink = { type: "game_final", ref_id: 501 };
+
+    mediator.send("attachment", { kind: "link-attached", link });
+    link.ref_id = 999;
+
+    expect(mediator.getDraft().dataLink).toEqual(GAME);
+  });
+
+  it("publishes a new draft object, and notifies subscribers", () => {
+    const mediator = new ComposeMediator();
+    const listener = vi.fn();
+    mediator.subscribe(listener);
+    const before = mediator.getDraft();
+
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
+
+    expect(mediator.getDraft()).not.toBe(before);
+    expect(listener).toHaveBeenCalled();
   });
 });
 
 describe("undo, after live-event data is attached", () => {
-  it("has nothing to undo before a mention is inserted", () => {
+  it("has nothing to undo before a link is attached", () => {
     const mediator = new ComposeMediator();
     mediator.send("text", { kind: "text-changed", text: "Raptors win" });
     mediator.send("media", { kind: "media-attached", mediaId: 4242 });
@@ -169,65 +212,63 @@ describe("undo, after live-event data is attached", () => {
     expect(mediator.canUndo()).toBe(false);
   });
 
-  it("offers an undo once a mention is inserted", () => {
+  it("offers an undo once a link is attached", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "Raptors win #12" });
 
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
 
     expect(mediator.canUndo()).toBe(true);
   });
 
-  it("restores the exact prior draft — text, media ids and reply context", () => {
-    const mediator = new ComposeMediator({ replyToPostId: 77 });
+  it("restores the exact prior draft — text, media ids, repost context and no link", () => {
+    const mediator = new ComposeMediator({ repostOfPostId: 9 });
     mediator.send("media", { kind: "media-attached", mediaId: 4242 });
-    mediator.send("text", { kind: "text-changed", text: "Raptors win #12" });
+    mediator.send("text", { kind: "text-changed", text: "Raptors win" });
     // Written out rather than read back from the mediator: comparing the
     // mediator against its own object would pass even if undo did nothing.
     const before: Draft = {
-      text: "Raptors win #12",
+      text: "Raptors win",
       mediaIds: [4242],
-      replyToPostId: 77,
-      repostOfPostId: null,
+      replyToPostId: null,
+      repostOfPostId: 9,
+      dataLink: null,
     };
 
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
     mediator.undo();
 
     expect(mediator.getDraft()).toEqual(before);
   });
 
-  it("walks back one insertion at a time", () => {
+  it("walks back a replace to the previous link, then to none", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "#" });
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
-    mediator.send("text", { kind: "text-changed", text: "#GameId123 $to" });
-    mediator.send("mentions", { kind: "mention-inserted", token: "$TOR" });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
+    mediator.send("attachment", { kind: "link-attached", link: LINE });
 
     mediator.undo();
-    expect(mediator.getDraft().text).toBe("#GameId123 $to");
+    expect(mediator.getDraft().dataLink).toEqual(GAME);
+    expect(mediator.canUndo()).toBe(true);
 
     mediator.undo();
-    expect(mediator.getDraft().text).toBe("#");
+    expect(mediator.getDraft().dataLink).toBeNull();
     expect(mediator.canUndo()).toBe(false);
+  });
+
+  it("restores a link that nothing done to a later draft can reach", () => {
+    const mediator = new ComposeMediator();
+    mediator.send("attachment", { kind: "link-attached", link: { ...GAME } });
+    const attached = mediator.getDraft().dataLink as DataLink;
+    mediator.send("attachment", { kind: "link-attached", link: LINE });
+    attached.ref_id = 1;
+
+    mediator.undo();
+
+    expect(mediator.getDraft().dataLink).toEqual(GAME);
   });
 
   it("notifies subscribers when it rolls back", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "#" });
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
     const listener = vi.fn();
     mediator.subscribe(listener);
 
@@ -249,28 +290,28 @@ describe("loading and clearing the draft", () => {
     expect(mediator.getDraft().text).toBe("Tip-off soon: ");
   });
 
-  it("does not keep a reference to the draft it was handed", () => {
+  it("does not keep a reference to the draft it was handed, link included", () => {
     const mediator = new ComposeMediator();
     const draft: Draft = {
       text: "seed",
       mediaIds: [5],
       replyToPostId: null,
       repostOfPostId: null,
+      dataLink: { type: "game_final", ref_id: 501 },
     };
 
     mediator.loadDraft(draft);
     draft.mediaIds.push(6);
+    (draft.dataLink as DataLink).ref_id = 999;
 
     expect(mediator.getDraft().mediaIds).toEqual([5]);
+    expect(mediator.getDraft().dataLink).toEqual(GAME);
   });
 
-  it("empties everything on reset, including the undo history", () => {
+  it("empties everything on reset, the link and the undo history included", () => {
     const mediator = new ComposeMediator();
-    mediator.send("text", { kind: "text-changed", text: "#" });
-    mediator.send("mentions", {
-      kind: "mention-inserted",
-      token: "#GameId123",
-    });
+    mediator.send("text", { kind: "text-changed", text: "Raptors win" });
+    mediator.send("attachment", { kind: "link-attached", link: GAME });
     mediator.send("media", { kind: "media-attached", mediaId: 4242 });
 
     mediator.reset();

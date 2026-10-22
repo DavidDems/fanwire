@@ -1,11 +1,11 @@
+import { copyDataLink, type DataLink } from "./dataLink";
 import { DraftSnapshot } from "./DraftSnapshot";
 import { copyDraft, emptyDraft, type Draft } from "./draft";
-import { activeMentionLength, activeMentionQuery } from "./mentions";
 
 /**
  * Mediator — assigned by `wiki/CodeContext/Standards/gof-patterns.md`.
  *
- * Three controls — the text box, the mention dropdown and the media widget —
+ * Three controls — the text box, the attachment picker and the media widget —
  * each need to know what the other two are doing. That is the case the pattern
  * exists for, and the alternative (each importing the others) is the connection
  * rule violation this codebase keeps writing tests against. Here the colleagues
@@ -18,17 +18,33 @@ import { activeMentionLength, activeMentionQuery } from "./mentions";
  * rather than a failing assertion. Every mutation therefore publishes a *new*
  * draft object and nothing ever edits the published one in place.
  *
- * The Memento is used here and only here: a mention insertion rewrites text the
- * user typed, so it captures a `DraftSnapshot` before it does, and `undo()` walks
- * back one insertion at a time.
+ * The Memento is used here and only here: attaching a data link is the "risky
+ * action (attaching live event data)" the pattern doc names, so the mediator
+ * captures a `DraftSnapshot` before each attach or replace, and `undo()` walks
+ * back one at a time — to the previous link, then to none.
+ *
+ * **Undo restores the attachment only.** It takes `dataLink` from the popped
+ * snapshot and leaves the text, the media ids and the reply/repost context as
+ * they are *now*. Restoring the whole captured draft would throw away anything
+ * typed or attached since the attach, and `ComposePage` holds that losing a
+ * user's typed text is the worst thing the composer can do. Undo is about the
+ * stats; it must never cost the words. Removing a link is not captured: it
+ * is already its own undo (attach again), and Undo after it still walks back
+ * through the attaches that came before.
+ *
+ * Until `FRONTEND-013` the second colleague was the `#`/`$` mention dropdown and
+ * the snapshot was taken before a mention rewrote the text. The dropdown is
+ * gone (the human, 2026-10-22), and with it the `"mentions"` colleague and its
+ * event: text is now only ever what the user typed.
  */
 
 /** Who is reporting. Part of the Mediator's contract, not decoration. */
-export type ComposeColleague = "text" | "mentions" | "media";
+export type ComposeColleague = "text" | "attachment" | "media";
 
 export type ComposeEvent =
   | { kind: "text-changed"; text: string }
-  | { kind: "mention-inserted"; token: string }
+  | { kind: "link-attached"; link: DataLink }
+  | { kind: "link-removed" }
   | { kind: "media-attached"; mediaId: number }
   | { kind: "media-detached"; mediaId: number };
 
@@ -39,20 +55,6 @@ export interface ComposeMediatorOptions {
   repostOfPostId?: number | null;
 }
 
-/**
- * Replace the mention run at the end of `text` with `token`, plus one space.
- *
- * The trailing space is load-bearing: it is what `activeMentionQuery` reads as
- * closing the token, so the dropdown shuts and the next thing typed is a word
- * rather than more of the mention.
- */
-function withMentionInserted(text: string, token: string): string {
-  const active = activeMentionQuery(text);
-  if (active === null) return `${text}${token} `;
-
-  return `${text.slice(0, text.length - activeMentionLength(active))}${token} `;
-}
-
 export class ComposeMediator {
   /** The context the composer was opened in — what `reset()` returns to. */
   private readonly initial: Draft;
@@ -61,7 +63,7 @@ export class ComposeMediator {
 
   private readonly listeners = new Set<() => void>();
 
-  /** One entry per mention insertion, newest last. */
+  /** One entry per attach or replace of a data link, newest last. */
   private history: DraftSnapshot[] = [];
 
   /**
@@ -106,17 +108,26 @@ export class ComposeMediator {
         this.publish({ ...this.draft, text: event.text });
         return;
 
-      case "mention-inserted":
-        // Captured *first*: undo restores what the user had before the rewrite,
-        // and the rewrite touches text only — an attachment made before the
-        // mention survives both the insertion and the undo.
+      case "link-attached":
+        // Captured *first*, so undo can restore the link from before this
+        // attach — the previous link on a replace, none on a first attach.
+        // The picker's object is copied rather than held: it may go on to
+        // change it, and the draft must not change with it.
         this.history.push(DraftSnapshot.capture(this.draft));
-        this.publish({ ...this.draft, text: withMentionInserted(this.draft.text, event.token) });
+        this.publish({ ...this.draft, dataLink: copyDataLink(event.link) });
+        return;
+
+      case "link-removed":
+        if (this.draft.dataLink === null) return;
+        this.publish({ ...this.draft, dataLink: null });
         return;
 
       case "media-attached":
         if (this.draft.mediaIds.includes(event.mediaId)) return;
-        this.publish({ ...this.draft, mediaIds: [...this.draft.mediaIds, event.mediaId] });
+        this.publish({
+          ...this.draft,
+          mediaIds: [...this.draft.mediaIds, event.mediaId],
+        });
         return;
 
       case "media-detached":
@@ -129,11 +140,13 @@ export class ComposeMediator {
       default:
         // Unreachable while `ComposeEvent` is exhaustive — and a fail-fast rather
         // than a silent no-op the day it stops being.
-        throw new Error(`ComposeMediator has no route for what ${from} sent it.`);
+        throw new Error(
+          `ComposeMediator has no route for what ${from} sent it.`,
+        );
     }
   }
 
-  /** Whether there is a mention insertion to walk back. */
+  /** Whether there is an attach or replace to walk back. */
   canUndo(): boolean {
     return this.history.length > 0;
   }
@@ -141,12 +154,14 @@ export class ComposeMediator {
   undo(): void {
     const snapshot = this.history.pop();
     if (snapshot === undefined) return;
-    this.publish(snapshot.restore());
+    // Only the link comes back; what was typed or attached since stays (see
+    // the class comment). `restore()` hands out a detached copy of it.
+    this.publish({ ...this.draft, dataLink: snapshot.restore().dataLink });
   }
 
   /** Start from a whole draft — how a quick-post template is applied. */
   loadDraft(draft: Draft): void {
-    // A different draft, so the insertions recorded against the old one are not
+    // A different draft, so the attaches recorded against the old one are not
     // something the user could meaningfully undo into.
     this.history = [];
     this.publish(draft);

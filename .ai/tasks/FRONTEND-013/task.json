@@ -19,6 +19,7 @@
   "allowed_paths": [
     "frontend/src/features/compose/**",
     "frontend/src/test/**",
+    "frontend/src/features/thread/ThreadModal.test.tsx",
     "wiki/CodeContext/Modules/0x08-frontend.md",
     "wiki/CodeContext/FrontendUI/components.md"
   ],

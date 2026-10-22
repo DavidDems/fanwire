@@ -1,3 +1,4 @@
+import { copyDataLinkOrNull, type DataLink } from "./dataLink";
 import { copyDraft, emptyDraft, type Draft } from "./draft";
 
 /**
@@ -8,12 +9,18 @@ import { copyDraft, emptyDraft, type Draft } from "./draft";
  * that shares the media-id array passes every obvious test and fails on the
  * *second* use of the same template, by which point the first draft's
  * attachments have leaked into it.
+ *
+ * Since `FRONTEND-013` a draft also carries one data link. The stored quick
+ * posts set none, so their clones have `dataLink: null`; a template that does
+ * set one hands every clone its own copy, never the template's object, for
+ * the same reason as the media ids.
  */
 
 /** What a template fixes; everything it leaves out comes from `emptyDraft()`. */
 export interface PostTemplateContent {
   text?: string;
   mediaIds?: number[];
+  dataLink?: DataLink | null;
 }
 
 export class PostTemplate {
@@ -29,6 +36,7 @@ export class PostTemplate {
       ...emptyDraft(),
       text: content.text ?? "",
       mediaIds: [...(content.mediaIds ?? [])],
+      dataLink: copyDataLinkOrNull(content.dataLink ?? null),
     };
   }
 

@@ -9,7 +9,7 @@
     "A signed-out viewer sees none of these links on either page; the pages are otherwise unchanged for them.",
     "Following each link lands on /compose with the matching attachment summary shown (FRONTEND-013's parser), asserted end to end through the route table for all three types.",
     "The games and players features reach compose by address only, never by import (the feature isolation tests pass); the address is built by one helper per feature or one shared helper under src/features/stats/links.ts, not hand-written per link.",
-    "Every existing frontend test passes; typecheck, lint and build pass; 0x08-frontend.md and FrontendUI/components.md record the action.",
+    "Every existing frontend test passes; typecheck, lint and build pass; 0x08-frontend.md records the action (FrontendUI/components.md rows go in a Director PR: no unit role may write FrontendUI/).",
     "Browser rows (vite preview against backend-dev with seeded data, light and dark, 360 and 1280 wide): signed in, each of the three links opens compose pre-filled and the post publishes; signed out, none shows; the box-score link stays reachable in the horizontally scrolling table at 360 wide; focus is visible on each link."
   ],
   "allowed_paths": [
@@ -18,8 +18,7 @@
     "frontend/src/features/stats/links.ts",
     "frontend/src/features/stats/links.test.ts",
     "frontend/src/test/**",
-    "wiki/CodeContext/Modules/0x08-frontend.md",
-    "wiki/CodeContext/FrontendUI/components.md"
+    "wiki/CodeContext/Modules/0x08-frontend.md"
   ],
   "forbidden_paths": [
     "backend/**",

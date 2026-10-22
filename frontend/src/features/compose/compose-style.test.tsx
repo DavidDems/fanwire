@@ -9,21 +9,29 @@
  * `src/components/ui/`; that those rules really exist on disk, and that the
  * composer's own module CSS is clean, is `compose-css.test.ts`.
  *
- * The suggestions stay a list of plain buttons inside a named section, not a
- * combobox, and the file input keeps no `accept` attribute — neither is
- * changed here, and the guards below pin the names a user reaches them by.
+ * The file input keeps no `accept` attribute, and the guards below pin the
+ * names a user reaches it by. Since FRONTEND-013 the `#`/`$` suggestions are
+ * gone; the attachment picker's controls are shared `Button`s (it may use
+ * `components/ui` primitives only), and Undo is the ghost Button Undo mention
+ * was.
  */
-import { screen, waitFor } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import buttonStyles from "../../components/ui/Button.module.css";
 import cardStyles from "../../components/ui/Card.module.css";
 import messageStyles from "../../components/ui/message.module.css";
-import { renderWithAuth, teamsAre } from "../../test/auth";
+import {
+  CHOICES,
+  attachGameResult,
+  attachServer,
+  openPicker,
+  summaryShown,
+} from "../../test/attach";
+import { renderWithAuth } from "../../test/auth";
 import {
   createPost,
-  gamesAre,
   mediaStatuses,
   s3Upload,
   testFile,
@@ -114,17 +122,25 @@ describe("the compose form card (criterion 1)", () => {
     expect(post).toHaveClass(buttonStyles.button, buttonStyles.primary);
   });
 
-  it("offers Undo mention as a ghost Button", async () => {
-    server.use(gamesAre());
-    const user = renderComposer();
+  it("offers Attach stats as a shared Button", async () => {
+    renderComposer();
 
-    await user.type(textBox(), "Raptors win #12");
-    await user.click(await screen.findByRole("button", { name: /123/ }));
-    await waitFor(() => {
-      expect(textBox()).toHaveValue("Raptors win #GameId123 ");
+    const attach = await screen.findByRole("button", {
+      name: /^attach stats$/i,
     });
 
-    const undo = screen.getByRole("button", { name: /^undo mention$/i });
+    expect(attach).toHaveClass(buttonStyles.button);
+  });
+
+  it("offers Undo, after an attach, as a ghost Button", async () => {
+    server.use(...attachServer().handlers);
+    const user = renderComposer();
+    await screen.findByRole("heading", { name: /^compose$/i });
+
+    await attachGameResult(user);
+    await summaryShown();
+
+    const undo = screen.getByRole("button", { name: /^undo/i });
     expect(undo).toHaveClass(buttonStyles.button, buttonStyles.ghost);
   });
 
@@ -143,38 +159,33 @@ describe("the compose form card (criterion 1)", () => {
   });
 });
 
-describe("the mention suggestions keep their names (criterion 2)", () => {
-  it("names the game suggestions and keeps each button's label", async () => {
-    server.use(gamesAre());
+describe("the attachment picker is built from shared Buttons (FRONTEND-013)", () => {
+  it("renders its three choices as Buttons", async () => {
+    server.use(...attachServer().handlers);
     const user = renderComposer();
+    await screen.findByRole("heading", { name: /^compose$/i });
 
-    await user.type(textBox(), "#12");
+    await openPicker(user);
 
-    const section = await screen.findByRole("region", {
-      name: "Game suggestions",
-    });
-    expect(section).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", {
-        // The date part is left loose: it is formatted in the runner's zone.
-        name: /^Game 123 · \d{1,2} \w{3} 2026 · 110–98$/,
-      }),
-    ).toBeInTheDocument();
+    for (const choice of Object.values(CHOICES)) {
+      expect(
+        screen.getByRole("button", { name: choice }),
+        String(choice),
+      ).toHaveClass(buttonStyles.button);
+    }
   });
 
-  it("names the team suggestions and keeps each button's label", async () => {
-    server.use(teamsAre());
+  it("renders Remove in the summary as a Button", async () => {
+    server.use(...attachServer().handlers);
     const user = renderComposer();
+    await screen.findByRole("heading", { name: /^compose$/i });
 
-    await user.type(textBox(), "$TO");
+    await attachGameResult(user);
+    const summary = await summaryShown();
 
-    const section = await screen.findByRole("region", {
-      name: "Team suggestions",
-    });
-    expect(section).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Toronto Raptors (TOR)" }),
-    ).toBeInTheDocument();
+      within(summary).getByRole("button", { name: /^remove/i }),
+    ).toHaveClass(buttonStyles.button);
   });
 });
 
