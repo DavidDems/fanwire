@@ -22,6 +22,7 @@ from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _PARENT_REVISION = "b2d6f9a3c8e5"  # add_posts_deleted_at, head before POSTS-005
+_REVISION = "c7e3a5d9f1b4"  # add_posts_data_link_columns: POSTS-006's revision adds a CHECK on top
 
 _COLUMNS = {
     "linked_game_id": ("bigint", "YES", None),
@@ -143,7 +144,9 @@ def test_upgrade_adds_the_four_named_check_constraints(alembic_config, engine):
     _at_parent(alembic_config)
     before = _posts_checks(engine)
 
-    command.upgrade(alembic_config, "head")
+    # This revision by name, not "head": a later revision (POSTS-006's
+    # linked_line_game_id) adds a CHECK of its own.
+    command.upgrade(alembic_config, _REVISION)
 
     assert _posts_checks(engine) - before == _CHECKS
 

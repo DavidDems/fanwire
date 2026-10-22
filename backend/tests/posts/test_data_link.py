@@ -231,7 +231,8 @@ def test_a_post_stores_each_kind_of_link_directly(db_targets, session_factory):
     t, _ = db_targets
     for fields in (
         {"linked_game_id": t.completed_game},
-        {"linked_player_game_stats_id": t.played_line},
+        # POSTS-006: a line link stores its game beside it (ck_posts_line_game_pairing).
+        {"linked_player_game_stats_id": t.played_line, "linked_line_game_id": t.completed_game},
         {"linked_player_id": t.career_player, "linked_player_scope": "regular"},
         {"linked_player_id": t.career_player, "linked_player_scope": "playoffs"},
     ):
@@ -246,6 +247,7 @@ def _violations(t: Targets, parent: int) -> dict[str, dict]:
         "game_and_line": {
             "linked_game_id": t.completed_game,
             "linked_player_game_stats_id": t.played_line,
+            "linked_line_game_id": t.completed_game,
         },
         "game_and_player": {
             "linked_game_id": t.completed_game,
@@ -254,6 +256,7 @@ def _violations(t: Targets, parent: int) -> dict[str, dict]:
         },
         "line_and_player": {
             "linked_player_game_stats_id": t.played_line,
+            "linked_line_game_id": t.completed_game,
             "linked_player_id": t.career_player,
             "linked_player_scope": "regular",
         },
@@ -266,6 +269,7 @@ def _violations(t: Targets, parent: int) -> dict[str, dict]:
             "is_reply": True,
             "parent_post_id": parent,
             "linked_player_game_stats_id": t.played_line,
+            "linked_line_game_id": t.completed_game,
         },
         "player_on_reply": {
             "is_reply": True,
@@ -277,7 +281,17 @@ def _violations(t: Targets, parent: int) -> dict[str, dict]:
         "scope_without_player": {"linked_player_scope": "regular"},
         "play_in_scope": {"linked_player_id": t.career_player, "linked_player_scope": "play-in"},
         "unknown_game": {"linked_game_id": MISSING},
-        "unknown_line": {"linked_player_game_stats_id": MISSING},
+        "unknown_line": {
+            "linked_player_game_stats_id": MISSING,
+            "linked_line_game_id": t.completed_game,
+        },
+        # POSTS-006: ck_posts_line_game_pairing and the line game's FK.
+        "line_without_line_game": {"linked_player_game_stats_id": t.played_line},
+        "line_game_without_line": {"linked_line_game_id": t.completed_game},
+        "unknown_line_game": {
+            "linked_player_game_stats_id": t.played_line,
+            "linked_line_game_id": MISSING,
+        },
         "unknown_player": {"linked_player_id": MISSING, "linked_player_scope": "regular"},
     }
 
@@ -297,6 +311,9 @@ def _violations(t: Targets, parent: int) -> dict[str, dict]:
         "unknown_game",
         "unknown_line",
         "unknown_player",
+        "line_without_line_game",
+        "line_game_without_line",
+        "unknown_line_game",
     ],
 )
 def test_a_direct_insert_that_breaks_a_link_constraint_raises_integrity_error(
@@ -454,6 +471,74 @@ def test_a_post_without_a_data_link_has_data_link_null(client, targets, session_
     assert _links(session_factory, body["id"]) == dict.fromkeys(LINK_COLUMNS)
 
 
+# ------------------- POSTS-006: the line's game stored at create
+
+
+_POST_OUT_FIELDS = {
+    "id",
+    "author_id",
+    "text",
+    "is_reply",
+    "parent_post_id",
+    "is_repost",
+    "original_post_id",
+    "reported",
+    "created_at",
+    "data_link",
+}
+
+
+@pytest.mark.parametrize("kind", VALID)
+def test_create_stores_the_line_game_for_a_player_game_link_only(
+    client, targets, session_factory, kind
+):
+    data_link, _ = _valid(targets)[kind]
+    expected = targets.completed_game if kind == "player_game" else None
+
+    response = client.post(
+        "/posts", json={"text": "look at this", "data_link": data_link}, headers=TOKEN
+    )
+
+    assert response.status_code == 201, response.text
+    with session_factory() as session:
+        post = session.get(Post, response.json()["id"])
+        assert post.linked_line_game_id == expected
+    # PostOut is unchanged: the stored game is not part of the response.
+    assert set(response.json()) == _POST_OUT_FIELDS
+
+
+def test_a_quote_repost_with_a_player_game_link_stores_the_line_game(
+    client, targets, session_factory
+):
+    original = _a_post(session_factory, targets.author_id, text="the original")
+
+    response = client.post(
+        "/posts",
+        json={
+            "text": "this, and the line",
+            "is_repost": True,
+            "original_post_id": original,
+            "data_link": {"type": "player_game", "ref_id": targets.played_line},
+        },
+        headers=TOKEN,
+    )
+
+    assert response.status_code == 201, response.text
+    with session_factory() as session:
+        assert session.get(Post, response.json()["id"]).linked_line_game_id == (
+            targets.completed_game
+        )
+
+
+def test_a_post_without_a_link_stores_no_line_game(client, targets, session_factory):
+    response = client.post("/posts", json={"text": "no attachment"}, headers=TOKEN)
+
+    assert response.status_code == 201, response.text
+    with session_factory() as session:
+        assert session.get(Post, response.json()["id"]).linked_line_game_id is None
+    assert set(response.json()) == _POST_OUT_FIELDS
+
+
 # ------------------------------------------ criterion 5: a refused target
 
 
@@ -601,50 +686,58 @@ def test_a_quote_repost_with_a_data_link_answers_201(client, targets, session_fa
 
 
 # ------------------------------------------- criterion 7: #GameId tokens
+#
+# POSTS-006 retired #GameId parsing for new posts: a token in new text is
+# just text. These two tests pinned the old rule (422
+# data_link_with_game_mention; EventMention rows from new text) and are
+# rewritten to the new one.
 
 
 @pytest.mark.parametrize("resolves", [True, False])
-def test_a_game_mention_with_a_data_link_answers_422_and_creates_nothing(
+def test_a_game_mention_with_a_data_link_answers_201_and_creates_no_event_mention(
     client, targets, session_factory, publisher, resolves
 ):
     game_id = targets.completed_game if resolves else MISSING
+    text = f"what a night #GameId{game_id}"
 
     response = client.post(
         "/posts",
         json={
-            "text": f"what a night #GameId{game_id}",
+            "text": text,
             "data_link": {"type": "player_game", "ref_id": targets.played_line},
         },
         headers=TOKEN,
     )
 
-    assert response.status_code == 422, response.text
-    assert response.json() == {"detail": "data_link_with_game_mention"}
-    assert _post_count(session_factory) == 0
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["text"] == text
+    assert body["data_link"] == {
+        "type": "player_game",
+        "ref_id": targets.played_line,
+        "scope": None,
+    }
+    assert _links(session_factory, body["id"])["linked_player_game_stats_id"] == (
+        targets.played_line
+    )
     with session_factory() as session:
         assert session.scalar(select(func.count()).select_from(EventMention)) == 0
-    assert publisher.published == []
+    assert [event.name for event in publisher.published] == ["PostCreated"]
 
 
-def test_game_mentions_without_a_data_link_still_create_event_mentions(
-    client, targets, session_factory
+def test_game_mentions_in_new_text_create_no_event_mention_and_publish_only_post_created(
+    client, targets, session_factory, publisher
 ):
-    """Passes before POSTS-005: the legacy path is unchanged."""
     text = f"what a night #GameId{targets.completed_game} and #GameId{targets.unplayed_game}"
 
     response = client.post("/posts", json={"text": text}, headers=TOKEN)
 
     assert response.status_code == 201, response.text
+    assert response.json()["text"] == text
     with session_factory() as session:
-        mentions = session.scalars(
-            select(EventMention).where(EventMention.post_id == response.json()["id"])
-        ).all()
-        assert sorted((m.game_id, m.raw_token) for m in mentions) == sorted(
-            [
-                (targets.completed_game, f"#GameId{targets.completed_game}"),
-                (targets.unplayed_game, f"#GameId{targets.unplayed_game}"),
-            ]
-        )
+        assert session.scalar(select(func.count()).select_from(EventMention)) == 0
+        assert session.get(Post, response.json()["id"]).text == text
+    assert [event.name for event in publisher.published] == ["PostCreated"]
 
 
 # -------------------------------------------------- criterion 8: an image
@@ -678,10 +771,10 @@ def test_a_data_link_and_a_processed_image_are_both_stored(client, targets, sess
 
 _POSTS_PACKAGE = Path(__file__).resolve().parents[2] / "app" / "posts"
 _FORBIDDEN = "app.events.models"
-# mentions.py resolves #GameId tokens against Game (the existing resolver);
 # models.py imports Game only to register the FK targets on Base.metadata, a
-# schema fact rather than a read (POSTS-005 brief).
-_ALLOWED = {_POSTS_PACKAGE / "mentions.py", _POSTS_PACKAGE / "models.py"}
+# schema fact rather than a read (POSTS-005 brief). mentions.py, the #GameId
+# resolver, went with POSTS-006's retirement of the tokens.
+_ALLOWED = {_POSTS_PACKAGE / "models.py"}
 
 
 def _imported_modules(path: Path) -> set[str]:
