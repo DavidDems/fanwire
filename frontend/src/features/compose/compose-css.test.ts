@@ -3,9 +3,8 @@
  * styles (`wiki/CodeContext/FrontendUI/verification.md` §1, §2a), so the CSS
  * is read from disk.
  *
- * - The suggestions panel's own module, `MentionAutocomplete.module.css`, sets
- *   `z-index: var(--z-dropdown)` (`layout.md` §5: the one dropdown layer), and
- *   `MentionAutocomplete.tsx` imports it.
+ * - The suggestions panel and its `MentionAutocomplete.module.css` are gone
+ *   with the dropdown (FRONTEND-013).
  * - Every `*.module.css` under `src/features/compose/` passes the shared
  *   raw-value scanner in `src/test/module-css.ts`, and there is at least one.
  * - The shared classes `compose-style.test.tsx` asserts really exist as rules:
@@ -23,13 +22,11 @@ import { describe, expect, it } from "vitest";
 import {
   SRC_DIR,
   allBlocks,
-  isAtRule,
   parseCss,
   readSrcFile,
   selectors,
 } from "../../test/css";
 import {
-  declared,
   lastCompoundClasses,
   moduleCssFiles,
   moduleCssViolations,
@@ -38,26 +35,10 @@ import {
 const COMPOSE_DIR = join(SRC_DIR, "features", "compose");
 const SUGGESTIONS_CSS = join(COMPOSE_DIR, "MentionAutocomplete.module.css");
 
-describe("the suggestions panel's CSS (criterion 5)", () => {
-  it("exists as MentionAutocomplete.module.css and sets z-index: var(--z-dropdown)", () => {
-    expect(
-      existsSync(SUGGESTIONS_CSS),
-      `${SUGGESTIONS_CSS} does not exist`,
-    ).toBe(true);
-
-    const layered = allBlocks(
-      parseCss(readFileSync(SUGGESTIONS_CSS, "utf8")),
-    ).some(
-      (block) =>
-        !isAtRule(block) &&
-        declared(block, "z-index") === "var(--z-dropdown)",
-    );
-    expect(layered, "no rule sets z-index: var(--z-dropdown)").toBe(true);
-  });
-
-  it("is imported by MentionAutocomplete.tsx", () => {
-    expect(readSrcFile("features/compose/MentionAutocomplete.tsx")).toMatch(
-      /import\s+\w+\s+from\s+["']\.\/MentionAutocomplete\.module\.css["']/,
+describe("the suggestions panel's CSS is gone (FRONTEND-013 criterion 9)", () => {
+  it("MentionAutocomplete.module.css no longer exists", () => {
+    expect(existsSync(SUGGESTIONS_CSS), `${SUGGESTIONS_CSS} still exists`).toBe(
+      false,
     );
   });
 });

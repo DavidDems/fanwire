@@ -10,12 +10,15 @@
  * which is the point at which undo is needed and the only point at which anyone
  * would notice.
  *
- * The mediator's side of this criterion — capturing before a mention insertion
- * and restoring on undo — is in `ComposeMediator.test.ts`.
+ * The mediator's side of this criterion — capturing before each attach or
+ * replace of a data link (FRONTEND-013) and restoring on undo — is in
+ * `ComposeMediator.test.ts`. The link is part of what is captured, and is
+ * detached like the media ids are.
  */
 import { describe, expect, it } from "vitest";
 
 import { DraftSnapshot } from "./DraftSnapshot";
+import type { DataLink } from "../../test/attach";
 import type { Draft } from "./draft";
 
 function draftWithEverything(): Draft {
@@ -24,6 +27,7 @@ function draftWithEverything(): Draft {
     mediaIds: [11, 12],
     replyToPostId: 77,
     repostOfPostId: null,
+    dataLink: null,
   };
 }
 
@@ -40,6 +44,7 @@ describe("DraftSnapshot captures a draft", () => {
       mediaIds: [],
       replyToPostId: null,
       repostOfPostId: 9,
+      dataLink: null,
     };
 
     expect(DraftSnapshot.capture(draft).restore()).toEqual(draft);
@@ -49,7 +54,7 @@ describe("DraftSnapshot captures a draft", () => {
     const draft = draftWithEverything();
     const snapshot = DraftSnapshot.capture(draft);
 
-    draft.text = `${draft.text} #GameId123 `;
+    draft.text = `${draft.text} and more`;
     draft.mediaIds.push(13);
     draft.replyToPostId = null;
 
@@ -65,5 +70,40 @@ describe("DraftSnapshot captures a draft", () => {
 
     expect(snapshot.restore()).toEqual(draftWithEverything());
     expect(snapshot.restore().mediaIds).not.toBe(first.mediaIds);
+  });
+});
+
+describe("DraftSnapshot captures the data link (FRONTEND-013)", () => {
+  function draftWithLink(): Draft {
+    return {
+      text: "Raptors win",
+      mediaIds: [],
+      replyToPostId: null,
+      repostOfPostId: null,
+      dataLink: { type: "player_career", ref_id: 2544, scope: "regular" },
+    };
+  }
+
+  it("restores the link with the rest of the draft", () => {
+    expect(DraftSnapshot.capture(draftWithLink()).restore()).toEqual(
+      draftWithLink(),
+    );
+  });
+
+  it("is unaffected by a change to the captured draft's link", () => {
+    const draft = draftWithLink();
+    const snapshot = DraftSnapshot.capture(draft);
+
+    (draft.dataLink as DataLink).ref_id = 1;
+
+    expect(snapshot.restore()).toEqual(draftWithLink());
+  });
+
+  it("hands back a link no restore can reach into", () => {
+    const snapshot = DraftSnapshot.capture(draftWithLink());
+
+    (snapshot.restore().dataLink as DataLink).ref_id = 1;
+
+    expect(snapshot.restore()).toEqual(draftWithLink());
   });
 });
