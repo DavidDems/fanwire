@@ -389,6 +389,7 @@ export function testRepostOut(
     original_post_id: originalId,
     reported: false,
     created_at: "2026-09-28T12:30:00Z",
+    data_link: null,
     ...overrides,
   };
 }

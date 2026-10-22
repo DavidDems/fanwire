@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_event_bus, get_session
 from app.eventbus import PostEventBus
+from app.posts.data_link import DataLinkRefused
 from app.posts.dependencies import get_publish_post_facade
 from app.posts.facade import (
     CreatePostRequest as FacadePostRequest,
@@ -92,6 +93,9 @@ def create_post(
     session: Session = Depends(get_session),
     facade: PublishPostFacade = Depends(get_publish_post_facade),
 ) -> Post:
+    """A refused data_link (app.posts.data_link.DataLinkRefused) answers 422
+    with its machine code as the detail; a malformed one is Pydantic's own
+    422."""
     request = FacadePostRequest(
         author_id=current_user.id,
         text=body.text,
@@ -100,9 +104,14 @@ def create_post(
         is_repost=body.is_repost,
         original_post_id=body.original_post_id,
         media_ids=body.media_ids,
+        data_link=body.data_link.to_link() if body.data_link is not None else None,
     )
     try:
         return facade.publish(request)
+    except DataLinkRefused as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code
+        ) from exc
     except RateLimitExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=exc.reason
