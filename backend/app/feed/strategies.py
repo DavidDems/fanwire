@@ -40,7 +40,9 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
     """Reverse-chronological: authors = the viewer's followed ids plus the
     viewer themself (a viewer sees their own posts in their own feed --
     judgment call, see wiki/CodeContext/Modules/0x06-feed.md), OR'd with
-    mentions of the viewer's preferred team's games when one is set."""
+    posts relevant to one of the viewer's preferred team's games when one
+    is set: a legacy mention of it, a game_final link to it or a
+    player_game link to a line in it (POSTS-006)."""
 
     def __init__(self, viewer_id: int, preferred_team_id: int | None) -> None:
         self._viewer_id = viewer_id
@@ -50,7 +52,7 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
         author_ids = set(followed_user_ids(session, self._viewer_id))
         author_ids.add(self._viewer_id)
 
-        mentioned_game_ids = (
+        team_game_ids = (
             game_ids_for_team(session, self._preferred_team_id)
             if self._preferred_team_id is not None
             else None
@@ -59,7 +61,7 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
         return query_feed_posts(
             session,
             author_ids=author_ids,
-            mentioned_game_ids=mentioned_game_ids,
+            mentioned_game_ids=team_game_ids,
             before_id=before_id,
             limit=limit,
         )

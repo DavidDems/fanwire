@@ -1,12 +1,14 @@
 """DataLink — a post's one sports-data attachment (POSTS-005), and the one
-place it is mapped onto, and read back from, Post's four link columns
+place it is mapped onto, and read back from, Post's link columns
 (linked_game_id, linked_player_game_stats_id, linked_player_id,
-linked_player_scope). Schema and rationale:
+linked_player_scope, and POSTS-006's linked_line_game_id, the game of a
+player_game link's line). Schema and rationale:
 wiki/CodeContext/Modules/0x03-posts.md.
 
-The attachment's target is checked through events/' public interface only
-(app.events.service's EVENTS-009 validate_* functions and the
-app.events.errors refusals they raise), per
+The attachment's target is checked, and a line's game read, through events/'
+public interface only (app.events.service's EVENTS-009 validate_* and
+player_game_previews functions and the app.events.errors refusals they
+raise), per
 wiki/CodeContext/Modules/0x00-architecture.md "Connection rule" -- never
 app.events.models.
 """
@@ -26,6 +28,7 @@ from app.events.errors import (
     PlayerDidNotPlayError,
 )
 from app.events.service import (
+    player_game_previews,
     validate_game_final,
     validate_player_career,
     validate_player_game,
@@ -45,7 +48,7 @@ _TARGET_REFUSAL_CODES: dict[type[LinkTargetError], str] = {
 
 class DataLinkRefused(ValueError):
     """A post's data_link is refused, by a post-level rule (a reply, a plain
-    repost, a #GameId token alongside it) or by its target's validator.
+    repost) or by its target's validator.
     `code` is the machine detail the route answers 422 with."""
 
     def __init__(self, code: str) -> None:
@@ -64,13 +67,19 @@ class DataLink:
     ref_id: int
     scope: CareerScope | None = None
 
-    def columns(self) -> dict[str, object]:
-        """The Post column values that store this link: exactly one id (and,
-        for a career, the scope); the others stay null."""
+    def columns(self, session: Session) -> dict[str, object]:
+        """The Post column values that store this link: exactly one target id
+        (and, for a career, the scope; for a line, its game, read from
+        events/' player_game_preview); the others stay null. Called after
+        validate_target, so a line's preview exists."""
         if self.type == "game_final":
             return {"linked_game_id": self.ref_id}
         if self.type == "player_game":
-            return {"linked_player_game_stats_id": self.ref_id}
+            line = player_game_previews(session, [self.ref_id])[self.ref_id]
+            return {
+                "linked_player_game_stats_id": self.ref_id,
+                "linked_line_game_id": line.game_id,
+            }
         return {"linked_player_id": self.ref_id, "linked_player_scope": self.scope}
 
     @classmethod
