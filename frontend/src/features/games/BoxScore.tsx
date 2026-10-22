@@ -183,6 +183,32 @@ function lineIdFrom(raw: string | null): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+/**
+ * Centres `row` in the nearest ancestor that scrolls vertically, or, with
+ * none (a full page, where the window scrolls), in the window. Not plain
+ * `scrollIntoView` everywhere: that scrolls every scrollable ancestor, and in
+ * the modal it scrolled the dialog itself (its header off the top) and the
+ * page under the modal (so closing returned to the wrong scroll).
+ */
+function revealRow(row: HTMLElement) {
+  for (
+    let el = row.parentElement;
+    el !== null && el !== document.body;
+    el = el.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(el);
+    const scrolls = overflowY === "auto" || overflowY === "scroll";
+    if (scrolls && el.scrollHeight > el.clientHeight) {
+      const box = el.getBoundingClientRect();
+      const target = row.getBoundingClientRect();
+      el.scrollTop +=
+        target.top + target.height / 2 - (box.top + box.height / 2);
+      return;
+    }
+  }
+  row.scrollIntoView({ block: "center" });
+}
+
 function PlayerRow({
   player,
   firstOfBench = false,
@@ -199,7 +225,7 @@ function PlayerRow({
   const state = useInFlowLinkState();
 
   useEffect(() => {
-    if (current) ref.current?.scrollIntoView({ block: "center" });
+    if (current && ref.current !== null) revealRow(ref.current);
   }, [current]);
 
   const className = [
