@@ -126,30 +126,57 @@ Update this section in every spec PR and unit PR of this thread.
   went in Director PR #217, which also took the path out of FRONTEND-014's
   and FRONTEND-017's specs. **Every frontend unit's `components.md` rows are
   a Director PR**, merged with or after the unit.
-- **Next:** four units are left. Hand-run the first two in parallel; their
-  specs are merged.
-  1. **`FRONTEND-014`** (needs POSTS-006, merged): the three preview
-     components on the post card, and game and player details in the modal
-     flow. It closes the gap the human saw.
-  2. **`FRONTEND-017`** (needs FRONTEND-013, merged): "Post about this" on
-     the stats pages, signed-in only, linking to FRONTEND-013's
-     `/compose?link=…`.
+- **2026-10-22, stage 5 hand-run:** `FRONTEND-014` as #220 and
+  `FRONTEND-017` as #221, both open. Merge #220 first.
+  - **Merged preview:** green, 1613 tests. The two units conflict only
+    textually (`BoxScore.tsx`, `Games.module.css`, `PlayerPage.tsx`, all
+    union resolutions). After #220 merges, merge `main` into
+    `agent/FRONTEND-017` with that resolution, so CI runs on the pair.
+  - **Two defects found in the browser rows**, both fixed on their branches
+    and re-driven:
+    - `scrollIntoView` scrolled the dialog and the page under the modal;
+    - hidden accessible names widened the page to 879 px at 360.
 
-  Both edit `features/games/**` and `features/players/**`: test them on a
-  merged preview before the second merges. Then:
-  3. **`FRONTEND-015`** (stage 6): complete-card reveal. Spec it after
-     FRONTEND-014 merges, against its components.
-  4. **`FRONTEND-012`** (lifecycle UI): unblocked since POSTS-004, still
-     unspecced. Its acceptance list is in the units table below.
+    jsdom can't see either: **do the 360 rows, they find things.**
+  - **Browser data:** the dev Postgres is ephemeral and the Kaggle CSVs
+    aren't on this machine, so the rows ran on a small SQL fixture of two
+    games, five players and seven lines inserted into `backend-dev`'s
+    database. A fresh database also needs the test account's profile
+    created on first sign-in.
+  - **`FrontendUI/components.md` rows** for both units are still to write:
+    a Director PR, with or after the units.
+- **2026-10-22, decided (the human, by `AskUserQuestion`):**
+  - **FRONTEND-012:**
+    - A deactivated account browses as a guest under a banner, and a
+      signed-in-only route shows the recovery screen.
+    - Deactivate lives in the own-profile settings.
+    - Report asks first, then reads "Reported" for the session.
+    - A deleted card leaves every cache at once, then refetches.
+  - **FRONTEND-015:**
+    - Every post image sits in a fixed 4:3 frame, frontend only, since
+      `MediaItemView` has no dimensions.
+    - The route-level bundle split is in 015.
+- **2026-10-22, stage 6 specs written:** `FRONTEND-015` and `FRONTEND-012`,
+  in one Director PR. Settled in them:
+  - readiness = every image loaded and `decode()` settled;
+  - a 4000 ms bound per card, with an "Image unavailable" line in the
+    frame;
+  - a window one viewport ahead;
+  - a revealed card never returns to a skeleton;
+  - the post menu on the Popover API, with confirms as nested
+    `alertdialog`s;
+  - one `useAccount()` state hook for the whole app.
+- **Next:**
+  1. The human merges #220, then #221 after its `main` merge.
+  2. Write the `components.md` rows for FRONTEND-014 and FRONTEND-017, and
+     delete the backlog's game-link bullet (FRONTEND-014 closes it).
+  3. Hand-run **`FRONTEND-015`** and **`FRONTEND-012`**, both cut after #220
+     and #221 merge. They both touch `PostNode` and the feed caches, so test
+     them on a merged preview.
 
   Small loose ends:
   - `backend/app/eventbus.py` and `backend/app/notifications/consumer.py`
     still name `PostMentionedEvent` in comments: a Director tidy-up.
-  - Vite now warns that the one JS chunk is 513 kB (limit 500): note it for
-    FRONTEND-015, which is about load behaviour.
-  - Delete the backlog row "A narrower compose game picker" and the
-    game-link bullet (`TODO/02-backlog.md`, as their own notes say), which
-    FRONTEND-013 and POSTS-006 closed.
 
 ## Read first, in this order
 
