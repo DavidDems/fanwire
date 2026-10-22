@@ -111,14 +111,45 @@ Update this section in every spec PR and unit PR of this thread.
     contract for FRONTEND-017.
   - Game and player details join the modal flow as overlay routes, and
     `?line=<line_id>` highlights a box-score row.
-- **Next:** hand-run `FRONTEND-013` and `POSTS-006`, in parallel. They
-  depend only on POSTS-005. Merge FRONTEND-013 first or together, so the
-  live composer never inserts tokens that do nothing, and test the pair on a
-  merged preview.
-  - Then `FRONTEND-017` (needs FRONTEND-013) and `FRONTEND-014` (needs
-    POSTS-006), whose specs are already merged.
-  - `FRONTEND-012` (lifecycle UI) is still unblocked and still unspecced.
-  - `FRONTEND-015` (stage 6) is specced after FRONTEND-014.
+- **2026-10-22, stage 4 merged and live:**
+  - **Merged:** `FRONTEND-013` #216, `POSTS-006` #218. A spec amendment, #215, let FRONTEND-013 rewrite `ThreadModal.test.tsx`'s two dropdown tests.
+  - **Live:** deployed together. The `#216` deploy run was cancelled, and `#218`'s ran with the Migration function invoked (`d4f8b2e6a1c3`).
+  - **The human's check:** they attached stats on `/compose`, and a second attach replaces the first. The feed card doesn't show the attachment yet. That is expected: it is `FRONTEND-014`, and `data_link_preview` is already in the feed response.
+  - **Two decisions made in the hand-runs:**
+    - Undo attach restores the link only, never text or media typed after it.
+    - `app/posts/mentions.py` is deleted, so the import scan allows `app.events.models` in `posts/models.py` only.
+  - **Not done:** FRONTEND-013's spec browser rows were never run as a formal pass. The human's manual check covered attach and replace.
+- **2026-10-22, the `FrontendUI/` slip:** `#214` listed
+  `wiki/CodeContext/FrontendUI/components.md` in three frontend specs'
+  `allowed_paths`, and `agent-guard` refused it on #216. No unit role may
+  write `FrontendUI/`, as this file's stage 2 note already said. The rows
+  went in Director PR #217, which also took the path out of FRONTEND-014's
+  and FRONTEND-017's specs. **Every frontend unit's `components.md` rows are
+  a Director PR**, merged with or after the unit.
+- **Next:** four units are left. Hand-run the first two in parallel; their
+  specs are merged.
+  1. **`FRONTEND-014`** (needs POSTS-006, merged): the three preview
+     components on the post card, and game and player details in the modal
+     flow. It closes the gap the human saw.
+  2. **`FRONTEND-017`** (needs FRONTEND-013, merged): "Post about this" on
+     the stats pages, signed-in only, linking to FRONTEND-013's
+     `/compose?link=…`.
+
+  Both edit `features/games/**` and `features/players/**`: test them on a
+  merged preview before the second merges. Then:
+  3. **`FRONTEND-015`** (stage 6): complete-card reveal. Spec it after
+     FRONTEND-014 merges, against its components.
+  4. **`FRONTEND-012`** (lifecycle UI): unblocked since POSTS-004, still
+     unspecced. Its acceptance list is in the units table below.
+
+  Small loose ends:
+  - `backend/app/eventbus.py` and `backend/app/notifications/consumer.py`
+    still name `PostMentionedEvent` in comments: a Director tidy-up.
+  - Vite now warns that the one JS chunk is 513 kB (limit 500): note it for
+    FRONTEND-015, which is about load behaviour.
+  - Delete the backlog row "A narrower compose game picker" and the
+    game-link bullet (`TODO/02-backlog.md`, as their own notes say), which
+    FRONTEND-013 and POSTS-006 closed.
 
 ## Read first, in this order
 
@@ -345,6 +376,19 @@ Turn each into criteria with observable predicates in the matching spec.
   (`Architecture/incident-runbook.md`).
 - **Symptom: two sibling PRs each green, red together.** Tree-scanning tests
   trip on each other. Run the full suite on a merged preview.
+- **Symptom: a hand-run PR's guard fails on a wiki path the spec lists.**
+  `allowed_paths` is intersected with the role policy, and no unit role may
+  write `wiki/CodeContext/FrontendUI/` or `Standards/`. Before pushing,
+  check every changed path against the dispatched roles: `agentctl guard
+  check <TASK> --role <role> --diff-file <one path>` for `test_agent`,
+  `code_agent` and `context_maintainer`. A path is fine if any one of them
+  passes, and `state.json` is exempt.
+- **Symptom: a check "running" for 40 minutes, or "Checking for the ability
+  to merge automatically…" that never ends.** This is GitHub losing a
+  status, not a hung runner. Compare the job's steps (`gh api
+  repos/DavidDems/fanwire/actions/jobs/<id>`) and the PR's `headRefOid`
+  with `git ls-remote`. Check githubstatus.com, then
+  `gh pr close <N>; gh pr reopen <N>` to make GitHub re-read the branch.
 
 ## Limits
 
