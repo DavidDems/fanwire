@@ -1,0 +1,91 @@
+/*
+ * The data-link previews on a post card (FRONTEND-014): a game result, a
+ * player's game line, a player's career. A muted box inside the card, so it
+ * reads as what the post carries rather than as the post. Values come from
+ * tokens.css by name only.
+ */
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+/* The playoff label, or the career's scope, over the headline. */
+.kicker {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The headline is the preview's one link. Body line height keeps it at least
+ * 24 px tall (WCAG 2.5.8); focus is base.css's :focus-visible ring.
+ */
+.headline {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.score {
+  font-variant-numeric: tabular-nums;
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta abbr,
+.figures abbr {
+  text-decoration: none;
+}
+
+/* Each figure is its abbreviation over its value; the row wraps on a phone. */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.figures div {
+  display: flex;
+  flex-direction: column;
+}
+
+.figures dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.figures dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A did-not-play, in place of figures the source does not have. */
+.dnp {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* A link whose target has no preview: a neutral line, not an empty box. */
+.unavailable {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  color: var(--color-text-muted);
+}

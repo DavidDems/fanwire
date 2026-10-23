@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { useInFlowLinkState } from "../../routes/modal-flow";
+
 /** A game mention as the composer writes it; the digits are the game's id. */
 const GAME_MENTION = /#GameId(\d+)/g;
 
@@ -19,9 +21,13 @@ export interface PostTextProps {
  * is never parsed as HTML: markup in a post reads literally. A token whose id
  * is not in `mentionedGameIds` did not resolve to a game and stays plain text,
  * and `\d+` is greedy, so `#GameId5012` is the id 5012, never 501 and a "2".
+ *
+ * Inside the modal a mention opens its game as the flow's next detail
+ * (`FRONTEND-014`); on a page it is the plain link to the game's page it was.
  */
 export function PostText({ text, mentionedGameIds, className }: PostTextProps) {
   const mentioned = new Set(mentionedGameIds);
+  const state = useInFlowLinkState();
   const nodes: ReactNode[] = [];
   let last = 0;
 
@@ -31,7 +37,7 @@ export function PostText({ text, mentionedGameIds, className }: PostTextProps) {
     const start = match.index;
     if (start > last) nodes.push(text.slice(last, start));
     nodes.push(
-      <Link key={start} to={`/games/${id}`}>
+      <Link key={start} to={`/games/${id}`} state={state}>
         {match[0]}
       </Link>,
     );
