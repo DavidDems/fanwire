@@ -166,17 +166,20 @@ Update this section in every spec PR and unit PR of this thread.
   - the post menu on the Popover API, with confirms as nested
     `alertdialog`s;
   - one `useAccount()` state hook for the whole app.
+- **2026-10-22, stage 5 merged:**
+  - **Merged:** `FRONTEND-014` #220, then `FRONTEND-017` #221 after its `main`
+    merge (the preview's union resolution; CI green on the pair). Also merged:
+    the `components.md` rows #223, and the stage 6 specs #222.
+  - **Deploy:** the human cancelled #220's deploy run and approved #221's, which
+    carries both. No Alembic revision since #218, so no Migration run.
+  - **Tidy-up:** the backlog's game-link bullet is gone, and the
+    `PostMentionedEvent` comments in `eventbus.py` and `consumer.py` are
+    corrected. `infra/lib/messaging-stack.ts`'s bus description still names
+    it: left alone, because changing it changes a deployed resource.
 - **Next:**
-  1. The human merges #220, then #221 after its `main` merge.
-  2. Merge #223 (the `components.md` rows), and delete the backlog's
-     game-link bullet (FRONTEND-014 closes it).
-  3. Hand-run **`FRONTEND-015`** and **`FRONTEND-012`**, both cut after #220
-     and #221 merge. They both touch `PostNode` and the feed caches, so test
-     them on a merged preview.
-
-  Small loose ends:
-  - `backend/app/eventbus.py` and `backend/app/notifications/consumer.py`
-    still name `PostMentionedEvent` in comments: a Director tidy-up.
+  1. Hand-run **`FRONTEND-015`** and **`FRONTEND-012`** in parallel. They both
+     touch `PostNode` and the feed caches, so test them on a merged preview
+     before the second one merges.
 
 ## Read first, in this order
 

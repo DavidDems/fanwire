@@ -9,9 +9,11 @@
  *   absence is `search-scope.test.ts`'s.) A hand-rolled `<p role="alert">` renders the same role,
  *   which is why this is read from disk.
  * - **Posts render through `PostNode`, not a search renderer** (criterion 3):
- *   a source imports `PostNode` from `../feed/PostNode`, nothing in this
- *   folder reads a post's text or like data itself, and the only things taken
- *   from `features/feed` are `PostNode` and `api` (the cache's root key, which
+ *   a source imports `PreparedPostNode` from `../feed/PreparedPostNode` (the
+ *   feed's readiness wrapper around `PostNode`, `FRONTEND-015`), nothing in
+ *   this folder reads a post's text or like data itself, and the only things
+ *   taken from `features/feed` are `PostNode`, `PreparedPostNode` and `api`
+ *   (the cache's root key, which
  *   `LikeButton`'s optimistic patch walks). Any other sibling feature is never
  *   imported ([[0x00-architecture]] Connection rule).
  *
@@ -167,24 +169,32 @@ describe("built from the shared components (criterion 9)", () => {
 });
 
 describe("posts render through the feed's PostNode (criterion 3)", () => {
-  it("imports PostNode from ../feed/PostNode", () => {
+  it("imports PreparedPostNode from ../feed/PreparedPostNode", () => {
+    // FRONTEND-015: the feed's wrapper around PostNode, which holds a card
+    // behind its skeleton until it is ready, so search applies the feed's
+    // readiness rule instead of a second one.
     const importers = searchSources().filter((file) =>
       importStatements(read(file)).some(
         ({ specifier, names }) =>
-          /^\.\.\/feed\/PostNode(\.tsx?)?$/.test(specifier) &&
-          names.includes("PostNode"),
+          /^\.\.\/feed\/PreparedPostNode(\.tsx?)?$/.test(specifier) &&
+          names.includes("PreparedPostNode"),
       ),
     );
 
     expect(importers.map(posix)).not.toEqual([]);
   });
 
-  it("takes nothing from features/feed but PostNode and api", () => {
+  it("takes nothing from features/feed but PostNode, PreparedPostNode and api", () => {
     const offenders: string[] = [];
     for (const file of searchSources()) {
       for (const { specifier } of importStatements(read(file))) {
         const fromFeed = /(^|\/)feed\//.test(specifier);
-        if (fromFeed && !["PostNode", "api"].includes(moduleName(specifier))) {
+        if (
+          fromFeed &&
+          !["PostNode", "PreparedPostNode", "api"].includes(
+            moduleName(specifier),
+          )
+        ) {
           offenders.push(`${posix(file)} imports ${specifier}`);
         }
       }

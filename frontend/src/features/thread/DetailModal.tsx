@@ -1,4 +1,5 @@
 import {
+  Suspense,
   createContext,
   useContext,
   useLayoutEffect,
@@ -9,6 +10,7 @@ import {
 import { Outlet } from "react-router-dom";
 
 import { Dialog } from "../../components/ui/Dialog";
+import { StatusLine } from "../../components/ui/StatusLine";
 import { useModalFlow } from "../../routes/modal-flow";
 
 /** Where a detail names itself, for the dialog's title. */
@@ -44,7 +46,13 @@ export function DetailModal() {
   return (
     <Dialog open onClose={close} onBack={back} title={title}>
       <DetailTitle.Provider value={setTitle}>
-        <Outlet />
+        {/*
+         * A lazy detail (a game, a player: FRONTEND-015) is waited for in
+         * here, so the dialog itself stays the same open element meanwhile.
+         */}
+        <Suspense fallback={<StatusLine>Loading…</StatusLine>}>
+          <Outlet />
+        </Suspense>
       </DetailTitle.Provider>
     </Dialog>
   );

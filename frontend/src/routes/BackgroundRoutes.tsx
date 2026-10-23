@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   matchRoutes,
   useLocation,
@@ -6,6 +7,7 @@ import {
   type RouteObject,
 } from "react-router-dom";
 
+import { StatusLine } from "../components/ui/StatusLine";
 import {
   ModalFlowScope,
   useFlowBackground,
@@ -75,6 +77,11 @@ const FEED: Partial<Location> = { pathname: "/" };
  * its scroll position. Switching between `<Outlet />` and something else at
  * this position is the re-mount this exists to avoid.
  *
+ * **One Suspense for the lazy pages** (`FRONTEND-015`): a page's chunk is
+ * waited for behind a loading line in `main`. It sits around the page alone,
+ * so a lazy page never takes the modal over it down with it; the modal has
+ * its own, inside its dialog (`DetailModal`).
+ *
  * Mounted as the layout's one splat child, so the pages and overlays stay data
  * in `routes.tsx` and `AppLayout` keeps its plain `<Outlet />`.
  */
@@ -92,7 +99,7 @@ export function BackgroundRoutes({ pages, overlays }: BackgroundRoutesProps) {
 
   return (
     <>
-      {page}
+      <Suspense fallback={<StatusLine>Loading…</StatusLine>}>{page}</Suspense>
       <ModalFlowScope>{overlay}</ModalFlowScope>
     </>
   );

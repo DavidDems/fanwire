@@ -21,7 +21,7 @@ import {
   type FeedCacheValue,
   type PostView,
 } from "../feed/api";
-import { PostNode } from "../feed/PostNode";
+import { PreparedPostNode } from "../feed/PreparedPostNode";
 import { useDetailTitle } from "./DetailModal";
 import styles from "./ThreadModal.module.css";
 
@@ -43,7 +43,8 @@ import styles from "./ThreadModal.module.css";
  * not this one's.
  *
  * **Assembled, not rebuilt.** The root and every reply are the feed's own
- * `PostNode` cards, with their controls and counts; the reply box is
+ * `PostNode` cards, with their controls and counts, each prepared before it is
+ * shown by the feed's `PreparedPostNode` (`FRONTEND-015`); the reply box is
  * `features/compose`'s `InlineComposer`. This feature owns only the order they
  * sit in — root, composer, then the direct replies oldest first — and the read
  * of `GET /feed/thread/{id}` (the root plus its direct replies, [[0x06-feed]]).
@@ -150,7 +151,7 @@ function Thread({ postId, replying }: ThreadProps) {
 
   return (
     <div className={styles.thread}>
-      <PostNode post={root} />
+      <PreparedPostNode post={root} />
 
       {deactivated ? null : status === "authenticated" ? (
         <InlineComposer
@@ -181,7 +182,7 @@ function Replies({ replies }: { replies: PostView[] }) {
     <ol className={styles.replies} aria-label="Replies">
       {oldestFirst(replies).map((reply) => (
         <li key={reply.id}>
-          <PostNode post={reply} />
+          <PreparedPostNode post={reply} />
         </li>
       ))}
     </ol>

@@ -44,13 +44,7 @@
  * `aria-pressed` (the human's decision, 2026-10-16), so the tests below find it
  * by that one name and read the state off the attribute.
  */
-import {
-  cleanup,
-  fireEvent,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -63,6 +57,7 @@ import {
   renderWithAuth,
   testSession,
 } from "../../test/auth";
+import { stubImages, stubIntersectionObserver } from "../../test/card-ready";
 import {
   TEST_PUBLIC_MEDIA_KEY,
   feedPage,
@@ -460,6 +455,10 @@ describe("media on a post", () => {
   });
 
   it("renders the public-media key against the configured media base url", async () => {
+    // jsdom loads no images; since FRONTEND-015 a card waits for its pictures,
+    // so the stubs answer them (`src/test/card-ready.ts`).
+    stubImages({ autoLoad: true });
+    stubIntersectionObserver({ intersectAll: true });
     const feed = feedStub([feedPage([WITH_MEDIA], null)]);
     server.use(feed.handler);
 
@@ -472,27 +471,25 @@ describe("media on a post", () => {
     expect(image).toHaveAccessibleName();
   });
 
-  it("renders no image at all when a media item fails to load", async () => {
-    // jsdom never fires `error` on an `<img>` by itself — there is no network
-    // behind the element — so the failure is provoked directly.
+  it("keeps the picture's frame and says Image unavailable when a media item fails to load", async () => {
+    // FRONTEND-015 replaces "renders no image at all": a dropped picture is a
+    // layout shift, so the frame stays and holds a neutral line instead.
+    const images = stubImages();
+    stubIntersectionObserver({ intersectAll: true });
     const feed = feedStub([feedPage([WITH_MEDIA], null)]);
     server.use(feed.handler);
 
     renderFeed();
-    await screen.findByText(MEDIA_TEXT);
-    const image = within(postCard(MEDIA_TEXT)).getByRole("img");
+    await waitFor(() => expect(images.requested).not.toEqual([]));
+    await images.fail(images.requested[0]);
 
-    fireEvent.error(image);
-
-    await waitFor(() => expect(image).not.toBeInTheDocument());
+    const card = await screen.findByRole("article");
     // A tag query rather than a role query, deliberately: an `<img alt="">` has
     // the presentation role and is invisible to `queryByRole("img")`, and a
-    // bordered alt-text box is exactly what must not be left behind
-    // ([[0x06-feed]] brief — a feed of broken frames is worse than a feed of
-    // text).
-    const card = postCard(MEDIA_TEXT);
+    // broken-image box is exactly what must not be left behind.
     expect(card.getElementsByTagName("img")).toHaveLength(0);
-    // The post survives its picture; only the image goes.
+    expect(within(card).getByText("Image unavailable")).toBeInTheDocument();
+    // The post survives its picture.
     expect(within(card).getByText(MEDIA_TEXT)).toBeInTheDocument();
   });
 });

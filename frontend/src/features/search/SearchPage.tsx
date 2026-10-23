@@ -7,7 +7,7 @@ import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { PostNode } from "../feed/PostNode";
+import { PreparedPostNode } from "../feed/PreparedPostNode";
 import { SearchBar } from "./SearchBar";
 import styles from "./Search.module.css";
 import {
@@ -115,6 +115,8 @@ function AccountResults({ q }: { q: string }) {
 /**
  * "Posts": a stack of the feed's own `PostNode` cards, so a result is the same
  * post — likes, replies and all — as it is on the feed, not a look-alike.
+ * Each is prepared before it is shown, by the feed's `PreparedPostNode`
+ * (`FRONTEND-015`).
  */
 function PostResults({ q }: { q: string }) {
   const posts = useInfiniteQuery({
@@ -143,7 +145,7 @@ function PostResults({ q }: { q: string }) {
         <ol className={styles.stream}>
           {items.map((post) => (
             <li key={post.id}>
-              <PostNode post={post} />
+              <PreparedPostNode post={post} />
             </li>
           ))}
         </ol>

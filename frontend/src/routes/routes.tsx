@@ -1,19 +1,7 @@
+import { lazy } from "react";
 import { Navigate, type RouteObject } from "react-router-dom";
 
-import { ConfirmPage } from "../auth/ConfirmPage";
-import { ForgotPasswordPage } from "../auth/ForgotPasswordPage";
-import { ProfileSetupPage } from "../auth/ProfileSetupPage";
-import { SignInPage } from "../auth/SignInPage";
-import { SignUpPage } from "../auth/SignUpPage";
-import { ComposePage } from "../features/compose/ComposePage";
-import { GamePage } from "../features/games/GamePage";
-import { NotificationsPage } from "../features/notifications/NotificationsPage";
-import { PlayerPage } from "../features/players/PlayerPage";
-import { ProfilePage } from "../features/profile/ProfilePage";
 import { SearchPage } from "../features/search/SearchPage";
-import { PlayersTab } from "../features/stats/PlayersTab";
-import { SeasonsTab } from "../features/stats/SeasonsTab";
-import { StatsPage } from "../features/stats/StatsPage";
 import { DetailModal } from "../features/thread/DetailModal";
 import { ThreadModal } from "../features/thread/ThreadModal";
 import { AppLayout } from "./AppLayout";
@@ -22,6 +10,68 @@ import { GameDetail, PlayerDetail } from "./details";
 import { RequireAuth, RequireNewProfile } from "./guards";
 import { HomeView } from "./HomeView";
 import { NotFoundView } from "./views";
+
+/*
+ * Every page but the first paint loads as its own chunk (FRONTEND-015): the
+ * feed, search, the thread modal and the shell stay in the main one. Each
+ * page is a named export, so `lazy` is handed an adapter to a default one.
+ * `BackgroundRoutes` holds the one Suspense they wait behind.
+ */
+const ComposePage = lazy(() =>
+  import("../features/compose/ComposePage").then((m) => ({
+    default: m.ComposePage,
+  })),
+);
+const NotificationsPage = lazy(() =>
+  import("../features/notifications/NotificationsPage").then((m) => ({
+    default: m.NotificationsPage,
+  })),
+);
+const ProfilePage = lazy(() =>
+  import("../features/profile/ProfilePage").then((m) => ({
+    default: m.ProfilePage,
+  })),
+);
+const GamePage = lazy(() =>
+  import("../features/games/GamePage").then((m) => ({ default: m.GamePage })),
+);
+const PlayerPage = lazy(() =>
+  import("../features/players/PlayerPage").then((m) => ({
+    default: m.PlayerPage,
+  })),
+);
+const StatsPage = lazy(() =>
+  import("../features/stats/StatsPage").then((m) => ({ default: m.StatsPage })),
+);
+const SeasonsTab = lazy(() =>
+  import("../features/stats/SeasonsTab").then((m) => ({
+    default: m.SeasonsTab,
+  })),
+);
+const PlayersTab = lazy(() =>
+  import("../features/stats/PlayersTab").then((m) => ({
+    default: m.PlayersTab,
+  })),
+);
+const SignInPage = lazy(() =>
+  import("../auth/SignInPage").then((m) => ({ default: m.SignInPage })),
+);
+const SignUpPage = lazy(() =>
+  import("../auth/SignUpPage").then((m) => ({ default: m.SignUpPage })),
+);
+const ConfirmPage = lazy(() =>
+  import("../auth/ConfirmPage").then((m) => ({ default: m.ConfirmPage })),
+);
+const ForgotPasswordPage = lazy(() =>
+  import("../auth/ForgotPasswordPage").then((m) => ({
+    default: m.ForgotPasswordPage,
+  })),
+);
+const ProfileSetupPage = lazy(() =>
+  import("../auth/ProfileSetupPage").then((m) => ({
+    default: m.ProfileSetupPage,
+  })),
+);
 
 /**
  * The route table, as data rather than JSX elements, so it can be handed to
