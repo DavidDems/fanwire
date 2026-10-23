@@ -1031,6 +1031,14 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   then the entries that held it or its parent, and its own thread, are
   invalidated by exact key. 403, 404 and 409 each have their own alert. The
   card's click-to-open ignores clicks inside its own menu and confirms.
+- **Focus after a removal** (found in the browser rows: it fell to `<body>`).
+  A deleted card hands focus to the next card's "More options", else the
+  previous card's, else the list's heading (`tabindex="-1"`); inside the
+  thread modal a deleted reply does the same among the replies (the root's
+  menu last), and a deleted root hands it to the dialog's Close. It moves only
+  if focus was actually lost. After Deactivate, focus goes to the banner
+  (`id="deactivated-banner"`, `tabIndex={-1}`), through `mutateAsync`, because
+  the own-profile view that ran it has unmounted by then.
 - **"Post deleted"** replaces an original whose `reposted_post_deleted` is
   true, on a plain repost and in a quote: a muted box with that text only.
   `reposted_post: null` alone still reads "This post is unavailable".
