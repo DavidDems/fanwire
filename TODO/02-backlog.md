@@ -143,10 +143,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 ## Features in `business-rules.md` that are not built
 
-Both are now **`Prompts/18`'s** (2026-10-20): the game link is the `game_final` attachment (POSTS-005, FRONTEND-014), and the post menu is FRONTEND-012's. Delete each bullet when its unit merges.
+The post menu is **`Prompts/18`'s** `FRONTEND-012` (2026-10-20). Delete the bullet when it merges. (The game link shipped as the `game_final` attachment, POSTS-005 and FRONTEND-014, 2026-10-22.)
 
-- **The game stats page.** "Posts with a link to a game should be clickable
-  to go to the stats page." Once it exists, `#GameId<n>` in post text becomes
-  a link styled as an inline `neutral` badge (`components.md` §4).
 - **The post menu** (report, copy link). Use the native `<dialog>` and the
   Popover API before considering a dependency (`components.md` §2).
