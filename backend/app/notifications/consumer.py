@@ -82,7 +82,7 @@ def handle_domain_event(
     PostCreated (reply/repost only, not a plain post) and UserFollowed are
     notification triggers, per wiki/CodeContext/Modules/
     0x05-notifications.md business rules; every other event name --
-    including PostReported and PostMentionedEvent -- returns None without
+    including PostReported and the retired PostMentionedEvent -- returns None without
     raising.
 
     On a notification-worthy event: always creates+persists the

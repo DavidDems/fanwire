@@ -5,7 +5,7 @@ Lives at the top level (not inside app/posts/), because it's genuinely
 cross-cutting despite the name: per wiki/CodeContext/Modules/
 0x00-architecture.md "Connection rule" / "Cross-cutting conventions",
 users/ publishes UserFollowed onto the same bus that posts/ publishes
-PostCreated/PostMentionedEvent/PostReported onto. Living inside app/posts/
+PostCreated/PostReported onto. Living inside app/posts/
 would force users/ to reach into posts/'s package to use it, which the
 connection rule doesn't sanction — same reasoning as Phase 2a's
 app.dependencies (see that architecture doc's "Cross-cutting FastAPI DI").
