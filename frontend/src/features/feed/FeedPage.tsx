@@ -1,4 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useCallback, useReducer } from "react";
 
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -6,11 +7,29 @@ import { InlineAlert } from "../../components/ui/InlineAlert";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { StatusLine } from "../../components/ui/StatusLine";
 import styles from "./FeedPage.module.css";
-import { PostNode } from "./PostNode";
+import { PreparedPostNode } from "./PreparedPostNode";
 import { FEED_PAGES_KEY, fetchFeedPage } from "./api";
 
 /** Three post-shaped placeholders: enough to read as a feed arriving, not a count. */
 const SKELETONS = [0, 1, 2] as const;
+
+/** Which of the first page's cards are being prepared, until none ever is again. */
+interface FirstScreen {
+  preparing: ReadonlySet<number>;
+  /** The first screen's cards have all been prepared: never busy again. */
+  done: boolean;
+}
+
+function firstScreen(
+  state: FirstScreen,
+  [postId, preparing]: [number, boolean],
+): FirstScreen {
+  if (state.done || preparing === state.preparing.has(postId)) return state;
+  const next = new Set(state.preparing);
+  if (preparing) next.add(postId);
+  else next.delete(postId);
+  return { preparing: next, done: next.size === 0 };
+}
 
 /**
  * `/` — the feed.
@@ -36,6 +55,11 @@ const SKELETONS = [0, 1, 2] as const;
  * fetch would be untestable from inside the unit that owns it. Which page is
  * asked for, and when the asking stops, is a property of the request; the
  * gesture that starts it can be revisited without touching either.
+ *
+ * **Each card appears whole** (`FRONTEND-015`): through `PreparedPostNode`, a
+ * skeleton until its pictures are ready. The stream is `aria-busy` while the
+ * first page's cards in the window are being prepared, and never again after:
+ * not for a Load more, not for a refetch.
  */
 export function FeedPage() {
   const feed = useInfiniteQuery({
@@ -50,6 +74,24 @@ export function FeedPage() {
   });
 
   const items = (feed.data?.pages ?? []).flatMap((page) => page.items);
+  const firstPageIds = new Set(
+    (feed.data?.pages[0]?.items ?? []).map((post) => post.id),
+  );
+
+  // aria-busy while the first screen's cards are being prepared, and never
+  // again after (not for a Load more, not for a refetch): FRONTEND-015.
+  const [shown, report] = useReducer(firstScreen, {
+    preparing: new Set<number>(),
+    done: false,
+  });
+  const onPreparing = useCallback(
+    (postId: number, preparing: boolean) => report([postId, preparing]),
+    [],
+  );
+  // Only cards still on the first page count: one deleted while it was being
+  // prepared never reports again.
+  const busy =
+    !shown.done && [...shown.preparing].some((id) => firstPageIds.has(id));
 
   return (
     <section className={styles.page}>
@@ -77,10 +119,15 @@ export function FeedPage() {
        * as "list, 0 items", which says less than the status line above it.
        */}
       {items.length === 0 ? null : (
-        <ol className={styles.stream}>
+        <ol className={styles.stream} aria-busy={busy || undefined}>
           {items.map((post) => (
             <li key={post.id}>
-              <PostNode post={post} />
+              <PreparedPostNode
+                post={post}
+                onPreparing={
+                  firstPageIds.has(post.id) ? onPreparing : undefined
+                }
+              />
             </li>
           ))}
         </ol>

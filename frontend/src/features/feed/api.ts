@@ -235,6 +235,20 @@ export function withRepost(post: PostView, reposted: boolean): PostView {
 }
 
 /**
+ * A repost with nothing of its own to say stands for the original. A repost
+ * with text or media is a quote, and a post in its own right. Here rather than
+ * in `PostNode`, because what a card shows is also what `useCardReady` waits
+ * for (`FRONTEND-015`).
+ */
+export function isPlainRepost(post: PostView): boolean {
+  return (
+    post.is_repost &&
+    (post.text === null || post.text === "") &&
+    post.media.length === 0
+  );
+}
+
+/**
  * A public-media key joined to the configured base — the site origin in
  * production, not `/media`: keys already start with `media/`, and CloudFront
  * serves `/media/*` from the public-media bucket unchanged ([[0x04-media]]).

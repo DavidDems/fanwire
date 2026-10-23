@@ -604,10 +604,10 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   reply, which the modal makes when a reply's own thread is opened. The
   endpoint does not offer a whole thread and the shape exists to stop a client
   trying.
-- **A media item that fails to load leaves no `<img>` in the tree at all** — not
-  hidden, not an alt-text box with a border. A feed full of broken frames is
-  worse than a feed of text. The same answer covers a `null` `s3_key_public`,
-  which the schema allows: there is nothing to point an `<img>` at either way.
+- **A media item that cannot be shown keeps its frame** (since `FRONTEND-015`,
+  which replaced "leaves nothing behind": a dropped picture is a layout
+  shift). An error, a `null` `s3_key_public` or the card's timeout renders no
+  `<img>`, and the frame holds a neutral "Image unavailable" line instead.
   Media renders from `s3_key_public` (the served image), not
   `s3_key_thumbnail` — the composer's widget uses the thumbnail, and these are
   different jobs.
@@ -804,6 +804,55 @@ the reader was on. Public: a thread is a read path; replying needs a session.
 would have produced a "shared" module with one caller while the duplicate stayed.
 **Whoever next has both trees in scope should extract it**; it is small, and it
 is recorded so the second copy is a known state rather than a discovery.
+
+### Complete-card reveal and the route split (`FRONTEND-015`)
+
+- **One rule, one wrapper.** `features/feed/useCardReady.ts` decides when a
+  card is ready; `PreparedPostNode` renders the shared `Skeleton` post
+  variant (aria-hidden, `media` reserving the picture frame) until then, and
+  the whole `PostNode` in one render after. The feed, search results and the
+  thread modal (root and replies) render posts only through it; a profile
+  shows no posts yet.
+- **Ready** = every picture the card shows (its own; a plain repost's
+  original's; `isPlainRepost` moved to `api.ts` for this) has been preloaded
+  with `new Image()` and its `decode()` has settled. A rejected decode of a
+  picture that did load still counts as loaded. A card with no loadable
+  picture is ready on its first render.
+- **Bounded**: `CARD_READY_TIMEOUT_MS` (4000), started when the card enters
+  the window. A picture still pending then, one that errored, or one with a
+  `null` key shows "Image unavailable" in its frame.
+- **Windowed**: `usePrepareWindow` observes the skeleton with
+  `PREPARE_WINDOW_ROOT_MARGIN` (`0px 0px 100% 0px`, one viewport below) and
+  latches. Nothing is requested before that. Without `IntersectionObserver`
+  every card counts as in the window.
+- **A revealed card stays revealed.** The readiness lives in the card's own
+  state, kept per post id plus picture URL. A refetch with the same pictures
+  prepares nothing. A changed picture is preloaded again inside the card
+  already shown: its frame is empty until it settles, under the same bound.
+  Rows keep `key={post.id}`, so a Load more leaves the previous page as it
+  is.
+- **The frame** (`PostMedia.module.css`): `aspect-ratio: 4 / 3`,
+  `object-fit: contain`, letterboxed in `--color-surface-muted`, and the same
+  box for the picture, the skeleton's block and the unavailable line. The old
+  `max-height: 28rem` and `object-fit: cover` are gone. Inside a prepared
+  card the `<img>` is mounted only once loaded (via `CardImageContext`), never
+  hidden with CSS. A bare `PostNode` renders it at once.
+- **`aria-busy`** sits on the feed's `ol` while the first page's in-window
+  cards are being prepared (each reports through `onPreparing`). It latches
+  off once they are all ready, so Load more and refetches never set it, and a
+  first page without pictures never does. There is no animation anywhere in
+  the reveal.
+- **Route split.** `routes.tsx` loads the compose, notifications, profile,
+  game, player, stats (page and both tabs) and five auth pages with
+  `React.lazy` and named-export adapters. `details.tsx` has its own `lazy`
+  for the game and player details, which resolves to the same chunks. The
+  feed, search, the thread modal, `DetailModal` and the shell stay eager.
+  `BackgroundRoutes` wraps the page alone in one
+  `<Suspense fallback={<StatusLine>…}>`. `DetailModal` has its own around
+  its `<Outlet />`, so a lazy detail never unmounts the dialog. The main
+  chunk was 454 kB after the split (it had been 513 kB), so the build no
+  longer warns. `lazy-routes.test.ts` pins this through the static import
+  graph from `main.tsx`.
 
 ## Search (`FRONTEND-007`)
 

@@ -31,6 +31,7 @@ import {
   renderWithAuth,
   testSession,
 } from "../../test/auth";
+import { stubImages, stubIntersectionObserver } from "../../test/card-ready";
 import {
   TEST_PUBLIC_MEDIA_KEY,
   feedPage,
@@ -82,6 +83,10 @@ function renderNode(post: PostView) {
 }
 
 function renderFeed(authService: AuthService) {
+  // The original carries a picture, and since FRONTEND-015 a feed card waits
+  // for its pictures: jsdom loads none, so the stubs answer every one.
+  stubImages({ autoLoad: true });
+  stubIntersectionObserver({ intersectAll: true });
   return renderWithAuth(
     <Routes>
       <Route path="/" element={<FeedPage />} />
