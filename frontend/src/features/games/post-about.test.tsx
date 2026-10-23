@@ -21,6 +21,8 @@
  *   the totals row have none. Where in the row the link sits (the name cell
  *   or a trailing cell) is the implementation's.
  * - **Signed out**, none of these links exists.
+ * - **Deactivated** (`FRONTEND-012`): a signed-in account its owner
+ *   deactivated browses as a guest, so none exists for it either.
  * - Addresses are compared as a path and a set of parameters
  *   (`src/test/post-about.ts`): exact, but not order-sensitive.
  *
@@ -32,6 +34,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { deactivatedShown } from "../../test/account";
 import { renderAppAt, type Visitor } from "../../test/app-route";
 import {
   BARNES_LINE_ID,
@@ -89,6 +92,7 @@ async function openGame(game: GameDetailOut, as: Visitor) {
     name: new RegExp(escapeRegExp(game.home_team.name)),
   });
   if (as === "anonymous") await signedOutShown();
+  else if (as === "deactivated") await deactivatedShown();
   else await signedInShown();
   return { router: rendered.router, user: userEvent.setup() };
 }
@@ -238,6 +242,18 @@ describe("signed out, the game page offers none of these links", () => {
     expect(composeLinks(main())).toEqual([]);
     expect(postAboutLinks(main())).toEqual([]);
     // The page is otherwise there: the box score's name links still are.
+    expect(
+      within(boxScoreFor(GAME.home_team)).getAllByRole("link").length,
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe("a deactivated account, the game page offers none of these links (FRONTEND-012)", () => {
+  it("a completed game with a full box score shows no link to compose, as for a guest", async () => {
+    await openGame(GAME, "deactivated");
+
+    expect(composeLinks(main())).toEqual([]);
+    expect(postAboutLinks(main())).toEqual([]);
     expect(
       within(boxScoreFor(GAME.home_team)).getAllByRole("link").length,
     ).toBeGreaterThan(0);

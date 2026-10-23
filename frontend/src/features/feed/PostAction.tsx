@@ -6,6 +6,7 @@ import {
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { useAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
 import { Button, buttonClass } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
@@ -142,7 +143,10 @@ export function PostAction({
  * way `FollowButton` does and carrying `state.from` the way `routes/guards.tsx`
  * does. Reading the session to decide that is not the feed learning anything
  * about itself: the request that filled this page was the same one either way,
- * and what is rendered is identical — only what the click *does* differs.
+ * and what is rendered is identical — only what the click *does* differs. A
+ * deactivated account (`useAccount()`, `FRONTEND-012`) is treated exactly as a
+ * guest; one whose profile is still loading, or failed to load, is not, since
+ * only a known deactivation makes the write pointless.
  */
 export interface TogglePostActionProps {
   /** The post the toggle acts on — for a plain repost, the original's id. */
@@ -174,6 +178,7 @@ export function TogglePostAction({
   apply,
 }: TogglePostActionProps) {
   const { status } = useAuth();
+  const account = useAccount();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -223,7 +228,7 @@ export function TogglePostAction({
   });
 
   function handleClick(): void {
-    if (status !== "authenticated") {
+    if (status !== "authenticated" || account.status === "deactivated") {
       // `from` is what `SignInPage` reads to send them back afterwards. No
       // unauthenticated write is ever fired: a 401 here is a failure a
       // deliberately public page would then have to explain away.

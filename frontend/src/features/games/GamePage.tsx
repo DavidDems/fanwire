@@ -5,7 +5,7 @@ import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
-import { useAuth } from "../../auth/AuthContext";
+import { offersMemberLinks, useAccount } from "../../auth/account";
 import { fetchGame, gameKey, type GameDetailOut } from "./api";
 import { BoxScore } from "./BoxScore";
 import { formatGameDate } from "./format";
@@ -90,7 +90,9 @@ function Game({ game }: { game: GameDetailOut }) {
     homeScore > awayScore ? home : awayScore > homeScore ? away : null;
   const hasLineScore =
     game.home_line_score !== null && game.away_line_score !== null;
-  const canPost = useAuth().status === "authenticated";
+  // A signed-in account that is not deactivated (`FRONTEND-012`): a
+  // deactivated one browses as a guest, and a guest is offered none.
+  const canPost = offersMemberLinks(useAccount());
   // 0-0 is a game not yet played: there is no result to post about.
   const completed = homeScore !== 0 || awayScore !== 0;
 

@@ -18,7 +18,7 @@
  * reload. Both unresolved cases are held open deliberately here rather than
  * raced.
  */
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
@@ -27,6 +27,8 @@ import { describe, expect, it } from "vitest";
 import type { AuthService } from "../auth/AuthService";
 import {
   FakeAuthService,
+  profileDeactivated,
+  profileForbidden,
   profileFound,
   profileMissing,
   renderWithAuth,
@@ -82,7 +84,9 @@ describe("RequireAuth", () => {
       new FakeAuthService(),
     );
 
-    expect(await screen.findByText("sign-in stub, sent from /guarded")).toBeInTheDocument();
+    expect(
+      await screen.findByText("sign-in stub, sent from /guarded"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("protected content")).toBeNull();
   });
 
@@ -255,5 +259,105 @@ describe("RequireNewProfile", () => {
     answer();
 
     expect(await screen.findByText("profile form")).toBeInTheDocument();
+  });
+});
+
+/**
+ * FRONTEND-012 criterion 11 — the fourth answer `GET /users/me` can give: 403
+ * `{"detail": "account_deactivated"}` (`USERS-003`).
+ *
+ * | state                                  | `RequireAuth`        | `RequireNewProfile`        |
+ * |----------------------------------------|----------------------|----------------------------|
+ * | session, `GET /users/me` 403 deactivated | the recovery screen | never the profile form     |
+ * | session, any other 403                 | the "could not check" alert, as before |
+ *
+ * The recovery screen is not an error and not a redirect: it is where a
+ * deactivated account learns what recovery does and does it, on the route it
+ * asked for, so recovering lands it on that route.
+ */
+describe("a deactivated account (FRONTEND-012)", () => {
+  it("RequireAuth shows the recovery screen instead of the route", async () => {
+    server.use(profileDeactivated());
+
+    renderGuarded(
+      <RequireAuth>
+        <p>protected content</p>
+      </RequireAuth>,
+      signedIn(),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /deactivated/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Recover account" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("protected content")).toBeNull();
+  });
+
+  it("RequireAuth's recovery screen is neither sign-in, profile creation nor an error", async () => {
+    server.use(profileDeactivated());
+
+    renderGuarded(
+      <RequireAuth>
+        <p>protected content</p>
+      </RequireAuth>,
+      signedIn(),
+    );
+
+    await screen.findByRole("heading", { name: /deactivated/i });
+    expect(screen.queryByText(/sign-in stub/)).toBeNull();
+    expect(screen.queryByText("create-profile stub")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("RequireAuth's recovery screen says what recovery restores, and what it does not", async () => {
+    server.use(profileDeactivated());
+
+    const { container } = renderGuarded(
+      <RequireAuth>
+        <p>protected content</p>
+      </RequireAuth>,
+      signedIn(),
+    );
+
+    await screen.findByRole("heading", { name: /deactivated/i });
+    expect(container.textContent).toMatch(/restore/i);
+    expect(container.textContent).toMatch(/deleted/i);
+  });
+
+  it("RequireNewProfile never offers profile creation to it", async () => {
+    server.use(profileDeactivated());
+
+    renderGuarded(
+      <RequireNewProfile>
+        <p>profile form</p>
+      </RequireNewProfile>,
+      signedIn(),
+    );
+
+    // Settled: neither guard's loading status (session, then profile) is left.
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(screen.queryByText("profile form")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("any other 403 is still the could-not-check alert", async () => {
+    server.use(profileForbidden());
+
+    renderGuarded(
+      <RequireAuth>
+        <p>protected content</p>
+      </RequireAuth>,
+      signedIn(),
+    );
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Recover account" }),
+    ).toBeNull();
   });
 });

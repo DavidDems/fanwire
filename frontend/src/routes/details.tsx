@@ -1,6 +1,17 @@
-import { GamePage } from "../features/games/GamePage";
-import { PlayerPage } from "../features/players/PlayerPage";
+import { lazy } from "react";
+
 import { useDetailTitle } from "../features/thread/DetailModal";
+
+// The same chunks the pages load (`routes.tsx`), waited for behind the
+// Suspense inside `DetailModal`, so the dialog stays open meanwhile.
+const GamePage = lazy(() =>
+  import("../features/games/GamePage").then((m) => ({ default: m.GamePage })),
+);
+const PlayerPage = lazy(() =>
+  import("../features/players/PlayerPage").then((m) => ({
+    default: m.PlayerPage,
+  })),
+);
 
 /**
  * A game and a player as details of the modal flow (`FRONTEND-014`): the very

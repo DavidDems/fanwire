@@ -3,7 +3,8 @@
  * nav item from `FRONTEND-009`), copied rather than installed — and, since
  * `UI-009`, two pressed variants of them for the post card: a filled heart and
  * a heavier repeat-2, so a pressed like or repost is told apart by shape and
- * not by colour alone (`accessibility.md`).
+ * not by colour alone (`accessibility.md`). `FRONTEND-012` adds lucide
+ * `ellipsis`, the post card's "More options" menu button.
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
  * 1fae58d0a9c661a338036838caf3399b5507bab6. The shape elements below are those
@@ -186,6 +187,17 @@ export function ChartColumnIcon(props: IconProps) {
       <path d="M18 17V9" />
       <path d="M13 17V5" />
       <path d="M8 17v-3" />
+    </Icon>
+  );
+}
+
+/** lucide: ellipsis — the post card's "More options" menu (`FRONTEND-012`) */
+export function EllipsisIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
     </Icon>
   );
 }

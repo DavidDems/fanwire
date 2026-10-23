@@ -1,0 +1,89 @@
+/*
+ * A deactivated account's banner and recovery screen (FRONTEND-012). Values
+ * come from tokens.css by name only.
+ */
+
+/*
+ * Where the banner sits: the content column, under the header, with main's
+ * own side gutters so the two line up.
+ */
+.slot {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+@media (min-width: 60em) {
+  .slot {
+    padding-inline: var(--space-5);
+  }
+}
+
+/*
+ * The banner: the warning surface. Its text, then the two buttons, which sit
+ * beside the text from 40em.
+ */
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background-color: var(--color-warning-subtle);
+  color: var(--color-text);
+}
+
+@media (min-width: 40em) {
+  .banner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.bannerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.bannerText p {
+  margin: 0;
+}
+
+.bannerTitle {
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Recover and Sign out, then recovery's failure under them. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* The recovery screen, in main: heading, what recovery does, the buttons. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.screen h1,
+.screen p {
+  margin: 0;
+}

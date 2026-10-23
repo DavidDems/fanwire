@@ -16,6 +16,8 @@
  *   /playoff/i), so the two read differently out of context.
  * - **Only a scope with games.** A scope whose `games_played` is 0 has no link.
  * - **Signed out**, there is none.
+ * - **Deactivated** (`FRONTEND-012`): a signed-in account its owner
+ *   deactivated browses as a guest, so there is none either.
  * - Addresses are compared as a path and a set of parameters
  *   (`src/test/post-about.ts`).
  */
@@ -23,6 +25,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { deactivatedShown } from "../../test/account";
 import { renderAppAt, type Visitor } from "../../test/app-route";
 import { attachServer, summaryShown, textOf } from "../../test/attach";
 import {
@@ -51,6 +54,7 @@ async function openPlayer(as: Visitor, player: PlayerDetailOut = LEBRON) {
   const rendered = renderAppAt(`/players/${player.id}`, as, handlers);
   await screen.findByRole("heading", { level: 1, name: "LeBron James" });
   if (as === "anonymous") await signedOutShown();
+  else if (as === "deactivated") await deactivatedShown();
   else await signedInShown();
   return { router: rendered.router, user: userEvent.setup() };
 }
@@ -153,6 +157,16 @@ describe("signed out, the player page offers none of these links", () => {
     expect(composeLinks(main())).toEqual([]);
     expect(postAboutLinks(main())).toEqual([]);
     // The page is otherwise there.
+    expect(careerRows().regular).toBeInTheDocument();
+  });
+});
+
+describe("a deactivated account, the player page offers none of these links (FRONTEND-012)", () => {
+  it("shows no link to compose, as for a guest", async () => {
+    await openPlayer("deactivated");
+
+    expect(composeLinks(main())).toEqual([]);
+    expect(postAboutLinks(main())).toEqual([]);
     expect(careerRows().regular).toBeInTheDocument();
   });
 });

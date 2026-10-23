@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
-import { useAuth } from "../../auth/AuthContext";
-import { useProfile } from "../../auth/profile";
+import { useAccount } from "../../auth/account";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { OwnProfile } from "./OwnProfile";
@@ -26,9 +25,12 @@ import {
  * the generated schema's path parameter is a number, so `"7" === 7` would be
  * false for the one person it matters for.
  *
- * `GET /users/me` is read through `auth/profile.ts`'s shared query, never a
- * second key: the guards already read it, and a duplicate entry costs a round
- * trip on every profile view and can answer two readers differently.
+ * `GET /users/me` is read through `useAccount()` (`auth/account.ts`), on the
+ * one shared profile query, never a second key: the guards already read it,
+ * and a duplicate entry costs a round trip on every profile view and can answer
+ * two readers differently. Only an **active** account has an own profile: a
+ * deactivated one sees every profile, its own included, as a guest does
+ * (`FRONTEND-012`).
  *
  * The public read is skipped entirely on the own-profile variant — `MeOut` is a
  * superset of `PublicUserOut`, so there is nothing left to ask for.
@@ -36,15 +38,10 @@ import {
 export function ProfilePage() {
   const { userId: userIdParam } = useParams<{ userId: string }>();
   const userId = Number(userIdParam);
-  const { status } = useAuth();
+  const account = useAccount();
+  const ownProfile = account.status === "active" ? account.profile : null;
 
-  // Never asked without a session, the way `routes/guards.tsx` asks it: a
-  // profile lookup with no token is a 401 the page would have to explain away.
-  const own = useProfile(status === "authenticated");
-  const ownProfile = status === "authenticated" ? (own.data ?? null) : null;
-
-  const resolvingOwn =
-    status === "loading" || (status === "authenticated" && own.isPending);
+  const resolvingOwn = account.status === "loading";
   const isOwnProfile = ownProfile !== null && ownProfile.id === userId;
 
   // Held until "is this me?" has an answer, so the own-profile variant never
@@ -62,9 +59,13 @@ export function ProfilePage() {
    * The follow set is read here rather than inside the button, in parallel with
    * the profile: the two are rendered together, so fetching them in sequence
    * would show the counts while the button was still guessing. Never asked
-   * without a session — an anonymous read of it is a 401.
+   * without a session — an anonymous read of it is a 401 — nor by a
+   * deactivated account, whose read of it is a 403.
    */
-  const readsFollowSet = readsPublicProfile && status === "authenticated";
+  const readsFollowSet =
+    readsPublicProfile &&
+    account.status !== "anonymous" &&
+    account.status !== "deactivated";
   const followSet = useQuery({
     queryKey: FOLLOWING_QUERY_KEY,
     queryFn: fetchFollowing,

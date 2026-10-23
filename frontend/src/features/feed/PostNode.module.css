@@ -131,3 +131,12 @@
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
+
+/*
+ * An original that cannot be shown (FRONTEND-012): the quoted box's shape on
+ * the muted surface, holding only "Post deleted" or "This post is
+ * unavailable", in the original's place on a plain repost and in a quote.
+ */
+.missing {
+  background-color: var(--color-surface-muted);
+}

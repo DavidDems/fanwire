@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Link, useParams } from "react-router-dom";
 
-import { useAuth } from "../../auth/AuthContext";
+import { offersMemberLinks, useAccount } from "../../auth/account";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
@@ -141,7 +141,9 @@ function Player({ player }: { player: PlayerDetailOut }) {
   const known = facts.filter(
     (fact): fact is [string, string] => fact[1] !== null && fact[1] !== "",
   );
-  const canPost = useAuth().status === "authenticated";
+  // A signed-in account that is not deactivated (`FRONTEND-012`): a
+  // deactivated one browses as a guest, and a guest is offered none.
+  const canPost = offersMemberLinks(useAccount());
   const name = fullName(player);
 
   return (

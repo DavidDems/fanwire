@@ -1,0 +1,32 @@
+/*
+ * The post card's "More options" menu and what Copy link says (FRONTEND-012),
+ * at the end of the card's action row (PostNode.module.css). The menu's own
+ * look is components/ui/Menu.module.css's. Values come from tokens.css by
+ * name only.
+ */
+
+/* Pushed to the row's end edge, past like, reply and repost. */
+.menu {
+  margin-inline-start: auto;
+}
+
+/* The row wraps: "Link copied", or the address to copy, takes a row of its own. */
+.feedback {
+  flex-basis: 100%;
+}
+
+.manual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.manualLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.address {
+  width: 100%;
+  min-width: 0;
+}

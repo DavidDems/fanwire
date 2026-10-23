@@ -1,16 +1,22 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 
 import styles from "./PostMedia.module.css";
 import { mediaUrl, type MediaItemView } from "./api";
+import { CardImageContext } from "./useCardReady";
 
 /**
- * One processed image on a post.
+ * One processed image on a post, in its fixed 4:3 frame (`FRONTEND-015`).
  *
- * **A picture that fails to load leaves nothing behind.** Not a broken-image
- * icon, not a bordered box of alt text — the element is taken out of the tree.
- * A feed is dozens of these at once, and a column of broken frames is worse to
- * read than the same column with no pictures in it; the post's own text is what
- * survives, and it is still there.
+ * **A picture that cannot be shown keeps its frame.** An error, a missing
+ * public key, or (inside `PreparedPostNode`) a picture that did not settle
+ * within the card's bound is said as a neutral "Image unavailable" line in the
+ * very box the picture would have filled. It used to leave nothing behind;
+ * that was a layout shift for every card below it.
+ *
+ * Inside a prepared card the picture is drawn only once `useCardReady` has it
+ * loaded, from the same URL, so it paints from the cache; until then (only a
+ * revealed card whose picture changed) the frame is empty. A bare `PostNode`
+ * has no readiness and renders the picture at once.
  *
  * The key rendered is `s3_key_public`, not `s3_key_thumbnail`: the thumbnail is
  * the composer's preview of an upload in progress, and the feed shows the
@@ -31,20 +37,29 @@ export interface PostMediaProps {
 }
 
 export function PostMedia({ item, author }: PostMediaProps) {
+  const statusOf = useContext(CardImageContext);
   const [failed, setFailed] = useState(false);
 
   // `s3_key_public` is nullable in the schema: a row can reach the feed before
   // the pipeline has written its public object. There is nothing to point an
   // `<img>` at, and an element with an empty `src` re-requests the page itself —
   // so it is the same answer as a load that failed, for the same reason.
-  if (failed || item.s3_key_public === null) return null;
+  const url = item.s3_key_public === null ? null : mediaUrl(item.s3_key_public);
+  const status =
+    url === null || failed ? "unavailable" : (statusOf?.(url) ?? "loaded");
 
   return (
-    <img
-      className={styles.media}
-      src={mediaUrl(item.s3_key_public)}
-      alt={`Image posted by ${author}`}
-      onError={() => setFailed(true)}
-    />
+    <div className={styles.frame}>
+      {status === "unavailable" ? (
+        <p className={styles.unavailable}>Image unavailable</p>
+      ) : status === "pending" || url === null ? null : (
+        <img
+          className={styles.media}
+          src={url}
+          alt={`Image posted by ${author}`}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -10,6 +11,7 @@ import {
 import { buttonClass } from "./Button";
 import styles from "./Dialog.module.css";
 import { ChevronDownIcon, XIcon } from "./icons";
+import { InlineAlert } from "./InlineAlert";
 
 export interface DialogProps {
   /** Whether the dialog is open. A closed one renders nothing at all. */
@@ -29,6 +31,14 @@ export interface DialogProps {
    * is none. Back is not a way out: the dialog stays open.
    */
   onBack?: () => void;
+  /**
+   * `"alertdialog"` for a confirm (`FRONTEND-012`): a question that interrupts
+   * and needs an answer. It has no Close button: its own Cancel is that, and
+   * Escape and the backdrop still report `onClose`. `"dialog"` by default.
+   */
+  role?: "dialog" | "alertdialog";
+  /** The id of the text that says what the dialog is about (a confirm's question). */
+  describedBy?: string;
   children: ReactNode;
 }
 
@@ -59,6 +69,13 @@ export interface DialogProps {
  * **Back, when there is somewhere to step back to** (`onBack`): an icon button
  * before the title. It goes when the caller stops passing `onBack`, and focus
  * that was on it moves to Close rather than out of the dialog.
+ *
+ * **One may open inside another** (`FRONTEND-012`: a confirm chosen inside the
+ * thread modal). The browser puts the inner one on top and reports Escape as
+ * *its* `cancel`; React then hands that `cancel` (and the inner `close`) to
+ * every `onCancel`/`onClose` up its own tree as well, so each handler acts
+ * only on an event whose target is its own element. Without that, Escape in a
+ * confirm would also leave the whole modal flow under it.
  */
 export function Dialog({ open, ...rest }: DialogProps) {
   return open ? <OpenDialog {...rest} /> : null;
@@ -68,6 +85,8 @@ function OpenDialog({
   onClose,
   title,
   onBack,
+  role = "dialog",
+  describedBy,
   children,
 }: Omit<DialogProps, "open">) {
   const titleId = useId();
@@ -115,6 +134,8 @@ function OpenDialog({
   }, [hasBack]);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
+    // A dialog opened inside this one: its Escape is its own.
+    if (event.target !== event.currentTarget) return;
     event.preventDefault();
     onClose();
   }
@@ -127,6 +148,8 @@ function OpenDialog({
     // closes and reopens it, and the cleanup's queued event lands after the
     // reopen (when `closingRef` is already reset). A forced close leaves the
     // element closed, so it still gets through.
+    // A dialog inside this one closing is not this one closing.
+    if (event.target !== event.currentTarget) return;
     if (event.currentTarget.open) return;
     if (!closingRef.current) onClose();
   }
@@ -149,7 +172,9 @@ function OpenDialog({
     <dialog
       ref={ref}
       className={styles.dialog}
+      role={role === "dialog" ? undefined : role}
       aria-labelledby={titleId}
+      aria-describedby={describedBy}
       onCancel={handleCancel}
       onClose={handleClose}
       onMouseDown={handleMouseDown}
@@ -175,20 +200,127 @@ function OpenDialog({
           </h2>
           {/*
            * A native button styled as the ghost one: `Button` passes no ref,
-           * and this one is focused when the browser does not do it.
+           * and this one is focused when the browser does not do it. A
+           * confirm has none: its Cancel is the way out.
            */}
-          <button
-            ref={closeRef}
-            type="button"
-            className={`${buttonClass("ghost", "md")} ${styles.iconButton} ${styles.close}`}
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <XIcon />
-          </button>
+          {role === "alertdialog" ? null : (
+            <button
+              ref={closeRef}
+              type="button"
+              className={`${buttonClass("ghost", "md")} ${styles.iconButton} ${styles.close}`}
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <XIcon />
+            </button>
+          )}
         </header>
         <div className={styles.body}>{children}</div>
       </div>
     </dialog>
+  );
+}
+
+export interface ConfirmDialogProps {
+  open: boolean;
+  /** The question, as the dialog's heading and name: "Delete this post?". */
+  title: string;
+  /** What answering yes does, said before the buttons. */
+  children: ReactNode;
+  /** The button that does it: "Delete", "Report", "Deactivate". */
+  confirmLabel: string;
+  onConfirm: () => void;
+  /** Cancel, Escape and the backdrop alike: nothing is done. */
+  onCancel: () => void;
+  /** While the request is in flight: the action is disabled, so one press is one request. */
+  pending?: boolean;
+  /** A failure, shown inside the confirm, which stays open. */
+  failure?: string | null;
+  /** For an action that removes something: the action button says so. */
+  destructive?: boolean;
+}
+
+/**
+ * A confirm (`FRONTEND-012`): this `Dialog` as an `alertdialog`, its question
+ * the title, what it does its description, then Cancel and the action.
+ *
+ * **Focus starts on Cancel**, the answer that changes nothing, so an Enter
+ * pressed by habit never deletes anything. It is moved from a passive effect,
+ * which runs after `Dialog`'s layout effect has opened the element (a button in
+ * a closed `<dialog>` cannot take focus). When it closes, `Dialog` puts focus
+ * back on what opened it: for a post's confirms, the menu button.
+ *
+ * **A failure keeps it open**, as an alert inside it, so the reader can try
+ * again or cancel knowing nothing happened.
+ */
+export function ConfirmDialog({ open, ...rest }: ConfirmDialogProps) {
+  return open ? <OpenConfirm {...rest} /> : null;
+}
+
+function OpenConfirm({
+  title,
+  onCancel,
+  ...body
+}: Omit<ConfirmDialogProps, "open">) {
+  const descriptionId = useId();
+  return (
+    <Dialog
+      open
+      role="alertdialog"
+      title={title}
+      describedBy={descriptionId}
+      onClose={onCancel}
+    >
+      <ConfirmBody
+        descriptionId={descriptionId}
+        onCancel={onCancel}
+        {...body}
+      />
+    </Dialog>
+  );
+}
+
+function ConfirmBody({
+  descriptionId,
+  children,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+  pending = false,
+  failure = null,
+  destructive = false,
+}: Omit<ConfirmDialogProps, "open" | "title"> & { descriptionId: string }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+  }, []);
+
+  return (
+    <div className={styles.confirm}>
+      <div id={descriptionId} className={styles.question}>
+        {children}
+      </div>
+      {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
+      <div className={styles.answers}>
+        {/* Native buttons styled as `Button`s: `Button` passes no ref. */}
+        <button
+          ref={cancelRef}
+          type="button"
+          className={buttonClass("secondary", "md")}
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={`${buttonClass("primary", "md")}${destructive ? ` ${styles.destructive}` : ""}`}
+          onClick={onConfirm}
+          disabled={pending}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
   );
 }
