@@ -1,8 +1,27 @@
 /* Static by design: no animation, in either motion setting (accessibility.md A8). */
+
+/*
+ * The post skeleton is a typical post card's box (FRONTEND-015), so a card
+ * revealed in its place moves nothing: Card.module.css's border, radius,
+ * surface and padding, and PostNode.module.css's column gap between rows. The
+ * values are the same tokens those modules use; keep them in step.
+ */
 .post {
   display: flex;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
   padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* The card's header row: as tall as the `sm` avatar (2 rem). */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .avatar {
@@ -13,11 +32,19 @@
   background-color: var(--color-surface-muted);
 }
 
-.lines {
+.author {
+  width: 8em;
+}
+
+/* One line of post text: a body line box, with its bar centred in it. */
+.text {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-2);
+  align-items: center;
+  height: calc(var(--font-size-md) * var(--line-height-body));
+}
+
+.text .bar {
+  width: 80%;
 }
 
 .bar {
@@ -26,13 +53,54 @@
   background-color: var(--color-surface-muted);
 }
 
-.short {
-  width: 60%;
-}
-
-/* A post picture's frame (FRONTEND-015): the same 4:3 box the card's picture fills. */
+/*
+ * A post picture's frame (FRONTEND-015): the same 4:3 box the card's picture
+ * fills, a direct row of the card so it is the same full inner width.
+ */
 .frame {
   aspect-ratio: 4 / 3;
   border-radius: var(--radius-md);
   background-color: var(--color-surface-muted);
+}
+
+/*
+ * The card's action row (PostNode.module.css .footer, PostAction.module.css):
+ * three actions, each a 2 rem square control and its count in the small type
+ * size, with the same gaps and wrapping, so on a phone the third drops to a
+ * second row where the card's does.
+ */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-5);
+  row-gap: var(--space-1);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+.control {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+/* About as wide as "0 likes", "0 replies" and "0 reposts". */
+.likes {
+  width: 2.75em;
+}
+
+.replies {
+  width: 3.75em;
+}
+
+.reposts {
+  width: 4em;
 }
