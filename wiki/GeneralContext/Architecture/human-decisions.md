@@ -160,9 +160,10 @@ The performance test (`Prompts/16`, `PERF-001`), answered 2026-10-20:
 
 ## §9. Post deletion, account deactivation and sports-data attachments (2026-10-17)
 
-The human's feature set, agreed after a repository review. The design is
-in `Prompts/18-posts-lifecycle-and-data-links.md` "The agreed design" until
-its units land, then in the module files. The decisions:
+The human's feature set, agreed after a repository review. Its units all
+landed by 2026-10-23 (`USERS-003`, `EVENTS-009`, `POSTS-004` to `-006`,
+`FRONTEND-011` to `-017`), so the design now lives in the module files
+(`0x01`, `0x02`, `0x03`, `0x08`) and `Prompts/18` is deleted. The decisions:
 
 - **Posts become soft-deletable by their owner** (`Post.deleted_at`). This
   reverses `0x03-posts.md`'s "a published post is immutable". Deleted posts
