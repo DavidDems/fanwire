@@ -70,7 +70,11 @@ export class FakeAuthService implements AuthService {
   }
 
   /** Make `method` reject with a Cognito failure carrying `code`. */
-  failWith(method: AuthMethod, code: string, message = `${code} (from the auth double)`): this {
+  failWith(
+    method: AuthMethod,
+    code: string,
+    message = `${code} (from the auth double)`,
+  ): this {
     this.failures.set(method, new AuthError(code, message));
     return this;
   }
@@ -93,7 +97,9 @@ export class FakeAuthService implements AuthService {
 
   /** The inputs `method` was called with, in order. */
   callsTo(method: AuthMethod): unknown[] {
-    return this.calls.filter((call) => call.method === method).map((call) => call.input);
+    return this.calls
+      .filter((call) => call.method === method)
+      .map((call) => call.input);
   }
 
   private async enter(method: AuthMethod, input: unknown): Promise<void> {
@@ -104,7 +110,10 @@ export class FakeAuthService implements AuthService {
     if (failure) throw failure;
   }
 
-  async signUp(input: { email: string; password: string }): Promise<{ userConfirmed: boolean }> {
+  async signUp(input: {
+    email: string;
+    password: string;
+  }): Promise<{ userConfirmed: boolean }> {
     await this.enter("signUp", input);
     return { userConfirmed: this.userConfirmed };
   }
@@ -117,7 +126,10 @@ export class FakeAuthService implements AuthService {
     await this.enter("resendConfirmationCode", email);
   }
 
-  async signIn(input: { email: string; password: string }): Promise<AuthSession> {
+  async signIn(input: {
+    email: string;
+    password: string;
+  }): Promise<AuthSession> {
     await this.enter("signIn", input);
     this.session = testSession({ email: input.email });
     return this.session;
@@ -238,7 +250,40 @@ export function profileFound(profile: MeOut = testProfile()): RequestHandler {
  * shape rather than a generated type.
  */
 export function profileMissing(): RequestHandler {
-  return http.get("*/users/me", () => HttpResponse.json({ detail: "Not Found" }, { status: 404 }));
+  return http.get("*/users/me", () =>
+    HttpResponse.json({ detail: "Not Found" }, { status: 404 }),
+  );
+}
+
+/**
+ * The body `GET /users/me` (and every active-account route) answers a
+ * deactivated account with (`USERS-003`, [[0x01-users]]).
+ */
+export const ACCOUNT_DEACTIVATED_BODY = {
+  detail: "account_deactivated",
+} as const;
+
+/**
+ * `GET /users/me` → 403 `{"detail": "account_deactivated"}`: a valid token whose
+ * account its owner deactivated (`FRONTEND-012`). A state of its own — neither
+ * an error nor "no profile yet" — that the app answers with recovery, never
+ * with profile creation.
+ */
+export function profileDeactivated(): RequestHandler {
+  return http.get("*/users/me", () =>
+    HttpResponse.json(ACCOUNT_DEACTIVATED_BODY, { status: 403 }),
+  );
+}
+
+/**
+ * `GET /users/me` → a 403 that is *not* the deactivated one, so a test can show
+ * that only that exact body is read as a state and any other 403 is still an
+ * error.
+ */
+export function profileForbidden(detail = "Not authenticated"): RequestHandler {
+  return http.get("*/users/me", () =>
+    HttpResponse.json({ detail }, { status: 403 }),
+  );
 }
 
 /** `GET /events/teams` → 200, the preferred-team choices. */

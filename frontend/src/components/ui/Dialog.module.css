@@ -92,3 +92,47 @@
 .body {
   padding: var(--space-4);
 }
+
+/*
+ * A confirm (FRONTEND-012): the question, any failure, then Cancel and the
+ * action on one row that wraps on a phone, the action last.
+ */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.question > * {
+  margin: 0;
+}
+
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.answers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/*
+ * The action that removes something: the danger colour, not the brand's.
+ * Under .answers, so it outranks Button's .primary whatever the load order.
+ */
+.answers .destructive {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger);
+  color: var(--color-surface);
+}
+
+.answers .destructive:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background-color: var(--color-danger);
+  color: var(--color-surface);
+  text-decoration: underline;
+}

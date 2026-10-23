@@ -194,3 +194,123 @@ describe("a Dialog under StrictMode", () => {
     );
   });
 });
+
+/**
+ * FRONTEND-012 — confirms. A confirm ("Report this post?", "Delete this
+ * post?", "Deactivate your account?") is this same `Dialog` with
+ * `role="alertdialog"`, still named by its title.
+ *
+ * **One may open inside another** (a Delete chosen inside the thread modal).
+ * Escape there is the inner dialog's `cancel`, and it closes only the inner
+ * one: React hands a `cancel` to every `onCancel` up its own tree, whatever the
+ * DOM did with it, so a nested confirm whose Escape also closed the modal
+ * around it is the failure pinned here. The inner dialog closing (its `close`
+ * event) is not the outer one closing either.
+ */
+describe("a Dialog with role alertdialog", () => {
+  it("is an alertdialog named by its title", () => {
+    render(
+      <Dialog
+        open
+        onClose={vi.fn()}
+        title="Delete this post?"
+        role="alertdialog"
+      >
+        <p>It goes from every feed.</p>
+      </Dialog>,
+    );
+
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Delete this post?",
+    });
+    expect(dialog.tagName).toBe("DIALOG");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("is a plain dialog when no role is given", () => {
+    renderDialog();
+
+    expect(screen.getByRole("dialog", { name: "Thread" })).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+});
+
+describe("a Dialog opened inside another", () => {
+  function renderNested(innerOpen = true) {
+    const onOuterClose = vi.fn();
+    const onInnerClose = vi.fn();
+    const result = render(
+      <Dialog open onClose={onOuterClose} title="Thread">
+        <p>The thread</p>
+        <Dialog
+          open={innerOpen}
+          onClose={onInnerClose}
+          title="Delete this post?"
+          role="alertdialog"
+        >
+          <button type="button">Cancel</button>
+        </Dialog>
+      </Dialog>,
+    );
+    return { onOuterClose, onInnerClose, ...result };
+  }
+
+  it("Escape on the inner one (its cancel) closes only the inner one", () => {
+    const { onOuterClose, onInnerClose } = renderNested();
+
+    fireEvent(
+      screen.getByRole("alertdialog", { name: "Delete this post?" }),
+      new Event("cancel", { cancelable: true }),
+    );
+
+    expect(onInnerClose).toHaveBeenCalledTimes(1);
+    expect(onOuterClose).not.toHaveBeenCalled();
+  });
+
+  it("the inner one closing does not report the outer one closed", () => {
+    const onOuterClose = vi.fn();
+    const { rerender } = render(
+      <Dialog open onClose={onOuterClose} title="Thread">
+        <Dialog
+          open
+          onClose={vi.fn()}
+          title="Delete this post?"
+          role="alertdialog"
+        >
+          <p>Inner</p>
+        </Dialog>
+      </Dialog>,
+    );
+
+    rerender(
+      <Dialog open onClose={onOuterClose} title="Thread">
+        <Dialog
+          open={false}
+          onClose={vi.fn()}
+          title="Delete this post?"
+          role="alertdialog"
+        >
+          <p>Inner</p>
+        </Dialog>
+      </Dialog>,
+    );
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Thread" })).toHaveAttribute(
+      "open",
+    );
+    expect(onOuterClose).not.toHaveBeenCalled();
+  });
+
+  it("Escape on the outer one still closes the outer one", () => {
+    const { onOuterClose, onInnerClose } = renderNested(false);
+
+    fireEvent(
+      screen.getByRole("dialog", { name: "Thread" }),
+      new Event("cancel", { cancelable: true }),
+    );
+
+    expect(onOuterClose).toHaveBeenCalledTimes(1);
+    expect(onInnerClose).not.toHaveBeenCalled();
+  });
+});

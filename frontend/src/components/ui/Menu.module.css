@@ -1,0 +1,68 @@
+/*
+ * The shared menu (FRONTEND-012; components.md §2): a button and a popover
+ * list of actions. Values come from tokens.css by name only.
+ */
+
+.menuButton {
+  display: inline-flex;
+}
+
+/*
+ * Square, at least 32 px each way (Button's sm), so the hit area clears
+ * 24 × 24. Scoped under .menuButton so it outranks sm's padding whatever
+ * order the two modules load in.
+ */
+.menuButton .button {
+  padding: var(--space-1);
+}
+
+/*
+ * The list. A shown popover is in the top layer, and the UA centres it in the
+ * viewport (inset: 0; margin: auto); Menu.tsx places it under its button
+ * instead, so only its look is set here. Unsupported (jsdom), it renders in
+ * the flow under the button.
+ */
+.menu {
+  inset: auto;
+  min-width: 10rem;
+  max-width: calc(100vw - 2 * var(--space-2));
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-2);
+}
+
+/* One action: a full-width row, a whole touch target tall. */
+.item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item:hover:not([aria-disabled="true"]) {
+  background-color: var(--color-surface-muted);
+}
+
+.item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -0.125rem;
+}
+
+/* "Reported": still reachable by the arrows, plainly not a choice. */
+.item[aria-disabled="true"] {
+  color: var(--color-text-muted);
+  cursor: default;
+}
