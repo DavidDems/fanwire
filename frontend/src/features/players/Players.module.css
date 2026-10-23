@@ -122,3 +122,36 @@
 .more {
   width: 100%;
 }
+
+/*
+ * The signed-in "Post about this" column (FRONTEND-017): a compact pen icon
+ * and "Post", its full name for assistive technology in hidden text. Inline
+ * and no taller than a line of the table's text, so a row with a link is the
+ * same height as one without.
+ */
+/*
+ * The containing block for the cell's hidden name: `.visually-hidden` is
+ * absolutely positioned, and without a positioned ancestor inside the scroll
+ * region it escapes the region's overflow clip and widens the page.
+ */
+.table .postCell {
+  position: relative;
+  width: 1%;
+  text-align: left;
+}
+
+.postLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-link);
+  border-radius: var(--radius-sm);
+}
+
+.postLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

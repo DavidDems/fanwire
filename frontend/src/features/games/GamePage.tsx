@@ -1,13 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 
+import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
+import { useAuth } from "../../auth/AuthContext";
 import { fetchGame, gameKey, type GameDetailOut } from "./api";
 import { BoxScore } from "./BoxScore";
 import { formatGameDate } from "./format";
 import styles from "./Games.module.css";
 import { LineScore } from "./LineScore";
+import { postAboutGameHref } from "./postLinks";
 
 /**
  * `/games/:gameId`: one game from `GET /events/games/{id}` — the two teams
@@ -17,6 +21,12 @@ import { LineScore } from "./LineScore";
  * and never import this folder ([[0x00-architecture]] Connection rule). An id
  * the backend does not know is a not-found page, not an error, because a
  * shared or mistyped link lands there in the normal course of things.
+ *
+ * A signed-in viewer also gets "Post about this" links (`FRONTEND-017`): one
+ * for a completed game's result, by the score header, and one per played
+ * box-score row. Each goes to the composer's pre-filled address
+ * (`postLinks.ts`); a guest sees none, since compose would send them through
+ * sign-in first.
  */
 export function GamePage() {
   const { gameId: raw } = useParams();
@@ -80,6 +90,9 @@ function Game({ game }: { game: GameDetailOut }) {
     homeScore > awayScore ? home : awayScore > homeScore ? away : null;
   const hasLineScore =
     game.home_line_score !== null && game.away_line_score !== null;
+  const canPost = useAuth().status === "authenticated";
+  // 0-0 is a game not yet played: there is no result to post about.
+  const completed = homeScore !== 0 || awayScore !== 0;
 
   return (
     <article className={styles.page}>
@@ -96,6 +109,14 @@ function Game({ game }: { game: GameDetailOut }) {
             <span className={styles.score}>{homeScore}</span>
           </span>
         </h1>
+        {canPost && completed ? (
+          <p className={styles.postGame}>
+            <Link to={postAboutGameHref(game.id)} className={styles.postLink}>
+              <SquarePenIcon size={16} />
+              Post about this<VisuallyHidden> game</VisuallyHidden>
+            </Link>
+          </p>
+        ) : null}
         {winner === null ? null : (
           <p className={styles.result}>
             Final: {winner.name} won, {Math.max(homeScore, awayScore)}–
@@ -124,8 +145,18 @@ function Game({ game }: { game: GameDetailOut }) {
         />
       )}
 
-      <BoxScore team={away} boxScore={game.away_box_score} />
-      <BoxScore team={home} boxScore={game.home_box_score} />
+      <BoxScore
+        team={away}
+        boxScore={game.away_box_score}
+        gameId={game.id}
+        canPost={canPost}
+      />
+      <BoxScore
+        team={home}
+        boxScore={game.home_box_score}
+        gameId={game.id}
+        canPost={canPost}
+      />
     </article>
   );
 }
