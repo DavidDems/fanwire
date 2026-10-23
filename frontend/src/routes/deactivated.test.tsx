@@ -107,7 +107,17 @@ describe("the deactivated banner (criterion 10)", () => {
     const { banner } = await openDeactivated("/");
 
     expect(banner.tagName).not.toBe("HEADER");
-    expect(screen.getAllByRole("banner")).toHaveLength(1);
+    // A card's own `<header>` is no landmark in a browser, but testing-library
+    // counts it: keep only the page-level ones, as `AppLayout.test.tsx` does.
+    const pageBanners = screen
+      .getAllByRole("banner")
+      .filter(
+        (element) =>
+          element.parentElement?.closest(
+            "main, article, aside, nav, section",
+          ) == null,
+      );
+    expect(pageBanners).toHaveLength(1);
   });
 
   it("stays while a thread is open over the page", async () => {

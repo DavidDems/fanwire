@@ -208,7 +208,11 @@ describe("the Show replies disclosure is gone (criterion 10)", () => {
     renderCard(POST);
 
     expect(screen.queryByRole("button", { name: /show replies/i })).toBeNull();
-    expect(card().querySelector("[aria-expanded]")).toBeNull();
+    // The card's "More options" menu button (FRONTEND-012) is the one
+    // expanded state a card may carry: it opens a popup, not replies.
+    expect(
+      card().querySelector("[aria-expanded]:not([aria-haspopup])"),
+    ).toBeNull();
   });
 });
 
