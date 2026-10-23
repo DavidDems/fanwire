@@ -92,6 +92,10 @@ FRONTEND-015. Brief, design and order: `wiki/GeneralContext/Prompts/18-posts-lif
 It absorbs the compose game picker row below and both items under
 "Features in `business-rules.md` that are not built".
 
+## Stats navigation and the compose modal
+
+The human's request of 2026-10-23: the stats screens and the inputs are rebuilt, and compose becomes a modal. Six `hand` units in four stages: UI-010, EVENTS-010 → FRONTEND-018, FRONTEND-020 → FRONTEND-019 → FRONTEND-021. A skeptic agent declares each unit's Baseline (latency, query counts, bundle size, freezing). Brief, design and order: `wiki/GeneralContext/Prompts/20-stats-navigation-and-compose-modal.md`.
+
 ## Workflow ideas, not yet designed
 
 From the human's whiteboard (2026-10-17). Each needs a design discussion
