@@ -18,6 +18,7 @@ import styles from "./PostNode.module.css";
 import { PostText } from "./PostText";
 import { LinkPreview } from "./previews/LinkPreview";
 import {
+  isPlainRepost,
   setLiked,
   setReposted,
   withLike,
@@ -200,18 +201,6 @@ export function PostNode({ post }: PostNodeProps) {
     <Card as="article" className={styles.post} onClick={openThread}>
       {body}
     </Card>
-  );
-}
-
-/**
- * A repost with nothing of its own to say stands for the original. A repost
- * with text or media is a quote, and a post in its own right.
- */
-function isPlainRepost(post: PostView): boolean {
-  return (
-    post.is_repost &&
-    (post.text === null || post.text === "") &&
-    post.media.length === 0
   );
 }
 

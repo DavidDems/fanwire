@@ -29,3 +29,10 @@
 .short {
   width: 60%;
 }
+
+/* A post picture's frame (FRONTEND-015): the same 4:3 box the card's picture fills. */
+.frame {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
