@@ -65,12 +65,21 @@ function RecoveryActions() {
  * **A named region, not a second `<header>`**: the page keeps its one banner
  * landmark (`accessibility.md` A12), and the region is named by its own first
  * line, so it is found and announced as "Your account is deactivated".
+ *
+ * **It takes focus only when asked** (`focusDeactivatedBanner`, after
+ * Deactivate account): `tabindex="-1"` lets script focus it without adding a
+ * tab stop, and a page that merely opens deactivated leaves focus alone.
  */
 export function DeactivatedBanner() {
   const titleId = useId();
   return (
     <div className={styles.slot}>
-      <section className={styles.banner} aria-labelledby={titleId}>
+      <section
+        id={BANNER_ID}
+        className={styles.banner}
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <div className={styles.bannerText}>
           <p id={titleId} className={styles.bannerTitle}>
             Your account is deactivated
@@ -84,6 +93,29 @@ export function DeactivatedBanner() {
       </section>
     </div>
   );
+}
+
+const BANNER_ID = "deactivated-banner";
+
+/**
+ * Move focus to the banner once it is on the page: after Deactivate account,
+ * whose own-profile view (and the button that had focus) is replaced as the
+ * app moves to the deactivated state, so focus would otherwise fall to the
+ * page. Watched rather than done at once, because the banner arrives on the
+ * render after the profile is read again.
+ */
+export function focusDeactivatedBanner(): void {
+  const settle = (): boolean => {
+    const banner = document.getElementById(BANNER_ID);
+    if (banner === null) return false;
+    banner.focus();
+    return true;
+  };
+  if (settle()) return;
+  const observer = new MutationObserver(() => {
+    if (settle()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 /**

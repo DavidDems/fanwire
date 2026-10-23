@@ -11,6 +11,7 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/Dialog";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { focusDeactivatedBanner } from "../../routes/Deactivated";
 import { TEAMS_QUERY_KEY, fetchTeams, updateMe } from "./api";
 import styles from "./Profile.module.css";
 
@@ -212,12 +213,12 @@ function AccountSection() {
         destructive
         onConfirm={() => {
           setFailure(null);
-          deactivate.mutate(undefined, {
-            onError: () => {
-              setFailure(
-                "We could not deactivate your account just now. Please try again.",
-              );
-            },
+          // A promise, not `mutate`'s callbacks: this view is gone by the
+          // time it settles, and those are not called for an unmounted one.
+          void deactivate.mutateAsync().then(focusDeactivatedBanner, () => {
+            setFailure(
+              "We could not deactivate your account just now. Please try again.",
+            );
           });
         }}
         onCancel={() => {

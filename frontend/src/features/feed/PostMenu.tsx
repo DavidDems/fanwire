@@ -46,6 +46,13 @@ import { useReported } from "./reported";
  * the reposts of it), then those entries — and the parent's, whose reply
  * count just changed — are read again. `features/feed` imports none of the
  * features that cache posts: they all keep them under the feed's root.
+ *
+ * **Focus does not fall to the page** when the card goes with its menu
+ * button: it moves to the next card's "More options" in the same list, else
+ * the previous card's, else the list's heading; inside the thread modal, the
+ * root's, and for the root itself the modal's Close. Found through the DOM
+ * from where the card sits (`focusAfterDeleting`), so no list passes props for
+ * it and this folder still imports none of them.
  */
 export interface PostMenuProps {
   /** The post the menu acts on: for a plain repost, the original. */
@@ -67,6 +74,7 @@ export function PostMenu({ post, deletable, reportable }: PostMenuProps) {
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [copied, setCopied] = useState<Copied>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const own =
     account.status === "active" && post.author.id === account.profile.id;
@@ -87,8 +95,12 @@ export function PostMenu({ post, deletable, reportable }: PostMenuProps) {
   const remove = useMutation({
     mutationFn: () => deletePost(post.id),
     onSuccess: async () => {
+      // Where focus goes once the card has gone, found while it is still here.
+      const anchor = anchorRef.current;
+      const next = anchor === null ? null : focusAfterDeleting(anchor);
       setConfirming(null);
       await forgetDeletedPost(queryClient, post);
+      if (anchor !== null && next !== null) focusWhenGone(anchor, next);
     },
     onError: (error) => {
       setFailure(deleteFailure(error));
@@ -134,7 +146,7 @@ export function PostMenu({ post, deletable, reportable }: PostMenuProps) {
 
   return (
     <>
-      <div className={styles.menu}>
+      <div ref={anchorRef} className={styles.menu}>
         <Menu label="More options" items={items} icon={<EllipsisIcon />} />
       </div>
 
@@ -262,4 +274,89 @@ async function forgetDeletedPost(
   for (const key of [...stale, threadKey(post.id)]) {
     void queryClient.invalidateQueries({ queryKey: key, exact: true });
   }
+}
+
+/** A card's own "More options" button: a quote's original box has none. */
+const MENU_BUTTON = 'button[aria-haspopup="menu"]';
+
+/**
+ * Where focus goes after the card holding `anchor` (its menu) is deleted,
+ * read while that card is still on the page.
+ *
+ * | the card                      | focus goes to                                  |
+ * |-------------------------------|------------------------------------------------|
+ * | in a list, with a next card   | the next card's "More options"                 |
+ * | in a list, the last one       | the previous card's                            |
+ * | alone in a page's list        | the list's heading (`tabindex="-1"` if needed) |
+ * | alone in the thread's replies | the root's, if it is still there               |
+ * | not in a list (thread's root) | the modal's Close, else its title              |
+ *
+ * `null` where none of these exists: the browser's own fallback stands.
+ */
+function focusAfterDeleting(anchor: HTMLElement): HTMLElement | null {
+  const card = anchor.closest("article");
+  const item = card?.parentElement ?? null;
+  const dialog = anchor.closest("dialog");
+
+  if (item instanceof HTMLLIElement && item.parentElement !== null) {
+    const list = item.parentElement;
+    const sibling =
+      menuButtonIn(item.nextElementSibling) ??
+      menuButtonIn(item.previousElementSibling);
+    if (sibling !== null) return sibling;
+    if (dialog === null) {
+      // The page's list leaves with its last card; its section's heading stays.
+      return focusableHeading(list.closest("section")?.querySelector("h1, h2"));
+    }
+    const root = Array.from(
+      dialog.querySelectorAll<HTMLElement>(MENU_BUTTON),
+    ).find((button) => !list.contains(button));
+    if (root !== undefined) return root;
+  }
+
+  if (dialog === null) return null;
+  // The first Close in it is the dialog's own, in its header.
+  const close = dialog.querySelector<HTMLElement>('button[aria-label="Close"]');
+  if (close !== null) return close;
+  const titleId = dialog.getAttribute("aria-labelledby");
+  return focusableHeading(
+    titleId === null ? null : document.getElementById(titleId),
+  );
+}
+
+function menuButtonIn(item: Element | null): HTMLElement | null {
+  return item?.querySelector<HTMLElement>(MENU_BUTTON) ?? null;
+}
+
+/** A heading made able to take focus from script, never put in the tab order. */
+function focusableHeading(
+  heading: Element | null | undefined,
+): HTMLElement | null {
+  if (!(heading instanceof HTMLElement)) return null;
+  if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+  return heading;
+}
+
+/**
+ * Focus `target` once `anchor` has left the page, if focus went with it.
+ *
+ * Watched rather than done at once: the card leaves on react-query's render
+ * after the cache edit, and closing the confirm first puts focus back on the
+ * menu button, which then leaves with the card. A reader who has already moved
+ * focus somewhere else keeps it there.
+ */
+function focusWhenGone(anchor: HTMLElement, target: HTMLElement): void {
+  const settle = (): boolean => {
+    if (anchor.isConnected) return false;
+    const current = document.activeElement;
+    const lost =
+      current === null || current === document.body || !current.isConnected;
+    if (lost && target.isConnected) target.focus();
+    return true;
+  };
+  if (settle()) return;
+  const observer = new MutationObserver(() => {
+    if (settle()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
