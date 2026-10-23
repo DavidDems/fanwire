@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-015",
+  "objective": "Make post cards appear complete in one go: each card waits behind a stable skeleton until its images are decoded (bounded by a timeout and a failure fallback), images sit in a fixed 4:3 frame so nothing shifts, only the visible cards plus a small window ahead are prepared, a refetch keeps the cards already shown, and the bundle is split by route so the main chunk is under Vite's 500 kB warning.",
+  "acceptance_criteria": [
+    "A post card in the feed, search results, a profile's posts and a thread (root and replies) renders the existing Skeleton post variant, aria-hidden and the same height class for every card, until it is ready, then the whole card at once: author, text, data-link preview (FRONTEND-014's components) and images appear in the same render, never piecemeal.",
+    "A card is ready when every image it shows (its own, and a reposted or quoted original's) has loaded and HTMLImageElement.decode() has resolved or rejected; a card with no images is ready at once; readiness is computed by one hook (e.g. features/feed/useCardReady.ts) that every list uses.",
+    "Bounded failure: an image that errors, has a null s3_key_public, or has not decoded within 4000 ms (one named constant) no longer holds the card: the card is revealed with that image's frame showing a neutral 'Image unavailable' line in the same reserved space; no card stays a skeleton longer than the timeout, pinned with fake timers.",
+    "Every post image sits in a fixed 4:3 frame (aspect-ratio: 4 / 3, object-fit: contain, the letterbox a surface token), so the skeleton, the loaded image and the failure line occupy the same box; the skeleton post variant reserves that frame when the card has media (a skeleton prop, not a second variant).",
+    "Only the cards in view plus a window ahead (an IntersectionObserver rootMargin of one viewport height below, one named constant) start loading their images; a card further down stays a skeleton until it enters that window; jsdom tests stub IntersectionObserver.",
+    "A refetch (invalidate after a like, reply, repost or delete; a window refocus) keeps every card already revealed on screen with its content, and never returns it to a skeleton; only a post whose images changed is prepared again. The previous page of results stays visible while the next page of a Load more is prepared.",
+    "Revealing has no animation (FrontendUI/components.md: no shimmer, nothing to switch off for reduced motion) and no keyframes at-rule (styles/base.test.ts); the feed region is aria-busy only while its first visible cards are being prepared.",
+    "routes.tsx loads the stats, games, players, compose, notifications, profile and auth pages with React.lazy behind one Suspense fallback (StatusLine); the feed, the thread modal and the app shell stay in the main chunk; `npm run build` prints no chunk-size warning (every chunk under 500 kB).",
+    "The modal flow keeps working with lazy pages: FRONTEND-014's detail-flow and modal-flow tests pass, the same dialog element persists, and a direct load of /games/<id> and /players/<id> is still the full page.",
+    "Every existing frontend test passes; typecheck, lint and build pass; 0x08-frontend.md records the readiness rule, the timeout, the window, the frame and the lazy routes (FrontendUI/components.md rows go in a Director PR: no unit role may write FrontendUI/).",
+    "Browser rows (vite preview against backend-dev, seeded posts with and without images and data links, light and dark, 360 and 1280 wide, Chromium DevTools network throttled to Slow 4G for the slow row): the feed shows skeletons then whole cards with no partial card; a slow image keeps its card a skeleton then reveals within 4 s with the image or the fallback line; an image URL that 404s reveals with 'Image unavailable'; Cumulative Layout Shift for the first screen under 0.1 (Performance panel or a PerformanceObserver layout-shift sum); liking a post does not flash any card back to a skeleton; the network panel shows route chunks loading on first visit to /stats and /compose."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/features/search/**",
+    "frontend/src/features/profile/**",
+    "frontend/src/features/thread/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/Skeleton.tsx",
+    "frontend/src/components/ui/Skeleton.module.css",
+    "frontend/src/components/ui/Skeleton.test.tsx",
+    "frontend/src/components/ui/placeholders.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

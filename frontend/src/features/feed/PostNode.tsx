@@ -16,6 +16,7 @@ import { PostAction, TogglePostAction } from "./PostAction";
 import { PostMedia } from "./PostMedia";
 import styles from "./PostNode.module.css";
 import { PostText } from "./PostText";
+import { LinkPreview } from "./previews/LinkPreview";
 import {
   setLiked,
   setReposted,
@@ -55,6 +56,13 @@ import { likesText, repliesText, repostsText } from "./counts";
  * of its own, with the original inside it as a compact box without controls,
  * linked to the original's own thread. Either way it is this one node choosing
  * what to render, not a second component.
+ *
+ * **A post's data link is shown as what it links to** (`FRONTEND-014`): a game
+ * result, a player's game line or a career, from `./previews`, each with its
+ * one link to its detail. That link is its own tab stop, never inside the
+ * timestamp's or Reply's, and the card's click-to-open ignores it as it does
+ * every link. A plain repost shows the original's preview; a quote shows its
+ * own, and the original's inside the original's box.
  *
  * **The card renders from the `post` it was handed** (for a plain repost, from
  * the `reposted_post` inside it), never from another cache entry's copy of it.
@@ -228,6 +236,7 @@ function PostContent({ post }: { post: PostView }) {
           mentionedGameIds={post.mentioned_game_ids}
         />
       )}
+      <LinkPreview post={post} />
       {post.media.map((item) => (
         <PostMedia key={item.id} item={item} author={post.author.username} />
       ))}
@@ -273,6 +282,7 @@ function QuotedOriginal({ post }: { post: PostView }) {
           mentionedGameIds={post.mentioned_game_ids}
         />
       )}
+      <LinkPreview post={post} />
     </div>
   );
 }

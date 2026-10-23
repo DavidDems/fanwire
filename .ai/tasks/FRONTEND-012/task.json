@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-012",
+  "objective": "Build the lifecycle UI on POSTS-004 and USERS-003: a post menu (Copy link, Report, and the owner's Delete), the 'Post deleted' placeholders, deactivating an account from the own-profile settings, and a recovery screen and banner for a deactivated account that otherwise browses as a guest.",
+  "acceptance_criteria": [
+    "Every post card (feed, search, profile, thread root and replies, a quote's own card) has one 'More options' menu button (aria-haspopup, aria-expanded) opening a menu built on the Popover API and native elements, no new dependency: arrow keys move between items, Escape closes the menu only (never the thread modal around it) and returns focus to its button, and Tab leaves it.",
+    "Copy link writes the post's absolute address (origin + /posts/<id>) with navigator.clipboard.writeText and announces 'Link copied' in a polite status; a refused or missing clipboard shows the address in a read-only, pre-selected text field instead, never a silent failure.",
+    "Report is offered to a signed-in active viewer on another member's post, never on their own and never to a guest or a deactivated account. It opens a confirm (role alertdialog, 'Report this post?' with Report and Cancel, focus on Cancel); confirming sends POST /posts/<id>/report once, and after its 204 the item reads 'Reported' and is disabled for the rest of the session (a reload offers it again). A failure is an inline alert in the confirm, which stays open.",
+    "Delete is offered only on the viewer's own post (post.author.id equals the GET /users/me id) and never on a plain repost (whose removal stays the Undo repost toggle). It opens a confirm ('Delete this post?', Delete and Cancel, focus on Cancel); confirming sends DELETE /posts/<id>. On 204 the card is removed at once from every cached feed, search and profile page that holds it (setQueryData), then those queries and the open thread are invalidated; a 403, 404 or 409 is an inline alert naming what happened, and the card stays.",
+    "A confirm opened inside the thread modal is a nested alertdialog over it: Escape or Cancel closes only the confirm and returns focus to the menu button; the modal flow's depth, Back and Close are unchanged.",
+    "Deleting the root of the open thread leaves the modal open on POSTS-004's 'Post deleted' card with the surviving replies under it; deleting a reply removes it from the thread's list and refetches the parent's counts.",
+    "A plain repost whose original is gone (reposted_post null, reposted_post_deleted true) and a quote repost whose original is gone both render a 'Post deleted' placeholder in the original's place: no author, text, media, preview or link, a muted card with the text 'Post deleted'; the reposter's own line and controls are unchanged. A reply whose parent is gone needs no change (POSTS-004 keeps the thread readable).",
+    "Own-profile settings gain an 'Account' section at the end with a 'Deactivate account' button (destructive styling). It opens a confirm explaining that posts are hidden until recovery and that individually deleted posts stay deleted; confirming sends DELETE /users/me. On 204 the react-query cache is cleared except the session, GET /users/me is read again, and the app shows the deactivated state below.",
+    "auth/profile.ts reports GET /users/me's 403 {\"detail\": \"account_deactivated\"} as its own result (not an error and not 'no profile'), through the one PROFILE_QUERY_KEY entry; any other 403 is still an error.",
+    "A signed-in deactivated account browses public pages as a guest: like, reply, repost, follow, compose, the post menu's Report and Delete, and FRONTEND-017's Post about this links are absent or behave exactly as for a guest, and every page shows a persistent banner (role region, named) 'Your account is deactivated' with a Recover account button and Sign out.",
+    "Any RequireAuth route (compose, notifications) shows a recovery screen instead of its content for a deactivated account: a heading, what recovery does (restores the account and its posts, not individually deleted ones), Recover account and Sign out. RequireNewProfile never offers profile creation to a deactivated account.",
+    "Recover account sends POST /users/me/recover; on 200 every cached query is invalidated, the banner and recovery screen go, and the route the viewer was on renders as an active member. A failure is an inline alert beside the button.",
+    "One hook decides the account state for the whole app (loading, anonymous, active, deactivated) from useAuth and the one profile query; PostNode, the stats pages' links and the guards read it, nobody re-derives it.",
+    "The menu, confirm, placeholder and banner pass the axe checks the existing component tests run, use only tokens (the module-css scans), and have visible focus.",
+    "Every existing frontend test passes; typecheck, lint and build pass; 0x08-frontend.md records the menu, the account states and the deactivate/recover flows (FrontendUI/components.md rows go in a Director PR: no unit role may write FrontendUI/).",
+    "Browser rows (vite preview against backend-dev, signed in with the test accounts, light and dark, 360 and 1280 wide): copy a link and paste it in a new tab; report another's post, see Reported; delete your own post from the feed and from inside the thread modal (root and reply), the card goes and Escape in the confirm leaves the modal open; deactivate from your profile, see the banner on the feed and the recovery screen on /compose; recover, and posts reappear and compose works; keyboard-only through the menu with visible focus."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/**",
+    "frontend/src/features/thread/**",
+    "frontend/src/features/search/**",
+    "frontend/src/features/profile/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/players/**",
+    "frontend/src/routes/**",
+    "frontend/src/auth/profile.ts",
+    "frontend/src/auth/profile.test.ts",
+    "frontend/src/auth/account.ts",
+    "frontend/src/auth/account.test.tsx",
+    "frontend/src/components/ui/Menu.tsx",
+    "frontend/src/components/ui/Menu.module.css",
+    "frontend/src/components/ui/Menu.test.tsx",
+    "frontend/src/components/ui/Dialog.tsx",
+    "frontend/src/components/ui/Dialog.module.css",
+    "frontend/src/components/ui/Dialog.test.tsx",
+    "frontend/src/components/ui/icons/index.tsx",
+    "frontend/src/components/ui/icons/icons.test.tsx",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/config.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/AuthContext.tsx",
+    "frontend/src/auth/AuthService.ts",
+    "frontend/src/auth/CognitoAuthService.ts",
+    "frontend/src/styles/**",
+    "frontend/src/features/compose/**",
+    "frontend/index.html"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
