@@ -83,15 +83,6 @@ its answer.
 | System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
 | System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
 
-## Posts: deletion, deactivation and sports-data attachments
-
-The human's feature set of 2026-10-17, agreed (`Architecture/human-decisions.md`
-§9). Ten `hand` units in six stages: USERS-003, EVENTS-009, FRONTEND-011 →
-POSTS-004 → FRONTEND-012, POSTS-005 → POSTS-006 → FRONTEND-013, FRONTEND-014 →
-FRONTEND-015. Brief, design and order: `wiki/GeneralContext/Prompts/18-posts-lifecycle-and-data-links.md`.
-It absorbs the compose game picker row below and both items under
-"Features in `business-rules.md` that are not built".
-
 ## Stats navigation and the compose modal
 
 The human's request of 2026-10-23: the stats screens and the inputs are rebuilt, and compose becomes a modal. Six `hand` units in four stages: UI-010, EVENTS-010 → FRONTEND-018, FRONTEND-020 → FRONTEND-019 → FRONTEND-021. A skeptic agent declares each unit's Baseline (latency, query counts, bundle size, freezing). Brief, design and order: `wiki/GeneralContext/Prompts/20-stats-navigation-and-compose-modal.md`.
@@ -145,9 +136,3 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `hand` | — | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
 | **A username character rule** (look-alike usernames) | `director` | — | `typography.md` §1 | A product decision first. **Director** |
 
-## Features in `business-rules.md` that are not built
-
-The post menu is **`Prompts/18`'s** `FRONTEND-012` (2026-10-20). Delete the bullet when it merges. (The game link shipped as the `game_final` attachment, POSTS-005 and FRONTEND-014, 2026-10-22.)
-
-- **The post menu** (report, copy link). Use the native `<dialog>` and the
-  Popover API before considering a dependency (`components.md` §2).
