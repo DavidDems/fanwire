@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-010",
+  "objective": "Serve historical records from the loaded games and box scores: a summary of every record with its holder, and each record's full ranked list, computed live at read time in a bounded number of queries, measured at full-load scale against a stated latency ceiling, so the Stats > Records tab can show them.",
+  "acceptance_criteria": [
+    "The records are a fixed, named set, each with an id, a group (team or player), a title, a unit and a rule text: team-championships (NBA titles won), team-best-season and team-worst-season (regular-season win percentage, then wins), team-most-points-game (points by one team in one game), team-largest-win (margin of victory in one game), player-championships (titles won: a played line for the champion in that season's NBA Finals), player-points-game, player-rebounds-game, player-assists-game and player-threes-game (one player in one game), player-career-points (regular-season points, summed) and player-career-triple-doubles (regular-season games with 10 or more in at least three of points, rebounds, assists, steals and blocks).",
+    "Counting rules, each named in the record's rule text: single-game records count `regular` and `playoffs` games only (not play-in or the NBA Cup final) and each entry names its game type; season records count `regular` games only and only seasons with a champion (a season in progress never holds a season record); championships use the same NBA Finals rule as GET /events/seasons/{season}/champion, by construction (one shared helper); career records count played rows of `regular` games; every response states the data window as since_season (the earliest stored season) and through_season (the latest).",
+    "GET /events/records returns { since_season, through_season, records: [{ id, group, title, unit, rule, holder }] } in the fixed order team records then player records; holder is the first-ranked entry (as in the list below) or null when no stored data qualifies; ties for first return the first by the list's order and a tied_count of how many share the value.",
+    "GET /events/records/{record_id}?limit=&offset= returns { id, group, title, unit, rule, since_season, through_season, total, entries } with limit defaulting to 25 (1-100) and offset 0 or more; each entry has rank (competition ranking: equal values share a rank, the next rank skips), value, the team (id, name, abbreviation) or the player (id, first and last name) and, where it applies, the season, the game (id, date, game type, opponent abbreviation) and the team the player played for; entries are ordered by value (descending for every record except team-worst-season, ascending), then by date or season, then by id.",
+    "An unknown record id is a 404, a limit or offset out of range a 422, and every route's docstring says so, so it reaches openapi.json; an empty database answers 200 with null holders and empty lists, never a 500.",
+    "Each value is computed in Postgres (GROUP BY, window functions or ORDER BY ... LIMIT), never by loading box-score or game rows into Python; GET /events/records is built in at most 12 queries and each list in at most 3, whatever the data's size, pinned by query-count tests.",
+    "Correctness against a synthetic fixture: for every record, the holder and the first five entries equal values the test derives independently from the fixture rows (including a tie, a DNP line, a play-in game, a cup-final game and a season with no champion that must be excluded).",
+    "Indexes are allowed, in one Alembic migration with a downgrade, only where a measurement shows they are needed; the migration and the measurement before and after are in the PR.",
+    "Baseline (provisional, the skeptic's to confirm or tighten before the branch is cut): measured on a database at full-load scale (about 30,000 games and 800,000 box-score rows: the real load, or the synthetic generator below), the median of 20 warm calls is at most 150 ms for each GET /events/records/{record_id} at limit 25, and at most 500 ms for GET /events/records; every existing events route keeps its measured median within 10 % of 0x02-events.md's table; the numbers and the machine are recorded in 0x02-events.md and the PR. A record that misses its ceiling after indexing is reported in the PR and not shipped behind a cache or a stored table (the human, 2026-10-23: that is a separate unit).",
+    "If the real load isn't available, backend/scripts/generate_scale_fixture.py builds a deterministic synthetic database at that scale (fixed seed, 30 teams, 23 seasons, realistic distributions of points and minutes), idempotent and refusing to run against a database whose games came from the real loader; it is a dev tool, never run in CI or in production, and documented in 0x02-events.md.",
+    "openapi.json and schema.d.ts match the backend; every existing events route, schema and query count is unchanged; ruff and mypy pass; the backend test suite passes in the container."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/scripts/generate_scale_fixture.py",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    "infra/**",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**",
+    "backend/pyproject.toml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
