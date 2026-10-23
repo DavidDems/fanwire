@@ -25,7 +25,12 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { AuthService } from "../../auth/AuthService";
-import { FakeAuthService, renderWithAuth, testSession } from "../../test/auth";
+import {
+  FakeAuthService,
+  profileFound,
+  renderWithAuth,
+  testSession,
+} from "../../test/auth";
 import {
   likeStub,
   testAuthor,
@@ -154,7 +159,10 @@ describe("a click elsewhere on the card opens the thread", () => {
   it("leaves a button to do its own thing: Like likes and does not navigate", async () => {
     const user = userEvent.setup();
     const like = likeStub();
-    server.use(...like.handlers);
+    // Signed in, the card reads the account state (`FRONTEND-012`'s
+    // `useAccount()`), which asks `GET /users/me`: answered, so the Like is an
+    // active member's.
+    server.use(...like.handlers, profileFound());
     renderCard(POST, new FakeAuthService({ session: testSession() }));
 
     await user.click(within(card()).getByRole("button", { name: "Like" }));

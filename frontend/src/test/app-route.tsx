@@ -1,13 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderResult } from "@testing-library/react";
-import type { RequestHandler } from "msw";
+import { HttpResponse, http, type RequestHandler } from "msw";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 
 import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
 import { routes } from "../routes/routes";
 import {
+  ACCOUNT_DEACTIVATED_BODY,
   FakeAuthService,
+  profileDeactivated,
   profileFound,
   profileMissing,
   teamsAre,
@@ -33,8 +35,12 @@ import { followingStub, publicProfilesById } from "./users";
  * - `anonymous` — no session at all.
  * - `member` — a session, and `GET /users/me` answers 200 with `testProfile()`.
  * - `newcomer` — a session, and `GET /users/me` answers 404.
+ * - `deactivated` — a session, and `GET /users/me` answers 403
+ *   `{"detail": "account_deactivated"}` (`FRONTEND-012`): the account's owner
+ *   deactivated it, and the follow set answers the same 403, as every
+ *   active-account read does ([[0x01-users]]).
  */
-export type Visitor = "anonymous" | "member" | "newcomer";
+export type Visitor = "anonymous" | "member" | "newcomer" | "deactivated";
 
 /** The signed-in member's own id, so `/profile/${OWN_USER_ID}` is their own profile. */
 export const OWN_USER_ID = testProfile().id;
@@ -56,6 +62,16 @@ export function arrangeVisitor(as: Visitor): AuthService {
   server.use(...statsDefaults());
   if (as === "anonymous") return new FakeAuthService();
 
+  if (as === "deactivated") {
+    server.use(
+      profileDeactivated(),
+      http.get("*/users/me/following", () =>
+        HttpResponse.json(ACCOUNT_DEACTIVATED_BODY, { status: 403 }),
+      ),
+    );
+    return new FakeAuthService({ session: testSession() });
+  }
+
   server.use(as === "member" ? profileFound() : profileMissing());
   // A signed-in visit to someone else's profile reads the follow set too.
   server.use(followingStub().handler);
@@ -65,17 +81,30 @@ export function arrangeVisitor(as: Visitor): AuthService {
 export type AppRouter = ReturnType<typeof createMemoryRouter>;
 
 /**
+ * What a whole-app render hands back: the render result, the memory router,
+ * and the two things a test may need to look behind the screen at — the
+ * react-query client (what is still cached after a deactivation, say) and the
+ * auth double (whether Sign out was called).
+ */
+export type AppRender = RenderResult & {
+  router: AppRouter;
+  queryClient: QueryClient;
+  authService: AuthService;
+};
+
+/**
  * `handlers` are installed after the visitor's defaults, so they win: a test
  * that asserts on a read passes its own stub here rather than racing the
  * defaults with a `server.use` of its own. The memory router is returned
  * beside the render result, so a test can read the address
- * (`router.state.location`) and go Back (`router.navigate(-1)`).
+ * (`router.state.location`) and go Back (`router.navigate(-1)`), with the
+ * query client and the auth double beside it (`AppRender`).
  */
 export function renderAppAt(
   path: string,
   as: Visitor,
   handlers: RequestHandler[] = [],
-): RenderResult & { router: AppRouter } {
+): AppRender {
   return renderAppWithHistory({ initialEntries: [path] }, as, handlers);
 }
 
@@ -96,7 +125,7 @@ export function renderAppWithHistory(
   history: AppHistory,
   as: Visitor,
   handlers: RequestHandler[] = [],
-): RenderResult & { router: AppRouter } {
+): AppRender {
   const authService = arrangeVisitor(as);
   if (handlers.length > 0) server.use(...handlers);
   const router = createMemoryRouter(routes, {
@@ -116,5 +145,5 @@ export function renderAppWithHistory(
       </AuthProvider>
     </QueryClientProvider>,
   );
-  return { ...result, router };
+  return { ...result, router, queryClient, authService };
 }
