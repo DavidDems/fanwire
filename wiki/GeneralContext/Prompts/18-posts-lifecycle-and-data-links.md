@@ -176,10 +176,28 @@ Update this section in every spec PR and unit PR of this thread.
     `PostMentionedEvent` comments in `eventbus.py` and `consumer.py` are
     corrected. `infra/lib/messaging-stack.ts`'s bus description still names
     it: left alone, because changing it changes a deployed resource.
+- **2026-10-23, stage 6 hand-run:** `FRONTEND-015` as #225 and `FRONTEND-012`
+  as #226, both open. They merge with no conflict, and the merged preview is
+  green (1865 tests).
+  - **Browser defects found and fixed**, all invisible to jsdom:
+    - a skeleton 100 px shorter than its image card (a visible shift);
+    - the prepare window not reaching past the thread modal's scroll
+      container;
+    - focus falling to `<body>` after a delete or a deactivate.
+  - **A test correction in FRONTEND-012** (`124b48c`): two tests from its own
+    test commit contradicted the spec. The Director corrected them in their
+    own commit, before the implementation, and the PR says so.
+  - **Signed-in rows need the human's yes.** The auto-mode classifier refused
+    typing the test-account password into the localhost preview until the
+    human allowed it in the session.
+  - **`FrontendUI/components.md` rows** for both units: a Director PR.
 - **Next:**
-  1. Hand-run **`FRONTEND-015`** and **`FRONTEND-012`** in parallel. They both
-     touch `PostNode` and the feed caches, so test them on a merged preview
-     before the second one merges.
+  1. The human merges #225 and #226, either first. Merge `main` into the
+     second before it merges, so CI runs on the pair.
+  2. Merge the `components.md` Director PR, and delete the backlog's
+     post-menu bullet (FRONTEND-012 closes it).
+  3. **This brief is then finished:** delete it, and its line in
+     `wiki/GeneralContext/index.md` "Task prompts".
 
 ## Read first, in this order
 
