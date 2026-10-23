@@ -2,10 +2,14 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Link, useParams } from "react-router-dom";
 
+import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { useInFlowLinkState } from "../../routes/modal-flow";
+import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import {
   formatAverage,
   formatGameDate,
@@ -26,6 +30,7 @@ import {
   type StatLineOut,
 } from "./api";
 import styles from "./Players.module.css";
+import { postAboutCareerHref, type CareerScope } from "./postLinks";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
 
 /**
@@ -36,6 +41,10 @@ import { ColumnHeader, ScrollTable } from "./ScrollTable";
  * Public, and reached by address only (the Stats page, the leaders and the
  * game page's box scores link here; nothing imports this folder). An id the
  * backend does not know is a not-found page, not an error.
+ *
+ * A signed-in viewer also gets a "Post about this" link on each career row
+ * with games in it (`FRONTEND-017`), to the composer's pre-filled address
+ * (`postLinks.ts`); a guest sees none.
  */
 export function PlayerPage() {
   const { playerId: raw } = useParams();
@@ -132,10 +141,12 @@ function Player({ player }: { player: PlayerDetailOut }) {
   const known = facts.filter(
     (fact): fact is [string, string] => fact[1] !== null && fact[1] !== "",
   );
+  const canPost = useAuth().status === "authenticated";
+  const name = fullName(player);
 
   return (
     <section className={styles.page}>
-      <h1 className={styles.heading}>{fullName(player)}</h1>
+      <h1 className={styles.heading}>{name}</h1>
 
       {known.length === 0 ? null : (
         <dl className={styles.facts}>
@@ -157,11 +168,30 @@ function Player({ player }: { player: PlayerDetailOut }) {
               {AVERAGE_COLUMNS.map(([label, title]) => (
                 <ColumnHeader key={label} label={label} title={title} />
               ))}
+              {canPost ? (
+                <th scope="col" className={styles.postCell}>
+                  <VisuallyHidden>Post</VisuallyHidden>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
-            <CareerRow label="Regular season" line={player.career_regular} />
-            <CareerRow label="Playoffs" line={player.career_playoffs} />
+            <CareerRow
+              label="Regular season"
+              line={player.career_regular}
+              post={
+                canPost ? { playerId: player.id, name, scope: "regular" } : null
+              }
+            />
+            <CareerRow
+              label="Playoffs"
+              line={player.career_playoffs}
+              post={
+                canPost
+                  ? { playerId: player.id, name, scope: "playoffs" }
+                  : null
+              }
+            />
           </tbody>
         </ScrollTable>
       </section>
@@ -242,13 +272,48 @@ function AverageCells({ line }: { line: StatLineOut }) {
   );
 }
 
-function CareerRow({ label, line }: { label: string; line: StatLineOut }) {
+/** What a signed-in viewer's career-row post link is about. */
+interface CareerPost {
+  playerId: number;
+  name: string;
+  scope: CareerScope;
+}
+
+/**
+ * One career line. With `post` (signed in) it gains a trailing cell: a
+ * "Post about this" link, or nothing for a scope with no games.
+ */
+function CareerRow({
+  label,
+  line,
+  post,
+}: {
+  label: string;
+  line: StatLineOut;
+  post: CareerPost | null;
+}) {
   return (
     <tr>
       <th scope="row" className={styles.name}>
         {label}
       </th>
       <AverageCells line={line} />
+      {post === null ? null : (
+        <td className={styles.postCell}>
+          {line.games_played === 0 ? null : (
+            <Link
+              to={postAboutCareerHref(post.playerId, post.scope)}
+              className={styles.postLink}
+            >
+              <SquarePenIcon size={16} />
+              Post
+              <VisuallyHidden>
+                {` about ${post.name}’s ${label.toLowerCase()}`}
+              </VisuallyHidden>
+            </Link>
+          )}
+        </td>
+      )}
     </tr>
   );
 }
@@ -329,11 +394,16 @@ function GameLog({ playerId }: { playerId: number }) {
 
 function GameLogRow({ game }: { game: PlayerGameOut }) {
   const won = game.team_score > game.opponent_score;
+  // Inside the modal, a game is the flow's next detail; on the page, a plain
+  // link to the game's page.
+  const state = useInFlowLinkState();
 
   return (
     <tr>
       <th scope="row" className={styles.name}>
-        <Link to={`/games/${game.game_id}`}>{formatGameDate(game.date)}</Link>
+        <Link to={`/games/${game.game_id}`} state={state}>
+          {formatGameDate(game.date)}
+        </Link>
       </th>
       <td className={styles.name}>
         {game.is_home ? "vs " : "at "}

@@ -705,8 +705,8 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   continues it at depth + 1 with the same background), `useFlowBackground()`
   (the page to keep underneath) and `useModalFlow()` (`{ depth, back, close
   }`). No other file reads `location.state`; `src/routes/modal-flow.test.tsx`
-  scans for it. A game or player detail (`FRONTEND-014`) joins the flow by
-  being another overlay route; the module does not change.
+  scans for it. Game and player details joined it in `FRONTEND-014` (below)
+  without a change to that shape; the module gained two read-only hooks.
 - **Closing leaves the whole flow.** Close, Escape and a backdrop click go
   back `depth` entries with a background, which is the origin's own entry:
   its address, query string, loaded pages and scroll are as the reader left
@@ -722,7 +722,8 @@ the reader was on. Public: a thread is a read path; replying needs a session.
 - **Known gap:** opening a nested thread from a reply's timestamp removes the
   focused link, and focus falls to `body` with the modal still open (Tab
   re-enters the dialog). Moving focus to the dialog's heading on a detail
-  change is a follow-up (`FRONTEND-014`, which adds more details).
+  change is still a follow-up: `FRONTEND-014` did not take it, and a
+  preview or box-score link inside the modal has the same gap.
 - **`components/ui/Dialog`**: a native `<dialog>` opened with `showModal()`
   (top layer, inert page, focus kept inside), the title as its heading and
   accessible name, a Close button, the prevented `cancel` event as Escape,
@@ -755,6 +756,46 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   optimistic, as the human asked.
 - **Signed out**: the thread, and in place of the composer a "Sign in to
   reply" link whose `state.from` is `/posts/<id>`.
+
+### Data-link previews and details in the flow (`FRONTEND-014`)
+
+- **Three components, one folder**: `features/feed/previews/`
+  `GamePreview`, `PlayerGamePreview` and `PlayerCareerPreview`, each typed by
+  its generated `*PreviewView`, picked by `LinkPreview` on the preview's
+  `type`. `PostNode` renders it after the text in `PostContent`, so a plain
+  repost shows the original's, and in `QuotedOriginal`, so a quote shows its
+  own and the original's inside the original's box. They share no markup with
+  the composer's attachment summary. `features/feed` may not import games, so
+  `previews/format.ts` formats locally.
+- **Honest gaps**: a link with no preview is "Stats unavailable"; a DNP line
+  is "Did not play" plus its reason, with no figures; a null figure is an em
+  dash (U+2014). The stats pages' own `formatAverage` uses an en dash, which
+  is a known difference.
+- **One detail link each, outside the thread controls**: `/games/<id>`,
+  `/games/<id>?line=<line_id>` (the player is not linked separately) and
+  `/players/<id>`, each with `useDetailLinkState`. The card's click-to-open
+  already ignores links, so activating one never opens the thread.
+- **One dialog for every detail.** `overlays` in `routes.tsx` is one pathless
+  layout route, `features/thread/DetailModal`. It calls `useModalFlow` once
+  and renders the one `Dialog` around an `<Outlet />`. Its children are
+  `posts/:postId` (`ThreadModal`, now the thread body only), and
+  `games/:gameId` and `players/:playerId` (`routes/details.tsx`, the
+  unchanged `GamePage` and `PlayerPage`). The `<dialog>` element is the same
+  from the first detail to the last, which tests pin. Each detail names the
+  dialog with `useDetailTitle` ("Thread", "Game", "Player"). The shell sits
+  beside the thread because `thread-isolation.test.ts` expects the thread
+  feature to own `Dialog`.
+- **A detail that is also a page is `flowOnly`** (`BackgroundRoutes.tsx`).
+  It is an overlay only when `useIsFlowEntry()` holds, meaning the entry has
+  a background or `depth > 1`. A direct load or a shared link is the full
+  page. A thread has no page, so it is always an overlay.
+- **Links inside a detail** (box-score names, game-log rows, `#GameId` in
+  post text) take `useInFlowLinkState()`. Inside the modal that continues the
+  flow; on a page it is `undefined`, a plain navigation as before.
+- **`?line=<line_id>`**: `BoxScore` marks that row `aria-current="true"`,
+  with an accent tint plus an inset left rule and a bold name (not colour
+  alone), and calls `scrollIntoView({ block: "center" })` once. An unknown or
+  malformed id marks nothing.
 
 **Known duplication, left deliberately.** The media-URL join
 (`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
@@ -906,6 +947,29 @@ the generated schema; each feature has its own `api.ts`.
   `MentionAutocomplete` and `features/stats/api.ts` (search no longer
   fetches them). They share the `["events", "teams"]` cache key; moving
   the fetch into `api/` is the fix, for a unit with all four in scope.
+
+### "Post about this" (`FRONTEND-017`)
+
+- **Signed-in only** (the human, 2026-10-22), from `useAuth()`: a guest would
+  go through `RequireAuth`'s sign-in and could lose the attachment on the way.
+  A guest's page and tables are exactly what they were.
+- **Offered only where `POST /posts` would accept it**, by FRONTEND-013's
+  picker rules: the game page's result link for a completed game (not 0–0),
+  one per played box-score row (`seconds_played` not null), one per career row
+  whose scope has games.
+- **Links, to FRONTEND-013's address** (Compose, above), built in one helper
+  per feature, `features/games/postLinks.ts` and
+  `features/players/postLinks.ts`. Not a shared one in `features/stats/`: the
+  isolation tests keep both folders from importing it. Each is the only file
+  in its folder that names `/compose`, which `postLinks.test.ts` pins. The
+  links carry no flow state, so from the modal they simply leave it.
+- **Placement.** The result link sits under the score heading. In the box
+  score and the career table it is a trailing column, only for a signed-in
+  viewer (a visually hidden "Post" header), so the row header keeps its one
+  link and the stat columns stay put; the column scrolls with the table at
+  360 px. The visible text is "Post" with `SquarePenIcon`; the accessible
+  name says what about ("Post about Scottie Barnes’s game", "… LeBron James’s
+  playoffs").
 
 ## Open decisions
 
