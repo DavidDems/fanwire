@@ -190,9 +190,16 @@ describe("a thread is the same node as a post", () => {
   });
 
   it("builds the page out of PostNode", () => {
+    // Since FRONTEND-015 through PreparedPostNode, the wrapper that holds a
+    // card behind its skeleton until it is ready and then renders PostNode.
     const imported = importSpecifiers(read(join(FEED_DIR, "FeedPage.tsx"))).map(moduleName);
+    const wrapper = join(FEED_DIR, "PreparedPostNode.tsx");
 
-    expect(imported, "the feed's items are PostNodes").toContain("PostNode");
+    expect(imported, "the feed's items are prepared PostNodes").toContain("PreparedPostNode");
+    expect(
+      existsSync(wrapper) ? importSpecifiers(read(wrapper)).map(moduleName) : [],
+      "PreparedPostNode renders PostNode",
+    ).toContain("PostNode");
   });
 });
 

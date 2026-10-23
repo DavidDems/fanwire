@@ -3,8 +3,10 @@
  * feature *is*, which a behavioural test cannot see.
  *
  * - **The thread is assembled, not rebuilt.** `features/thread/` renders posts
- *   through the feed's `PostNode` and replies through compose's
- *   `InlineComposer`. From `features/feed` it takes only `PostNode` and `api`
+ *   through the feed's `PostNode` (since `FRONTEND-015` by way of its
+ *   readiness wrapper, `PreparedPostNode`) and replies through compose's
+ *   `InlineComposer`. From `features/feed` it takes only `PostNode`,
+ *   `PreparedPostNode` and `api`
  *   (the thread read and the cache keys); from `features/compose` only
  *   `InlineComposer`; and it imports no other feature at all
  *   ([[0x00-architecture]] Connection rule). The feed never imports it back —
@@ -173,11 +175,13 @@ describe("the thread unit's modules exist where its interface names them", () =>
 });
 
 describe("the thread is assembled from the feed and compose", () => {
-  it("imports PostNode from ../feed/PostNode", () => {
+  it("imports PreparedPostNode from ../feed/PreparedPostNode", () => {
+    // FRONTEND-015: the feed's wrapper around PostNode, which holds a card
+    // behind its skeleton until it is ready; the root and every reply use it.
     const importers = allImports().filter(
       ({ statement }) =>
-        /^\.\.\/feed\/PostNode(\.tsx?)?$/.test(statement.specifier) &&
-        statement.names.includes("PostNode"),
+        /^\.\.\/feed\/PreparedPostNode(\.tsx?)?$/.test(statement.specifier) &&
+        statement.names.includes("PreparedPostNode"),
     );
 
     expect(importers.map(({ file }) => posix(file))).not.toEqual([]);
@@ -203,12 +207,14 @@ describe("the thread is assembled from the feed and compose", () => {
     expect(importers.map(({ file }) => posix(file))).not.toEqual([]);
   });
 
-  it("takes nothing from features/feed but PostNode and api", () => {
+  it("takes nothing from features/feed but PostNode, PreparedPostNode and api", () => {
     const offenders = allImports()
       .filter(
         ({ statement }) =>
           featureOf(statement.specifier) === "feed" &&
-          !["PostNode", "api"].includes(moduleName(statement.specifier)),
+          !["PostNode", "PreparedPostNode", "api"].includes(
+            moduleName(statement.specifier),
+          ),
       )
       .map(
         ({ file, statement }) =>
