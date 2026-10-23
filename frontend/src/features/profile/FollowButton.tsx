@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import type { components } from "../../api/schema";
+import { useAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
@@ -27,7 +28,9 @@ import { FOLLOWING_QUERY_KEY, setFollowing, viewedUserKey } from "./api";
  * signed out ([[0x01-users]]), so the control still renders — but using it sends
  * the visitor to sign-in carrying where they were, the convention
  * `routes/guards.tsx` uses. It never fires an unauthenticated write: a 401 here
- * is a failure the page would then have to explain away.
+ * is a failure the page would then have to explain away. A deactivated account
+ * (`FRONTEND-012`) browses as a guest, so its press does exactly the same:
+ * every write of its would be a 403.
  */
 
 type PublicUserOut = components["schemas"]["PublicUserOut"];
@@ -55,6 +58,7 @@ export interface FollowButtonProps {
 
 export function FollowButton({ userId, isFollowing }: FollowButtonProps) {
   const { status } = useAuth();
+  const account = useAccount();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -130,7 +134,7 @@ export function FollowButton({ userId, isFollowing }: FollowButtonProps) {
   });
 
   function handleClick(): void {
-    if (status !== "authenticated") {
+    if (status !== "authenticated" || account.status === "deactivated") {
       // `from` is what `SignInPage` reads to send them back afterwards.
       navigate("/sign-in", { state: { from: location } });
       return;

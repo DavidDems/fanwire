@@ -14,6 +14,7 @@ import {
 import { useDetailLinkState } from "../../routes/modal-flow";
 import { PostAction, TogglePostAction } from "./PostAction";
 import { PostMedia } from "./PostMedia";
+import { PostMenu } from "./PostMenu";
 import styles from "./PostNode.module.css";
 import { PostText } from "./PostText";
 import { LinkPreview } from "./previews/LinkPreview";
@@ -66,6 +67,17 @@ import { likesText, repliesText, repostsText } from "./counts";
  *
  * **The card renders from the `post` it was handed** (for a plain repost, from
  * the `reposted_post` inside it), never from another cache entry's copy of it.
+ *
+ * **Every card has one "More options" menu** (`FRONTEND-012`, `./PostMenu`) at
+ * the end of its action row: Copy link, Report, the owner's Delete. A plain
+ * repost's acts on the original, and never offers Delete; a quote's original
+ * box has none of its own.
+ *
+ * **An original its owner deleted** (`reposted_post_deleted`, `POSTS-004`) is
+ * a muted "Post deleted" card in its place, on a plain repost and in a quote
+ * alike: nothing of it is shown, and nothing links to it. An original that is
+ * merely hidden (its author deactivated) still reads "This post is
+ * unavailable".
  */
 
 export interface PostNodeProps {
@@ -89,12 +101,14 @@ function useOpenThreadOnClick(postId: number) {
   return (event: MouseEvent<HTMLElement>): void => {
     if (event.defaultPrevented) return;
     const target = event.target;
-    if (
-      target instanceof Element &&
-      target.closest("a, button, input, textarea, select, label") !== null
-    ) {
+    if (!(target instanceof Element)) return;
+    if (target.closest("a, button, input, textarea, select, label") !== null) {
       return;
     }
+    // The card's own menu and confirms: a click in them is never the card's.
+    // Only ones inside this card, since the card itself may be in the modal.
+    const inner = target.closest('dialog, [role="menu"]');
+    if (inner !== null && event.currentTarget.contains(inner)) return;
     const selection = window.getSelection();
     if (selection !== null && !selection.isCollapsed) return;
     // Marked handled, so the card around a quote's original does not open
@@ -129,7 +143,10 @@ export function PostNode({ post }: PostNodeProps) {
     subject === null ? (
       <>
         {repostedBy}
-        <p className={styles.unavailable}>This post is unavailable</p>
+        <MissingOriginal deleted={post.reposted_post_deleted} />
+        <footer className={styles.footer}>
+          <PostMenu post={post} deletable={false} reportable={false} />
+        </footer>
       </>
     ) : (
       <>
@@ -143,7 +160,10 @@ export function PostNode({ post }: PostNodeProps) {
          * claiming the original is gone.
          */}
         {!plain && subject.is_repost ? (
-          <QuotedPost post={subject.reposted_post} />
+          <QuotedPost
+            post={subject.reposted_post}
+            deleted={subject.reposted_post_deleted}
+          />
         ) : null}
 
         {/*
@@ -189,6 +209,7 @@ export function PostNode({ post }: PostNodeProps) {
             send={setReposted}
             apply={withRepost}
           />
+          <PostMenu post={subject} deletable={!plain} reportable />
         </footer>
       </>
     );
@@ -249,15 +270,31 @@ function PostContent({ post }: { post: PostView }) {
  * time and text clamped to a few lines, and no controls — the controls on a
  * quote are the quote's own.
  */
-function QuotedPost({ post }: { post: PostView | null }) {
-  if (post === null) {
-    return (
-      <div className={styles.quoted}>
-        <p className={styles.unavailable}>This post is unavailable</p>
-      </div>
-    );
-  }
+function QuotedPost({
+  post,
+  deleted,
+}: {
+  post: PostView | null;
+  deleted: boolean;
+}) {
+  if (post === null) return <MissingOriginal deleted={deleted} />;
   return <QuotedOriginal post={post} />;
+}
+
+/**
+ * Where an original that cannot be shown would be: "Post deleted" when its
+ * owner deleted it, "This post is unavailable" when it is hidden (its author
+ * deactivated). Plain text in a muted box, not a link or a control: there is
+ * nothing of it left to open.
+ */
+function MissingOriginal({ deleted }: { deleted: boolean }) {
+  return (
+    <div className={`${styles.quoted} ${styles.missing}`}>
+      <p className={styles.unavailable}>
+        {deleted ? "Post deleted" : "This post is unavailable"}
+      </p>
+    </div>
+  );
 }
 
 /**

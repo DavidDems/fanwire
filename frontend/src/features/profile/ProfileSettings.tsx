@@ -3,10 +3,12 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import type { components } from "../../api/schema";
+import { useDeactivateAccount } from "../../auth/account";
 import { PROFILE_QUERY_KEY } from "../../auth/profile";
 import { Field, describeField } from "../../components/FormField";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { ConfirmDialog } from "../../components/ui/Dialog";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { TEAMS_QUERY_KEY, fetchTeams, updateMe } from "./api";
@@ -28,6 +30,9 @@ import styles from "./Profile.module.css";
  * which has not landed; a second uploader here would be a duplicate media path
  * ([[0x00-architecture]] Connection rule) and would need deleting rather than
  * merging. `profile_picture_media_id` is therefore never sent.
+ *
+ * **The Account section closes the card** (`FRONTEND-012`): Deactivate account,
+ * outside the form so it can never be submitted with it. See `AccountSection`.
  */
 
 type MeOut = components["schemas"]["MeOut"];
@@ -157,6 +162,78 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
           Save
         </Button>
       </form>
+
+      <AccountSection />
     </Card>
+  );
+}
+
+/**
+ * Deactivating the account (`USERS-003`'s `DELETE /users/me`), decided by the
+ * human (2026-10-22) to live here rather than on a route of its own.
+ *
+ * It asks first: what deactivating does (the profile and posts are hidden
+ * until the account is recovered) and what recovering will not undo (posts
+ * deleted one by one stay deleted). On the 204, `useDeactivateAccount` resets
+ * the cache and reads `GET /users/me` again, whose answer moves the whole app
+ * to the deactivated state: this page then shows the profile as a guest sees
+ * it, under the banner. The session stays: deactivating is not signing out.
+ */
+function AccountSection() {
+  const deactivate = useDeactivateAccount();
+  const [confirming, setConfirming] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  return (
+    <section className={styles.account} aria-labelledby="profile-account">
+      <h3 id="profile-account">Account</h3>
+      <p className={styles.muted}>
+        Deactivating hides your profile and posts until you recover the account.
+      </p>
+      <div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          className={styles.deactivate}
+          onClick={() => {
+            setFailure(null);
+            setConfirming(true);
+          }}
+        >
+          Deactivate account
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Deactivate your account?"
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={() => {
+          setFailure(null);
+          deactivate.mutate(undefined, {
+            onError: () => {
+              setFailure(
+                "We could not deactivate your account just now. Please try again.",
+              );
+            },
+          });
+        }}
+        onCancel={() => {
+          setConfirming(false);
+        }}
+        pending={deactivate.isPending}
+        failure={failure}
+      >
+        <p>
+          Your profile and your posts are hidden from everyone until you recover
+          the account, which you can do by signing in again.
+        </p>
+        <p>
+          Posts you deleted one by one stay deleted, even after you recover.
+        </p>
+      </ConfirmDialog>
+    </section>
   );
 }

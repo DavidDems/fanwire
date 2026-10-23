@@ -134,6 +134,54 @@ export async function setReposted(
 }
 
 /**
+ * A post-lifecycle request the server refused, with the status it answered:
+ * the menu's confirms say what happened from it (`FRONTEND-012`).
+ */
+export class PostRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "PostRequestError";
+  }
+}
+
+/**
+ * `POST /posts/{post_id}/report` → 204 (the `reported` flag, [[0x03-posts]] Report).
+ * Idempotent on the server: a second report by the same viewer is another
+ * 204, and nothing in `PostView` says it was ever sent.
+ */
+export async function reportPost(postId: number): Promise<void> {
+  const { response } = await apiClient.POST("/posts/{post_id}/report", {
+    params: { path: { post_id: postId } },
+  });
+  if (!response.ok) {
+    throw new PostRequestError(
+      `POST /posts/${postId}/report answered ${response.status}`,
+      response.status,
+    );
+  }
+}
+
+/**
+ * `DELETE /posts/{post_id}` → 204, the owner's soft delete (`POSTS-004`): 204
+ * again on a repeat, 403 for someone else's post, 404 for an unknown one, 409
+ * for a plain repost (which `setReposted(…, false)` on its original removes).
+ */
+export async function deletePost(postId: number): Promise<void> {
+  const { response } = await apiClient.DELETE("/posts/{post_id}", {
+    params: { path: { post_id: postId } },
+  });
+  if (!response.ok) {
+    throw new PostRequestError(
+      `DELETE /posts/${postId} answered ${response.status}`,
+      response.status,
+    );
+  }
+}
+
+/**
  * The two cached shapes that can contain a post: a run of feed pages, and one
  * thread. Both are walked by the same two helpers below so that an optimistic
  * edit reaches every rendering of a post rather than only the one that was
@@ -203,6 +251,42 @@ export function mapCachedPosts(
     ...value,
     root: value.root === null ? null : deep(value.root),
     replies: value.replies.map(deep),
+  };
+}
+
+/**
+ * The same cached value with a deleted post taken out of it (`FRONTEND-012`),
+ * as the server will answer it once read again ([[0x03-posts]] "Post
+ * deletion"): gone from a page of the feed, search or a profile; a thread's
+ * root replaced by the "Post deleted" state with its replies kept; gone from
+ * a thread's replies; and inside any repost of it, the original replaced by
+ * `reposted_post_deleted`, which the card shows as "Post deleted".
+ */
+export function withoutPost(
+  value: FeedCacheValue | undefined,
+  postId: number,
+): FeedCacheValue | undefined {
+  if (value === undefined || value === null) return value;
+  const keep = (post: PostView): boolean => post.id !== postId;
+  const orphan = (post: PostView): PostView =>
+    post.reposted_post?.id === postId
+      ? { ...post, reposted_post: null, reposted_post_deleted: true }
+      : post;
+  if ("pages" in value) {
+    return {
+      ...value,
+      pages: value.pages.map((page) => ({
+        ...page,
+        items: page.items.filter(keep).map(orphan),
+      })),
+    };
+  }
+  const rootGone = value.root !== null && value.root.id === postId;
+  return {
+    ...value,
+    root: value.root === null || rootGone ? null : orphan(value.root),
+    root_deleted: value.root_deleted || rootGone,
+    replies: value.replies.filter(keep).map(orphan),
   };
 }
 

@@ -11,8 +11,8 @@ import {
 import symbol from "../assets/brand/symbol.svg";
 import wordmarkDark from "../assets/brand/wordmark-dark.svg";
 import wordmarkLight from "../assets/brand/wordmark-light.svg";
+import { useAccount } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
-import { useProfile } from "../auth/profile";
 import { buttonClass } from "../components/ui/Button";
 import {
   BellIcon,
@@ -24,6 +24,7 @@ import {
   type IconProps,
 } from "../components/ui/icons";
 import styles from "./AppLayout.module.css";
+import { DeactivatedBanner } from "./Deactivated";
 
 interface NavItemProps {
   to: string;
@@ -88,18 +89,22 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * who has a profile: an anonymous one has no id to link to, and a signed-in one
  * whose `GET /users/me` is a 404 has no profile row yet — the state
  * `RequireNewProfile` exists for, and `/profile/undefined` is the bug it
- * prevents. The profile is read through the one shared query, gated on the
- * session exactly as the guards gate it, so the shell asks the API nothing until
+ * prevents — nor for a deactivated account, whose profile is hidden. Both come
+ * from `useAccount()`, which reads the one shared profile query gated on the
+ * session exactly as the guards are, so the shell asks the API nothing until
  * somebody signs in.
+ *
+ * **A deactivated account** (`FRONTEND-012`) gets `DeactivatedBanner` on every
+ * page, between the header and `main`: a named region, so the header stays the
+ * page's one banner landmark.
  *
  * "Sign in" is offered to an anonymous visitor only, and not on `/sign-in`
  * itself, where it would be a link to the page already open.
  */
 export function AppLayout() {
   const { status } = useAuth();
-  const profile = useProfile(status === "authenticated");
-  const ownUserId =
-    status === "authenticated" ? (profile.data?.id ?? null) : null;
+  const account = useAccount();
+  const ownUserId = account.status === "active" ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
   const mainRef = useRef<HTMLElement>(null);
 
@@ -158,6 +163,7 @@ export function AppLayout() {
           </Link>
         ) : null}
       </header>
+      {account.status === "deactivated" ? <DeactivatedBanner /> : null}
       <main id="main" tabIndex={-1} ref={mainRef} className={styles.main}>
         <Outlet />
       </main>

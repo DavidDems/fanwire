@@ -6,6 +6,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import { useAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/ui/Button";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -89,6 +90,9 @@ interface ThreadProps {
 function Thread({ postId, replying }: ThreadProps) {
   const queryClient = useQueryClient();
   const { status } = useAuth();
+  // A deactivated account reads the thread as a guest would, with no way to
+  // reply: there is nothing to sign in to (`FRONTEND-012`).
+  const deactivated = useAccount().status === "deactivated";
   const location = useLocation();
   const thread = useQuery({
     queryKey: threadKey(postId),
@@ -148,7 +152,7 @@ function Thread({ postId, replying }: ThreadProps) {
     <div className={styles.thread}>
       <PostNode post={root} />
 
-      {status === "authenticated" ? (
+      {deactivated ? null : status === "authenticated" ? (
         <InlineComposer
           key={postId}
           parentPostId={postId}
