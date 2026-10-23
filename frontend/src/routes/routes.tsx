@@ -14,9 +14,11 @@ import { SearchPage } from "../features/search/SearchPage";
 import { PlayersTab } from "../features/stats/PlayersTab";
 import { SeasonsTab } from "../features/stats/SeasonsTab";
 import { StatsPage } from "../features/stats/StatsPage";
+import { DetailModal } from "../features/thread/DetailModal";
 import { ThreadModal } from "../features/thread/ThreadModal";
 import { AppLayout } from "./AppLayout";
-import { BackgroundRoutes } from "./BackgroundRoutes";
+import { BackgroundRoutes, flowOnly } from "./BackgroundRoutes";
+import { GameDetail, PlayerDetail } from "./details";
 import { RequireAuth, RequireNewProfile } from "./guards";
 import { HomeView } from "./HomeView";
 import { NotFoundView } from "./views";
@@ -104,10 +106,23 @@ const pages: RouteObject[] = [
 ];
 
 const overlays: RouteObject[] = [
-  // FRONTEND-010's thread modal. Public: a thread is a read path
-  // ([[0x06-feed]]); replying inside it needs a session, and the modal itself
-  // offers a signed-out reader the way to one.
-  { path: "posts/:postId", element: <ThreadModal /> },
+  {
+    // FRONTEND-014: one dialog for every detail of a flow. Pathless, so it
+    // stays mounted while the details below switch inside it.
+    element: <DetailModal />,
+    children: [
+      // FRONTEND-010's thread modal. Public: a thread is a read path
+      // ([[0x06-feed]]); replying inside it needs a session, and the modal
+      // itself offers a signed-out reader the way to one. A direct load is
+      // still the modal, over the feed: a thread has no page of its own.
+      { path: "posts/:postId", element: <ThreadModal /> },
+      // FRONTEND-014: a game and a player opened from a card or from inside
+      // the modal. Only as a step of a flow: loaded by address, each is the
+      // page of the same name above.
+      flowOnly({ path: "games/:gameId", element: <GameDetail /> }),
+      flowOnly({ path: "players/:playerId", element: <PlayerDetail /> }),
+    ],
+  },
 ];
 
 export const routes: RouteObject[] = [

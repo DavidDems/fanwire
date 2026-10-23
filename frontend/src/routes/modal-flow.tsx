@@ -107,6 +107,30 @@ export function useDetailLinkState(): ModalFlowState {
     : { background, depth: depth + 1 };
 }
 
+/**
+ * The `state` for a link *inside a detail* (`FRONTEND-014`: a box score's
+ * player names, a game log's rows, a `#GameId` in a post's text): inside the
+ * modal it continues the flow, exactly as `useDetailLinkState` does; on a page
+ * it is `undefined`, so the link stays the plain navigation to a full page it
+ * always was.
+ */
+export function useInFlowLinkState(): ModalFlowState | undefined {
+  const inFlow = useContext(InFlow);
+  const state = useDetailLinkState();
+  return inFlow ? state : undefined;
+}
+
+/**
+ * Whether the current entry is a step of a flow that a link opened: it has an
+ * origin, or it is past the flow's first detail. A direct load or a reload of a
+ * detail's address is neither, which is how `BackgroundRoutes` tells a game or
+ * a player opened from a card (a modal) from one loaded by address (a page).
+ */
+export function useIsFlowEntry(): boolean {
+  const { background, depth } = flowOf(useLocation());
+  return background !== null || depth > 1;
+}
+
 /** What the modal needs from the flow to offer its ways out. */
 export interface ModalFlowControls {
   /** The current detail's place in the flow: 1 for the first. */

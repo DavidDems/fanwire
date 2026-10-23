@@ -8,6 +8,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { useInFlowLinkState } from "../../routes/modal-flow";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import {
   formatAverage,
@@ -393,11 +394,16 @@ function GameLog({ playerId }: { playerId: number }) {
 
 function GameLogRow({ game }: { game: PlayerGameOut }) {
   const won = game.team_score > game.opponent_score;
+  // Inside the modal, a game is the flow's next detail; on the page, a plain
+  // link to the game's page.
+  const state = useInFlowLinkState();
 
   return (
     <tr>
       <th scope="row" className={styles.name}>
-        <Link to={`/games/${game.game_id}`}>{formatGameDate(game.date)}</Link>
+        <Link to={`/games/${game.game_id}`} state={state}>
+          {formatGameDate(game.date)}
+        </Link>
       </th>
       <td className={styles.name}>
         {game.is_home ? "vs " : "at "}
