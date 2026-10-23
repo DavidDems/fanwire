@@ -22,7 +22,8 @@ import {
  * instead, never dropped: a dropped picture is a layout shift.
  *
  * **Windowed**: pictures are asked for only once the card is within
- * `PREPARE_WINDOW_ROOT_MARGIN` of the view (`usePrepareWindow`).
+ * `PREPARE_WINDOW_ROOT_MARGIN` of the view it scrolls in (`usePrepareWindow`):
+ * the page, or a scrolling container such as the thread modal's dialog.
  *
  * **A revealed card stays revealed.** Readiness is kept per post id and
  * picture URL in the card's own state, so a refetch that changes counts (a
@@ -34,7 +35,7 @@ import {
 /** How long a card waits for its pictures once it is in the window. */
 export const CARD_READY_TIMEOUT_MS = 4000;
 
-/** The prepare window: the view, and one viewport height below it. */
+/** The prepare window: the view, and one view's height below it. */
 export const PREPARE_WINDOW_ROOT_MARGIN = "0px 0px 100% 0px";
 
 /**
@@ -176,9 +177,35 @@ export function useCardReady(post: PostView, inWindow: boolean): CardReadiness {
 }
 
 /**
+ * The nearest ancestor of `element` that scrolls vertically, or `null` for the
+ * page itself. A card inside such a container is clipped by it, and a root
+ * margin grows only the root, never the clipping ancestors, so the window has
+ * to be measured against the container for it to reach past the container's
+ * visible edge.
+ */
+function scrollingAncestor(element: Element): Element | null {
+  for (
+    let parent = element.parentElement;
+    parent !== null &&
+    parent !== document.body &&
+    parent !== document.documentElement;
+    parent = parent.parentElement
+  ) {
+    if (/^(auto|scroll|overlay)$/.test(getComputedStyle(parent).overflowY)) {
+      return parent;
+    }
+  }
+  return null;
+}
+
+/**
  * Whether the element given to the returned ref is within the prepare window,
  * latched: once a card has started preparing, scrolling it away does not stop
  * it. Without `IntersectionObserver` every card counts as in the window.
+ *
+ * The window is measured against the card's nearest scrolling ancestor when it
+ * has one (the thread modal's dialog), so `PREPARE_WINDOW_ROOT_MARGIN` is one
+ * container height below it; on the page, against the viewport.
  */
 export function usePrepareWindow(): [
   (element: Element | null) => void,
@@ -201,7 +228,10 @@ export function usePrepareWindow(): [
           setInWindow(true);
         }
       },
-      { rootMargin: PREPARE_WINDOW_ROOT_MARGIN },
+      {
+        root: scrollingAncestor(element),
+        rootMargin: PREPARE_WINDOW_ROOT_MARGIN,
+      },
     );
     observer.current = watching;
     watching.observe(element);
