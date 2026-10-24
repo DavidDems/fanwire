@@ -1,0 +1,25 @@
+/*
+ * SearchInput (components.md §5, UI-010): base.css's soft-filled input with a
+ * search icon inside the fill at the inline start. The text padding rule is
+ * two classes deep, because base.css's input rule (0,1,1) comes after the
+ * module CSS in the bundle. Values come from tokens.css by name only.
+ */
+
+.wrapper {
+  position: relative;
+}
+
+.icon {
+  position: absolute;
+  inset-inline-start: var(--space-4);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* Icon (20 px) plus a gap on each side. */
+.wrapper .input {
+  width: 100%;
+  padding-inline-start: calc(var(--space-4) + 1.25rem + var(--space-2));
+}

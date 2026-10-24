@@ -367,3 +367,68 @@ describe("Skeleton.module.css", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * UI-010 Baseline (d): no runtime styling work in the new primitives or in
+ * FormField. Layout and state are CSS's; keyboard handling goes through
+ * React's `onKeyDown`. Comments are stripped first, so a doc comment may say
+ * why.
+ */
+describe("no runtime styling work (UI-010 Baseline d)", () => {
+  const BANNED = [
+    "addEventListener",
+    "ResizeObserver",
+    "IntersectionObserver",
+    "matchMedia",
+    "requestAnimationFrame",
+    "useLayoutEffect",
+  ];
+
+  const FILES = [
+    "components/ui/SearchInput.tsx",
+    "components/ui/SegmentedTabs.tsx",
+    "components/ui/FloatingButton.tsx",
+    "components/FormField.tsx",
+  ];
+
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  }
+
+  function banned(source: string): string[] {
+    const code = withoutComments(source);
+    return BANNED.filter((name) =>
+      new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(code),
+    );
+  }
+
+  it.each([
+    ["window.addEventListener('resize', f);", "addEventListener"],
+    ["new ResizeObserver(cb)", "ResizeObserver"],
+    ["useLayoutEffect(() => {}, []);", "useLayoutEffect"],
+    ["window.matchMedia('(min-width: 40em)')", "matchMedia"],
+  ])("the scan flags %s", (source, name) => {
+    expect(banned(source)).toContain(name);
+  });
+
+  it("the scan ignores a comment and onKeyDown", () => {
+    expect(
+      banned(
+        "// not addEventListener\n/* nor matchMedia */\n<div onKeyDown={f} />",
+      ),
+    ).toEqual([]);
+  });
+
+  it("the scan matches whole names only, not part of a longer one", () => {
+    expect(
+      banned("const xmatchMedia = 1; const useLayoutEffects = 2;"),
+    ).toEqual([]);
+  });
+
+  it.each(FILES)("%s exists and uses none of them", (file) => {
+    const full = join(findSrcDir(), ...file.split("/"));
+    expect(existsSync(full), `${file} must exist`).toBe(true);
+
+    expect(banned(readFileSync(full, "utf8"))).toEqual([]);
+  });
+});
