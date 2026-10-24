@@ -307,6 +307,39 @@ Update this section in every spec PR and unit PR of this thread.
   re-published it on 2026-10-23 and shows "awaiting compression". The human
   downloads it within a few hours, into `C:\Users\david\data\nba` ("Local
   data" below).
+- **2026-10-23, `UI-010` hand-run, PR #232** (awaiting review; its
+  `FrontendUI/` rows are in this Director PR). Every Baseline line is met:
+  - Bundle: entry JS +0.12 kB gzip (148.83, budget 149.6), entry CSS +0.38
+    (5.39, budget 6.25). Lazy chunks are unchanged.
+  - Requests per screen are unchanged (1 on `/`, 8 on Seasons). There are no
+    new long tasks: the worst cold load of `/` is 158 ms, typing has none,
+    and CLS is 0 on `/` and `/sign-in`.
+  - Post cards and the thread root card are byte-identical in screenshots
+    before and after.
+  - **Two defects were found and fixed in-unit, each with a Director test
+    commit first:**
+    - Forced colors (`accessibility.md` A20) dropped the shadow-drawn bottom
+      rule and invalid ring. Found by the Director's review.
+    - The gradient select chevron disappeared under forced colors. Found by
+      the skeptic's second pass.
+  - **The skeptic's verdict:** proceed. The cost is negligible and the
+    complexity is earned (about 400 lines of code against 1,900 of tests).
+  - **Carried to the stage-2 specs (FRONTEND-018, -020):**
+    - **R12, the bundle-budget test blocks them as written.** It
+      hard-codes every lazy chunk's size and fails on a new chunk, and those
+      sizes only exist after implementation, when test edits are frozen.
+      Each spec either lists `src/test/bundle-budget.test.ts` for update in
+      its implementation commit, or replaces the exact sizes with a gzip
+      budget per new lazy chunk, declared in the test commit.
+    - **R13:** the entry has 0.77 kB gzip of headroom. Compose and the
+      navigator are `lazy()` (R1), and each may grow the entry by at most
+      +0.5 kB gzip.
+    - **R14:** the (f) rows use five alternating runs per side and report
+      the median and the worst. This machine's noise is about ±50 ms.
+    - **Look decision for FRONTEND-018:** an overflowing `SegmentedTabs`
+      bar shows a classic scrollbar on Windows desktop.
+    - **FRONTEND-020:** at 360 the **+** can sit over a card's right edge
+      while scrolling; the "More options" row checks it.
 - **Next:**
   1. Hand-run `UI-010` and `EVENTS-010` in parallel, each in its own session
      and worktree.
