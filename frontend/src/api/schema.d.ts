@@ -110,6 +110,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Records
+         * @description Every historical record, team records then player records, each
+         *     with its rule and its holder: the first entry of its list and
+         *     `tied_count`, how many share that value; null when no stored data
+         *     qualifies. `since_season` and `through_season` are the stored data's
+         *     window. Cacheable: `Cache-Control: public, max-age=300`.
+         */
+        get: operations["get_records_events_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Record
+         * @description One page of a record's ranked list, which holds at most its top 100
+         *     entries (a tie at the 100th place is cut by the list's order); `total`
+         *     is how many it holds. Ordered by value (ascending for
+         *     team-worst-season, descending for every other), then date or season,
+         *     then id. Cacheable: `Cache-Control: public, max-age=300`.
+         *
+         *     404: an unknown record id. 422: `limit` outside 1-100 or `offset`
+         *     outside 0-99.
+         */
+        get: operations["get_record_events_records__record_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events/seasons": {
         parameters: {
             query?: never;
@@ -1652,6 +1703,89 @@ export interface components {
             username: string;
         };
         /**
+         * RecordEntryOut
+         * @description One entry of a ranked record list. `rank` is competition ranking
+         *     (equal values share a rank, the next rank skips). `team` is the team
+         *     (for a player's single-game record, the team they played for), null for
+         *     a player's count or career sum; `season` and `game` are null where the
+         *     record has none. `value` is an integer, except a season record's win
+         *     percentage (a fraction from 0 to 1, three places).
+         */
+        RecordEntryOut: {
+            game: components["schemas"]["RecordGameOut"] | null;
+            player: components["schemas"]["RecordPlayerOut"] | null;
+            /** Rank */
+            rank: number;
+            /** Season */
+            season: string | null;
+            team: components["schemas"]["TeamRefOut"] | null;
+            /** Value */
+            value: number;
+        };
+        /**
+         * RecordGameOut
+         * @description The game a single-game record was set in, and the opponent.
+         */
+        RecordGameOut: {
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Game Type */
+            game_type: string | null;
+            /** Id */
+            id: number;
+            /** Opponent Abbreviation */
+            opponent_abbreviation: string | null;
+        };
+        /**
+         * RecordHolderOut
+         * @description The list's first entry; `tied_count` is how many entries share its
+         *     value (1 when it is alone).
+         */
+        RecordHolderOut: {
+            game: components["schemas"]["RecordGameOut"] | null;
+            player: components["schemas"]["RecordPlayerOut"] | null;
+            /** Rank */
+            rank: number;
+            /** Season */
+            season: string | null;
+            team: components["schemas"]["TeamRefOut"] | null;
+            /** Tied Count */
+            tied_count: number;
+            /** Value */
+            value: number;
+        };
+        /**
+         * RecordListOut
+         * @description GET /events/records/{record_id}: one page of the record's top 100
+         *     entries. `total` is how many entries the list holds (at most 100).
+         */
+        RecordListOut: {
+            /** Entries */
+            entries: components["schemas"]["RecordEntryOut"][];
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "team" | "player";
+            /** Id */
+            id: string;
+            /** Rule */
+            rule: string;
+            /** Since Season */
+            since_season: string | null;
+            /** Through Season */
+            through_season: string | null;
+            /** Title */
+            title: string;
+            /** Total */
+            total: number;
+            /** Unit */
+            unit: string;
+        };
+        /**
          * RecordOut
          * @description A team's regular-season record (only `regular` games count: NBA Cup
          *     group and knockout games do; play-in, playoffs and the cup final do
@@ -1670,6 +1804,45 @@ export interface components {
             losses: number;
             /** Wins */
             wins: number;
+        };
+        /** RecordPlayerOut */
+        RecordPlayerOut: {
+            /** First Name */
+            first_name: string | null;
+            /** Id */
+            id: number;
+            /** Last Name */
+            last_name: string | null;
+        };
+        /** RecordSummaryOut */
+        RecordSummaryOut: {
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "team" | "player";
+            holder: components["schemas"]["RecordHolderOut"] | null;
+            /** Id */
+            id: string;
+            /** Rule */
+            rule: string;
+            /** Title */
+            title: string;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * RecordsSummaryOut
+         * @description GET /events/records. The data window is the earliest and latest
+         *     stored seasons, null when there are none.
+         */
+        RecordsSummaryOut: {
+            /** Records */
+            records: components["schemas"]["RecordSummaryOut"][];
+            /** Since Season */
+            since_season: string | null;
+            /** Through Season */
+            through_season: string | null;
         };
         /**
          * SeasonLineOut
@@ -2200,6 +2373,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerGameOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_records_events_records_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordsSummaryOut"];
+                };
+            };
+        };
+    };
+    get_record_events_records__record_id__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                record_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordListOut"];
                 };
             };
             /** @description Validation Error */

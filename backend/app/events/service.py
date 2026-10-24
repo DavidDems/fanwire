@@ -23,6 +23,7 @@ from sqlalchemy import (
     RowMapping,
     Select,
     SQLColumnExpression,
+    Subquery,
     Text,
     case,
     exists,
@@ -40,7 +41,7 @@ from app.events.errors import (
     NoGamesInScopeError,
     PlayerDidNotPlayError,
 )
-from app.events.models import Game, Player, PlayerGameStats, Team
+from app.events.models import FINALS_LABEL, Game, Player, PlayerGameStats, Team
 
 # Allow-list for search/'s position filter (wiki/CodeContext/Modules/
 # 0x07-search.md), validated at the API boundary (unknown -> 422) --
@@ -780,8 +781,8 @@ REGULAR = "regular"
 # The ordering standings apply; the NBA's own tie-breakers are not.
 STANDINGS_TIE_BREAK = "Win percentage, then wins, then team name (NBA tie-breakers not applied)"
 
-# The dataset's label on every Finals game (tests/fixtures/nba_data/Games.csv).
-FINALS_LABEL = "NBA Finals"
+# FINALS_LABEL (app.events.models, where the Finals index needs it) names
+# every Finals game.
 FINALS_WINS = 4
 
 # The box-score column behind each leaders `stat`; threes are made threes.
@@ -988,6 +989,58 @@ def standings(session: Session, season: str) -> Standings | None:
     return Standings(season=season, tie_break=STANDINGS_TIE_BREAK, conferences=conferences)
 
 
+# The champion rule, shared by `champion` and the records (EVENTS-010's
+# team-championships and player-championships), so they agree by
+# construction: per season, the Finals teams ordered by their Finals wins,
+# then team id; the first is the champion once it has FINALS_WINS wins.
+
+
+def _finals_wins() -> ColumnElement[int]:
+    """In a _finals_teams query: the team's wins in its Finals games."""
+    return func.count().filter(_team_won())
+
+
+def _finals_teams(*columns: ColumnElement[Any] | type[Team]) -> Select[Any]:
+    """Team joined to the `playoffs` games labelled FINALS_LABEL it played,
+    one group per team (add Game.season to the group for several seasons)."""
+    return (
+        select(*columns)
+        .select_from(Team)
+        .join(Game, or_(Game.home_team_id == Team.id, Game.away_team_id == Team.id))
+        .where(Game.game_type == "playoffs", Game.label == FINALS_LABEL)
+        .group_by(Team.id)
+    )
+
+
+def _finals_order(wins: ColumnElement[int]) -> tuple[Any, ...]:
+    """The champion rule's order of a season's Finals teams."""
+    return (wins.desc(), Team.id)
+
+
+def season_champions() -> Subquery:
+    """One row (season, team_id) per season with a champion, by the rule
+    `champion` applies: in one statement, a window over every season's
+    Finals wins per team. For EVENTS-010's records."""
+    wins = _finals_wins()
+    ranked = (
+        _finals_teams(
+            Game.season.label("season"),
+            Team.id.label("team_id"),
+            wins.label("wins"),
+            func.row_number()
+            .over(partition_by=Game.season, order_by=_finals_order(wins))
+            .label("place"),
+        )
+        .group_by(Game.season)
+        .subquery("finals_teams")
+    )
+    return (
+        select(ranked.c.season, ranked.c.team_id)
+        .where(ranked.c.place == 1, ranked.c.wins >= FINALS_WINS)
+        .subquery("season_champions")
+    )
+
+
 def champion(session: Session, season: str) -> Champion | None:
     """The team with FINALS_WINS wins in the season's `playoffs` games
     labelled FINALS_LABEL, the other Finals team and the series score. Two
@@ -995,16 +1048,10 @@ def champion(session: Session, season: str) -> Champion | None:
     if not season_has_games(session, season):
         return None
 
-    wins = func.count().filter(_team_won())
+    wins = _finals_wins()
     finals = (
         session.execute(
-            _team_games(wins)
-            .where(
-                Game.season == season,
-                Game.game_type == "playoffs",
-                Game.label == FINALS_LABEL,
-            )
-            .order_by(wins.desc(), Team.id)
+            _finals_teams(Team, wins).where(Game.season == season).order_by(*_finals_order(wins))
         )
         .tuples()
         .all()

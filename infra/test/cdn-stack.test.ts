@@ -94,6 +94,89 @@ describe('CDN stack', () => {
     });
   });
 
+  describe('/api/events/records* behaviour: the records routes, cached at the edge (EVENTS-010)', () => {
+    const RECORDS = '/api/events/records*';
+    const refTo = (value: unknown): string => {
+      expect(value).toEqual({ Ref: expect.any(String) });
+      return (value as { Ref: string }).Ref;
+    };
+    const cachePolicy = (): Record<string, unknown> => {
+      const id = refTo(behavior(RECORDS).CachePolicyId);
+      const resource = resourcesOfType(raw(), 'AWS::CloudFront::CachePolicy')[id];
+      expect(resource).toBeDefined();
+      return resource!.Properties?.CachePolicyConfig as Record<string, unknown>;
+    };
+    const originRequestPolicy = (): Record<string, unknown> => {
+      const id = refTo(behavior(RECORDS).OriginRequestPolicyId);
+      const resource = resourcesOfType(raw(), 'AWS::CloudFront::OriginRequestPolicy')[id];
+      expect(resource).toBeDefined();
+      return resource!.Properties?.OriginRequestPolicyConfig as Record<string, unknown>;
+    };
+    const sortedQueryStrings = (config: unknown): string[] =>
+      [...((config as { QueryStrings?: string[] }).QueryStrings ?? [])].sort();
+
+    test('exists and is ordered before /api/* (CloudFront takes the first matching pattern)', () => {
+      const patterns = behaviors().map((b) => b.PathPattern);
+      expect(patterns).toContain(RECORDS);
+      expect(patterns).toContain('/api/*');
+      expect(patterns.indexOf(RECORDS)).toBeLessThan(patterns.indexOf('/api/*'));
+    });
+
+    test('same API origin, prefix-stripping function and security headers as /api/*', () => {
+      const records = behavior(RECORDS);
+      const api = behavior('/api/*');
+      expect(records).toBeDefined();
+      expect(records.TargetOriginId).toEqual(api.TargetOriginId);
+      expect(records.FunctionAssociations).toEqual(api.FunctionAssociations);
+      expect(records.ResponseHeadersPolicyId).toEqual(api.ResponseHeadersPolicyId);
+      expect(records.ViewerProtocolPolicy).toBe('redirect-to-https');
+      const f = functionAssociatedWith(records);
+      expect(runFunction(f, '/api/events/records')).toBe('/events/records');
+      expect(runFunction(f, '/api/events/records/team-championships')).toBe('/events/records/team-championships');
+    });
+
+    test('GET and HEAD only', () => {
+      expect(behavior(RECORDS)).toBeDefined();
+      expect([...(behavior(RECORDS).AllowedMethods as string[])].sort()).toEqual(['GET', 'HEAD']);
+    });
+
+    test('a new cache policy honouring the origin Cache-Control: TTL 0/0/300, keyed on limit and offset only', () => {
+      expect(behavior(RECORDS)).toBeDefined();
+      expect(behavior(RECORDS).CachePolicyId).not.toBe(CACHING_DISABLED);
+      const config = cachePolicy();
+      expect(config.MinTTL).toBe(0);
+      expect(config.DefaultTTL).toBe(0);
+      expect(config.MaxTTL).toBe(300);
+      const key = config.ParametersInCacheKeyAndForwardedToOrigin as Record<string, Record<string, unknown>>;
+      expect(key.HeadersConfig?.HeaderBehavior).toBe('none');
+      expect(key.HeadersConfig?.Headers).toBeUndefined();
+      expect(key.CookiesConfig?.CookieBehavior).toBe('none');
+      expect(key.QueryStringsConfig?.QueryStringBehavior).toBe('whitelist');
+      expect(sortedQueryStrings(key.QueryStringsConfig)).toEqual(['limit', 'offset']);
+      expect(JSON.stringify(key).toLowerCase()).not.toContain('authorization');
+    });
+
+    test('an origin request policy forwarding limit and offset, no viewer header and no cookie', () => {
+      expect(behavior(RECORDS)).toBeDefined();
+      expect(behavior(RECORDS).OriginRequestPolicyId).not.toBe(ALL_VIEWER_EXCEPT_HOST);
+      const config = originRequestPolicy();
+      const headers = config.HeadersConfig as Record<string, unknown>;
+      const cookies = config.CookiesConfig as Record<string, unknown>;
+      const queryStrings = config.QueryStringsConfig as Record<string, unknown>;
+      expect(headers.HeaderBehavior).toBe('none');
+      expect(headers.Headers).toBeUndefined();
+      expect(cookies.CookieBehavior).toBe('none');
+      expect(queryStrings.QueryStringBehavior).toBe('whitelist');
+      expect(sortedQueryStrings(queryStrings)).toEqual(['limit', 'offset']);
+    });
+
+    test('/api/* is unchanged: still CACHING_DISABLED with AllViewerExceptHostHeader', () => {
+      const api = behavior('/api/*');
+      expect(api.CachePolicyId).toBe(CACHING_DISABLED);
+      expect(api.OriginRequestPolicyId).toBe(ALL_VIEWER_EXCEPT_HOST);
+    });
+  });
+
   test('/media/* behaviour: public-media bucket via OAC, cached', () => {
     const b = behavior('/media/*');
     expect(b.CachePolicyId).toBe(CACHING_OPTIMIZED);

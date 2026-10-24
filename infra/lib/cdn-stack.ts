@@ -68,6 +68,12 @@ const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
 /**
  * CloudFront: the only public entry point (security.md "Network").
  *   default  -> frontend bucket (OAC), SPA fallback at the edge
+ *   /api/events/records* -> HTTP API, as /api/* but GET/HEAD only and
+ *               cached for up to 5 minutes (the origin's Cache-Control),
+ *               keyed on limit and offset only: no header (Authorization
+ *               among them) and no cookie, because the records routes are
+ *               public and never read the caller. Ordered before /api/*,
+ *               since CloudFront takes the first matching pattern.
  *   /api/*   -> HTTP API (prefix stripped, uncached, origin-verify header)
  *   /media/* -> public-media bucket (OAC)
  * Also owns the frontend and public-media bucket policies, which must name
@@ -126,6 +132,28 @@ export class CdnStack extends cdk.Stack {
     });
 
     const securityHeaders = cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS;
+
+    // The records routes (EVENTS-010) send `Cache-Control: public,
+    // max-age=300`; this policy honours it (min/default 0, so nothing is
+    // cached without it) and keys only on the two paging parameters.
+    const recordsQueryStrings = ['limit', 'offset'];
+    const recordsCachePolicy = new cloudfront.CachePolicy(this, 'RecordsCachePolicy', {
+      comment: 'fanwire: public records routes, honour the origin Cache-Control (max 300 s)',
+      minTtl: cdk.Duration.seconds(0),
+      defaultTtl: cdk.Duration.seconds(0),
+      maxTtl: cdk.Duration.seconds(300),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.allowList(...recordsQueryStrings),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    });
+    const recordsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'RecordsOriginRequestPolicy', {
+      comment: 'fanwire: public records routes, forward limit and offset only',
+      queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.allowList(...recordsQueryStrings),
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.none(),
+      cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),
+    });
     const certificate = edge.certificate;
 
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
@@ -151,6 +179,17 @@ export class CdnStack extends cdk.Stack {
         functionAssociations: [{ function: spaFallback, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
       },
       additionalBehaviors: {
+        // Before /api/*: CloudFront takes the first matching pattern.
+        '/api/events/records*': {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          cachePolicy: recordsCachePolicy,
+          originRequestPolicy: recordsOriginRequestPolicy,
+          responseHeadersPolicy: securityHeaders,
+          compress: true,
+          functionAssociations: [{ function: stripApiPrefix, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST }],
+        },
         '/api/*': {
           origin: apiOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
