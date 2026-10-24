@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from functools import cache
 from typing import Any, Literal
 
 from sqlalchemy import (
@@ -648,17 +649,26 @@ def _list_statement(candidates: Candidates, *, limit: int, offset: int) -> Selec
     )
 
 
+# Built once per process: the statements take no parameters, and building all
+# of them is about 20 ms of Python per summary on the full load.
+@cache
+def _holder_for(record_id: str) -> tuple[Select[Any], bool]:
+    """A record's holder statement, and whether its value is a percentage."""
+    candidates = RECORDS_BY_ID[record_id].candidates()
+    return _holder_statement(candidates), candidates.percentage
+
+
 def records_summary(session: Session) -> RecordsSummary:
     """Every record with its holder. 1 + len(RECORDS) queries, each
     fetching at most one row."""
     since, through = _window(session)
     summaries = []
     for record in RECORDS:
-        candidates = record.candidates()
-        row = session.execute(_holder_statement(candidates)).mappings().first()
+        statement, percentage = _holder_for(record.id)
+        row = session.execute(statement).mappings().first()
         holder = (
             RecordHolder(
-                **_entry_fields(row, percentage=candidates.percentage),
+                **_entry_fields(row, percentage=percentage),
                 tied_count=int(row["tied_count"]),
             )
             if row is not None
