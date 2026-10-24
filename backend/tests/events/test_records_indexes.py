@@ -2,9 +2,11 @@
 
 The migration test (tests/test_migrations_records_indexes.py) proves the
 indexes exist; this proves they are used. For each of the seven indexed
-records, the exact statements the app sends (records_summary's holder
-statement and record_list's page statement, with their bound parameters)
-are captured, then explained on the same connection, after ANALYZE, with
+records, and for the data window every records call runs first (the
+eighth index, ix_games_season: min and max of games.season), the exact
+statements the app sends (records_summary's holder statement and
+record_list's page statement, and each one's window statement, with their
+bound parameters) are captured, then explained on the same connection, after ANALYZE, with
 the planner told to avoid sequential scans, bitmap scans and explicit sorts
 (_PLANNER_SETTINGS). Those are cost penalties, not bans: what is left
 cheapest is a plain index scan that answers the query's filter, and, for a
@@ -49,6 +51,10 @@ RECORD_INDEXES: tuple[tuple[str, str], ...] = (
     ("team-largest-win", "ix_games_margin"),
     ("player-championships", "ix_games_nba_finals"),
 )
+
+# The index that must serve the data window (records._window), the first
+# statement of every records call.
+WINDOW_INDEX = "ix_games_season"
 
 # Each set off with SET LOCAL, for the EXPLAIN's transaction only.
 _PLANNER_SETTINGS: tuple[str, ...] = ("enable_seqscan", "enable_bitmapscan", "enable_sort")
@@ -135,3 +141,25 @@ def test_the_summary_holder_statement_uses_the_records_index(engine, session, re
     plan = _plan(session, statement, parameters)
 
     assert index in plan, f"{record_id}'s holder does not use {index}:\n{plan}"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(
+            lambda s: record_list(s, "player-points-game", limit=100, offset=0), id="list"
+        ),
+        pytest.param(records_summary, id="summary"),
+    ],
+)
+def test_the_window_statement_uses_the_season_index(engine, session, call):
+    with executed(engine) as log:
+        call(session)
+    # The data window is the first statement of every records call.
+    assert log.statements, "no statement was sent"
+    statement, parameters = log.statements[0]
+    assert "min(games.season)" in statement and "max(games.season)" in statement, statement
+
+    plan = _plan(session, statement, parameters)
+
+    assert WINDOW_INDEX in plan, f"the data window does not use {WINDOW_INDEX}:\n{plan}"

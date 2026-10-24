@@ -1,12 +1,14 @@
-"""EVENTS-010's migration: the seven indexes the records read side needs on
-the full NBA load, so each record's top-of-list and holder reads are index
-scans, not scans of every game or box-score row. Written before the
-revision exists.
+"""EVENTS-010's migration: the eight indexes the records read side needs on
+the full NBA load, so each record's top-of-list and holder reads, and the
+data window every records call reads first, are index scans, not scans of
+every game or box-score row. Written before the revision exists.
 
 Four partial indexes on one single-game stat each, over played lines; one
 partial index on the played lines that are triple-doubles; one expression
 index on a game's margin; one partial index on the NBA Finals games every
-championship rule reads.
+championship rule reads; one plain index on a game's season, for the data
+window (records._window: min and max of games.season), which every records
+call runs and which is otherwise a sequential scan of every game.
 
 The new revision's parent is named explicitly (the head before EVENTS-010),
 not "-1", so this test keeps meaning "undo this migration" after a later
@@ -59,6 +61,7 @@ INDEXES: dict[str, Expected] = {
     "ix_games_nba_finals": Expected(
         "games", "season", ("game_type", "'playoffs'", "label", "'nbafinals'")
     ),
+    "ix_games_season": Expected("games", "season", None),
 }
 
 
@@ -113,7 +116,7 @@ def _assert_all_present(engine) -> None:
                 assert fragment in _squash(predicate), (name, fragment, definition)
 
 
-def test_upgrade_head_adds_the_seven_records_indexes(alembic_config, engine):
+def test_upgrade_head_adds_the_eight_records_indexes(alembic_config, engine):
     command.upgrade(alembic_config, "head")
 
     _assert_all_present(engine)
