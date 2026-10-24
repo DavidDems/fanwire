@@ -1,7 +1,7 @@
 import { Outlet } from "react-router-dom";
 
 import { Tabs } from "../../components/ui/Tabs";
-import styles from "./Stats.module.css";
+import styles from "./StatsPage.module.css";
 
 const TABS = [
   { to: "/stats/seasons", label: "Seasons" },

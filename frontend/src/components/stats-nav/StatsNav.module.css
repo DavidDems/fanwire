@@ -1,0 +1,177 @@
+/*
+ * The stats navigator: the breadcrumb bar, the level's heading and its view,
+ * laid out by the caller's column. Tables scroll sideways inside their own
+ * focusable container; the page never does. Focus rings are base.css's
+ * global :focus-visible, and a button's font and cursor are base.css's too.
+ * Values come from tokens.css by name only.
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The breadcrumb and Back: one row of a fixed height, at every level. */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+}
+
+.bar ol {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar li + li::before {
+  content: "›";
+  padding-inline: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.bar + h2,
+.section :is(h2, h3),
+.championBody > p {
+  margin: 0;
+}
+
+/*
+ * The champion's place, two lines tall in every state, so the line that
+ * replaces the loading one (two lines at 360 wide) moves nothing below it.
+ */
+.championBody {
+  min-height: calc(2em * var(--line-height-body));
+}
+
+.section strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted,
+.facts dt {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The All standings' place while they load, as tall as the two tables that
+ * replace it (fifteen teams a conference: a caption and sixteen ruled rows of
+ * small type, padded by space-2 each, in a bordered box), their gaps and the
+ * tie-break note.
+ */
+.hold {
+  --line: calc(var(--font-size-sm) * var(--line-height-body));
+
+  min-height: calc(
+    2 * (var(--space-4) + 17 * var(--line) + 16 * var(--space-2) + 18px) +
+      var(--space-5) + var(--line)
+  );
+}
+
+/* A team's record and splits: label over figure, side by side, wrapping. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table caption {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+}
+
+.table thead th {
+  border-bottom: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--color-border);
+}
+
+.table abbr {
+  text-decoration: none;
+}
+
+.table .name {
+  text-align: left;
+}
+
+.table tbody th.name {
+  font-weight: var(--font-weight-regular);
+}
+
+/* A level control without an address: a button that reads as a link. */
+.control {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* Player results: one list card with dividers. */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+/* A divider between rows, with the same room above and below it. */
+.list > li + li {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Load more, the one button directly in a section. */
+.section > button {
+  width: 100%;
+}
