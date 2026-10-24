@@ -17,20 +17,30 @@ import type { UnitBudget } from "../bundle-budget";
  * chunks (R20). The Director may correct the names here in its own commit
  * after a build of the implementation, keeping the two sums.
  */
+// The Director's correction after a build of the implementation (R20): the
+// reads in api/stats.ts and links.ts share one chunk, which Rollup names
+// after Stats.module, so `links` is gone; SegmentedTabs' stylesheet is a new
+// lazy output. Measured (gzip): SeasonsTab 4,599, Stats.module 1,036,
+// PlayersTab 1,138, format 430, StatsPage 386 (7,589); css:Stats.css 1,094,
+// css:StatsPage.css 398, css:SeasonsTab.css 364 (1,856). The ceilings keep
+// the two sums at 7,800 and 1,900.
 const budget: UnitBudget = {
   unit: "FRONTEND-018",
   entryJsGzipGrowth: 100,
   entryJsRawGrowth: 200,
   changed: {
-    StatsPage: 437,
-    SeasonsTab: 4_325,
-    PlayersTab: 1_291,
-    links: 845,
-    "Stats.module": 410,
-    format: 490,
-    "css:Stats.css": 1_366,
-    "css:StatsPage.css": 533,
+    StatsPage: 400,
+    SeasonsTab: 4_700,
+    PlayersTab: 1_170,
+    "Stats.module": 1_080,
+    format: 450,
+    "css:Stats.css": 1_115,
+    "css:StatsPage.css": 410,
   },
+  added: {
+    "css:SeasonsTab.css": 375,
+  },
+  removed: ["links"],
 };
 
 export default budget;
