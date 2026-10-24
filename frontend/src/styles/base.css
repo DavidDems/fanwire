@@ -220,6 +220,12 @@ textarea[aria-invalid="true"] {
     border-bottom: 1px solid var(--color-border-strong);
   }
 
+  /* Forced colors drops the gradient chevron, so the native arrow returns, with its own room. */
+  select {
+    appearance: auto;
+    padding-inline-end: var(--space-4);
+  }
+
   input:not(
       [type="checkbox"],
       [type="radio"],
