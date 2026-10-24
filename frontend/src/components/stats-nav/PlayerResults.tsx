@@ -67,6 +67,7 @@ export function PlayerResults({
           type="button"
           variant="secondary"
           size="md"
+          className={styles.more}
           onClick={() => void players.fetchNextPage()}
           disabled={players.isFetchingNextPage}
         >

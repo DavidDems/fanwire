@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  TEAMS_KEY,
   teamSeasonQuery,
+  type TeamOut,
   type TeamSeasonGameOut,
   type TeamSeasonOut,
 } from "../../api/stats";
@@ -19,8 +21,9 @@ import type { StatsLevel, StatsNavAdapter } from "./types";
 type TeamLevelData = Extract<StatsLevel, { kind: "team" }>;
 
 /**
- * A team's name for its level, from the team's season (the read its view
- * makes, so naming it asks nothing more); "Team" until it lands.
+ * A team's name for its level: from the teams list when it is already cached
+ * (read without asking), else from the team's season (the read its view
+ * makes), else "Team".
  */
 export function TeamName({
   teamId,
@@ -29,8 +32,11 @@ export function TeamName({
   teamId: number;
   season: string;
 }) {
+  const cached = useQueryClient()
+    .getQueryData<TeamOut[]>(TEAMS_KEY)
+    ?.find((team) => team.id === teamId)?.name;
   const teamSeason = useQuery(teamSeasonQuery(teamId, season));
-  return <>{teamSeason.data?.team.name ?? "Team"}</>;
+  return <>{cached ?? teamSeason.data?.team.name ?? "Team"}</>;
 }
 
 /**
