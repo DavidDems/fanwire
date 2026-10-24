@@ -10,13 +10,13 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
-from app.events import service
+from app.events import records, service
 from app.events.models import Game, Team
 from app.events.schemas import (
     CareerGameType,
@@ -29,6 +29,8 @@ from app.events.schemas import (
     PlayerDetailOut,
     PlayerGameOut,
     PlayerListItemOut,
+    RecordListOut,
+    RecordsSummaryOut,
     StandingsOut,
     TeamOut,
     TeamSeasonOut,
@@ -47,6 +49,12 @@ NameQuery = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 SeasonPath = Annotated[str, Path(pattern=SEASON_PATTERN)]
 
 SEASON_NOT_FOUND = "Season not found"
+
+# The records routes only (EVENTS-010): public, the same for every caller,
+# so cacheable at the edge for five minutes (infra/lib/cdn-stack.ts's
+# /api/events/records* behaviour). They never read the caller, which is
+# what keeps Authorization out of the cache key safe.
+RECORDS_CACHE_CONTROL = "public, max-age=300"
 
 
 @router.get("/teams", response_model=list[TeamOut])
@@ -214,4 +222,40 @@ def get_team_season(
     found = service.team_season(session, team_id, season)
     if found is None:
         raise HTTPException(status_code=404, detail="Team or season not found")
+    return found
+
+
+@router.get("/records", response_model=RecordsSummaryOut)
+def get_records(
+    response: Response, session: Session = Depends(get_session)
+) -> records.RecordsSummary:
+    """Every historical record, team records then player records, each
+    with its rule and its holder: the first entry of its list and
+    `tied_count`, how many share that value; null when no stored data
+    qualifies. `since_season` and `through_season` are the stored data's
+    window. Cacheable: `Cache-Control: public, max-age=300`."""
+    response.headers["Cache-Control"] = RECORDS_CACHE_CONTROL
+    return records.records_summary(session)
+
+
+@router.get("/records/{record_id}", response_model=RecordListOut)
+def get_record(
+    record_id: str,
+    response: Response,
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=99),
+    session: Session = Depends(get_session),
+) -> records.RecordList:
+    """One page of a record's ranked list, which holds at most its top 100
+    entries (a tie at the 100th place is cut by the list's order); `total`
+    is how many it holds. Ordered by value (ascending for
+    team-worst-season, descending for every other), then date or season,
+    then id. Cacheable: `Cache-Control: public, max-age=300`.
+
+    404: an unknown record id. 422: `limit` outside 1-100 or `offset`
+    outside 0-99."""
+    found = records.record_list(session, record_id, limit=limit, offset=offset)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Record not found")
+    response.headers["Cache-Control"] = RECORDS_CACHE_CONTROL
     return found
