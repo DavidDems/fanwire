@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-018",
+  "objective": "Build one reusable stats navigator outside features/ (a stack of levels with a breadcrumb and Back, router-agnostic so the compose stats picker can drive it from state later) with the stats reads moved into src/api/, and rebuild the Stats page's Seasons and Players tabs on it: Seasons becomes a season level with All / East / West standings tabs and a team level, the season-wide games list is dropped, and only what is viewed is loaded.",
+  "acceptance_criteria": [
+    "frontend/src/components/stats-nav/ holds the shared navigator: a StatsNavigator frame that renders a stack of levels as a breadcrumb (a nav landmark labelled \"Stats path\" holding an ordered list, every level but the last a control that returns to it, the last marked aria-current=\"location\"), a Back control shown only when the stack is deeper than one level that returns to the previous level, and the current level's view; the levels this unit builds are Season (the champion, then the standings under an All / East / West SegmentedTabs bar) and Team season (the team's record, home and away splits and its games, newest first); the Players search's rows are a navigator view as well.",
+    "The navigator is router-agnostic: no file under components/stats-nav/ imports react-router-dom, or anything under features/ except features/games/format (the one shared formatter, as stats-isolation.test.ts already allows), pinned by a source scan; it takes the stack, a way to open and pop a level, and how to render a game or player link (an adapter) from its caller. features/stats/ is the route adapter (the URL is the state, as today); a second, state-driven adapter written in a test only walks Season → Team season → Back and Players → results with no router mounted, so FRONTEND-021's picker can reuse the levels.",
+    "The stats reads move to frontend/src/api/stats.ts: every fetcher, type alias and query key of today's features/stats/api.ts, with the same keys (TEAMS_KEY stays [\"events\", \"teams\"], which features/profile and search spell too), and features/stats/api.ts is removed; features/compose/attachmentReads.ts is untouched (FRONTEND-021 consolidates it).",
+    "Season level: the season select and the team search stay above the standings as today; the All / East / West bar filters the one standings response on the client (All shows both conference tables as today, East and West one each); the chosen conference is ?conf=east|west in the address (All is the default and is not written), so a reload, a shared link and Back keep it; an unknown ?conf= shows All. The season-wide Games section is removed (the human, 2026-10-24). The Leaders section stays on Seasons exactly as it is, below the standings, until FRONTEND-019 moves it (the human, 2026-10-24).",
+    "Team season level: opened from a standings row or the team search, as today's ?team= address; the breadcrumb reads season › team name, and Back and the breadcrumb's season item return to the season level with the conference tab it was on; its game rows link to the game page as today (plain links: the Stats page is not a modal flow).",
+    "Players tab: the search box, the debounced ?q= address and the paged results behave exactly as today; its rows are rendered by the navigator's player-results view and link to /players/<id> as today.",
+    "The tabs stay Seasons and Players, as route tabs (Tabs), with the same addresses; FRONTEND-019 adds Records. teamHref and the other address helpers in features/stats/links.ts keep their output for the same inputs (FRONTEND-017 and the game and player pages link into them).",
+    "Only what is viewed is loaded: no request is made for a level or tab that is not shown, and switching conference tabs, returning to a level already shown, or opening the Players tab with an empty box makes no request; Baseline (c) pins the counts.",
+    "Accessibility: the conference bar is UI-010's SegmentedTabs (tablist, arrow keys, one tab stop) whose panel holds the tables; when a level is opened or popped, focus moves to that level's heading (tabIndex -1), and the breadcrumb and Back are reachable by keyboard with the visible focus ring; every table keeps its caption and row headers.",
+    "Every existing frontend test passes, except where a test pins the removed Games section or today's file layout; such a test is changed in the test commit and named in the PR body; stats-isolation.test.ts is updated in the test commit for the new layout (features/stats/ may import components/stats-nav/ and api/; nothing under components/ imports features/).",
+    "Baseline (declared by the skeptic, 2026-10-24; before figures from origin/main 041e1c1 as bundle-budget.test.ts's own build measures them, gzip by zlib at the default level): (a) no new dependency, no file under frontend/src/routes/ changes, and the entry is held near its base (148,797 B gzip, 468,568 B raw) because the navigator is reached only from the lazy Stats page: frontend/src/test/bundle-budgets/FRONTEND-018.ts declares entryJsGzipGrowth 100, entryJsRawGrowth 200 and no entry CSS growth, and every lazy output the unit changes, adds or removes with a gzip ceiling (R12); the Stats JS chunks together (StatsPage, SeasonsTab, PlayersTab, links, Stats.module, format and any chunk the unit adds) at most 7.8 kB gzip (before 6,830 B; the skeptic's minimal prototype 7,351), and the Stats stylesheets together at most 1.9 kB gzip (before 1,254; prototype 1,793); no chunk 500,000 bytes raw or more; the before and after build tables are in the PR body; (b) the navigator and its levels are lazy: nothing under components/stats-nav/ or api/stats.ts is reachable from the entry by a static import, pinned by an import walk in a new components/stats-nav/stats-nav-lazy.test.ts (routes/lazy-routes.test.ts is FRONTEND-020's); (c) requests per screen, pinned with msw request counts in a test: a cold open of /stats/seasons as a guest makes 7 API calls (before: 8, as UI-010 recorded: seasons, teams, champion, standings, the three leader boards, whose rule line shares the points read, and the games page, which is dropped), switching to East, West and back to All makes 0, opening a team makes 1 (its season), Back to the season makes 0, a cold /stats/seasons?team=<id> makes 3 (seasons, teams, its season) and Back from it makes 5 (champion, standings, the three boards), opening /stats/players makes 0 until a query is typed, and one debounced query makes 1; the season reads (champion, standings, leaders, team season) carry staleTime 300,000 ms in api/stats.ts, so the zeros hold in the tests' staleTime-0 client and for five minutes in the app; (d) no freeze, recorded in the PR body (Chromium Performance panel, CPU throttled 4x, 360 wide, vite preview against backend-dev with the full load in fanwire_perf or the dev fixture, which the PR states): on a cold load of /stats/seasons, on switching conference tabs, on opening a team and on Back, the median long task over five alternating runs per side is at most 200 ms and no run is over 250 ms (this machine's noise is about ±50 ms) (R4, R14), with the before figures measured on origin/main and stated; (e) cumulative layout shift under 0.1 on /stats/seasons at 360 wide from a cold load to settled, in the worst of five runs (before: 0.14, R3); the champion and the All standings hold their full height while loading (R15); (f) every existing frontend test passes; typecheck, lint and build pass.",
+    "Sibling hygiene with FRONTEND-020: 0x08-frontend.md gets a section of its own for this unit, appended, and the PR names any shared test-kit file under src/test/ it edits (server.ts, app-route.tsx, render.tsx and the like). 0x08-frontend.md records the navigator (its home, its levels, the adapter seam and that it is router-agnostic), the ?conf= address, the dropped Games section and the moved reads (FrontendUI/components.md rows go in a Director PR: no unit role may write FrontendUI/).",
+    "Browser rows (vite preview against backend-dev, light and dark, 360 and 1280 wide, signed out and signed in): Seasons opens on the current season with All selected; East and West each show one conference; a standings row opens the team level with the breadcrumb and Back; Back returns to the same conference tab; reload keeps season, conference and team; the season select and team search work at both widths; the Players search finds a player and opens their page; the conference bar does not overflow at 360 (if any bar does, the PR says so and the Director asks the human about the scrollbar look); keyboard only: the tabs, the breadcrumb and Back work with a visible ring; nothing moves sideways at 360."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/api/stats.ts",
+    "frontend/src/api/stats.test.ts",
+    "frontend/src/features/stats/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/config.ts",
+    "frontend/src/api/client.ts",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/auth/**",
+    "frontend/src/styles/**",
+    "frontend/src/routes/routes.tsx",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/BackgroundRoutes.tsx",
+    "frontend/src/routes/modal-flow.tsx",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/thread/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/players/**",
+    "frontend/src/components/ui/**",
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/test/bundle-budget.test.ts",
+    "frontend/src/test/bundle-budget-combine.test.ts",
+    "frontend/src/routes/lazy-routes.test.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/FrontendUI/index.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
