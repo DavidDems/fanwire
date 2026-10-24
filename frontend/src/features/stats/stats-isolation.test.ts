@@ -312,7 +312,8 @@ describe("no raw HTML", () => {
   const needle = ["dangerously", "Set", "Inner", "HTML"].join("");
 
   it.each(FOLDERS)("features/%s never sets inner HTML", (_name, directory) => {
-    const sources = shipped(directory);
+    // featureFiles: the stats views now live in components/stats-nav/ too.
+    const sources = featureFiles(directory);
 
     expect(sources.length).toBeGreaterThan(0);
     expect(

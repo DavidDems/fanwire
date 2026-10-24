@@ -23,10 +23,12 @@
  */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { delay, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { teamsAre } from "../../test/auth";
 import { renderAppAt, type AppRouter } from "../../test/app-route";
+import { server } from "../../test/server";
 import {
   CELTICS,
   NEWEST_SEASON,
@@ -252,6 +254,31 @@ describe("the team level from a standings row", () => {
       expect(heading?.textContent ?? "").toContain(CELTICS.name);
       expect(heading).toHaveAttribute("tabindex", "-1");
     });
+  });
+
+  it("names the team in the focused heading before its season read lands", async () => {
+    // The skeptic's second pass: the team's name is already in the cached
+    // teams list, so a screen reader must never hear a "Team" placeholder.
+    openSeasons("/stats/seasons?season=2023-24");
+    server.use(
+      http.get("*/events/teams/:team_id/seasons/:season", async () => {
+        await delay("infinite");
+      }),
+    );
+    const user = userEvent.setup();
+
+    await clickStandingsTeam(user, CELTICS.name);
+
+    await waitFor(() => {
+      const heading = focusedHeading();
+      expect(heading, "focus is on no heading").not.toBeNull();
+      expect(heading?.textContent ?? "").toContain(CELTICS.name);
+    });
+    expect(
+      within(screen.getByRole("navigation", { name: "Stats path" })).getByText(
+        CELTICS.name,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("Back returns to the season level on the same conference tab, focus on its heading", async () => {

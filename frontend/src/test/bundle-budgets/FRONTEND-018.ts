@@ -23,17 +23,18 @@ import type { UnitBudget } from "../bundle-budget";
 // lazy output. Measured (gzip): SeasonsTab 4,599, Stats.module 1,036,
 // PlayersTab 1,138, format 430, StatsPage 386 (7,589); css:Stats.css 1,094,
 // css:StatsPage.css 398, css:SeasonsTab.css 364 (1,856). The ceilings keep
-// the two sums at 7,800 and 1,900.
+// the two sums at 7,800 and 1,900. Respread after the skeptic's second
+// pass so every JS output has at least 24 B over its measured size.
 const budget: UnitBudget = {
   unit: "FRONTEND-018",
   entryJsGzipGrowth: 100,
   entryJsRawGrowth: 200,
   changed: {
-    StatsPage: 400,
-    SeasonsTab: 4_700,
+    StatsPage: 410,
+    SeasonsTab: 4_685,
     PlayersTab: 1_170,
     "Stats.module": 1_080,
-    format: 450,
+    format: 455,
     "css:Stats.css": 1_115,
     "css:StatsPage.css": 410,
   },
