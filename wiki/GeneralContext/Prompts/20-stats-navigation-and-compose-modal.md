@@ -181,8 +181,10 @@ no unit role may write `FrontendUI/`.
   `TeamStatistics.csv` and `Players.csv`) go straight into
   `C:\Users\david\data\nba`. That folder is outside the repository and is
   never committed.
-  - **Status, 2026-10-23:** pending. Kaggle updated the dataset that day and
-    the download waited on "awaiting compression".
+  - **Status, 2026-10-24:** still pending. Kaggle updated the dataset on
+    2026-10-23, and the download still waits on "awaiting compression".
+    EVENTS-010 measured on the human's June 15 2026 download in
+    `C:\data\nba-eoin` instead: it is complete through the 2025-26 Finals.
   - **Before loading,** check the four files are there. A newer dataset may
     hold a few more 2025-26 games than the live load, and that's fine for
     measuring.
@@ -340,16 +342,37 @@ Update this section in every spec PR and unit PR of this thread.
       bar shows a classic scrollbar on Windows desktop.
     - **FRONTEND-020:** at 360 the **+** can sit over a card's right edge
       while scrolling; the "More options" row checks it.
+- **2026-10-24, `EVENTS-010` hand-run, PR #234** (awaiting review).
+  - **The data:** the current dataset still says "awaiting compression", so
+    it was measured on the human's June 15 2026 download (`C:\data\nba-eoin`,
+    complete through the 2025-26 Finals). It is loaded into a separate
+    database, `fanwire_perf`, in the dev Postgres. The `fanwire` database
+    still holds only the small browser fixture.
+  - **Eight indexes** (migration `b5e9c3a7d2f1`), each justified by a plan:
+    - four single-game stats, triple-doubles, the NBA Finals games, a game's
+      margin (kept by the human for the summary), and `games (season)` for
+      the data window (added by the human);
+    - two query rewrites: `FETCH FIRST ... WITH TIES`, and season records
+      grouped per side.
+  - **Met:** every latency ceiling.
+    - Locally: summary 187–193 ms, career points 100–107 ms, other lists at
+      most 41 ms.
+    - Micro proxy: summary 315–351 ms, career points 210–274 ms.
+    - Also met: payloads, the per-list buffer caps, the regressions, and the
+      upgrade (3.0 s).
+  - **Missed, both accepted by the human (2026-10-24):**
+    - the whole summary's buffers, about 22,200 against 19,193 (all repeat
+      reads of `games`);
+    - the 800,000-row scale floor, because the real data has 745,466.
+  - **Carried to FRONTEND-019:**
+    - Season records rank on the exact fraction but show three places, so
+      two rows can show the same .xxx with different ranks.
+    - The points-in-a-game holder is Adebayo's 83 (2026-03-10, in the
+      dataset), which the Director couldn't check.
 - **Next:**
-  1. Hand-run `UI-010` and `EVENTS-010` in parallel, each in its own session
-     and worktree.
-  2. EVENTS-010 does everything that needs no data first: the tests, the
-     implementation, the generator and the infra cache behaviour. Its
-     measuring step waits for the four CSVs, and the session checks the
-     folder before it starts.
-  3. The skeptic's second pass on each PR, before it's handed over.
-  4. Then the FRONTEND-018 and FRONTEND-020 specs (stage 2), carrying R1, R3
-     and R4.
+  1. The human reviews and merges #234. UI-010 merged as #232 and #233.
+  2. Then the FRONTEND-018 and FRONTEND-020 specs (stage 2), carrying R1, R3,
+     R4 and R12–R14.
 
 ## Limits
 
