@@ -1,0 +1,52 @@
+/*
+ * SegmentedTabs (UI-010): an in-page tab bar of pills. The selected tab is
+ * filled with the action colour, the others are muted text on nothing. The
+ * bar never wraps: when the tabs overflow it scrolls sideways inside itself,
+ * so the page never does. Values come from tokens.css by name only.
+ */
+
+.segmented {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tablist {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  /* Room for the focus outline, which overflow would otherwise clip. */
+  padding: var(--space-1);
+}
+
+.tab {
+  flex: none;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  background-color: transparent;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.tab:hover:not([aria-selected="true"]) {
+  color: var(--color-text);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--color-on-action);
+  background-color: var(--color-action);
+}
+
+/* A20: forced colors replaces the fill, so the selected tab is underlined too. */
+@media (forced-colors: active) {
+  .tab[aria-selected="true"] {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.3em;
+  }
+}
