@@ -57,18 +57,20 @@ white and against Jet Black:
 | Token | Light | Dark | Use |
 |---|---|---|---|
 | `--color-bg` | `#f3f7f9` (n-50) | `#011d28` (n-950) | Page background |
-| `--color-surface` | `#ffffff` | `#022b3a` (**exactly** ink) | Cards, header, inputs |
+| `--color-surface` | `#ffffff` | `#022b3a` (**exactly** ink) | Cards, header |
 | `--color-surface-muted` | `#e6eef2` (n-100) | `#173543` (n-800) | Skeletons, hover fill, chips. **Never put a link on it** (§6) |
 | `--color-text` | `#022b3a` | `#bfdbf7` | Body text |
 | `--color-text-muted` | `#465f6c` | `#8fb0c4` | Timestamps, counts, hints |
 | `--color-border` | `#d0dde4` | `#1f4757` | Decorative dividers, card edges. Not a control boundary |
-| `--color-border-strong` | `#5c7684` | `#6d8fa1` | Input and checkbox boundaries (≥3:1) |
+| `--color-border-strong` | `#5c7684` | `#6d8fa1` | Input and checkbox boundaries (≥3:1): a soft-filled field's 1 px bottom rule |
+| `--color-field` (`UI-010`) | `#e6eef2` (n-100) | `#173543` (n-800) | A form control's fill at rest. Under 3:1 against bg and surface (§5), so it never identifies the field alone: the bottom rule does |
+| `--color-field-focus` (`UI-010`) | `#ffffff` | `#1b3c4b` | A focused control's fill. **Dark stays near `#173543`**: `#1f4757` puts the placeholder at 4.38 and the rule at 2.91 |
 | `--color-action` | `#1f7a8c` (Teal) | `#bfdbf7` (Pale Sky) | Primary button fill, selected-tab bar |
 | `--color-action-hover` | `#17606f` | `#e1eefb` | Primary button hover and active |
 | `--color-on-action` | `#ffffff` | `#022b3a` | Primary button label |
 | `--color-link` | `#1f7a8c` | `#279ab1` | Inline links |
 | `--color-focus` | `#1f7a8c` | `#bfdbf7` | Focus ring |
-| `--color-danger` | `#9b1c1c` | `#ffa08a` | Error text, field-error border |
+| `--color-danger` | `#9b1c1c` | `#ffa08a` | Error text, the invalid field's ring |
 | `--color-danger-subtle` | `#fdecea` | `#2e0f17` | Alert background |
 | `--color-success` | `#1b6e4a` | `#6fd39a` | Success text |
 | `--color-success-subtle` | `#e7f4ec` | `#0e2a13` | Success status background |
@@ -121,6 +123,17 @@ Every pair the components in `components.md` use. All pass.
 | live → surface (badge edge, non-text) | 5.844 | 6.718 | 3.0 |
 | live → bg (non-text) | 5.422 | 7.840 | 3.0 |
 | sky → ink (the symbol on its tile) | 10.425 | 10.425 | 4.5 |
+| text → field (`UI-010`) | 12.685 | 9.031 | 4.5 |
+| text → field-focus | 14.902 | 8.186 | 4.5 |
+| text-muted → field (placeholder) | 5.741 | 5.640 | 4.5 |
+| text-muted → field-focus | 6.744 | 5.113 | 4.5 |
+| border-strong → field (the bottom rule) | 4.082 | 3.746 | 3.0 |
+| border-strong → field-focus | 4.795 | **3.396** | 3.0 |
+
+**Measured to fail, on purpose:** field → bg is 1.090 / 1.347 and field →
+surface 1.175 / 1.154. No soft fill reaches 3:1 (WCAG 1.4.11), which is why
+every soft-filled control keeps a 1 px `--color-border-strong` bottom rule in
+every state (`UI-010`, `src/styles/tokens.test.ts`).
 
 ## 6. Banned pairs
 
@@ -193,8 +206,9 @@ constants (§9), not tokens.
 | `--font-weight-semibold` | `600` | Headings, usernames, buttons |
 | `--font-weight-bold` | `700` | Score figures only |
 | `--space-1` … `--space-8` | `0.25rem`, `0.5rem`, `0.75rem`, `1rem`, `1.5rem`, `2rem`, `3rem`, `4rem` | 4, 8, 12, 16, 24, 32, 48, 64 px |
-| `--radius-sm` | `4px` | Inputs, badges |
+| `--radius-sm` | `4px` | Badges, small previews |
 | `--radius-md` | `8px` | Cards, buttons |
+| `--radius-lg` (`UI-010`) | `12px` | Form controls (soft filled) |
 | `--radius-full` | `9999px` | Avatars, the live dot |
 | `--shadow-1` | light `0 1px 2px rgb(2 43 58 / 0.08), 0 1px 3px rgb(2 43 58 / 0.06)`; dark `none` | Sticky header and bottom bar. Dark uses `--color-border` instead |
 | `--shadow-2` | light `0 4px 12px rgb(2 43 58 / 0.12)`; dark `0 0 0 1px var(--color-border-strong)` | Mention suggestions |
