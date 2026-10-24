@@ -398,7 +398,7 @@ describe("no runtime styling work (UI-010 Baseline d)", () => {
   function banned(source: string): string[] {
     const code = withoutComments(source);
     return BANNED.filter((name) =>
-      new RegExp(`(?<![\w$])${name}(?![\w$])`).test(code),
+      new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(code),
     );
   }
 
@@ -416,6 +416,12 @@ describe("no runtime styling work (UI-010 Baseline d)", () => {
       banned(
         "// not addEventListener\n/* nor matchMedia */\n<div onKeyDown={f} />",
       ),
+    ).toEqual([]);
+  });
+
+  it("the scan matches whole names only, not part of a longer one", () => {
+    expect(
+      banned("const xmatchMedia = 1; const useLayoutEffects = 2;"),
     ).toEqual([]);
   });
 
