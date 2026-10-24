@@ -197,7 +197,7 @@ jobs:
       # runners it is the only way the CLI exists at all.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22
+          node-version: 24
       # handoff.md §5.6. The version is pinned in one place, main's
       # .ai/config.json, read from the trusted copy so a task branch cannot
       # move it. It is checked as an exact x.y.z before npm sees it (no range,
