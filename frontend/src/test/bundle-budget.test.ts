@@ -1,25 +1,27 @@
 // @vitest-environment node
 /**
- * UI-010 Baseline (c): the bundle budget, pinned against a real production
- * build.
+ * The bundle budget, pinned against a real production build (UI-010
+ * Baseline c, then each unit of Prompt 20 through `bundle-budgets/`).
  *
  * Runs Vite's own `build()` with the project's `vite.config.ts`, writes
  * nothing (`write: false`), and gzips every output with `zlib.gzipSync` at the
  * default level, which is what Vite's size report uses. 1 kB = 1000 bytes, as
  * Vite reports it.
  *
- * - The entry JS chunk: at most 149.6 kB gzip and 471.0 kB raw (before, on
- *   origin/main 8bda2e1: 148.61 / 468.08 as the skeptic measured).
- * - The entry CSS (the stylesheet the entry chunk imports): at most 6.25 kB
- *   gzip (before: 5.01).
- * - Every other JS chunk (the lazy routes and the shared chunks they split
- *   out): within 0.1 kB gzip of its before size, measured on the unchanged
- *   source and hard-coded below. This unit's files are all reached from the
- *   entry, so no lazy chunk has a reason to move, and none should appear.
- * - No output file is 500,000 bytes raw or larger.
+ * The numbers live in `bundle-budget.ts`: a measured base, plus one file per
+ * later unit under `bundle-budgets/` that declares the chunks it changes, adds
+ * or removes and how far it may grow the entry (R12, R13). Against the
+ * combined budget:
  *
- * It is a ceiling, green before the change: it exists so the restyle and the
- * three new primitives stay "a few kilobytes at most".
+ * - The entry JS chunk stays within its gzip and raw ceilings, and never
+ *   past 480 kB raw (R1).
+ * - The entry CSS (the stylesheet the entry chunk imports) stays within its
+ *   gzip ceiling.
+ * - Every lazy output (JS chunk or stylesheet) no unit declares stays within
+ *   0.1 kB gzip of its base size; every declared one stays within its
+ *   ceiling; a removed one is gone; no output appears that nobody declared;
+ *   and no two lazy outputs share a name, so none can hide behind another.
+ * - No output file is 500,000 bytes raw or larger.
  */
 import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -27,41 +29,27 @@ import { gzipSync } from "node:zlib";
 import { build, type Rollup } from "vite";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import {
+  FILE_RAW_LIMIT,
+  TOLERANCE,
+  combine,
+  type UnitBudget,
+} from "./bundle-budget";
 import { SRC_DIR } from "./css";
 
-const KB = 1000;
+const declared = import.meta.glob<{ default: UnitBudget }>(
+  "./bundle-budgets/*.ts",
+  { eager: true },
+);
 
-const ENTRY_JS_GZIP_MAX = 149.6 * KB;
-const ENTRY_JS_RAW_MAX = 471.0 * KB;
-const ENTRY_CSS_GZIP_MAX = 6.25 * KB;
-const LAZY_TOLERANCE = 0.1 * KB;
-const FILE_RAW_LIMIT = 500_000;
-
-/**
- * Non-entry JS chunks, by chunk name (no hash) → gzip bytes, measured on the
- * unchanged source (UI-010's worktree at 8bda2e1, before any change).
- */
-const LAZY_CHUNKS_BEFORE: Record<string, number> = {
-  ComposePage: 5178,
-  NotificationsPage: 1667,
-  ProfilePage: 2785,
-  GamePage: 3386,
-  PlayerPage: 3041,
-  VisuallyHidden: 141,
-  StatsPage: 382,
-  SeasonsTab: 3789,
-  format: 430,
-  PlayersTab: 1133,
-  links: 740,
-  "Stats.module": 359,
-  SignInPage: 990,
-  SignUpPage: 878,
-  ConfirmPage: 1056,
-  ForgotPasswordPage: 1085,
-  errors: 240,
-  ProfileSetupPage: 1414,
-  "AuthPage.module": 158,
-};
+const budget = combine(
+  Object.entries(declared).map(([path, module]) => {
+    const unit = module.default;
+    if (!path.endsWith(`/${unit.unit}.ts`))
+      throw new Error(`${path} declares ${unit.unit}: name the file after it`);
+    return unit;
+  }),
+);
 
 interface Built {
   fileName: string;
@@ -91,6 +79,33 @@ function chunks(): Rollup.OutputChunk[] {
   return output.filter(
     (file): file is Rollup.OutputChunk => file.type === "chunk",
   );
+}
+
+/**
+ * Every lazy output by budget name → gzip bytes: each non-entry JS chunk by
+ * its chunk name, and each stylesheet but the entry's as `css:<asset name>`.
+ * A list, not a map, so two outputs with one name can be seen.
+ */
+function lazyOutputs(): [string, number][] {
+  const entryCss = new Set(entryChunk().viteMetadata?.importedCss ?? []);
+  const js = chunks()
+    .filter((chunk) => !chunk.isEntry)
+    .map((chunk) => [chunk.name, measure(chunk).gzip] as [string, number]);
+  const css = output
+    .filter(
+      (file): file is Rollup.OutputAsset =>
+        file.type === "asset" &&
+        file.fileName.endsWith(".css") &&
+        !entryCss.has(file.fileName),
+    )
+    .map(
+      (asset) =>
+        [`css:${asset.names[0] ?? asset.fileName}`, measure(asset).gzip] as [
+          string,
+          number,
+        ],
+    );
+  return [...js, ...css];
 }
 
 function entryChunk(): Rollup.OutputChunk {
@@ -125,23 +140,23 @@ beforeAll(async () => {
   }
 }, 180_000);
 
-describe("the production bundle (UI-010 Baseline c)", () => {
+describe("the production bundle (UI-010 Baseline c, Prompt 20 R1, R12, R13)", () => {
   it("built something to measure (not vacuously green)", () => {
     expect(chunks().length).toBeGreaterThan(1);
   });
 
-  it("keeps the entry JS chunk within 149.6 kB gzip and 471.0 kB raw", () => {
+  it("keeps the entry JS chunk within its gzip and raw ceilings", () => {
     const entry = measure(entryChunk());
 
     expect(entry.gzip, `${entry.fileName} gzip bytes`).toBeLessThanOrEqual(
-      ENTRY_JS_GZIP_MAX,
+      budget.entryJsGzipMax,
     );
     expect(entry.raw, `${entry.fileName} raw bytes`).toBeLessThanOrEqual(
-      ENTRY_JS_RAW_MAX,
+      budget.entryJsRawMax,
     );
   });
 
-  it("keeps the entry CSS within 6.25 kB gzip", () => {
+  it("keeps the entry CSS within its gzip ceiling", () => {
     const importedCss = [...(entryChunk().viteMetadata?.importedCss ?? [])];
     expect(
       importedCss,
@@ -152,31 +167,46 @@ describe("the production bundle (UI-010 Baseline c)", () => {
 
     const css = measure(asset as Rollup.OutputAsset);
     expect(css.gzip, `${css.fileName} gzip bytes`).toBeLessThanOrEqual(
-      ENTRY_CSS_GZIP_MAX,
+      budget.entryCssGzipMax,
     );
   });
 
-  it("keeps every lazy chunk within 0.1 kB gzip of its before size", () => {
-    const after = new Map(
-      chunks()
-        .filter((chunk) => !chunk.isEntry)
-        .map((chunk) => [chunk.name, measure(chunk).gzip] as const),
+  it("gives every lazy output its own name", () => {
+    const names = lazyOutputs().map(([name]) => name);
+    const repeated = names.filter(
+      (name, index) => names.indexOf(name) !== index,
     );
 
-    const drifted = Object.entries(LAZY_CHUNKS_BEFORE)
+    expect(names.length, "lazy outputs found").toBeGreaterThan(1);
+    expect(repeated, "lazy outputs sharing a name").toEqual([]);
+  });
+
+  it("keeps every lazy output within its budget, and adds none undeclared", () => {
+    const after = new Map(lazyOutputs());
+
+    const drifted = Object.entries(budget.unchanged)
       .map(([name, before]) => ({ name, before, after: after.get(name) }))
       .filter(
         ({ before, after }) =>
-          after === undefined || Math.abs(after - before) > LAZY_TOLERANCE,
+          after === undefined || Math.abs(after - before) > TOLERANCE,
       );
-    expect(drifted, "lazy chunks missing or moved by more than 100 B").toEqual(
+    expect(
+      drifted,
+      "undeclared lazy outputs missing or moved by more than 100 B",
+    ).toEqual([]);
+
+    const over = Object.entries(budget.lazyMax)
+      .filter(([name]) => !(name in budget.unchanged))
+      .map(([name, max]) => ({ name, max, after: after.get(name) }))
+      .filter(({ max, after }) => after === undefined || after > max);
+    expect(over, "declared lazy outputs missing or over their ceiling").toEqual(
       [],
     );
 
     const unexpected = [...after.keys()].filter(
-      (name) => !(name in LAZY_CHUNKS_BEFORE),
+      (name) => !(name in budget.lazyMax),
     );
-    expect(unexpected, "new non-entry chunks").toEqual([]);
+    expect(unexpected, "lazy outputs no budget declares").toEqual([]);
   });
 
   it("has no output file of 500,000 bytes raw or larger", () => {

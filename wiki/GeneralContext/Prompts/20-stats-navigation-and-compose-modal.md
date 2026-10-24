@@ -119,9 +119,9 @@ specified when what they build on has merged.
 |---|---|---|---|
 | 1 | **UI-010**: soft-filled inputs and shared primitives | every form control restyled (the human's "soft filled" direction); `SegmentedTabs` (an in-page tab bar); `FloatingButton`; `SearchInput`; icons `circle-plus`, `paperclip`, `circle-x` | — |
 | 1 | **EVENTS-010**: the records API | `GET /events/records` (each record's holder) and `GET /events/records/{record_id}` (the ranked list); live and measured | — |
-| 2 | **FRONTEND-018**: the stats navigator, and Stats rebuilt on it | shared navigator components, outside `features/` so compose can use them; `StatsPage` becomes Seasons / Records / Players; Seasons gets All / East / West tabs, and the leaders leave it | UI-010 |
+| 2 | **FRONTEND-018**: the stats navigator, and Stats rebuilt on it | shared navigator components, outside `features/` so compose can use them; Seasons gets All / East / West tabs and a team level, and the season-wide games list goes | UI-010 |
 | 2 | **FRONTEND-020**: the compose modal | `/compose` as an overlay route over the current page; the **+** button bottom right replaces the nav item; paperclip and bar-chart icon buttons; the image check overlay with auto-attach, a 30 s bound and the red refusal line | UI-010 |
-| 3 | **FRONTEND-019**: Records | the Records tab: Historical (Team and Player tabs of record cards, each opening its full ranked list) and Seasonal (the per-season leaders, moved from Seasons) | EVENTS-010, FRONTEND-018 |
+| 3 | **FRONTEND-019**: Records | `StatsPage` becomes Seasons / Records / Players; the Records tab: Historical (Team and Player tabs of record cards, each opening its full ranked list) and Seasonal (the per-season leaders, moved from Seasons in this unit) | EVENTS-010, FRONTEND-018 |
 | 4 | **FRONTEND-021**: the stats picker modal | the bar-chart button opens a second modal holding the navigator in select mode, with Cancel and Select (disabled until a selectable item is chosen); it replaces `AttachmentPicker` | FRONTEND-018, FRONTEND-020 |
 
 Each frontend unit's `FrontendUI/components.md` rows go in a Director PR:
@@ -160,6 +160,17 @@ no unit role may write `FrontendUI/`.
       of its title.
     - Clicking anywhere on the card opens that record's ranked list.
     - Team and Player records are tabs.
+
+## Decided by the human (2026-10-24, by `AskUserQuestion`, for stage 2)
+
+- **The season-wide games list is dropped.** A season shows its champion and
+  standings. A team's games open when the team is opened.
+- **The leaders stay on Seasons until FRONTEND-019 moves them** to Records >
+  Seasonal, in one PR, so no deploy is ever without them.
+- **The thread's reply box takes the new image flow too.** `InlineComposer`
+  uses the same `MediaWidget`. Only its attach control changes.
+- **A published post closes the compose modal**, and the feed's data is
+  refreshed.
 
 ## How the human wants the work done
 
@@ -369,10 +380,64 @@ Update this section in every spec PR and unit PR of this thread.
       two rows can show the same .xxx with different ranks.
     - The points-in-a-game holder is Adebayo's 83 (2026-03-10, in the
       dataset), which the Director couldn't check.
+- **2026-10-24, stage 1 done:** EVENTS-010 merged as #234, and this
+  brief's entry for it as #235.
+- **2026-10-24, the FRONTEND-018 and FRONTEND-020 specs** (one Director PR,
+  which also writes `frontend/src/test/`).
+  - **Decided by the human** ("Decided by the human … for stage 2" above):
+    - the season-wide games list is dropped;
+    - FRONTEND-019 moves the leaders;
+    - the reply box takes the new image flow;
+    - a published post closes the modal;
+    - the 30 s bound starts when the upload finishes.
+  - **The bundle budget is per unit now (R12).**
+    - `src/test/bundle-budget.ts` holds a base measured by the test's own
+      build on 041e1c1: entry 148,797 B gzip and 468,568 B raw, entry CSS
+      5,388 B, and every lazy JS chunk and stylesheet.
+    - Each unit in flight declares its changes in
+      `src/test/bundle-budgets/<UNIT>.ts`.
+    - **After a unit merges,** the next Director spec PR measures `main`
+      again, folds the sizes into the base and deletes the unit's file.
+  - **The skeptic's first pass: proceed with changes, on both units.** All of
+    them are in the specs. It built bare prototypes of each and measured
+    them:
+    - FRONTEND-018 grows the entry 16 B, and the Stats JS from 6,830 B to
+      7,351 B;
+    - FRONTEND-020 grows the entry +807 B gzip, so **R13's +0.5 kB was
+      unmeetable**. One unit may now grow the entry by at most 1 kB, and
+      FRONTEND-020 declares at most 1,000 B.
+    - It also found five contract defects, C1–C5, each now fixed in a spec:
+      - the navigator needed `features/games/format`;
+      - the + couldn't carry history state;
+      - focus had nowhere to return to when compose opens from inside the
+        detail modal;
+      - the "0 requests" lines needed a `staleTime`;
+      - the guard's in-place states would render below the page.
+    - It found four budget holes, M1–M4, all fixed:
+      - the base was a ceiling, not a measurement;
+      - later units would have been refused;
+      - two chunks with the same name could hide each other;
+      - lazy CSS was not budgeted.
+  - **Risks carried:**
+    - **R15 (018):** the champion and the All standings must hold their
+      height while loading, for CLS under 0.1.
+    - **R16 (020):** the pipeline's production latency was never timed. Time
+      it on the live stack after deploy.
+    - **R17 (020):** the final poll at the bound, now in the spec.
+    - **R18 (021):** a link inside the compose dialog continues a modal flow
+      (depth 2, with Back), because the dialog renders inside
+      `ModalFlowScope`.
+    - **R19 (019, 021):** after FRONTEND-020 the entry is about 472 kB raw and
+      149.8 kB gzip, so those two units add nothing to it.
+    - **R20 (018):** a new shared chunk's name can't be predicted, so the
+      Director may correct the budget file before the implementation commit.
+    - **R21:** the headroom figure in R13 above was 0.88 kB on 041e1c1, not
+      0.77.
 - **Next:**
-  1. The human reviews and merges #234. UI-010 merged as #232 and #233.
-  2. Then the FRONTEND-018 and FRONTEND-020 specs (stage 2), carrying R1, R3,
-     R4 and R12–R14.
+  1. The human reviews and merges this spec PR.
+  2. Hand-run FRONTEND-018 and FRONTEND-020 in parallel, each on
+     `agent/<ID>` cut from `main` after the merge. Test the pair on a merged
+     preview before the second one merges.
 
 ## Limits
 
