@@ -94,7 +94,7 @@ describe("Attach stats is offered where a link may be attached (criterion 1)", (
   it("is on /compose, closed until pressed", async () => {
     renderComposer();
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(attachStatsButton()).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("button", { name: CHOICES.game })).toBeNull();
   });
@@ -127,7 +127,7 @@ describe("Attach stats is offered where a link may be attached (criterion 1)", (
 
     renderComposer("/compose?reply_to=42");
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(textBox()).toBeInTheDocument();
     expect(queryAttachStatsButton()).toBeNull();
   });
@@ -135,7 +135,7 @@ describe("Attach stats is offered where a link may be attached (criterion 1)", (
   it("is present on /compose?repost_of=<id>", async () => {
     renderComposer("/compose?repost_of=7");
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(attachStatsButton()).toBeInTheDocument();
   });
 
@@ -404,7 +404,7 @@ describe("the attachment's summary (criterion 5)", () => {
   it("shows nothing before anything is attached", async () => {
     renderComposer();
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(attachedSummary()).toBeNull();
     expect(screen.queryByRole("button", { name: /^undo/i })).toBeNull();
   });
@@ -495,7 +495,7 @@ describe("the attachment's summary (criterion 5)", () => {
 describe("the picker by keyboard alone (criterion 12)", () => {
   it("opens from Attach stats and moves focus into the panel", async () => {
     const { user } = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     attachStatsButton().focus();
     await user.keyboard("{Enter}");
@@ -509,7 +509,7 @@ describe("the picker by keyboard alone (criterion 12)", () => {
 
   it("reaches every choice by Tab", async () => {
     const { user } = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     attachStatsButton().focus();
     await user.keyboard("{Enter}");
@@ -531,7 +531,7 @@ describe("the picker by keyboard alone (criterion 12)", () => {
 
   it("reaches the team and season selects by Tab after Game result", async () => {
     const { user } = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     attachStatsButton().focus();
     await user.keyboard("{Enter}");
@@ -553,7 +553,7 @@ describe("the picker by keyboard alone (criterion 12)", () => {
 
   it("closes on Escape and returns focus to Attach stats", async () => {
     const { user } = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     attachStatsButton().focus();
     await user.keyboard("{Enter}");

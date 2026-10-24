@@ -47,6 +47,7 @@ import {
   uploadTicket,
   type RecordedUpload,
 } from "../../test/compose";
+import { IMAGE_REFUSED, imageFileInput } from "../../test/compose-modal";
 import { server } from "../../test/server";
 import { ComposeMediator } from "./ComposeMediator";
 import { MediaWidget } from "./MediaWidget";
@@ -63,13 +64,9 @@ function renderWidget() {
   return { mediator, user: userEvent.setup() };
 }
 
-/** The labelled file input. `Field`/`describeField` is the labelling idiom. */
+/** The hidden file input the paperclip opens (FRONTEND-020: no label of its own). */
 function fileInput(): HTMLElement {
-  return screen.getByLabelText(/image/i);
-}
-
-function attachButton(): HTMLElement {
-  return screen.getByRole("button", { name: /attach/i });
+  return imageFileInput();
 }
 
 describe("the upload goes straight to the bucket, never through the API", () => {
@@ -113,7 +110,9 @@ describe("the upload goes straight to the bucket, never through the API", () => 
     await user.upload(fileInput(), testFile());
 
     await waitFor(() => expect(uploads).toHaveLength(1));
-    expect(ticketRequests[0].headers.get("Authorization")).toBe(`Bearer ${TEST_ID_TOKEN}`);
+    expect(ticketRequests[0].headers.get("Authorization")).toBe(
+      `Bearer ${TEST_ID_TOKEN}`,
+    );
     expect(uploads[0].authorization).toBeNull();
   });
 
@@ -136,7 +135,9 @@ describe("the upload goes straight to the bucket, never through the API", () => 
 
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toEqual({ mime_type: "image/jpeg" });
-    expect(ticketRequests[0].headers.get("Content-Type")).toMatch(/application\/json/);
+    expect(ticketRequests[0].headers.get("Content-Type")).toMatch(
+      /application\/json/,
+    );
   });
 });
 
@@ -154,20 +155,33 @@ describe("a file the client can already tell is wrong is rejected before it is u
     );
     const { user, mediator } = renderWidget();
 
-    await user.upload(fileInput(), testFile({ name: "notes.pdf", type: "application/pdf" }));
+    await user.upload(
+      fileInput(),
+      testFile({ name: "notes.pdf", type: "application/pdf" }),
+    );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/jpe?g|png|webp/i);
-    expect(ticketCalls, "a rejected type must not reach POST /media/uploads").toBe(0);
+    // FRONTEND-020: every refusal is the one line.
+    expect(await screen.findByRole("alert")).toHaveTextContent(IMAGE_REFUSED);
+    expect(
+      ticketCalls,
+      "a rejected type must not reach POST /media/uploads",
+    ).toBe(0);
     expect(s3Calls).toBe(0);
     expect(mediator.getDraft().mediaIds).toEqual([]);
   });
 
   it("refuses an SVG, which is a type the security baseline excludes by name", async () => {
     let ticketCalls = 0;
-    server.use(uploadTicket({ onRequest: () => (ticketCalls += 1) }), s3Upload());
+    server.use(
+      uploadTicket({ onRequest: () => (ticketCalls += 1) }),
+      s3Upload(),
+    );
     const { user } = renderWidget();
 
-    await user.upload(fileInput(), testFile({ name: "logo.svg", type: "image/svg+xml" }));
+    await user.upload(
+      fileInput(),
+      testFile({ name: "logo.svg", type: "image/svg+xml" }),
+    );
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(ticketCalls).toBe(0);
@@ -189,8 +203,13 @@ describe("a file the client can already tell is wrong is rejected before it is u
 
     await user.upload(fileInput(), testFile({ bytes: 128 }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/large|size|big|byte/i);
-    expect(ticketCalls, "max_bytes comes from the ticket, so the ticket is fetched").toBe(1);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /large|size|big|byte/i,
+    );
+    expect(
+      ticketCalls,
+      "max_bytes comes from the ticket, so the ticket is fetched",
+    ).toBe(1);
     expect(s3Calls, "no upload may be attempted for an oversize file").toBe(0);
     expect(mediator.getDraft().mediaIds).toEqual([]);
   });
@@ -204,15 +223,26 @@ describe("a file the client can already tell is wrong is rejected before it is u
     );
     const { user } = renderWidget();
 
-    await user.upload(fileInput(), testFile({ name: "shot.png", type: "image/png" }));
+    await user.upload(
+      fileInput(),
+      testFile({ name: "shot.png", type: "image/png" }),
+    );
 
     await waitFor(() => expect(uploads).toHaveLength(1));
   });
 });
 
-describe("only processed media can be attached", () => {
+// FRONTEND-020: there is no Attach press any more. Processed media attaches
+// by itself, anything else is never attached, and rejected media is the one
+// refusal line. The timing (the tile, the 1 s poll, the 30 s bound) is
+// `image-check.test.tsx`'s, with fake timers.
+describe("only processed media is attached", () => {
   it("shows the file's name while the upload is still being processed", async () => {
-    server.use(uploadTicket(), s3Upload(), mediaStatuses({ statuses: ["uploaded"] }));
+    server.use(
+      uploadTicket(),
+      s3Upload(),
+      mediaStatuses({ statuses: ["uploaded"] }),
+    );
     const { user } = renderWidget();
 
     await user.upload(fileInput(), testFile({ name: "courtside.jpg" }));
@@ -221,7 +251,7 @@ describe("only processed media can be attached", () => {
   });
 
   it.each(["uploaded", "scanning"] as const)(
-    "will not let %s media be attached",
+    "does not attach %s media, and offers no Attach press",
     async (status) => {
       const polls: number[] = [];
       server.use(
@@ -237,29 +267,33 @@ describe("only processed media can be attached", () => {
       await user.upload(fileInput(), testFile());
 
       await waitFor(() => expect(polls.length).toBeGreaterThan(0));
-      expect(attachButton()).toBeDisabled();
+      expect(screen.queryByRole("button", { name: /^attach$/i })).toBeNull();
       expect(mediator.getDraft().mediaIds).toEqual([]);
     },
   );
 
-  it("offers no attach at all for rejected media, and says so", async () => {
-    server.use(uploadTicket(), s3Upload(), mediaStatuses({ statuses: ["rejected"] }));
+  it("attaches nothing for rejected media, and says so", async () => {
+    server.use(
+      uploadTicket(),
+      s3Upload(),
+      mediaStatuses({ statuses: ["rejected"] }),
+    );
     const { user, mediator } = renderWidget();
 
     await user.upload(fileInput(), testFile());
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(IMAGE_REFUSED);
     expect(screen.queryByRole("button", { name: /attach/i })).toBeNull();
     expect(mediator.getDraft().mediaIds).toEqual([]);
   });
 
-  it("polls GET /media/{id} until it is processed, then allows attaching", async () => {
+  it("polls GET /media/{id} until it is processed, then attaches it by itself", async () => {
     const polls: number[] = [];
     server.use(
       uploadTicket(),
       s3Upload(),
       mediaStatuses({
-        statuses: ["uploaded", "scanning", "processed"],
+        statuses: ["uploaded", "processed"],
         onRequest: (id, call) => polls.push(id === TEST_MEDIA_ID ? call : -1),
       }),
     );
@@ -267,20 +301,23 @@ describe("only processed media can be attached", () => {
 
     await user.upload(fileInput(), testFile());
 
-    await waitFor(() => expect(attachButton()).toBeEnabled(), {
-      timeout: 5000,
-    });
-    // Three answers means it really polled rather than asking once and hoping.
-    expect(polls.length).toBeGreaterThanOrEqual(3);
+    await waitFor(
+      () => expect(mediator.getDraft().mediaIds).toEqual([TEST_MEDIA_ID]),
+      {
+        timeout: 3500,
+      },
+    );
+    // Two answers means it really polled rather than asking once and hoping.
+    expect(polls.length).toBeGreaterThanOrEqual(2);
     expect(polls).not.toContain(-1);
-
-    await user.click(attachButton());
-
-    expect(mediator.getDraft().mediaIds).toEqual([TEST_MEDIA_ID]);
   });
 
   it("renders the served thumbnail once processed, not a blob url", async () => {
-    server.use(uploadTicket(), s3Upload(), mediaStatuses({ statuses: ["processed"] }));
+    server.use(
+      uploadTicket(),
+      s3Upload(),
+      mediaStatuses({ statuses: ["processed"] }),
+    );
     const { user } = renderWidget();
 
     await user.upload(fileInput(), testFile());

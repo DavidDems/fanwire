@@ -46,6 +46,7 @@ import {
   uploadTicket,
   type RequestRecorder,
 } from "../../test/compose";
+import { imageFileInput } from "../../test/compose-modal";
 import { server } from "../../test/server";
 import { ComposePage } from "./ComposePage";
 import { QUICK_POST_TEMPLATES } from "./PostTemplate";
@@ -81,23 +82,27 @@ function mediaUploadSucceeds() {
   );
 }
 
+/**
+ * FRONTEND-020: a processed image attaches by itself, with no Attach press,
+ * so choosing the file (in the hidden input the paperclip opens) and waiting
+ * for its thumbnail is the whole of it.
+ */
 async function attachAProcessedImage(user: ReturnType<typeof userEvent.setup>) {
-  await user.upload(screen.getByLabelText(/image/i), testFile());
-  // Anchored: "Attach stats" is a button on this page too.
-  const attach = await screen.findByRole("button", { name: /^attach$/i });
-  await waitFor(() => expect(attach).toBeEnabled());
-  await user.click(attach);
+  await user.upload(imageFileInput(), testFile());
   await screen.findByRole("img");
+  await screen.findByRole("button", { name: "Remove image" });
 }
 
 describe("the composer page", () => {
-  it("keeps the heading the route table pins", async () => {
+  // FRONTEND-020: the composer is shown in the Dialog titled "Compose", whose
+  // title is the route's one "Compose" heading (`ComposeRoute.test.tsx`), so
+  // the page renders no heading of that name of its own.
+  it("renders no Compose heading of its own: the dialog's title is it", async () => {
     recorder = recordRequests();
     renderComposer();
 
-    expect(
-      await screen.findByRole("heading", { name: /^compose$/i }),
-    ).toBeInTheDocument();
+    await screen.findByRole("textbox", { name: /post/i });
+    expect(screen.queryByRole("heading", { name: /^compose$/i })).toBeNull();
   });
 
   it("issues no HTTP request when it mounts", async () => {
@@ -107,7 +112,7 @@ describe("the composer page", () => {
     recorder = recordRequests();
     renderComposer();
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(textBox()).toBeInTheDocument();
 
     expect(recorder.paths()).toEqual([]);
@@ -117,7 +122,7 @@ describe("the composer page", () => {
     recorder = recordRequests();
     renderComposer();
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     expect(submitButton()).toBeDisabled();
     expect(recorder.paths()).toEqual([]);
@@ -488,7 +493,7 @@ describe("the #/$ mention dropdown is gone (criterion 9)", () => {
   it("no longer tells the user to type # or $", async () => {
     renderComposer();
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(textBox()).not.toHaveAccessibleDescription(/#|\$/);
     expect(
       within(textBox().closest("form") as HTMLElement).queryByText(
