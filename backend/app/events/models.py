@@ -18,13 +18,27 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Integer, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    ForeignKey,
+    Identity,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    case,
+    func,
+    literal_column,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.db import Base
+
+# The dataset's label on every Finals game (tests/fixtures/nba_data/Games.csv).
+FINALS_LABEL = "NBA Finals"
 
 
 class Team(Base):
@@ -163,3 +177,63 @@ class PlayerGameStats(Base):
     @classmethod
     def _played_expression(cls) -> ColumnElement[bool]:
         return cls.seconds_played.is_not(None)
+
+
+# The box-score stats a triple-double counts: 10 or more in at least three.
+TRIPLE_DOUBLE_STATS: tuple[str, ...] = ("points", "rebounds", "assists", "steals", "blocks")
+
+
+def _inline(value: int) -> ColumnElement[int]:
+    """A constant written into the SQL, not bound: a partial index's
+    predicate only applies to a query that spells it the same way, and a
+    bound parameter's type is the driver's to choose."""
+    return literal_column(str(value), Integer)
+
+
+# The one spelling of "this line is a triple-double", shared by the partial
+# index below and the record that counts them (app.events.records); the
+# migration that creates the index writes the same expression out.
+TRIPLE_DOUBLE: ColumnElement[bool] = sum(
+    (
+        case((getattr(PlayerGameStats, stat) >= _inline(10), _inline(1)), else_=_inline(0))
+        for stat in TRIPLE_DOUBLE_STATS
+    ),
+    start=_inline(0),
+) >= _inline(3)
+
+# EVENTS-010's records indexes (app.events.records), so each record's top of
+# list and holder are index scans on the full load. Declared here, after the
+# classes, because their keys and predicates are expressions over the
+# mapped columns; the migration creates the same seven.
+Index(
+    "ix_player_game_stats_points_played",
+    PlayerGameStats.points,
+    postgresql_where=PlayerGameStats.played,
+)
+Index(
+    "ix_player_game_stats_rebounds_played",
+    PlayerGameStats.rebounds,
+    postgresql_where=PlayerGameStats.played,
+)
+Index(
+    "ix_player_game_stats_assists_played",
+    PlayerGameStats.assists,
+    postgresql_where=PlayerGameStats.played,
+)
+Index(
+    "ix_player_game_stats_three_pointers_made_played",
+    PlayerGameStats.three_pointers_made,
+    postgresql_where=PlayerGameStats.played,
+)
+Index(
+    "ix_player_game_stats_triple_doubles",
+    PlayerGameStats.player_id,
+    PlayerGameStats.game_id,
+    postgresql_where=PlayerGameStats.played & TRIPLE_DOUBLE,
+)
+Index("ix_games_margin", func.abs(Game.home_score - Game.away_score))
+Index(
+    "ix_games_nba_finals",
+    Game.season,
+    postgresql_where=(Game.game_type == "playoffs") & (Game.label == FINALS_LABEL),
+)

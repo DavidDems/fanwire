@@ -41,7 +41,7 @@ from app.events.errors import (
     NoGamesInScopeError,
     PlayerDidNotPlayError,
 )
-from app.events.models import Game, Player, PlayerGameStats, Team
+from app.events.models import FINALS_LABEL, Game, Player, PlayerGameStats, Team
 
 # Allow-list for search/'s position filter (wiki/CodeContext/Modules/
 # 0x07-search.md), validated at the API boundary (unknown -> 422) --
@@ -781,8 +781,8 @@ REGULAR = "regular"
 # The ordering standings apply; the NBA's own tie-breakers are not.
 STANDINGS_TIE_BREAK = "Win percentage, then wins, then team name (NBA tie-breakers not applied)"
 
-# The dataset's label on every Finals game (tests/fixtures/nba_data/Games.csv).
-FINALS_LABEL = "NBA Finals"
+# FINALS_LABEL (app.events.models, where the Finals index needs it) names
+# every Finals game.
 FINALS_WINS = 4
 
 # The box-score column behind each leaders `stat`; threes are made threes.

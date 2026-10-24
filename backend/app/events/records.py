@@ -11,7 +11,8 @@ so a new record is one more entry in RECORDS, never a branch here.
 
 Everything is computed in Postgres, live at read time (0x02-events.md: no
 aggregate table until a measured query is too slow): values with GROUP BY
-or a plain expression, the top of the list with ORDER BY ... LIMIT, ranks
+or a plain expression, the top of the list with FETCH FIRST ... WITH TIES
+on the ranked value (an index scan where app.events.models declares one), ranks
 with RANK() (competition ranking) over that top, `tied_count` with a count
 in the same statement. No box-score or game row is ever loaded into Python:
 a summary fetches one row per record, a list at most one page.
@@ -57,8 +58,8 @@ from sqlalchemy.orm import QueryableAttribute, Session, aliased
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import CTE
 
-from app.events.models import Game, Player, PlayerGameStats, Team
-from app.events.service import FINALS_LABEL, REGULAR, TeamRef, _pct, season_champions
+from app.events.models import FINALS_LABEL, TRIPLE_DOUBLE, Game, Player, PlayerGameStats, Team
+from app.events.service import REGULAR, TeamRef, _pct, season_champions
 
 # A list holds at most its top LIST_CAP entries; ties at the cut are cut by
 # the list's order.
@@ -152,14 +153,10 @@ class Candidates:
     season, game_id and opponent_id (null where a record has no such thing,
     see _columns) and the columns `order` names. `order`: the list's order as (column, descending)
     pairs, ending in a unique key; its first column is the value entries are
-    ranked on (equal values share a rank). `aggregated`: the rows are a
-    GROUP BY's (a few thousand at most), so tied_count is a window over all
-    of them; otherwise they are game or box-score rows, and tied_count is a
-    count of the rows equal to the first, which an index can answer."""
+    ranked on (equal values share a rank)."""
 
     rows: Select[Any]
     order: tuple[tuple[str, bool], ...]
-    aggregated: bool
     # The value shown is a win percentage, from the `wins` and `games`
     # columns, rounded by events/' one percentage rule (service._pct, as
     # standings' win_pct); the exact fraction still ranks and orders.
@@ -236,34 +233,53 @@ def _team_championships() -> Candidates:
             champions.c.team_id
         ),
         order=(("value", True), ("team_id", False)),
-        aggregated=True,
     )
 
 
 def _season_record(*, best: bool) -> Candidates:
-    sides = _team_sides(REGULAR)
     champions = season_champions()
-    wins = func.count().filter(sides.c.score > sides.c.opponent_score)
-    # The exact fraction ranks; the value shown is three places.
-    fraction = cast(wins, Numeric) / func.count()
-    rows = (
-        select(
-            *_columns(
-                fraction,
-                team_id=sides.c.team_id,
-                season=sides.c.season,
-                fraction=fraction,
-                wins=wins,
-                games=func.count(),
+
+    def side(team: _Column, won: ColumnElement[bool]) -> Select[Any]:
+        """Per season, each team's games and wins on one side, grouped on
+        games directly: a few hundred rows, not one per game."""
+        columns: list[ColumnElement[Any]] = [
+            Game.season.label("season"),
+            team.label("team_id"),
+            func.count().label("games"),
+            func.count().filter(won).label("wins"),
+        ]
+        return (
+            select(*columns)
+            .where(
+                Game.game_type == REGULAR,
+                Game.completed,
+                Game.season.in_(select(champions.c.season)),
             )
+            .group_by(Game.season, team)
         )
-        .where(sides.c.season.in_(select(champions.c.season)))
-        .group_by(sides.c.season, sides.c.team_id)
-    )
+
+    sides = union_all(
+        side(Game.home_team_id, Game.home_score > Game.away_score),
+        side(Game.away_team_id, Game.away_score > Game.home_score),
+    ).subquery("season_sides")
+    # sum() of a count is numeric in Postgres; these are whole numbers.
+    wins = cast(func.sum(sides.c.wins), BigInteger)
+    games = cast(func.sum(sides.c.games), BigInteger)
+    # The exact fraction ranks; the value shown is three places.
+    fraction = cast(wins, Numeric) / games
+    rows = select(
+        *_columns(
+            fraction,
+            team_id=sides.c.team_id,
+            season=sides.c.season,
+            fraction=fraction,
+            wins=wins,
+            games=games,
+        )
+    ).group_by(sides.c.season, sides.c.team_id)
     return Candidates(
         rows=rows,
         order=(("fraction", best), ("wins", best), ("season", False), ("team_id", False)),
-        aggregated=True,
         percentage=True,
     )
 
@@ -282,7 +298,6 @@ def _team_most_points_game() -> Candidates:
             )
         ),
         order=(("value", True), ("date", False), ("team_id", False)),
-        aggregated=False,
     )
 
 
@@ -300,7 +315,6 @@ def _team_largest_win() -> Candidates:
             )
         ).where(Game.game_type.in_(SINGLE_GAME_TYPES), Game.completed),
         order=(("value", True), ("date", False), ("team_id", False)),
-        aggregated=False,
     )
 
 
@@ -324,7 +338,7 @@ def _player_championships() -> Candidates:
         )
         .group_by(PlayerGameStats.player_id)
     )
-    return Candidates(rows=rows, order=(("value", True), ("player_id", False)), aggregated=True)
+    return Candidates(rows=rows, order=(("value", True), ("player_id", False)))
 
 
 def _player_game(stat: str) -> Callable[[], Candidates]:
@@ -353,7 +367,6 @@ def _player_game(stat: str) -> Callable[[], Candidates]:
         return Candidates(
             rows=rows,
             order=(("value", True), ("date", False), ("player_id", False), ("line_id", False)),
-            aggregated=False,
         )
 
     return candidates
@@ -370,22 +383,16 @@ def _career(value: ColumnElement[Any], *where: ColumnElement[bool]) -> Candidate
         .group_by(PlayerGameStats.player_id)
         .having(value > 0)
     )
-    return Candidates(rows=rows, order=(("value", True), ("player_id", False)), aggregated=True)
+    return Candidates(rows=rows, order=(("value", True), ("player_id", False)))
 
 
 def _career_points() -> Candidates:
     return _career(func.sum(PlayerGameStats.points))
 
 
-TRIPLE_DOUBLE_STATS: tuple[str, ...] = ("points", "rebounds", "assists", "steals", "blocks")
-
-
 def _career_triple_doubles() -> Candidates:
-    tens = sum(
-        (case((getattr(PlayerGameStats, stat) >= 10, 1), else_=0) for stat in TRIPLE_DOUBLE_STATS),
-        start=literal(0),
-    )
-    return _career(func.count(), tens >= 3)
+    # models.TRIPLE_DOUBLE: also the predicate of the index that serves this.
+    return _career(func.count(), TRIPLE_DOUBLE)
 
 
 _SINGLE_GAME = "Regular-season and playoff games only (not the play-in or the NBA Cup final)"
@@ -574,46 +581,66 @@ def _window(session: Session) -> tuple[str | None, str | None]:
     return since, through
 
 
+def _by_value(source: Subquery | CTE, candidates: Candidates) -> Any:
+    """`source` ordered on the rank column alone, so equal values tie."""
+    return _ordered(source, candidates.order[:1])[0]
+
+
 def _holder_statement(candidates: Candidates) -> Select[Any]:
-    """At most one row: the list's first entry and its tied_count."""
-    rank_column = candidates.order[0][0]
+    """At most one row: the list's first entry and its tied_count.
+
+    FETCH FIRST 1 ROW WITH TIES on the rank column alone is every entry
+    sharing the top value (an index's first few entries, where one serves):
+    tied_count is their number, the holder the first of them in the list's
+    order."""
     rows = candidates.rows.subquery("candidates")
-    if candidates.aggregated:
-        rows = select(
-            rows, func.count().over(partition_by=rows.c[rank_column]).label("tied_count")
-        ).subquery("windowed")
-        top = select(rows).order_by(*_ordered(rows, candidates.order)).limit(1).subquery("top")
-        # tied_count is already one of top's columns.
-        return _with_refs(top, literal(1).label("rank"))
-    top = select(rows).order_by(*_ordered(rows, candidates.order)).limit(1).subquery("top")
-    again = candidates.rows.subquery("tied")
     tied = (
-        select(func.count())
-        .select_from(again)
-        .where(again.c[rank_column] == top.c[rank_column])
-        .scalar_subquery()
+        select(rows).order_by(_by_value(rows, candidates)).fetch(1, with_ties=True).subquery("tied")
     )
-    return _with_refs(top, literal(1).label("rank"), tied.label("tied_count"))
+    top = (
+        select(tied, func.count().over().label("tied_count"))
+        .order_by(*_ordered(tied, candidates.order))
+        .limit(1)
+        .subquery("top")
+    )
+    # tied_count is already one of top's columns.
+    return _with_refs(top, literal(1).label("rank"))
 
 
 def _list_statement(candidates: Candidates, *, limit: int, offset: int) -> Select[Any]:
     """One row per entry of the page, each with the list's total; one row
-    of nulls but the total when the page is empty."""
-    rank_column, descending = candidates.order[0]
+    of nulls but the total when the page is empty.
+
+    `top` is the first LIST_CAP rows on the rank column alone, WITH TIES:
+    the whole list and anything tied with its last value, read straight off
+    an index where one serves. The list's full order then numbers it, and
+    the position cuts it to LIST_CAP. Ranks are unchanged by the extra rows:
+    an entry's rank counts only the better values, all of them in `top`."""
     rows = candidates.rows.subquery("candidates")
-    top = select(rows).order_by(*_ordered(rows, candidates.order)).limit(LIST_CAP).cte("top")
-    rank_by = top.c[rank_column].desc() if descending else top.c[rank_column].asc()
+    top = (
+        select(rows)
+        .order_by(_by_value(rows, candidates))
+        .fetch(LIST_CAP, with_ties=True)
+        .cte("top")
+    )
     ranked = select(
         top,
-        func.rank().over(order_by=rank_by).label("rank"),
+        func.rank().over(order_by=_by_value(top, candidates)).label("rank"),
         func.row_number().over(order_by=_ordered(top, candidates.order)).label("position"),
     ).subquery("ranked")
     page = (
         _with_refs(ranked)
-        .where(ranked.c.position > offset, ranked.c.position <= offset + limit)
+        .where(
+            ranked.c.position > offset,
+            ranked.c.position <= offset + limit,
+            ranked.c.position <= LIST_CAP,
+        )
         .subquery("page")
     )
-    total = select(func.count().label("total")).select_from(top).subquery("total")
+    # WITH TIES can hold more than LIST_CAP rows; the list never does.
+    total = (
+        select(func.least(func.count(), LIST_CAP).label("total")).select_from(top).subquery("total")
+    )
     return (
         select(total.c.total, page)
         .select_from(total.outerjoin(page, true()))
