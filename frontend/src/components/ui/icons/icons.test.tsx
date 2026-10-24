@@ -16,6 +16,10 @@
  * `HeartFilledIcon`, Lucide's heart path filled with currentColor, and
  * `Repeat2FilledIcon`, Lucide's repeat-2 paths drawn heavier than the default
  * stroke of 2. Both keep the shared frame (aria-hidden, currentColor only).
+ *
+ * UI-010 adds three for the stats and compose redesign, copied from Lucide like
+ * the others: `circle-plus` (the floating new-post button), `paperclip` (attach)
+ * and `circle-x` (clear). Same frame, same `size` and `className` props.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -30,11 +34,14 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  CirclePlusIcon,
+  CircleXIcon,
   HeartFilledIcon,
   HeartIcon,
   HouseIcon,
   ImageIcon,
   MessageCircleIcon,
+  PaperclipIcon,
   Repeat2FilledIcon,
   Repeat2Icon,
   SearchIcon,
@@ -42,6 +49,7 @@ import {
   UserIcon,
   XIcon,
 } from "./index";
+import type { IconProps } from "./index";
 
 /** Lucide name → component: the thirteen of components.md §3, plus chart-column (FRONTEND-009). */
 const ICONS: [string, ComponentType][] = [
@@ -61,6 +69,9 @@ const ICONS: [string, ComponentType][] = [
   ["chart-column", ChartColumnIcon],
   ["heart (filled, UI-009)", HeartFilledIcon],
   ["repeat-2 (heavier, UI-009)", Repeat2FilledIcon],
+  ["circle-plus (UI-010)", CirclePlusIcon],
+  ["paperclip (UI-010)", PaperclipIcon],
+  ["circle-x (UI-010)", CircleXIcon],
 ];
 
 const SHAPES = "path, circle, line, rect, polyline, polygon, ellipse";
@@ -93,6 +104,30 @@ describe.each(ICONS)("icon %s", (_name, Icon) => {
         }
       }
     }
+  });
+});
+
+describe.each([
+  ["circle-plus", CirclePlusIcon],
+  ["paperclip", PaperclipIcon],
+  ["circle-x", CircleXIcon],
+] as [string, ComponentType<IconProps>][])("%s (UI-010)", (_name, Icon) => {
+  it("is 20 px by default, like the others", () => {
+    const { container } = render(<Icon />);
+
+    const svg = container.querySelector("svg") as SVGSVGElement;
+    expect(svg).toHaveAttribute("width", "20");
+    expect(svg).toHaveAttribute("height", "20");
+    expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
+  });
+
+  it("takes size and className", () => {
+    const { container } = render(<Icon size={24} className="lead" />);
+
+    const svg = container.querySelector("svg") as SVGSVGElement;
+    expect(svg).toHaveAttribute("width", "24");
+    expect(svg).toHaveAttribute("height", "24");
+    expect(svg).toHaveClass("lead");
   });
 });
 

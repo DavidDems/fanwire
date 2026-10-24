@@ -17,7 +17,7 @@ file, `tokens.md`, and the section of `layout.md` for its route.
 **Native controls are styled by `base.css`, keyed on attributes that already
 exist.** Every form in the app uses plain `input`, `select`, `textarea` and
 `button` inside `FormField`'s `Field`, which already sets `aria-invalid` and
-`aria-describedby`. So the error border is `[aria-invalid="true"]`, the disabled
+`aria-describedby`. So the error ring is `[aria-invalid="true"]`, the disabled
 look is `:disabled`, and the focus ring is `:focus-visible`, with no class on
 any control. That's why most auth and settings forms need almost no
 feature-level CSS. A native `<button>` (and a file input's
@@ -25,6 +25,23 @@ feature-level CSS. A native `<button>` (and a file input's
 `:where()` so any module class wins. Until each feature moves its buttons onto
 `Button`, they are readable instead of the browser's grey button face, which
 in dark mode put Pale Sky on `#6b6b6b` (`src/styles/native-buttons.test.ts`).
+
+**Soft filled (`UI-010`, the human 2026-10-23).** Every text-like `input`,
+`select` and `textarea`: no border at rest, a `--color-field` fill,
+`--radius-lg`, `--space-4` either side, 48 px (`3rem`) tall for the
+single-line ones, the label above (`Field`). The fill alone is under 3:1
+(`tokens.md` §5), so a 1 px `--color-border-strong` bottom rule, drawn as an
+inset box-shadow, stays in every state. Focus: the fill becomes
+`--color-field-focus` and the `:focus-visible` ring appears; nothing moves (no
+border, padding or size changes on focus). Invalid: a 2 px `--color-danger`
+ring at rest, beside the rule, never a border. A `select` has
+`appearance: none` and a chevron drawn with two `linear-gradient`s, with the
+end padding widened so the text never runs under it. **No CSS file has a
+`url(` or `@import`** (`src/styles/base.test.ts`): no styling makes a request.
+**Under forced colors (`accessibility.md` A20)**, which drops shadows and
+background images, the bottom rule is a real 1 px border, the invalid ring an
+outline (the focus ring still wins), and the select gets its native arrow
+back (`src/styles/forced-colors.test.ts`).
 
 **Text that tests read stays one text node.** `"3 likes"`, `"12 followers"` and
 `"8 following"` are matched exactly by `getByText` (`FeedPage.test.tsx`,
@@ -52,6 +69,9 @@ red commit.
 | `VisuallyHidden` | text for screen readers only (the `.visually-hidden` class from `base.css`) | — | — |
 | `Dialog` (`FRONTEND-010`) | a native `<dialog>` opened with `showModal()` (top layer, page inert, focus kept inside): a sticky header with the title as an `h2` (also the accessible name, `aria-labelledby`) and a Close button (`x` icon, 44 px), then the body. `--color-bg`, 1 px `--color-border`, `--radius-md`, `--shadow-2`, at most `--content-max` wide with a `--space-4` gutter. The backdrop is `--neutral-950` at 0.6 opacity: **there is no scrim token**, so a primitive is used; a styles unit may add one | — | open, closed (renders nothing). Escape is the prevented `cancel` event. The Back icon is `ChevronDownIcon` rotated 90° (no left chevron in `ui/icons/` yet). **A backdrop click is a click whose target, and whose mousedown's target, is the `<dialog>` itself**: the dialog has no padding and does not scroll (its content does), so a scrollbar click or a selection dragged out of the content never closes it. Focus returns to the opener. A `close` event arriving while the element is open again is ignored (StrictMode's re-run). **Since `FRONTEND-012`:** `role="alertdialog"` for confirms (no Close button), and a `<dialog>` inside another acts only on its own `cancel`/`close` events, so a confirm's Escape never closes the thread modal around it |
 | `ConfirmDialog` (`FRONTEND-012`) | `Dialog role="alertdialog"`: the question as the title, one explaining paragraph, then Cancel (`Button secondary`, focused on open) and the action, right-aligned | the action `primary`, or `destructive` (Delete, Deactivate: `--color-danger` fill) | default; in flight (both disabled); failed (an `InlineAlert` inside, and it stays open) |
+| `SearchInput` (`UI-010`) | `Field` around a wrapper holding an `aria-hidden` `SearchIcon` (`--color-text-muted`, inside the fill at the start) and an `input type="search"`, its text padded past the icon | — | as the soft-filled controls, plus `error` (from `Field`) |
+| `SegmentedTabs` (`UI-010`) | an in-page ARIA `tablist` of `<button role="tab">`s and one `tabpanel` around its children. **Not `Tabs`**: it switches a panel on the same page, where `Tabs` is navigation | — | each tab ≥ 44 px (`--target-min`); selected: a `--radius-full` pill in `--color-action` with `--color-on-action` text; others `--color-text-muted`; `:focus-visible` ring. One tab stop (roving `tabindex`); arrows wrap, Home/End. Overflow at 360 scrolls the bar inside itself, never the page. Ids from `useId`, so two bars on one page never collide. Forced colors: the selected tab is underlined |
+| `FloatingButton` (`UI-010`) | a 56 px round action, `position: fixed` bottom right: a `Link` (`to`) or a `<button type="button">` (`onClick`), named by a required `aria-label` | — | `--color-action` fill, `--color-on-action` icon, `--shadow-2`, `:focus-visible` ring, a 2 px edge under forced colors. Phones: above the bottom bar and clear of `env(safe-area-inset-bottom)`. From 40em: `--space-5` from the corner. **No caller in `UI-010`**: `FRONTEND-020` mounts it as the compose **+**. It must not cover a card's More options at 360 (a browser row there) |
 | `Menu` (`FRONTEND-012`) | a button (`aria-haspopup="menu"`, `aria-expanded`) and a `role="menu"` list shown with `popover="manual"` + `showPopover()`, so it sits in the top layer over a modal and is never clipped. `--color-surface`, 1 px `--color-border`, `--radius-md`, `--shadow-2`; items 44 px (`--target-min`), hover `--color-surface-muted`, `:focus-visible` `--focus-ring`, disabled items muted | — | rendered only while open; placed under the button's end edge, flipped above near the viewport's bottom, following scroll. APG menu button keys: arrows, Home/End (roving tab stop), Escape closes it and only it (stopped and default-prevented), Tab or focus leaving closes it |
 
 ### As built (`UI-002`, merged 2026-10-06)
@@ -74,8 +94,11 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `Tabs` | `label: string` (the `nav`'s name) and `items: TabItem[]` (each a route and its text) |
 | `Dialog` | `open: boolean`, `onClose: () => void` (called once per way out; the dialog never closes itself, the caller turns `open` false or unmounts it), `title: string`, `children`, optional `onBack: () => void` (`FRONTEND-011`: a 44 px ghost icon button named "Back" leads the header while it is given; if it disappears while focused, focus moves to Close), optional `role?: "dialog" \| "alertdialog"` and `describedBy?: string` (`FRONTEND-012`) |
 | `ConfirmDialog` | exported from `Dialog.tsx` (`FRONTEND-012`): the title, the explanation, the action's label and tone, `onConfirm`, `onCancel`, and its in-flight and error state |
+| `SearchInput` | `id: string`, `label: string`, `error?: string`, and every other `<input>` prop passed through to the input (`type` is always `search`; no `className`) |
+| `SegmentedTabs` | `label: string` (the tablist's name), `tabs: { id: string; label: string }[]`, `value: string` (the selected id), `onChange: (id: string) => void`, `children` (the panel). Controlled: the caller holds `value` |
+| `FloatingButton` | `aria-label: string` (required, a type error without it), `children` (the icon), and either `to: string` or `onClick: () => void` |
 | `Menu` | `label: string` (the button's and the menu's name), `items: MenuItem[]` (`{ label, onSelect, disabled? }`), `icon?: ReactNode` (shown in place of the label, which stays the name) |
-| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon`, `CircleCheckIcon` and `EllipsisIcon` (`FRONTEND-012`), each taking `size?: number` (default 20) and `className?` |
+| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon`, `CircleCheckIcon`, `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), each taking `size?: number` (default 20) and `className?` |
 
 A feature unit that needs something not listed here (for example a
 `className` on `InlineAlert`, or an `id` on `StatusLine`) can't edit
@@ -86,8 +109,8 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 
 **Deliberately not built** (no screen needs them; build when one does):
 
-- **Tabs.** No view has tabs. `FRONTEND-007`'s two search UIs are two sections,
-  by its own spec.
+- ~~**Tabs.**~~ Built: `Tabs` (route tabs, `FRONTEND-009`) and `SegmentedTabs`
+  (in-page, `UI-010`).
 - **Toast.** Every failure in the app is already inline, beside the control it
   is about, with `role="alert"`. That is the better pattern, and a toast would
   move the message away from its cause.
@@ -98,7 +121,7 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 
 ## 3. Icons
 
-**Copied, not installed.** Fifteen Lucide icons plus two pressed variants (ISC licence, `branding.md` §5)
+**Copied, not installed.** Eighteen Lucide icons plus two pressed variants (ISC licence, `branding.md` §5)
 are copied as inline SVG React components into `src/components/ui/icons/`,
 with Lucide's licence text in `src/components/ui/icons/LICENSE`. There is no
 `lucide-react` dependency (so no `package.json` Director PR), no third-party
@@ -121,6 +144,9 @@ request, and only the glyphs in use.
 | Alert | `circle-alert` | `InlineAlert` |
 | Success | `circle-check` | `StatusLine success` |
 | More options | `ellipsis` | `PostMenu`'s `Menu` button (`FRONTEND-012`) |
+| Compose (+) | `circle-plus` | `FloatingButton` in `FRONTEND-020` (added by `UI-010`, no caller yet) |
+| Attach image | `paperclip` | the compose modal's attach button, `FRONTEND-020` (no caller yet) |
+| Refused | `circle-x` | the compose modal's red refusal line, `FRONTEND-020` (no caller yet) |
 
 **An icon never replaces a label, with one exception.** Every control keeps
 its visible text, which is also its accessible name, and that is what the
@@ -211,7 +237,7 @@ to nothing.
 | `routes/views` `NotFoundView` | page template, `EmptyState`, `buttonClass` | The only view left in `views.tsx` |
 | `routes/HomeView` | `SearchBar` above `FeedPage` | `/`: composed in `routes/` because neither feature imports the other |
 | `routes/BackgroundRoutes` (`FRONTEND-010`) | no styles of its own | Renders the page at one position against the real location or the modal's background, then the modal: the page underneath is never re-mounted, so it keeps its scroll. **`FRONTEND-015`:** the lazy pages wait behind one `Suspense` with a `StatusLine` "Loading…" around the page only |
-| `features/search/SearchBar` | `Card`, `Field` + `input type="search"` (base), `Button primary` (Search) | `form role="search"`; box and button stacked at every width (`layout.md` §3) |
+| `features/search/SearchBar` | `Card`, `SearchInput` (`UI-010`), `Button primary` (Search) | `form role="search"`; box and button stacked at every width (`layout.md` §3) |
 | `features/search/SearchPage` | `StatusLine`, `InlineAlert`, `EmptyState` per section; accounts as one list `Card` with dividers, `Avatar sm`, username link 600, description muted; posts as `PreparedPostNode` cards (`FRONTEND-015`); `Button secondary` full width (Load more accounts / posts) | Every empty state names the query. Accounts and posts only since `FRONTEND-009` (`GameFilter` removed) |
 | `features/games/GamePage` (`FRONTEND-008`) | page template, `h1`, "Final: X won, 117–109" in words, `StatusLine`, `InlineAlert`, "Game not found" `EmptyState` with a link to the feed | Public. Reached from post mentions and Stats rows. **`FRONTEND-017`:** signed in, a completed game (not 0–0) gets "Post about this" (`SquarePenIcon` 16 + link text, hidden " game") under the score heading, to `/compose?link=game_final…`. **`FRONTEND-014`:** opened from a card, it renders inside `DetailModal` (title "Game"); loaded directly it is this page |
 | `features/games/LineScore`, `BoxScore` | real tables (`caption`, `th scope`), each in a labelled, focusable `role="region"` with `overflow-x: auto`; `tabular-nums` | Box-score names link to `/players/<id>` (`FRONTEND-009`). Did-not-play players listed after the table. **`FRONTEND-014`:** `?line=<line_id>` marks that row `aria-current="true"` with an accent tint (`color-mix` 12%), a 0.25rem inset `--color-accent` rule on the row header and a bold name, never the tint alone, and scrolls only its own scroller to it. **`FRONTEND-017`:** signed in, a trailing column (hidden header "Post", `width: 1%`, `position: relative` so the hidden name stays inside the scrolling region) with a compact `SquarePenIcon` + "Post" link per played row (accessible name "Post about <name>’s game"), an empty cell for DNP rows and totals; a guest's table is unchanged |

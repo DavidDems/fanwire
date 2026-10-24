@@ -1,0 +1,47 @@
+/*
+ * FloatingButton (UI-010): a 56 px action circle fixed at the bottom right.
+ * On phones it clears the bottom bar (under var(--space-8) plus the safe area,
+ * routes/AppLayout.module.css) with var(--space-4) to spare; from 40em, where
+ * the nav moves into the header, it sits var(--space-5) from the corner. The
+ * global :focus-visible outline is its ring. Values come from tokens.css by
+ * name only.
+ */
+
+.floating {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(
+    var(--space-8) + var(--space-4) + env(safe-area-inset-bottom, 0px)
+  );
+  z-index: var(--z-sticky);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-on-action);
+  background-color: var(--color-action);
+  box-shadow: var(--shadow-2);
+  text-decoration: none;
+}
+
+.floating:hover {
+  background-color: var(--color-action-hover);
+}
+
+@media (min-width: 40em) {
+  .floating {
+    right: var(--space-5);
+    bottom: var(--space-5);
+  }
+}
+
+/* A20: forced colors drops the fill and the shadow, so give it an edge. */
+@media (forced-colors: active) {
+  .floating {
+    border: 2px solid var(--color-on-action);
+  }
+}
