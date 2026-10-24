@@ -1069,8 +1069,8 @@ the generated schema; each feature has its own `api.ts`.
   the profile item and is current on `/stats/*` and `/players/*`. `NavLink`
   can only mark its own address, so `NavItem` takes `alsoCurrentOn`
   patterns and renders a plain `Link` with `aria-current="page"` on them.
-  The phone bar holds six items for a signed-in visitor (`grid-auto-columns:
-  1fr`).
+  The phone bar holds five items for a signed-in visitor since `FRONTEND-020`
+  moved Compose to the floating + (`grid-auto-columns: 1fr`).
 - **URL state.** `?season=`, `?team=` and `?q=` live in the address through
   `useSearchParams`. The season defaults to the newest from
   `GET /events/seasons` **without being written to the URL** until the user
