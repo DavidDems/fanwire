@@ -11,6 +11,7 @@ import {
 
 import { Field, describeField } from "../../components/FormField";
 import { Button } from "../../components/ui/Button";
+import { ChartColumnIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import type { ComposeMediator } from "./ComposeMediator";
@@ -53,12 +54,14 @@ import styles from "./AttachmentPicker.module.css";
  * back the mediator's history, so it sits beside Post on the page, as Undo
  * mention did.
  *
- * **A disclosure panel, not a dialog.** "Attach stats" is a button with
- * `aria-expanded` that opens a panel in the flow of the form card, under the
- * text box, because the composer may itself be opened over a page and a
- * dialog over a dialog is a trap. Focus moves to the first choice when it
- * opens, Escape closes it, and closing it — by Escape, by the button, or by
- * attaching — puts focus back on Attach stats.
+ * **A disclosure panel, not a dialog.** "Attach stats" (`StatsToggle`, the
+ * attach row's bar chart since `FRONTEND-020`) is a button with
+ * `aria-expanded` that opens a panel in the flow of the form card, because
+ * the composer is itself a dialog and a dialog over a dialog is a trap. The
+ * composer holds whether it is open, since the toggle sits in its row. Focus
+ * moves to the first choice when it opens, Escape closes it, and closing it
+ * (by Escape, by the button, or by attaching) puts focus back on Attach
+ * stats. What is attached is summarised whether the panel is open or not.
  *
  * **Plain controls only** (`components/ui` primitives and native elements):
  * the three choices are `Button`s whose names stay fixed while `aria-pressed`
@@ -97,6 +100,14 @@ export interface AttachmentPickerProps {
   mediator: ComposeMediator;
   /** A link from the address, to check and attach on arrival. */
   prefill?: AddressLink | null;
+  /** Whether the panel is shown: `StatsToggle`, which the composer places, decides. */
+  open: boolean;
+  /** Close the panel: Escape inside it, or a choice that attached. */
+  onClose: () => void;
+  /** The panel's id, for the toggle's `aria-controls`. */
+  panelId: string;
+  /** The toggle's id: focus goes back to it when the panel closes. */
+  toggleId: string;
 }
 
 type Choice = "game" | "playerGame" | "career";
@@ -116,28 +127,20 @@ const SEARCH_MIN_LENGTH = 2;
 export function AttachmentPicker({
   mediator,
   prefill = null,
+  open,
+  onClose,
+  panelId,
+  toggleId,
 }: AttachmentPickerProps) {
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
-  const [open, setOpen] = useState(false);
-  const [choice, setChoice] = useState<Choice | null>(null);
-  const panelId = useId();
-  // Found by id rather than by ref: the shared `Button` (React 18) does not
-  // forward a ref, and its `id` is passed through to the native button.
-  const toggleId = useId();
-  const firstChoiceId = useId();
 
   // Written before the link is sent, and read while rendering what the
   // mediator then publishes, so the summary has its words on the very render
   // the link appears in. A ref rather than state for exactly that ordering.
   const summaries = useRef(new Map<string, string>());
 
-  useEffect(() => {
-    if (open) document.getElementById(firstChoiceId)?.focus();
-  }, [open, firstChoiceId]);
-
   function close(): void {
-    setOpen(false);
-    setChoice(null);
+    onClose();
     document.getElementById(toggleId)?.focus();
   }
 
@@ -191,7 +194,7 @@ export function AttachmentPicker({
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key !== "Escape" || !open) return;
-    // Handled here, so a dialog the composer sits in does not close as well.
+    // Handled here, so the dialog the composer sits in does not close as well.
     event.preventDefault();
     event.stopPropagation();
     close();
@@ -221,73 +224,105 @@ export function AttachmentPicker({
         </section>
       )}
 
-      <div>
-        <Button
-          id={toggleId}
-          type="button"
-          variant="secondary"
-          size="md"
-          aria-expanded={open}
-          aria-controls={open ? panelId : undefined}
-          onClick={() => {
-            if (open) close();
-            else setOpen(true);
-          }}
-        >
-          Attach stats
-        </Button>
+      {open ? <Panel id={panelId} onAttach={attach} /> : null}
+    </div>
+  );
+}
+
+export interface StatsToggleProps {
+  id: string;
+  open: boolean;
+  /** The panel it shows, named by `aria-controls` while it is open. */
+  panelId: string;
+  onToggle: () => void;
+}
+
+/**
+ * Attach stats as the attach row's bar chart (`FRONTEND-020`): an icon-only
+ * disclosure button for `AttachmentPicker`'s panel, which the composer places
+ * beside the paperclip. Its accessible name is the panel's own.
+ */
+export function StatsToggle({ id, open, panelId, onToggle }: StatsToggleProps) {
+  return (
+    <Button
+      id={id}
+      type="button"
+      variant="ghost"
+      size="md"
+      className={styles.toggle}
+      aria-label="Attach stats"
+      aria-expanded={open}
+      aria-controls={open ? panelId : undefined}
+      onClick={onToggle}
+    >
+      <ChartColumnIcon />
+    </Button>
+  );
+}
+
+/** The open panel: the three choices, then the steps of the one chosen. */
+function Panel({
+  id,
+  onAttach,
+}: {
+  id: string;
+  onAttach: (link: DataLink, summary: string) => void;
+}) {
+  const [choice, setChoice] = useState<Choice | null>(null);
+  const firstChoiceId = useId();
+
+  useEffect(() => {
+    document.getElementById(firstChoiceId)?.focus();
+  }, [firstChoiceId]);
+
+  return (
+    <div
+      id={id}
+      className={styles.panel}
+      role="group"
+      aria-label="Attach stats"
+    >
+      <div className={styles.choices}>
+        {CHOICES.map((entry, index) => (
+          <Button
+            key={entry.choice}
+            id={index === 0 ? firstChoiceId : undefined}
+            type="button"
+            variant="secondary"
+            size="md"
+            aria-pressed={choice === entry.choice}
+            onClick={() => {
+              setChoice(entry.choice);
+            }}
+          >
+            {entry.label}
+          </Button>
+        ))}
       </div>
 
-      {open ? (
-        <div
-          id={panelId}
-          className={styles.panel}
-          role="group"
-          aria-label="Attach stats"
-        >
-          <div className={styles.choices}>
-            {CHOICES.map((entry, index) => (
-              <Button
-                key={entry.choice}
-                id={index === 0 ? firstChoiceId : undefined}
-                type="button"
-                variant="secondary"
-                size="md"
-                aria-pressed={choice === entry.choice}
-                onClick={() => {
-                  setChoice(entry.choice);
-                }}
-              >
-                {entry.label}
-              </Button>
-            ))}
-          </div>
-
-          {choice === "game" ? (
-            <GameFinder
-              onGame={(game, label) => {
-                attach({ type: "game_final", ref_id: game.id }, label);
-              }}
-            />
-          ) : null}
-          {choice === "playerGame" ? (
-            <PlayerGamePicker
-              onLine={(lineId, summary) => {
-                attach({ type: "player_game", ref_id: lineId }, summary);
-              }}
-            />
-          ) : null}
-          {choice === "career" ? (
-            <CareerPicker
-              onCareer={(playerId, scope, summary) => {
-                attach(
-                  { type: "player_career", ref_id: playerId, scope },
-                  summary,
-                );
-              }}
-            />
-          ) : null}
-        </div>
+      {choice === "game" ? (
+        <GameFinder
+          onGame={(game, label) => {
+            onAttach({ type: "game_final", ref_id: game.id }, label);
+          }}
+        />
+      ) : null}
+      {choice === "playerGame" ? (
+        <PlayerGamePicker
+          onLine={(lineId, summary) => {
+            onAttach({ type: "player_game", ref_id: lineId }, summary);
+          }}
+        />
+      ) : null}
+      {choice === "career" ? (
+        <CareerPicker
+          onCareer={(playerId, scope, summary) => {
+            onAttach(
+              { type: "player_career", ref_id: playerId, scope },
+              summary,
+            );
+          }}
+        />
       ) : null}
     </div>
   );

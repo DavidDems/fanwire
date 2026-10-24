@@ -67,7 +67,8 @@ const FEED: Partial<Location> = { pathname: "/" };
  * only when the entry is a step of a flow (`useIsFlowEntry`): opened from a
  * card, or from inside the modal. Loaded by its address it matches no overlay,
  * so the pages are matched against the real location and it is the full page
- * it always was. A thread has no page of its own, so it is always an overlay.
+ * it always was. A thread has no page of its own, so it is always an overlay,
+ * and so is compose (`FRONTEND-020`), over its background or the feed.
  *
  * **The page is never re-mounted for it.** The pages are always rendered here,
  * at this one position, and always against an explicit location — the real

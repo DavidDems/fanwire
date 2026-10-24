@@ -37,6 +37,12 @@
   overflow-wrap: anywhere;
 }
 
+/* Attach stats in the attach row: icon-only, a 44 px square at least. */
+.toggle {
+  min-width: var(--target-min);
+  padding: 0;
+}
+
 /* The panel: a quiet box under the button, its steps stacked. */
 .panel {
   display: flex;
