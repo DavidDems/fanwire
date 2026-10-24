@@ -265,14 +265,19 @@ Update this section in every spec PR and unit PR of this thread.
       worst is 174 ms, 26 ms under the line.
     - **R11:** Records opens with one call, and "View all" adds one, pinned
       with msw (FRONTEND-019).
-    - **R7 (the human's call, not yet asked):** a summary costs about 400 ms
-      of micro CPU, and `/api/*` isn't cached by CloudFront. A
-      `Cache-Control` header on the records routes would let CloudFront
-      answer repeats. FRONTEND-019 uses `staleTime: Infinity` for records
-      either way.
+    - **R7, decided by the human (2026-10-23):** the records routes are
+      cacheable for 5 minutes at CloudFront. EVENTS-010 adds
+      `Cache-Control: public, max-age=300` and a `/api/events/records*`
+      behaviour whose cache key holds no `Authorization`; `/api/*` stays
+      uncached. The ceilings are still measured uncached at the origin.
+      FRONTEND-019 uses `staleTime: Infinity` for records either way.
+- **2026-10-23, decided (the human, by `AskUserQuestion`):** EVENTS-010
+  measures on the real CSVs, which the human puts back
+  (`Prompts/06`, `load_nba_history.py`), and builds the synthetic generator
+  anyway.
 - **Next:**
-  1. Ask the human about EVENTS-010's measuring database. The skeptic
-     recommends the real CSVs for the Baseline, plus the generator anyway.
+  1. The human puts the four CSVs back. Load them into `backend-dev` before
+     EVENTS-010's measuring step.
   2. Hand-run `UI-010` and `EVENTS-010` in parallel, once this amendment
      merges.
   3. The skeptic's second pass on each PR, before it's handed over.

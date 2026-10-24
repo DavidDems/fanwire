@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task_id": "EVENTS-010",
-  "objective": "Serve historical records from the loaded games and box scores: a summary of every record with its holder, and each record's full ranked list, computed live at read time in a bounded number of queries, measured at full-load scale against a stated latency ceiling, so the Stats > Records tab can show them.",
+  "objective": "Serve historical records from the loaded games and box scores: a summary of every record with its holder, and each record's full ranked list, computed live at read time in a bounded number of queries, measured at full-load scale against a stated latency ceiling, and cacheable for five minutes at CloudFront (the records routes only), so the Stats > Records tab can show them.",
   "acceptance_criteria": [
     "The records are a fixed, named set, each with an id, a group (team or player), a title, a unit and a rule text: team-championships (NBA titles won), team-best-season and team-worst-season (regular-season win percentage, then wins), team-most-points-game (points by one team in one game), team-largest-win (margin of victory in one game), player-championships (titles won: a played line for the champion in that season's NBA Finals), player-points-game, player-rebounds-game, player-assists-game and player-threes-game (one player in one game), player-career-points (regular-season points, summed) and player-career-triple-doubles (regular-season games with 10 or more in at least three of points, rebounds, assists, steals and blocks).",
     "Counting rules, each named in the record's rule text: single-game records count `regular` and `playoffs` games only (not play-in or the NBA Cup final) and each entry names its game type; season records count `regular` games only and only seasons with a champion (a season in progress never holds a season record); championships use the same NBA Finals rule as GET /events/seasons/{season}/champion, by construction (one shared helper); career records count played rows of `regular` games; every response states the data window as since_season (the earliest stored season) and through_season (the latest).",
@@ -11,6 +11,7 @@
     "Each value is computed in Postgres (GROUP BY, window functions or ORDER BY ... LIMIT), never by loading box-score or game rows into Python; GET /events/records is built in at most 12 queries and each list in at most 3, whatever the data's size, pinned by query-count tests.",
     "Correctness against a synthetic fixture: for every record, the holder and the first five entries equal values the test derives independently from the fixture rows (including a tie, a DNP line, a play-in game, a cup-final game and a season with no champion that must be excluded).",
     "Indexes are allowed, in one Alembic migration with a downgrade, only where a measurement shows they are needed; the migration and the measurement before and after are in the PR.",
+    "Cacheable at the edge (the human, 2026-10-23, the skeptic's R7): both records routes answer a 200 with `Cache-Control: public, max-age=300` (and no Vary on Authorization or Cookie), and every other events route's headers are unchanged; infra/lib/cdn-stack.ts adds a `/api/events/records*` behaviour, ordered before `/api/*`, on the same API origin with the same prefix-stripping function, origin-verify header and security headers policy, GET and HEAD only, with a new cache policy that honours the origin's Cache-Control (minimum TTL 0, default TTL 0, maximum TTL 300 s), keys on the query strings `limit` and `offset` only, and includes no header (Authorization among them) and no cookie in the key, and an origin request policy that forwards those query strings and no viewer header; `/api/*` stays CACHING_DISABLED; infra/test/cdn-stack.test.ts pins the behaviour's order, path, methods, cache policy fields and origin request policy, and that `/api/*` is unchanged; npm test, the IAM wildcard gate and cdk synth pass. The latency ceilings in the Baseline are measured at the origin, uncached: the edge cache never excuses a missed ceiling.",
     "Baseline (declared by the skeptic, 2026-10-23; ceilings are medians of 20 warm calls over HTTP after 3 discarded calls, the method of 0x02-events.md's table): (a) bounded lists, pinned by route tests: every ranked list holds at most its top 100 entries (ties at the 100th place are cut by the list's order), total is min(qualifying, 100), limit is 1-100 (default 25), offset is 0-99 and a larger offset is a 422, so no call can page past the 100th entry; (b) query counts, pinned by query-count tests run on two fixture sizes (the correctness fixture, and the same fixture with every season copied three times) giving identical counts: GET /events/records in at most 13 queries (the data window plus one per record) and each GET /events/records/{record_id} in at most 3, for any limit and offset; (c) no Python-side aggregation: no route in app/events/records.py iterates over box-score or game rows; every value, rank and tied_count comes from Postgres (a test asserts the summary fetches at most 12 + 1 result rows per record query, via a cursor row-count listener); (d) scale: measured on a database of at least 29,000 games and 800,000 box-score rows; the PR and 0x02-events.md state whether it is the real load or the synthetic generator, the machine, and pg_relation_size of player_game_stats and games; (e) latency on the local Docker Postgres used for 0x02's table, unconstrained: GET /events/records at most 250 ms; GET /events/records/player-career-points at most 150 ms at limit 25 and at limit 100; every other record's list at most 50 ms at limit 25 and at limit 100, player-career-triple-doubles included; (f) latency on a db.t4g.micro proxy (the same Postgres 16 container run with --cpus=1 --memory=1g and -c shared_buffers=256MB -c work_mem=4MB): GET /events/records at most 500 ms and player-career-points at most 350 ms, recorded only, other records not required; (g) reads, recorded per record in the PR from EXPLAIN (ANALYZE, BUFFERS) of each of its queries: only player-career-points may read player_game_stats in full (a Seq Scan or full index scan of it); every other record's list query touches at most 2,000 shared buffers (hit plus read); the whole summary touches at most 1.25 x player_game_stats' heap pages plus 4 x games' heap pages; (h) payload, recorded: GET /events/records at most 10 KB and a limit-100 list at most 40 KB; (i) regressions: every existing events route in 0x02's table keeps its median within 10 % or 3 ms, whichever is larger, measured in the same session on the same database before and after the migration; (j) indexes: each one in the migration names the record it serves and is justified by that record's EXPLAIN before and after, in the PR; the migration's upgrade time on the full-scale database is recorded and is at most 60 s locally (the Migration Lambda times out at 10 minutes on a t4g.micro); with the real CSVs, the full load's wall time before and after the migration is recorded. A record that misses its ceiling after indexing is reported in the PR and to the human, and is not shipped behind a cache or a stored table (the human, 2026-10-23: that is a separate unit).",
     "If the real load isn't available, backend/scripts/generate_scale_fixture.py builds a deterministic synthetic database at that scale (fixed seed, 30 teams, 23 seasons, realistic distributions of points and minutes), idempotent; it uses its own id range (nba_game_id from 9,200,000,000, clear of seed_perf.py's 9,000,000,000-9,199,999,999), runs only when ENVIRONMENT is development or perf, and refuses to run if any stored nba_game_id is below 9,000,000,000 (a real load); it is a dev tool, never run in CI or in production, and documented in 0x02-events.md. When it is used, the PR records its triple-double count, its 50-point games, its DNP share, its rows per game and pg_relation_size, against the real data's expected values (the skeptic's report), and says that correctness at scale is unproven.",
     "openapi.json and schema.d.ts match the backend; every existing events route, schema and query count is unchanged; ruff and mypy pass; the backend test suite passes in the container."
@@ -22,10 +23,11 @@
     "backend/scripts/generate_scale_fixture.py",
     "backend/openapi.json",
     "frontend/src/api/schema.d.ts",
-    "wiki/CodeContext/Modules/0x02-events.md"
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "infra/lib/cdn-stack.ts",
+    "infra/test/cdn-stack.test.ts"
   ],
   "forbidden_paths": [
-    "infra/**",
     "frontend/src/features/**",
     "frontend/src/components/**",
     "backend/app/users/**",
@@ -34,12 +36,17 @@
     "backend/app/notifications/**",
     "backend/app/feed/**",
     "backend/app/search/**",
-    "backend/pyproject.toml"
+    "backend/pyproject.toml",
+    "infra/bin/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json"
   ],
   "required_context": [
     "wiki/CodeContext/Modules/0x02-events.md",
     "wiki/CodeContext/Modules/0x00-architecture.md",
-    "wiki/CodeContext/Standards/design-principles.md"
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/build-deployment.md"
   ],
   "required_skills": [
     "backend-testing",
