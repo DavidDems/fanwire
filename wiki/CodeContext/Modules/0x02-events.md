@@ -99,7 +99,7 @@ Only players a loaded box score names are stored. One already stored (matched by
 ## `PlayerGameStats`
 
 ### Schema
-One player's line in one game's box score (`player_game_stats`). Unique on `(game_id, player_id)`, whose index serves box-score reads by game; `ix_player_game_stats_player_id` serves career and game-log reads by player.
+One player's line in one game's box score (`player_game_stats`). Unique on `(game_id, player_id)`, whose index serves box-score reads by game; `ix_player_game_stats_player_id` serves career and game-log reads by player. The records indexes (migration `b5e9c3a7d2f1`, "API routes" → Records) add four single-stat partial indexes over played lines and one over triple-double lines.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -229,6 +229,27 @@ The loader above, run against the live database as the `SportsDataLoad` Lambda: 
     - Season values are win percentages through `_pct`, the one three-place rounding in `app/events`; the exact fraction ranks and orders, in SQL.
   - An unknown id is a 404, a `limit` or `offset` out of range a 422; an empty database answers 200 with null holders and empty lists.
   - **Cached at the edge for five minutes** (the human, 2026-10-23): both routes answer a 200 with `Cache-Control: public, max-age=300`, and `infra/lib/cdn-stack.ts`'s `/api/events/records*` behaviour, ordered before `/api/*`, honours it with a cache key of `limit` and `offset` only: no header, no cookie. That is safe only because the routes never read the caller (no user dependency, pinned by `test_records_contract.py`). Every other route under `/api/*` stays uncached. The latency ceilings are measured at the origin, uncached.
+  - **Query shape.** A list's top is `FETCH FIRST 100 ROWS WITH TIES` on the ranked value alone, then cut to 100 by the full order. A holder is `FETCH FIRST 1 ROW WITH TIES`, and `tied_count` is that set's size. Ordering the inner query by the full order instead (value, date, player, line) gave an incremental sort under a parallel Gather Merge that read about 1,000 index rows for a 100-row list. Season records group each side on `games` before the `UNION ALL`: about 1,400 rows reach the final grouping instead of 55,000.
+  - **Seven indexes (migration `b5e9c3a7d2f1`, measured, 2026-10-24).** `tests/events/test_records_indexes.py` pins each to the statement the app sends.
+
+    | Index | Serves | Before → after (list at limit 100, HTTP median) |
+    |---|---|---|
+    | `ix_player_game_stats_{points,rebounds,assists,three_pointers_made}_played`, each `(stat) WHERE seconds_played IS NOT NULL` | the four single-game player records | 116–138 ms → 16–18 ms; holder 29,380 → about 20 buffers |
+    | `ix_player_game_stats_triple_doubles`, `(player_id, game_id)` over played triple-double lines; its predicate is `models.TRIPLE_DOUBLE`, shared with the record | `player-career-triple-doubles` | 96 ms → 21 ms; 15,284 → 1,006 buffers |
+    | `ix_games_margin`, `(abs(home_score - away_score))` | `team-largest-win` | 31 ms → 15 ms; holder 1,321 → 9 buffers |
+    | `ix_games_nba_finals`, `(season)` over NBA Finals games | every championship rule | `player-championships` 2,687 → 1,461 buffers |
+
+    - **The measurement.** The real 2003-04 to 2025-26 load: 29,646 games and 745,466 box-score rows. That is 108.6 MB of `player_game_stats` (`pg_relation_size`) and 5.4 MB of `games`. Local Docker Postgres 16 on Windows, from the June 2026 CSV download.
+    - **Upgrade** time: 2.3 s, and the indexes total about 17 MB. The full load took 490 s before the migration and 332 s after it. The first run read the CSVs cold, so the index cost isn't visible in that gap.
+    - **Medians after:**
+      - local: the summary in 225 ms, `player-career-points` in 89–91 ms, every other list in 14–44 ms;
+      - the `db.t4g.micro` proxy (`--cpus=1 --memory=1g`, `shared_buffers=256MB`, `work_mem=4MB`): the summary in 383 ms, `player-career-points` in 209–220 ms.
+    - **Payloads:** the summary is 5.4 KB, a 100-entry list at most 27.5 KB.
+    - **Unchanged:** the other events routes stay within 1 ms of their medians before the migration.
+    - **Not indexed:**
+      - `player-career-points` reads every line by design: about 15,300 buffers.
+      - `team-most-points-game` reads `games` twice, as a `UNION ALL` of both sides that no index plan serves: 1,765 buffers and 35 ms.
+      - The season records read `games` twice: 1,419 buffers and 44 ms.
 
 No pagination on `GET /events/teams` (YAGNI — `Team` is a small, static ~30-row table).
 
@@ -240,6 +261,7 @@ A dev tool for measuring at full-load scale without the real CSVs: `python scrip
 - **Deterministic and idempotent:** a fixed seed; a second run finds its range populated and writes nothing.
 - **Shape:** the 30 franchises (the loader's names and divisions), seasons from 2003-04, every team playing exactly `--games-per-team` regular games, playoffs with an NBA Finals that makes a champion each season, about 26–27 box-score rows per game with about 20 % did-not-play rows. Written with `COPY` in one transaction. It prints its games, rows, triple-doubles, 50-point games and DNP share.
 - Its distributions are synthetic: correctness at scale is proven only on the real load.
+- EVENTS-010's measurements used the real load, not this generator.
 
 ## The attachment interface — `posts/`' read of sports data (`EVENTS-009`)
 
