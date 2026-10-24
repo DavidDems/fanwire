@@ -10,8 +10,11 @@
  *   the user picks one, `/stats/seasons` stays the address of "the current
  *   season". A picked season is `?season=`, and a page opened at
  *   `?season=` shows that season (a reload or a shared link).
- * - **The league view** is four sections, each a region named by its `h2`:
- *   "Champion", "Standings", "Leaders" and "Games".
+ * - **The league view** is three sections, each a region named by its
+ *   heading: "Champion", "Standings" and "Leaders". (FRONTEND-018 dropped the
+ *   fourth, "Games": the human, 2026-10-24. Its tests are replaced by one that
+ *   pins it gone; the conference tabs, the team level and the request counts
+ *   are `SeasonsNavigation.test.tsx` and `stats-requests.test.tsx`.)
  *   - Champion: the champion's and the runner-up's names and the series
  *     result from `GET /events/seasons/{season}/champion`, or a line saying
  *     the season has no champion (matching /no champion/i) when they are null.
@@ -26,11 +29,8 @@
  *     `GET /events/seasons/{season}/leaders?stat=`, one table each captioned
  *     with the stat's name, every leader's name a link to `/players/<id>`, and
  *     the `rule` string the API names shown in the section.
- *   - Games: `GET /events/games?season=` from offset 0 in pages of 50 (`limit`
- *     50 or absent, the API's default), in the API's order (newest first),
- *     each game a link to `/games/<id>`, with both teams and both scores in
- *     its row. A full page offers a "Load more games" button, which asks for
- *     the next offset; a short page offers none.
+ *   - No season-wide games: no "Games" region, and `GET /events/games` is
+ *     never asked.
  * - Every table has a caption, a scope on every header cell, and its own
  *   named, focusable scroll region (`src/test/tables.ts`).
  */
@@ -55,14 +55,11 @@ import {
   TIE_BREAK,
   championStub,
   leadersStub,
-  limitOf,
-  offsetOf,
   seasonGames,
   seasonGamesStub,
   seasonsStub,
   standingsStub,
   statsTeams,
-  teamById,
   teamSeasonStub,
   testChampion,
   type GameOut,
@@ -127,13 +124,6 @@ function seasonsAsked(stub: Stub): string[] {
   return stub.requests.map((request) => request.path.season);
 }
 
-/** The table row or list item a link sits in. */
-function rowOf(element: HTMLElement): HTMLElement {
-  const container = element.closest<HTMLElement>("tr, li");
-  if (container === null) throw new Error("the link is in no row or item");
-  return container;
-}
-
 describe("the season picker (criterion 3)", () => {
   it("lists GET /events/seasons newest first, the newest selected, and writes nothing to the URL", async () => {
     const { stubs, router } = openSeasons();
@@ -153,9 +143,9 @@ describe("the season picker (criterion 3)", () => {
       expect(seasonsAsked(stubs.champion)).toContain(NEWEST_SEASON),
     );
     expect(router.state.location.pathname).toBe("/stats/seasons");
-    expect(new URLSearchParams(router.state.location.search).has("season")).toBe(
-      false,
-    );
+    expect(
+      new URLSearchParams(router.state.location.search).has("season"),
+    ).toBe(false);
   });
 
   it("asks every league read for the newest season by default", async () => {
@@ -167,10 +157,9 @@ describe("the season picker (criterion 3)", () => {
       expect(new Set(seasonsAsked(stubs.leaders))).toEqual(
         new Set([NEWEST_SEASON]),
       );
-      expect(
-        stubs.games.requests.map((request) => request.query.get("season")),
-      ).toEqual([NEWEST_SEASON]);
     });
+    // FRONTEND-018: the season-wide games list is gone, and so is its read.
+    expect(stubs.games.requests).toEqual([]);
   });
 
   it("honours ?season= on load: that season selected, and only it asked for", async () => {
@@ -184,9 +173,8 @@ describe("the season picker (criterion 3)", () => {
       new Set(["2023-24"]),
     );
     expect(new Set(seasonsAsked(stubs.leaders))).toEqual(new Set(["2023-24"]));
-    expect(
-      new Set(stubs.games.requests.map((request) => request.query.get("season"))),
-    ).toEqual(new Set(["2023-24"]));
+    // FRONTEND-018: the season-wide games list is gone, and so is its read.
+    expect(stubs.games.requests).toEqual([]);
   });
 
   it("keeps a picked season in the URL and shows it", async () => {
@@ -242,7 +230,9 @@ describe("the champion (criterion 4)", () => {
       tweak: (stubs) => stubs.champion.fail(),
     });
 
-    expect(await within(await region("Champion")).findByRole("alert")).toBeVisible();
+    expect(
+      await within(await region("Champion")).findByRole("alert"),
+    ).toBeVisible();
     const standings = await region("Standings");
     expect(await within(standings).findAllByRole("table")).toHaveLength(2);
   });
@@ -402,99 +392,19 @@ describe("the leaders (criterion 4)", () => {
   });
 });
 
-describe("the season's games (criterion 4, 6)", () => {
-  function gameLinks(games: HTMLElement): HTMLElement[] {
-    return within(games)
-      .queryAllByRole("link")
-      .filter((link) => /^\/games\/\d+$/.test(link.getAttribute("href") ?? ""));
-  }
+describe("the season-wide games list is gone (FRONTEND-018)", () => {
+  it("shows no Games section and never asks GET /events/games", async () => {
+    const { stubs } = openSeasons("/stats/seasons?season=2023-24");
 
-  function distinctGameHrefs(games: HTMLElement): string[] {
-    return [...new Set(gameLinks(games).map((l) => l.getAttribute("href")))].filter(
-      (href): href is string => href !== null,
-    );
-  }
+    await within(await region("Standings")).findAllByRole("table");
+    await within(await region("Leaders")).findAllByRole("table");
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-  it("asks GET /events/games for the season from offset 0, 50 at a time", async () => {
-    const { stubs } = openSeasons();
-
-    await waitFor(() => expect(stubs.games.requests).toHaveLength(1));
-    const [first] = stubs.games.requests;
-    expect(first.query.get("season")).toBe(NEWEST_SEASON);
-    expect(offsetOf(first.query)).toBe(0);
-    expect(limitOf(first.query, 50)).toBe(50);
-  });
-
-  it("links every game to its page, in the API's order", async () => {
-    const games = seasonGames(NEWEST_SEASON, 3);
-    openSeasons("/stats/seasons", { games: { [NEWEST_SEASON]: games } });
-
-    const section = await region("Games");
-    await waitFor(() => expect(gameLinks(section).length).toBeGreaterThan(0));
-    expect(distinctGameHrefs(section)).toEqual(
-      games.map((game) => `/games/${game.id}`),
-    );
-  });
-
-  it("shows both teams and both scores in each game's row", async () => {
-    const games = seasonGames(NEWEST_SEASON, 3);
-    openSeasons("/stats/seasons", { games: { [NEWEST_SEASON]: games } });
-
-    const section = await region("Games");
-    await waitFor(() => expect(gameLinks(section).length).toBeGreaterThan(0));
-    for (const game of games) {
-      const link = gameLinks(section).find(
-        (l) => l.getAttribute("href") === `/games/${game.id}`,
-      );
-      if (link === undefined) throw new Error(`no link to game ${game.id}`);
-      const text = rowText(rowOf(link));
-      for (const teamId of [game.home_team_id, game.away_team_id]) {
-        const team = teamById(teamId);
-        expect(
-          text.includes(team.name) ||
-            new RegExp(`\\b${team.abbreviation}\\b`).test(text),
-          `game ${game.id}'s row names neither ${team.name} nor ${team.abbreviation}`,
-        ).toBe(true);
-      }
-      expect(text).toMatch(figure(game.home_score));
-      expect(text).toMatch(figure(game.away_score));
-    }
-  });
-
-  it("offers Load more games after a full page, which asks for the next 50", async () => {
-    const games = seasonGames(NEWEST_SEASON, 53);
-    const { stubs } = openSeasons("/stats/seasons", {
-      games: { [NEWEST_SEASON]: games },
-    });
-    const user = userEvent.setup();
-
-    const section = await region("Games");
-    const more = await within(section).findByRole("button", {
-      name: "Load more games",
-    });
-    expect(distinctGameHrefs(section)).toHaveLength(50);
-
-    await user.click(more);
-
-    await waitFor(() => expect(distinctGameHrefs(section)).toHaveLength(53));
-    expect(stubs.games.requests.map((r) => offsetOf(r.query))).toEqual([0, 50]);
-    expect(stubs.games.requests[1].query.get("season")).toBe(NEWEST_SEASON);
+    expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
     expect(
-      within(section).queryByRole("button", { name: "Load more games" }),
+      screen.queryByRole("button", { name: /load more games/i }),
     ).toBeNull();
-    expect(distinctGameHrefs(section)).toEqual(
-      games.map((game) => `/games/${game.id}`),
-    );
-  });
-
-  it("offers no Load more after a short page", async () => {
-    openSeasons();
-
-    const section = await region("Games");
-    await waitFor(() => expect(gameLinks(section).length).toBeGreaterThan(0));
-    expect(
-      within(section).queryByRole("button", { name: /load more/i }),
-    ).toBeNull();
+    expect(stubs.games.requests).toEqual([]);
   });
 });
 

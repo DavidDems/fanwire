@@ -15,6 +15,14 @@
  *   `components/ui/`; HTTP goes through `api/`; a failure is the shared
  *   `InlineAlert`.
  * - **No raw HTML.**
+ * - **FRONTEND-018's layout.** The stats reads live in `api/stats.ts`
+ *   (`features/stats/api.ts` is gone), and the navigator in
+ *   `components/stats-nav/`, which `features/stats/` uses: `SeasonsTab`
+ *   renders `StatsNavigator` and `PlayersTab` renders `PlayerResults`. The
+ *   stats feature is `features/stats/` and `components/stats-nav/` together
+ *   for the "formats through games/format" and "shows a failure with
+ *   InlineAlert" sweeps, since the views moved into the navigator. Nothing
+ *   under `components/` imports `features/`, except `features/games/format`.
  *
  * Every sweep is guarded against passing vacuously. Comments are stripped
  * first: stripping can only hide a match, never invent one.
@@ -29,6 +37,8 @@ import { SRC_DIR } from "../../test/css";
 const FEATURES_DIR = join(SRC_DIR, "features");
 const STATS_DIR = join(FEATURES_DIR, "stats");
 const PLAYERS_DIR = join(FEATURES_DIR, "players");
+const COMPONENTS_DIR = join(SRC_DIR, "components");
+const STATS_NAV_DIR = join(COMPONENTS_DIR, "stats-nav");
 
 const MODULES: [string, string][] = [
   ["stats", "StatsPage.tsx"],
@@ -109,6 +119,13 @@ const FOLDERS: [string, string][] = [
   ["players", PLAYERS_DIR],
 ];
 
+/** A feature's shipped files, with the navigator counted as the stats feature's. */
+function featureFiles(directory: string): string[] {
+  return directory === STATS_DIR
+    ? [...shipped(STATS_DIR), ...shipped(STATS_NAV_DIR)]
+    : shipped(directory);
+}
+
 describe("the modules exist where the brief names them", () => {
   it.each(MODULES)("features/%s has %s", (folder, module) => {
     expect(
@@ -122,9 +139,15 @@ describe("the modules exist where the brief names them", () => {
 
     expect(sources.length).toBeGreaterThan(0);
     for (const file of sources) {
-      expect(withoutComments(read(file)).trim().length, posix(file)).toBeGreaterThan(0);
+      expect(
+        withoutComments(read(file)).trim().length,
+        posix(file),
+      ).toBeGreaterThan(0);
       if (file.endsWith(".tsx"))
-        expect(importSpecifiers(read(file)).length, posix(file)).toBeGreaterThan(0);
+        expect(
+          importSpecifiers(read(file)).length,
+          posix(file),
+        ).toBeGreaterThan(0);
     }
   });
 
@@ -162,7 +185,7 @@ describe("reached by address, never by import", () => {
   it.each(FOLDERS)(
     "features/%s formats its figures through games/format",
     (_name, directory) => {
-      const users = shipped(directory).filter((file) =>
+      const users = featureFiles(directory).filter((file) =>
         importSpecifiers(read(file)).some(
           (specifier) =>
             featureOf(file, specifier) === "games" &&
@@ -187,7 +210,7 @@ describe("reached by address, never by import", () => {
 
 describe("the shared layers", () => {
   function importsFromUi(directory: string, component: string): string[] {
-    return shipped(directory)
+    return featureFiles(directory)
       .filter((file) =>
         importSpecifiers(read(file)).some(
           (specifier) =>
@@ -202,18 +225,86 @@ describe("the shared layers", () => {
     expect(importsFromUi(STATS_DIR, "Tabs")).not.toEqual([]);
   });
 
-  it.each(FOLDERS)("features/%s shows a failure with InlineAlert", (_name, directory) => {
-    expect(importsFromUi(directory, "InlineAlert")).not.toEqual([]);
-  });
+  it.each(FOLDERS)(
+    "features/%s shows a failure with InlineAlert",
+    (_name, directory) => {
+      expect(importsFromUi(directory, "InlineAlert")).not.toEqual([]);
+    },
+  );
 
-  it.each(FOLDERS)("features/%s fetches through api/", (_name, directory) => {
-    const fetchers = shipped(directory).filter((file) =>
+  it("features/players fetches through api/", () => {
+    const fetchers = shipped(PLAYERS_DIR).filter((file) =>
       importSpecifiers(read(file)).some((specifier) =>
         /(^|\/)api\/client$/.test(specifier),
       ),
     );
 
     expect(fetchers.map(posix)).not.toEqual([]);
+  });
+
+  it("the stats feature reads through api/stats.ts, and features/stats/api.ts is gone", () => {
+    expect(existsSync(join(SRC_DIR, "api", "stats.ts"))).toBe(true);
+    expect(existsSync(join(STATS_DIR, "api.ts"))).toBe(false);
+    const readers = featureFiles(STATS_DIR).filter((file) =>
+      importSpecifiers(read(file)).some((specifier) =>
+        /(^|\/)api\/stats$/.test(specifier),
+      ),
+    );
+
+    expect(readers.map(posix)).not.toEqual([]);
+  });
+
+  it("api/stats.ts fetches through api/client", () => {
+    const file = join(SRC_DIR, "api", "stats.ts");
+    expect(existsSync(file)).toBe(true);
+    expect(importSpecifiers(read(file))).toContain("./client");
+  });
+});
+
+describe("the navigator's place (FRONTEND-018)", () => {
+  function importers(directory: string, pattern: RegExp): string[] {
+    return shipped(directory)
+      .filter((file) =>
+        importSpecifiers(read(file)).some((specifier) =>
+          pattern.test(specifier),
+        ),
+      )
+      .map(posix);
+  }
+
+  it("SeasonsTab renders StatsNavigator from components/stats-nav/", () => {
+    expect(
+      importers(STATS_DIR, /(^|\/)components\/stats-nav\/StatsNavigator$/),
+    ).toContain("features/stats/SeasonsTab.tsx");
+  });
+
+  it("PlayersTab renders the navigator's PlayerResults view", () => {
+    expect(
+      importers(STATS_DIR, /(^|\/)components\/stats-nav\/PlayerResults$/),
+    ).toContain("features/stats/PlayersTab.tsx");
+  });
+
+  it("nothing under components/ imports features/, but features/games/format", () => {
+    const sources = shipped(COMPONENTS_DIR);
+    expect(sources.length).toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const file of sources) {
+      for (const specifier of importSpecifiers(read(file))) {
+        const resolved = specifier.startsWith(".")
+          ? relative(SRC_DIR, join(file, "..", ...specifier.split("/")))
+              .split(sep)
+              .join("/")
+          : specifier;
+        const match = /(^|\/)features\/(.+)$/.exec(resolved);
+        if (match === null) continue;
+        const target = match[2].replace(/\.[cm]?[jt]sx?$/, "");
+        if (target !== "games/format")
+          offenders.push(`${posix(file)} imports ${specifier}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -224,6 +315,8 @@ describe("no raw HTML", () => {
     const sources = shipped(directory);
 
     expect(sources.length).toBeGreaterThan(0);
-    expect(sources.filter((file) => read(file).includes(needle)).map(posix)).toEqual([]);
+    expect(
+      sources.filter((file) => read(file).includes(needle)).map(posix),
+    ).toEqual([]);
   });
 });
