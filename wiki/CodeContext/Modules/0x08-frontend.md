@@ -30,7 +30,7 @@ What is real:
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) and `Menu` (`FRONTEND-012`: a button and a `popover` list), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), and `EllipsisIcon` (`FRONTEND-012`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) `Menu` (`FRONTEND-012`: a button and a `popover` list), and `SearchInput`, `SegmentedTabs` and `FloatingButton` (`UI-010`, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
@@ -49,6 +49,50 @@ eight styling units (`FrontendUI/implementation-plan.md`). This file stays the
 record of what the frontend *does*; how it looks is recorded there, not here. A
 styling unit that changes behaviour (for example "No replies yet.") records
 that here as usual.
+
+### Soft-filled controls and the shared primitives (`UI-010`)
+
+- **Every text-like `input`, `select` and `textarea` is soft filled, from
+  `base.css` alone.** No border; the `--color-field` fill; `--radius-lg`
+  (12 px); 48 px tall when single-line. No feature CSS changed: every form
+  takes the style through the element rule, as before. The fill is under
+  3:1 against the page and the card in both themes, so a 1 px
+  `--color-border-strong` bottom rule (an inset `box-shadow`) is drawn in
+  every state (WCAG 1.4.11, `tokens.test.ts` measures it).
+- **Focus moves nothing.** `:focus` only changes the fill to
+  `--color-field-focus`; the ring is still the global `:focus-visible`
+  outline. No focus rule sets a border, padding or size (`base.test.ts`).
+- **Invalid is a ring, not a border.** The controls' `[aria-invalid="true"]`
+  adds a 2 px `--color-danger` shadow ring beside the bottom rule. The old
+  bare `[aria-invalid] { border-color }` is gone, so a checkbox marked invalid
+  gets nothing from it. The field's message (`Field`) is unchanged.
+- **Forced colors (`accessibility.md` A20).** Shadows are dropped there, so
+  under `@media (forced-colors: active)` the bottom rule is a real border, the
+  invalid ring an outline (focus still wins), `SegmentedTabs`' selected tab is
+  underlined and `FloatingButton` has a 2 px edge (`styles/forced-colors.test.ts`).
+- **No CSS file has `url(` or `@import`**, so styling makes no request; the
+  select's chevron is two `linear-gradient`s (`base.test.ts`). The
+  placeholder is `--color-text-muted` at full opacity, the colour the
+  contrast test measures.
+- **`SearchInput`** wraps `Field` and an `input type="search"` with a leading
+  `aria-hidden` `SearchIcon`. `SearchBar` uses it: the label, `name="q"`, the
+  100 cap and `role="search"` are unchanged. Its text-padding rule is two
+  classes deep because `base.css` loads after module CSS in the build.
+- **`SegmentedTabs`** is an in-page ARIA `tablist` (automatic activation,
+  roving tab stop, ids from `useId`). `Tabs` stays the route tabs.
+  **`FloatingButton`** is the 56 px fixed action, a `Link` or a button,
+  with a required `aria-label`. Neither has a caller yet: `FRONTEND-018` to
+  `-021` adopt them.
+- **No runtime styling work** in the three primitives or `FormField`: no
+  listeners, observers, `matchMedia`, `requestAnimationFrame` or
+  `useLayoutEffect` (`components/ui/ui-css.test.ts`).
+- **The bundle has a budget test**, `src/test/bundle-budget.test.ts`. It
+  runs Vite's `build()` in vitest and pins the entry JS (149.6 kB gzip,
+  471.0 kB raw), the entry CSS (6.25 kB gzip), every other chunk to within
+  0.1 kB of its recorded size (and no new one), and no file of 500,000 bytes.
+  **A unit that adds or grows a lazy chunk updates its table, in its test
+  commit, with the reason.** This thread's later specs carry it forward
+  (brief 20, R1).
 
 ## Auth (`FRONTEND-002`)
 
