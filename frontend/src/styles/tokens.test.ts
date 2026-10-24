@@ -86,6 +86,9 @@ const SEMANTIC_COLOURS: Record<string, [string, string]> = {
   "--color-warning-subtle": ["#fdf1dc", "#3d350f"],
   "--color-live": ["#c0176f", "#f58cc8"],
   "--color-on-live": ["#ffffff", "#011d28"],
+  // UI-010: the soft-filled form controls' fill at rest and on focus.
+  "--color-field": ["#e6eef2", "#173543"],
+  "--color-field-focus": ["#ffffff", "#1b3c4b"],
 };
 
 /**
@@ -116,6 +119,7 @@ const TYPE_SPACE_SHAPE: Record<string, string> = {
   "--space-8": "4rem",
   "--radius-sm": "4px",
   "--radius-md": "8px",
+  "--radius-lg": "12px",
   "--radius-full": "9999px",
   "--shadow-1": "0 1px 2px rgb(2 43 58 / 0.08), 0 1px 3px rgb(2 43 58 / 0.06)",
   "--shadow-2": "0 4px 12px rgb(2 43 58 / 0.12)",
@@ -412,5 +416,83 @@ describe("no banned pair is declared (tokens.md §6, accessibility.md A2/A4)", (
       );
     });
     expect(teal, "teal is light-theme only (accessibility.md A4)").toEqual([]);
+  });
+});
+
+/**
+ * UI-010 criterion 3 and Baseline (e): the soft-filled field, from tokens.css
+ * in both themes, unrounded.
+ *
+ * The fill alone cannot identify a field (WCAG 1.4.11 needs 3:1 against what
+ * is around it), so the first group documents that it falls short and the
+ * 1 px bottom rule in --color-border-strong is what carries the boundary: it
+ * must reach 3:1 against the fill (at rest and focused) and the page and card
+ * behind it. The text, the placeholder (--color-text-muted), the focus ring
+ * and the invalid ring are checked against what they sit on.
+ */
+describe("the soft-filled field (UI-010)", () => {
+  const BELOW_3: [string, string][] = [
+    ["field", "bg"],
+    ["field", "surface"],
+  ];
+
+  const AT_LEAST: [string, string, 4.5 | 3][] = [
+    ["border-strong", "field", 3],
+    ["border-strong", "field-focus", 3],
+    ["border-strong", "bg", 3],
+    ["border-strong", "surface", 3],
+    ["text-muted", "field", 4.5],
+    ["text-muted", "field-focus", 4.5],
+    ["text", "field", 4.5],
+    ["text", "field-focus", 4.5],
+    ["focus", "bg", 3],
+    ["focus", "surface", 3],
+    ["danger", "bg", 3],
+    ["danger", "surface", 3],
+  ];
+
+  it.each(
+    THEMES.flatMap((theme) =>
+      BELOW_3.map(
+        ([foreground, background]) => [theme, foreground, background] as const,
+      ),
+    ),
+  )(
+    "%s: --color-%s on --color-%s stays below 3:1 (why the bottom rule exists)",
+    (theme, foreground, background) => {
+      const ratio = contrastRatio(
+        colour(`--color-${foreground}`, theme),
+        colour(`--color-${background}`, theme),
+      );
+      expect(ratio).toBeLessThan(3);
+    },
+  );
+
+  it.each(
+    THEMES.flatMap((theme) =>
+      AT_LEAST.map(
+        ([foreground, background, minimum]) =>
+          [theme, foreground, background, minimum] as const,
+      ),
+    ),
+  )(
+    "%s: --color-%s on --color-%s meets %s:1",
+    (theme, foreground, background, minimum) => {
+      const fg = colour(`--color-${foreground}`, theme);
+      const bg = colour(`--color-${background}`, theme);
+      const ratio = contrastRatio(fg, bg);
+      expect(
+        ratio,
+        `${theme} ${foreground} ${fg} on ${background} ${bg} is ${ratio}`,
+      ).toBeGreaterThanOrEqual(minimum);
+    },
+  );
+
+  it("gives the field a fill of its own, not the page's or the card's", () => {
+    for (const theme of THEMES) {
+      const field = colour("--color-field", theme);
+      expect(field).not.toBe(colour("--color-bg", theme));
+      expect(field).not.toBe(colour("--color-surface", theme));
+    }
   });
 });

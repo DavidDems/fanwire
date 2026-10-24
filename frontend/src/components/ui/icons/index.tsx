@@ -4,7 +4,9 @@
  * `UI-009`, two pressed variants of them for the post card: a filled heart and
  * a heavier repeat-2, so a pressed like or repost is told apart by shape and
  * not by colour alone (`accessibility.md`). `FRONTEND-012` adds lucide
- * `ellipsis`, the post card's "More options" menu button.
+ * `ellipsis`, the post card's "More options" menu button. `UI-010` adds three
+ * for the stats and compose redesign: `circle-plus` (the floating new-post
+ * button), `paperclip` (attach) and `circle-x` (clear).
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
  * 1fae58d0a9c661a338036838caf3399b5507bab6. The shape elements below are those
@@ -198,6 +200,37 @@ export function EllipsisIcon(props: IconProps) {
       <circle cx="12" cy="12" r="1" />
       <circle cx="19" cy="12" r="1" />
       <circle cx="5" cy="12" r="1" />
+    </Icon>
+  );
+}
+
+/** lucide: circle-plus — the floating new-post button (`UI-010`) */
+export function CirclePlusIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 12h8" />
+      <path d="M12 8v8" />
+    </Icon>
+  );
+}
+
+/** lucide: paperclip — attach a file (`UI-010`) */
+export function PaperclipIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" />
+    </Icon>
+  );
+}
+
+/** lucide: circle-x — clear a field or an attachment (`UI-010`) */
+export function CircleXIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m15 9-6 6" />
+      <path d="m9 9 6 6" />
     </Icon>
   );
 }

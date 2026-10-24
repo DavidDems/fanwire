@@ -11,6 +11,10 @@
  * Routes), so the box caps at 100, the submit trims, and an empty or
  * whitespace-only submit goes nowhere — a request the API would answer 422
  * is not one to send.
+ *
+ * UI-010: the box is the shared `SearchInput` now, with a leading aria-hidden
+ * search icon inside the field. The form, its `role="search"`, the box's
+ * name, `name="q"`, its cap and every behaviour above are unchanged.
  */
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -129,5 +133,31 @@ describe("the search bar", () => {
 
     expect(currentPath()).toBe("/search");
     expect(currentQuery().get("q")).toBe("suns");
+  });
+});
+
+describe("the search bar's box (UI-010: the shared SearchInput)", () => {
+  it('keeps its label, name="q" and the 100-character cap', () => {
+    renderBar();
+
+    const box = within(screen.getByRole("search")).getByRole("searchbox", {
+      name: BOX_NAME,
+    });
+    expect(box).toHaveAttribute("name", "q");
+    expect(box).toHaveAttribute("maxLength", "100");
+    expect(screen.getByLabelText(BOX_NAME)).toBe(box);
+  });
+
+  it("leads with an aria-hidden search icon inside the field's wrapper", () => {
+    renderBar();
+
+    const box = screen.getByRole("searchbox", { name: BOX_NAME });
+    const wrapper = box.parentElement as HTMLElement;
+    const icons = wrapper.querySelectorAll("svg");
+    expect(icons).toHaveLength(1);
+    expect(icons[0]).toHaveAttribute("aria-hidden", "true");
+    expect(wrapper).not.toContainElement(
+      screen.getByText(BOX_NAME, { selector: "label" }),
+    );
   });
 });

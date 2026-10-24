@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { Field, describeField } from "../../components/FormField";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { SearchInput } from "../../components/ui/SearchInput";
 import styles from "./Search.module.css";
 
 /** The backend's own cap on `q` ([[0x07-search]] Routes). */
@@ -48,18 +48,16 @@ function SearchForm({ initial }: { initial: string }) {
   return (
     <Card>
       <form role="search" className={styles.bar} onSubmit={handleSubmit}>
-        <Field id={BOX_ID} label="Search accounts and posts">
-          <input
-            {...describeField(BOX_ID)}
-            type="search"
-            name="q"
-            maxLength={MAX_QUERY_LENGTH}
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-            }}
-          />
-        </Field>
+        <SearchInput
+          id={BOX_ID}
+          label="Search accounts and posts"
+          name="q"
+          maxLength={MAX_QUERY_LENGTH}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+        />
         <Button type="submit" variant="primary" size="md">
           Search
         </Button>
