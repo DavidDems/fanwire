@@ -40,10 +40,12 @@ runtime styling work, and a few kilobytes at most.
 ## Traps
 
 - **WCAG 1.4.11.** A field with no outline is identified only by its fill,
-  so the fill needs 3:1 against the background it sits on, in both themes.
-  The muted surface today (`#e6eef2` on white) likely won't reach that.
-  Measure it. If no fill both passes and stays "soft", add the bottom rule
-  the spec allows, and say so in the PR rather than shipping a failing fill.
+  so it would need 3:1 against its background. The skeptic's arithmetic
+  settles it: no soft fill can reach 3:1 in either theme (light 1.09 / 1.17,
+  dark 1.35 / 1.15). So every single-line control and select has a 1 px
+  bottom rule in `--color-border-strong`, at rest and on focus.
+  - **The dark focus fill must stay close to `#173543`.** Lightening it to
+    `#1f4757` drops the placeholder to 4.38:1 and the rule to 2.91:1.
 - **Focus must not move anything.** Use an outline or a box-shadow for the
   ring, never a border that appears on focus. The spec pins equal border
   boxes.

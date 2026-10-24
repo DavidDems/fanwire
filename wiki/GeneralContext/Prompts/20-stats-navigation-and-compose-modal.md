@@ -233,12 +233,49 @@ Update this section in every spec PR and unit PR of this thread.
 
 - **2026-10-23, written:** this brief, and the `UI-010` and `EVENTS-010`
   specs with provisional Baselines (one Director PR).
+- **2026-10-23, the skeptic's first pass** (stage 1, read-only, `origin/main`
+  8bda2e1). The verdict is to proceed on both, with tighter Baselines, which
+  this amendment PR lands:
+  - **UI-010:**
+    - The budgets are cut to +1.0 kB JS gzip and +1.25 kB CSS gzip, pinned
+      by a `bundle-budget.test.ts` that runs Vite's build in vitest. CI
+      doesn't fail on the chunk warning.
+    - Source scans enforce "no `url(`" and "no runtime listeners".
+    - **The bottom rule is required:** no soft fill reaches 3:1 in either
+      theme.
+  - **EVENTS-010:**
+    - Every list is capped at its top 100: an unbounded `total` and `offset`
+      meant a full scan of about 650k lines on every call.
+    - The summary is allowed 13 queries, not 12.
+    - **Ceilings:** 50 ms per list, 150 ms for career points, and 250 ms for
+      the summary locally. A db.t4g.micro proxy (500 ms and 350 ms) is
+      recorded.
+    - EXPLAIN buffer caps prove that only career points reads the whole box
+      score.
+    - Five indexes are expected: four single-game, plus a partial index for
+      triple-doubles.
+  - **Carried to later specs** (the risks it couldn't measure):
+    - **R1:** the main chunk is 468 kB raw, 32 kB under the warning. The
+      bundle-budget test carries forward, main stays at most 480 kB raw at
+      the thread's end, and the compose modal and the navigator are
+      `lazy()`, pinned by a test (FRONTEND-018, -020).
+    - **R3:** Stats already fails CLS at 360 wide (0.14). FRONTEND-018's
+      Baseline is under 0.1.
+    - **R4:** a cold-load long-task row on every unit from stage 2. Today's
+      worst is 174 ms, 26 ms under the line.
+    - **R11:** Records opens with one call, and "View all" adds one, pinned
+      with msw (FRONTEND-019).
+    - **R7 (the human's call, not yet asked):** a summary costs about 400 ms
+      of micro CPU, and `/api/*` isn't cached by CloudFront. A
+      `Cache-Control` header on the records routes would let CloudFront
+      answer repeats. FRONTEND-019 uses `staleTime: Infinity` for records
+      either way.
 - **Next:**
-  1. Run the skeptic on `UI-010` and `EVENTS-010`, and land any change to
-     their Baselines as a spec amendment before cutting either branch.
-  2. Ask the human about EVENTS-010's measuring database (the CSVs back, or
-     the synthetic generator).
-  3. Hand-run `UI-010` and `EVENTS-010` in parallel.
+  1. Ask the human about EVENTS-010's measuring database. The skeptic
+     recommends the real CSVs for the Baseline, plus the generator anyway.
+  2. Hand-run `UI-010` and `EVENTS-010` in parallel, once this amendment
+     merges.
+  3. The skeptic's second pass on each PR, before it's handed over.
 
 ## Limits
 
