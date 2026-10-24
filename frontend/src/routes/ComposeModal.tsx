@@ -3,6 +3,7 @@ import { Suspense, lazy, useContext, useEffect, useRef, useState } from "react";
 import { Dialog } from "../components/ui/Dialog";
 import { StatusLine } from "../components/ui/StatusLine";
 import { ShellAccountStatus } from "./AppLayout";
+import styles from "./ComposeModal.module.css";
 import { RequireAuth } from "./guards";
 import { useComposeClose } from "./modal-flow";
 
@@ -85,15 +86,18 @@ export function ComposeModal() {
 
   return (
     <Dialog title="Compose" open onClose={close}>
-      {!active ? (
-        <RequireAuth>{null}</RequireAuth>
-      ) : Loaded ? (
-        <Loaded onPosted={close} />
-      ) : (
-        <Suspense fallback={<StatusLine>Loading…</StatusLine>}>
-          <ComposePage onPosted={close} />
-        </Suspense>
-      )}
+      {/* Anchors the dialog at the top, so the composer grows it downward. */}
+      <div className={styles.composer}>
+        {!active ? (
+          <RequireAuth>{null}</RequireAuth>
+        ) : Loaded ? (
+          <Loaded onPosted={close} />
+        ) : (
+          <Suspense fallback={<StatusLine>Loading…</StatusLine>}>
+            <ComposePage onPosted={close} />
+          </Suspense>
+        )}
+      </div>
     </Dialog>
   );
 }
