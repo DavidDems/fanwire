@@ -283,7 +283,9 @@ describe("only processed media is attached", () => {
     await user.upload(fileInput(), testFile());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(IMAGE_REFUSED);
-    expect(screen.queryByRole("button", { name: /attach/i })).toBeNull();
+    // The paperclip ("Attach an image") stays, so another file can be
+    // chosen; the old second-press Attach button is what must not exist.
+    expect(screen.queryByRole("button", { name: /^attach$/i })).toBeNull();
     expect(mediator.getDraft().mediaIds).toEqual([]);
   });
 

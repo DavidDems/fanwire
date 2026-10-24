@@ -566,7 +566,8 @@ describe("from inside the detail modal: one dialog, and Close returns to the det
     await summaryShown();
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(recorder.paths()).toEqual(["/events/games/501"]);
+    // The recorder sees the client's `/api` base (VITE_API_BASE_URL).
+    expect(recorder.paths()).toEqual(["/api/events/games/501"]);
   });
 });
 
@@ -779,9 +780,13 @@ describe("after a post", () => {
     await waitFor(() => expect(cardUnderneath(NEW_TEXT)).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    const calls = recorder.calls.map(
-      (call) => `${call.method} ${call.pathname}`,
-    );
+    // The recorder sees the client's `/api` base. The new card's controls
+    // read the shared profile query; the test client's staleTime is 0, so it
+    // refetches here, where the app's (30 s, App.tsx) would not: not one of
+    // compose's requests, so it is left out of the count.
+    const calls = recorder.calls
+      .map((call) => `${call.method} ${call.pathname.replace(/^\/api/, "")}`)
+      .filter((call) => call !== "GET /users/me");
     expect(calls.filter((call) => call === "POST /posts")).toHaveLength(1);
     expect(calls.filter((call) => call === "GET /feed")).toHaveLength(2);
     expect(calls).toHaveLength(3);

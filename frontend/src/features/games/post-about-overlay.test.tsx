@@ -76,7 +76,8 @@ describe.each<[string, ComposeTarget, RegExp]>([
       screen.getByRole("heading", { level: 1, name: /Toronto Raptors/ }),
     ).toBe(heading);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(recorder.paths()).toEqual([`/events/games/${GAME.id}`]);
+    // The recorder sees the client's `/api` base (VITE_API_BASE_URL).
+    expect(recorder.paths()).toEqual([`/api/events/games/${GAME.id}`]);
   });
 
   it("Close returns to the game page's own entry, focus on the link", async () => {
