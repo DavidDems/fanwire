@@ -388,3 +388,93 @@ class TeamSeasonOut(BaseModel):
     team: TeamOut
     record: RecordOut
     games: list[TeamSeasonGameOut]
+
+
+# ------------------------------------------------------------------ records
+# EVENTS-010: read models built in app.events.records. (RecordOut above is a
+# team's W-L record; these are historical records.)
+
+RecordGroup = Literal["team", "player"]
+
+
+class RecordPlayerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    first_name: str | None
+    last_name: str | None
+
+
+class RecordGameOut(BaseModel):
+    """The game a single-game record was set in, and the opponent."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: datetime
+    game_type: str | None
+    opponent_abbreviation: str | None
+
+
+class RecordEntryOut(BaseModel):
+    """One entry of a ranked record list. `rank` is competition ranking
+    (equal values share a rank, the next rank skips). `team` is the team
+    (for a player's single-game record, the team they played for), null for
+    a player's count or career sum; `season` and `game` are null where the
+    record has none. `value` is an integer, except a season record's win
+    percentage (a fraction from 0 to 1, three places)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    rank: int
+    value: int | float
+    team: TeamRefOut | None
+    player: RecordPlayerOut | None
+    season: str | None
+    game: RecordGameOut | None
+
+
+class RecordHolderOut(RecordEntryOut):
+    """The list's first entry; `tied_count` is how many entries share its
+    value (1 when it is alone)."""
+
+    tied_count: int
+
+
+class RecordSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    group: RecordGroup
+    title: str
+    unit: str
+    rule: str
+    holder: RecordHolderOut | None
+
+
+class RecordsSummaryOut(BaseModel):
+    """GET /events/records. The data window is the earliest and latest
+    stored seasons, null when there are none."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    since_season: str | None
+    through_season: str | None
+    records: list[RecordSummaryOut]
+
+
+class RecordListOut(BaseModel):
+    """GET /events/records/{record_id}: one page of the record's top 100
+    entries. `total` is how many entries the list holds (at most 100)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    group: RecordGroup
+    title: str
+    unit: str
+    rule: str
+    since_season: str | None
+    through_season: str | None
+    total: int
+    entries: list[RecordEntryOut]

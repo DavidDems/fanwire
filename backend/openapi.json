@@ -2791,6 +2791,272 @@
         "title": "PublicUserOut",
         "type": "object"
       },
+      "RecordEntryOut": {
+        "description": "One entry of a ranked record list. `rank` is competition ranking\n(equal values share a rank, the next rank skips). `team` is the team\n(for a player's single-game record, the team they played for), null for\na player's count or career sum; `season` and `game` are null where the\nrecord has none. `value` is an integer, except a season record's win\npercentage (a fraction from 0 to 1, three places).",
+        "properties": {
+          "game": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordGameOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "player": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordPlayerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "rank",
+          "value",
+          "team",
+          "player",
+          "season",
+          "game"
+        ],
+        "title": "RecordEntryOut",
+        "type": "object"
+      },
+      "RecordGameOut": {
+        "description": "The game a single-game record was set in, and the opponent.",
+        "properties": {
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "opponent_abbreviation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opponent Abbreviation"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "game_type",
+          "opponent_abbreviation"
+        ],
+        "title": "RecordGameOut",
+        "type": "object"
+      },
+      "RecordHolderOut": {
+        "description": "The list's first entry; `tied_count` is how many entries share its\nvalue (1 when it is alone).",
+        "properties": {
+          "game": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordGameOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "player": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordPlayerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tied_count": {
+            "title": "Tied Count",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "rank",
+          "value",
+          "team",
+          "player",
+          "season",
+          "game",
+          "tied_count"
+        ],
+        "title": "RecordHolderOut",
+        "type": "object"
+      },
+      "RecordListOut": {
+        "description": "GET /events/records/{record_id}: one page of the record's top 100\nentries. `total` is how many entries the list holds (at most 100).",
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RecordEntryOut"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "group": {
+            "enum": [
+              "team",
+              "player"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "since_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since Season"
+          },
+          "through_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Through Season"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "group",
+          "title",
+          "unit",
+          "rule",
+          "since_season",
+          "through_season",
+          "total",
+          "entries"
+        ],
+        "title": "RecordListOut",
+        "type": "object"
+      },
       "RecordOut": {
         "description": "A team's regular-season record (only `regular` games count: NBA Cup\ngroup and knockout games do; play-in, playoffs and the cup final do\nnot), with home and away splits.",
         "properties": {
@@ -2828,6 +3094,132 @@
           "away_losses"
         ],
         "title": "RecordOut",
+        "type": "object"
+      },
+      "RecordPlayerOut": {
+        "properties": {
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          }
+        },
+        "required": [
+          "id",
+          "first_name",
+          "last_name"
+        ],
+        "title": "RecordPlayerOut",
+        "type": "object"
+      },
+      "RecordSummaryOut": {
+        "properties": {
+          "group": {
+            "enum": [
+              "team",
+              "player"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecordHolderOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "group",
+          "title",
+          "unit",
+          "rule",
+          "holder"
+        ],
+        "title": "RecordSummaryOut",
+        "type": "object"
+      },
+      "RecordsSummaryOut": {
+        "description": "GET /events/records. The data window is the earliest and latest\nstored seasons, null when there are none.",
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/RecordSummaryOut"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "since_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since Season"
+          },
+          "through_season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Through Season"
+          }
+        },
+        "required": [
+          "since_season",
+          "through_season",
+          "records"
+        ],
+        "title": "RecordsSummaryOut",
         "type": "object"
       },
       "SeasonLineOut": {
@@ -4326,6 +4718,95 @@
           }
         },
         "summary": "List Player Games",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/records": {
+      "get": {
+        "description": "Every historical record, team records then player records, each\nwith its rule and its holder: the first entry of its list and\n`tied_count`, how many share that value; null when no stored data\nqualifies. `since_season` and `through_season` are the stored data's\nwindow. Cacheable: `Cache-Control: public, max-age=300`.",
+        "operationId": "get_records_events_records_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordsSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Records",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/records/{record_id}": {
+      "get": {
+        "description": "One page of a record's ranked list, which holds at most its top 100\nentries (a tie at the 100th place is cut by the list's order); `total`\nis how many it holds. Ordered by value (ascending for\nteam-worst-season, descending for every other), then date or season,\nthen id. Cacheable: `Cache-Control: public, max-age=300`.\n\n404: an unknown record id. 422: `limit` outside 1-100 or `offset`\noutside 0-99.",
+        "operationId": "get_record_events_records__record_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 99,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Record",
         "tags": [
           "events"
         ]

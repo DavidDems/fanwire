@@ -99,7 +99,7 @@ Only players a loaded box score names are stored. One already stored (matched by
 ## `PlayerGameStats`
 
 ### Schema
-One player's line in one game's box score (`player_game_stats`). Unique on `(game_id, player_id)`, whose index serves box-score reads by game; `ix_player_game_stats_player_id` serves career and game-log reads by player.
+One player's line in one game's box score (`player_game_stats`). Unique on `(game_id, player_id)`, whose index serves box-score reads by game; `ix_player_game_stats_player_id` serves career and game-log reads by player. The records indexes (migration `b5e9c3a7d2f1`, "API routes" → Records) add four single-stat partial indexes over played lines and one over triple-double lines.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -215,7 +215,56 @@ The loader above, run against the live database as the `SportsDataLoad` Lambda: 
     - BOS's 2023-24 record is 64-18 (37-4 at home, 27-14 away).
     - The 2023-24 scoring leaders are Dončić 33.9, Antetokounmpo 30.4 and Gilgeous-Alexander 30.1. Embiid is out: he played under 65 games.
 
+- **Records (`EVENTS-010`).** `app.events.records` holds `RECORDS`, a fixed registry of twelve records, team records first: `team-championships`, `team-best-season`, `team-worst-season`, `team-most-points-game`, `team-largest-win`, `player-championships`, `player-points-game`, `player-rebounds-game`, `player-assists-game`, `player-threes-game`, `player-career-points`, `player-career-triple-doubles`. Each has an id, group, title, unit and rule text, and a query builder (a Strategy, [[wiki/CodeContext/Standards/gof-patterns|GoF]]) returning its *candidates*: every qualifying row with its value, and the list's order. One read path ranks, caps and pages any record's candidates, so a new record is one more registry entry. Computed live, as standings and leaders are: no aggregate table.
+  - **Counting rules**, each stated in its rule text:
+    - Single-game records count `regular` and `playoffs` games only (not play-in or the cup final), and played lines only.
+    - Season records count `regular` games, and only seasons with a champion: a season in progress never holds one.
+    - Championships use `champion`'s rule through one helper: `service.season_champions()` (one `ROW_NUMBER()` over every season's Finals wins) is built on the same `_finals_teams`/`_finals_wins`/`_finals_order` as `champion`, so they agree by construction. A player's title is a season with a played line for the champion in that season's NBA Finals.
+    - Career records count played lines of `regular` games. A triple-double is 10 or more in at least three of points, rebounds, assists, steals and blocks.
+    - Team records ignore a game without a result (`Game.completed`).
+  - `GET /events/records`: `{since_season, through_season, records: [{id, group, title, unit, rule, holder}]}`. `holder` is the list's first entry plus `tied_count`, how many entries share its value (all of them, not only those inside the cap); null when nothing qualifies. The window is the earliest and latest stored season. **13 queries**: the window, then one per record fetching at most one row.
+  - `GET /events/records/{record_id}?limit=&offset=`: `{id, group, title, unit, rule, since_season, through_season, total, entries}`. A list holds at most its **top 100** (a tie at the 100th place is cut by the list's order); `total` is how many it holds; `limit` 1–100 (default 25), `offset` 0–99, so no call pages past the 100th entry. **2 queries**: the window, then the page with its total.
+    - An entry has `rank` (competition ranking, `RANK()`: 1, 1, 3), `value`, `team` (id, name, abbreviation), `player` (id, names), `season` and `game` (id, date, type, opponent abbreviation), each null where the record has none. A player's single-game entry names the team he played for.
+    - Order: value (ascending for `team-worst-season`, descending otherwise), then wins for season records (more first for best, fewer first for worst), then date or season (earlier first), then team or player id.
+    - Season values are win percentages through `_pct`, the one three-place rounding in `app/events`; the exact fraction ranks and orders, in SQL.
+  - An unknown id is a 404, a `limit` or `offset` out of range a 422; an empty database answers 200 with null holders and empty lists.
+  - **Cached at the edge for five minutes** (the human, 2026-10-23): both routes answer a 200 with `Cache-Control: public, max-age=300`, and `infra/lib/cdn-stack.ts`'s `/api/events/records*` behaviour, ordered before `/api/*`, honours it with a cache key of `limit` and `offset` only: no header, no cookie. That is safe only because the routes never read the caller (no user dependency, pinned by `test_records_contract.py`). Every other route under `/api/*` stays uncached. The latency ceilings are measured at the origin, uncached.
+  - **Query shape.** A list's top is `FETCH FIRST 100 ROWS WITH TIES` on the ranked value alone, then cut to 100 by the full order. A holder is `FETCH FIRST 1 ROW WITH TIES`, and `tied_count` is that set's size. Ordering the inner query by the full order instead (value, date, player, line) gave an incremental sort under a parallel Gather Merge that read about 1,000 index rows for a 100-row list. Season records group each side on `games` before the `UNION ALL`: about 1,400 rows reach the final grouping instead of 55,000. The summary's twelve holder statements take no parameters, so each is built once per process: rebuilding them on every call cost about 20 ms of Python.
+  - **Eight indexes (migration `b5e9c3a7d2f1`, measured, 2026-10-24).** `tests/events/test_records_indexes.py` pins each to the statement the app sends.
+
+    | Index | Serves | Before → after (list at limit 100, HTTP median) |
+    |---|---|---|
+    | `ix_player_game_stats_{points,rebounds,assists,three_pointers_made}_played`, each `(stat) WHERE seconds_played IS NOT NULL` | the four single-game player records | 116–138 ms → 16–18 ms; holder 29,380 → about 20 buffers |
+    | `ix_player_game_stats_triple_doubles`, `(player_id, game_id)` over played triple-double lines; its predicate is `models.TRIPLE_DOUBLE`, shared with the record | `player-career-triple-doubles` | 96 ms → 21 ms; 15,284 → 1,006 buffers |
+    | `ix_games_margin`, `(abs(home_score - away_score))` | `team-largest-win` | 31 ms → 15 ms; holder 1,321 → 9 buffers |
+    | `ix_games_nba_finals`, `(season)` over NBA Finals games | every championship rule | `player-championships` 2,687 → 1,461 buffers |
+    | `ix_games_season`, `(season)` | the data window (min and max season) that every records call reads | 657 → 7 buffers, 6 ms → 0.1 ms |
+
+    - **The measurement.** The real 2003-04 to 2025-26 load: 29,646 games and 745,466 box-score rows. That is 108.6 MB of `player_game_stats` (`pg_relation_size`) and 5.4 MB of `games`. Local Docker Postgres 16 on Windows, from the June 2026 CSV download.
+    - **Upgrade** time: 3.0 s, and the indexes total about 18 MB. The full load took 490 s before the migration and 332 s after it. The first run read the CSVs cold, so compare season by season instead: a season that took 14–15 s without the indexes takes 14–15 s with them, so the indexes add no measurable load time.
+    - **Medians after:**
+      - local: the summary in 187–193 ms, `player-career-points` in 100–107 ms, every other list in 12–41 ms;
+      - the `db.t4g.micro` proxy (`--cpus=1 --memory=1g`, `shared_buffers=256MB`, `work_mem=4MB`): the summary in 315–351 ms, `player-career-points` in 210–274 ms.
+    - **Payloads:** the summary is 5.4 KB, a 100-entry list at most 27.5 KB.
+    - **Unchanged:** the other events routes stay within 1.5 ms of their medians before the migration.
+    - **Not indexed:**
+      - `player-career-points` reads every line by design: about 15,300 buffers.
+      - `team-most-points-game` reads `games` twice, as a `UNION ALL` of both sides: 1,765 buffers and 35 ms. Indexes on `home_score` and `away_score` were tried and gave no index plan, even with sequential scans off.
+      - The season records read `games` through `ix_games_season` once per champion season, on each side: 1,649 buffers and 41 ms.
+    - **One Baseline line is missed, and the human accepted it (2026-10-24):** the whole summary touches about 22,200 buffers against the skeptic's cap of 19,193 (1.25 × `player_game_stats`' heap plus 4 × `games`'). The overrun is all repeat reads of `games`. Every latency ceiling is met.
+    - **The scale floor was not reached either, also accepted by the human:** the complete real dataset has 745,466 box-score rows, not the 800,000 the skeptic estimated.
+
 No pagination on `GET /events/teams` (YAGNI — `Team` is a small, static ~30-row table).
+
+## The scale generator — `scripts/generate_scale_fixture.py` (`EVENTS-010`)
+
+A dev tool for measuring at full-load scale without the real CSVs: `python scripts/generate_scale_fixture.py [--seasons 23] [--games-per-team 82]`, cwd `backend/`, `DATABASE_URL` pointing at a migrated database. Never run in CI or in production.
+- **Fail-closed:** refuses (exit 1, nothing written) unless `ENVIRONMENT` is exactly `development` or `perf`, and when any stored `nba_game_id` is below 9,000,000,000 (a real load).
+- **Its own id range:** teams, players and games from 9,200,000,000, clear of `seed_perf.py`'s 9,000,000,000–9,199,999,999.
+- **Deterministic and idempotent:** a fixed seed; a second run finds its range populated and writes nothing.
+- **Shape:** the 30 franchises (the loader's names and divisions), seasons from 2003-04, every team playing exactly `--games-per-team` regular games, playoffs with an NBA Finals that makes a champion each season, about 26–27 box-score rows per game with about 20 % did-not-play rows. Written with `COPY` in one transaction. It prints its games, rows, triple-doubles, 50-point games and DNP share.
+- Its distributions are synthetic: correctness at scale is proven only on the real load.
+- EVENTS-010's measurements used the real load, not this generator.
 
 ## The attachment interface — `posts/`' read of sports data (`EVENTS-009`)
 
