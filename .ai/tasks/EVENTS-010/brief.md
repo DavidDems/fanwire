@@ -20,6 +20,14 @@ This unit serves Historical.
   a measured query is too slow"). A record that misses its ceiling, even with
   an index, is reported. It isn't hidden behind a cache or a stored table,
   because that is its own later unit.
+- **Cacheable for five minutes at CloudFront** (the human, after the
+  skeptic's R7). A summary costs about 400 ms of database CPU on the micro,
+  and `/api/*` is uncached, so repeats would each pay it. The records
+  routes send `Cache-Control: public, max-age=300`, and a CloudFront
+  behaviour for `/api/events/records*` only honours it. Records are public,
+  so the cache key holds no `Authorization`. Everything else under `/api/*`
+  stays uncached. The ceilings are still measured at the origin: the cache
+  never excuses a miss.
 - **The record list is the Director's pick** (the human: "you can pick a
   list"). It's in criterion 1, chosen because the stored data can answer
   each one honestly.
@@ -74,6 +82,16 @@ This is the unit where the skeptic matters most:
   three of five" is a sum of five `CASE` expressions in SQL, not a Python
   loop.
 - **Competition ranking** is `RANK()`, not `DENSE_RANK()` or `ROW_NUMBER()`.
+- **The behaviour's order matters.** CloudFront takes the first matching
+  path pattern, so `/api/events/records*` must come before `/api/*` in
+  `additionalBehaviors`. The infra test pins the order.
+- **An `Authorization` header in the cache key** would make the cache
+  per-user, and so useless. Leaving it out is only safe because the records
+  routes never read the caller. Keep them dependency-free (no
+  `get_current_user`), and pin that.
+- **The cache is deployed by `deploy.yml`**, with the human's approval. No
+  session runs `cdk deploy`. Run `npm test` and `npm run synth` in
+  `infra/`.
 - **`openapi-drift`:** regenerate `openapi.json` and `schema.d.ts` in the
   same commit as the routes.
 - **The container suite** (`docker compose run --rm backend-test`) is the
@@ -82,6 +100,6 @@ This is the unit where the skeptic matters most:
 
 ## Not in this task
 
-Any frontend; seasonal leaders (they already exist); a cache, a stored
-records table or a materialized view; records before 2003-04 (not in the
-data).
+Any frontend; seasonal leaders (they already exist); a server-side cache,
+a stored records table or a materialized view (the edge cache above is the
+only cache); records before 2003-04 (not in the data).
