@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from app.db import Base, make_session_factory
+from app.events import records
 from tests.events.players_support import make_client, make_players_engine
 from tests.events.records_support import (
     RECORD_IDS,
@@ -114,3 +115,28 @@ def test_each_list_is_at_most_3_queries_for_any_page_at_both_sizes(
         assert 1 <= len(small[key].statements) <= LIST_MAX_QUERIES, (key, small[key].statements)
         assert 1 <= len(large[key].statements) <= LIST_MAX_QUERIES, (key, large[key].statements)
         assert len(large[key].statements) == len(small[key].statements), key
+
+
+def test_the_summary_builds_each_holder_statement_at_most_once(session_factory, monkeypatch):
+    """The holder statements take no parameters, yet building all twelve
+    costs about 20 ms of Python per summary on the full load, against a
+    250 ms latency ceiling the summary measures close to. Each is built once
+    per process and reused: two summaries build at most len(RECORDS) in all
+    (none, if an earlier test already built them), and give the same answer."""
+    calls = 0
+    original = records._holder_statement
+
+    def counting(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(records, "_holder_statement", counting)
+    with session_factory() as session:
+        build_fixture(session)
+        session.commit()
+        first = records.records_summary(session)
+        second = records.records_summary(session)
+
+    assert first == second
+    assert calls <= len(records.RECORDS), calls
