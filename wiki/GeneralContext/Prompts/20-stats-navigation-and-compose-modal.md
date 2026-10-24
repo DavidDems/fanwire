@@ -174,6 +174,33 @@ no unit role may write `FrontendUI/`.
 - **Decisions:** anything that is the human's, ask with `AskUserQuestion`.
   Manual steps go in an ordered list, with one line of PowerShell per command.
 
+## Local data
+
+- **The dataset:** the Eoin Moore Kaggle dataset "NBA Dataset: Box Scores and
+  Stats (1947–Today)". Its four CSVs (`Games.csv`, `PlayerStatistics.csv`,
+  `TeamStatistics.csv` and `Players.csv`) go straight into
+  `C:\Users\david\data\nba`. That folder is outside the repository and is
+  never committed.
+  - **Status, 2026-10-23:** pending. Kaggle updated the dataset that day and
+    the download waited on "awaiting compression".
+  - **Before loading,** check the four files are there. A newer dataset may
+    hold a few more 2025-26 games than the live load, and that's fine for
+    measuring.
+- **Load it into `backend-dev`'s Postgres** from the host, with the backend
+  venv. Load one season per run: one run holds its whole box score in memory
+  (`backend/scripts/load_nba_history.py`).
+  - One PowerShell line, from the repository root, with `backend-dev` and
+    `postgres` running:
+    `$env:DATABASE_URL='postgresql+psycopg://fanwire:fanwire@localhost:5432/fanwire'; foreach ($y in 2003..2025) { $s = "$y-$((($y + 1) % 100).ToString('00'))"; backend\.venv\Scripts\python backend\scripts\load_nba_history.py --data-dir C:\Users\david\data\nba --season $s; if ($LASTEXITCODE -ne 0) { break } }`
+- **The dev database is ephemeral.** `docker compose down` and a fresh `up`
+  start it empty, so leave `postgres` running until EVENTS-010's measurements
+  and the stage 2 browser rows are done.
+  - While the load is in place, browser rows use it, not the small SQL
+    fixture. A fresh database needs the test accounts' profiles created again
+    on first sign-in.
+- **Memory:** a full load plus a test run is a lot for the 16 GB machine.
+  Don't load, or start a container, while another session is running tests.
+
 ## Mechanics learned the hard way
 
 - **Symptom: no stats data in the browser rows.**
@@ -275,12 +302,21 @@ Update this section in every spec PR and unit PR of this thread.
   measures on the real CSVs, which the human puts back
   (`Prompts/06`, `load_nba_history.py`), and builds the synthetic generator
   anyway.
+- **2026-10-23, ready to hand-run:** the Baseline amendment merged as #230,
+  so both branches can be cut from `main`. **The dataset is pending**: Kaggle
+  re-published it on 2026-10-23 and shows "awaiting compression". The human
+  downloads it within a few hours, into `C:\Users\david\data\nba` ("Local
+  data" below).
 - **Next:**
-  1. The human puts the four CSVs back. Load them into `backend-dev` before
-     EVENTS-010's measuring step.
-  2. Hand-run `UI-010` and `EVENTS-010` in parallel, once this amendment
-     merges.
+  1. Hand-run `UI-010` and `EVENTS-010` in parallel, each in its own session
+     and worktree.
+  2. EVENTS-010 does everything that needs no data first: the tests, the
+     implementation, the generator and the infra cache behaviour. Its
+     measuring step waits for the four CSVs, and the session checks the
+     folder before it starts.
   3. The skeptic's second pass on each PR, before it's handed over.
+  4. Then the FRONTEND-018 and FRONTEND-020 specs (stage 2), carrying R1, R3
+     and R4.
 
 ## Limits
 
