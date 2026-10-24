@@ -204,7 +204,7 @@ TRIPLE_DOUBLE: ColumnElement[bool] = sum(
 # EVENTS-010's records indexes (app.events.records), so each record's top of
 # list and holder are index scans on the full load. Declared here, after the
 # classes, because their keys and predicates are expressions over the
-# mapped columns; the migration creates the same seven.
+# mapped columns; the migration creates the same eight.
 Index(
     "ix_player_game_stats_points_played",
     PlayerGameStats.points,
@@ -237,3 +237,4 @@ Index(
     Game.season,
     postgresql_where=(Game.game_type == "playoffs") & (Game.label == FINALS_LABEL),
 )
+Index("ix_games_season", Game.season)

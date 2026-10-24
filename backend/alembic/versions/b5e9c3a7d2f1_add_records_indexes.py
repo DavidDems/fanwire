@@ -1,4 +1,4 @@
-"""add the seven indexes the historical records read (EVENTS-010)
+"""add the eight indexes the historical records read (EVENTS-010)
 
 Revision ID: b5e9c3a7d2f1
 Revises: d4f8b2e6a1c3
@@ -12,6 +12,7 @@ Each serves one record of app.events.records:
 - ix_player_game_stats_triple_doubles: player-career-triple-doubles
 - ix_games_margin: team-largest-win
 - ix_games_nba_finals: championships (team-championships, player-championships)
+- ix_games_season: the data window (min and max season), read on every records call
 """
 
 from collections.abc import Sequence
@@ -70,10 +71,12 @@ def upgrade() -> None:
         ["season"],
         postgresql_where=sa.text("game_type = 'playoffs' AND label = 'NBA Finals'"),
     )
+    op.create_index("ix_games_season", "games", ["season"])
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index("ix_games_season", table_name="games")
     op.drop_index("ix_games_nba_finals", table_name="games")
     op.drop_index("ix_games_margin", table_name="games")
     op.drop_index("ix_player_game_stats_triple_doubles", table_name="player_game_stats")
