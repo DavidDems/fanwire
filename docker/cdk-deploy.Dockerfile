@@ -10,7 +10,7 @@
 # from this image, so the pinned CLI survives the mount. The docker client
 # (buildx for `--platform`) talks to the runner's daemon through its socket.
 
-FROM node:20-alpine
+FROM node:24-alpine
 RUN apk add --no-cache docker-cli docker-cli-buildx
 WORKDIR /repo/infra
 COPY infra/package.json infra/package-lock.json ./
