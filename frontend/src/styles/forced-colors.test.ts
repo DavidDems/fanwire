@@ -66,6 +66,17 @@ describe("forced colors keeps what the shadows and fills carry (A20)", () => {
       expect(ok).toBe(true);
     });
 
+    // Forced colors drops background images, so the gradient chevron is gone
+    // there; the select gets its native arrow back (skeptic, 2026-10-23).
+    it("the select gets its native arrow back (appearance: auto)", () => {
+      const ok = rules().some(
+        (rule) =>
+          selectors(rule).some((selector) => /^select$/.test(selector)) &&
+          value(rule, /^appearance$/).includes("auto"),
+      );
+      expect(ok).toBe(true);
+    });
+
     it('an invalid control ([aria-invalid="true"]) gets a solid outline', () => {
       const ok = rules().some(
         (rule) =>
