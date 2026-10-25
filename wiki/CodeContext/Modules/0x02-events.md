@@ -121,7 +121,7 @@ A DNP row is stored (its stats are the source's zeros) so a box score can list w
 
 ## The loader — `app.events.nba_history` (`EVENTS-004`)
 
-`load_nba_history(session, data_dir, seasons=None) -> LoadReport` reads `Games.csv`, `PlayerStatistics.csv` (not `…Extended`, which has fewer rows), `TeamStatistics.csv` and `Players.csv` from a directory outside the repo (the human's copy: `C:\data\nba-eoin`, version of 2026-06-15). CLI: `python scripts/load_nba_history.py --data-dir <dir> [--season 2025-26 ...]` with `DATABASE_URL` set (the script kept its name; `seed_dev.py` points at it). Never pointed at the live RDS (that is `EVENTS-002`). Tests use a synthetic fixture with the dataset's exact headers under `backend/tests/fixtures/nba_data/`.
+`load_nba_history(session, data_dir, seasons=None) -> LoadReport` reads `Games.csv`, `PlayerStatistics.csv` (not `…Extended`, which has fewer rows), `TeamStatistics.csv` and `Players.csv` from a directory outside the repo (the human's copy: `C:\data\nba`, downloaded 2026-10-25, which adds the first 2026-27 games; the June 2026-06-15 copy in `C:\data\nba-eoin` is retired). CLI: `python scripts/load_nba_history.py --data-dir <dir> [--season 2025-26 ...]` with `DATABASE_URL` set (the script kept its name; `seed_dev.py` points at it). Never pointed at the live RDS (that is `EVENTS-002`). Tests use a synthetic fixture with the dataset's exact headers under `backend/tests/fixtures/nba_data/`.
 
 - **Scope:** 2003-04 onward (every team is one of today's 30). `--season` before 2003-04 is a `DatasetError`.
 - **One transaction per run**: every file is read and validated before the first write; any failure rolls back everything, teams and players included.
