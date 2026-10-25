@@ -1,25 +1,17 @@
 /*
- * The Stats page (/stats/seasons, /stats/players): the heading, the tab list,
- * then the tab's controls and sections, stacked in one column. The tables are
+ * The Stats page's tabs (/stats/seasons, /stats/players): the tab's controls,
+ * the stats navigator (whose own styles are
+ * components/stats-nav/) and the leaders, stacked in one column. The tables are
  * wider than a phone, so each scrolls sideways inside its own focusable
  * container and the page itself never does. Values come from tokens.css by
  * name only.
  */
 
-.page,
 .tab {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   min-width: 0;
-}
-
-.page {
-  gap: var(--space-4);
-}
-
-.heading {
-  margin: 0;
 }
 
 /*
@@ -36,7 +28,7 @@
   width: 100%;
 }
 
-/* One section: its h2, its state line, its tables, its Load more. */
+/* The leaders' section: its h3, its rule, its tables. */
 .section {
   display: flex;
   flex-direction: column;
@@ -44,47 +36,19 @@
   min-width: 0;
 }
 
-.section h2 {
+.section h3 {
   margin: 0;
 }
 
-.champion {
-  margin: 0;
-}
-
-.championName {
-  font-weight: var(--font-weight-semibold);
-}
-
-.note,
 .muted {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
 
-/* A team's record and splits: label over figure, side by side, wrapping. */
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3) var(--space-5);
-  margin: 0;
-}
-
-.facts dt {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.facts dd {
-  margin: 0;
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
 /*
  * The scroll container. Focusable (tabIndex 0) so a keyboard user can scroll
- * it with the arrow keys; the ring below is what shows it has focus.
+ * it with the arrow keys; base.css's :focus-visible ring shows it has focus.
  */
 .scroll {
   max-width: 100%;
@@ -92,11 +56,6 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-}
-
-.scroll:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
 }
 
 .table {
@@ -107,7 +66,7 @@
   white-space: nowrap;
 }
 
-.caption {
+.table caption {
   padding: var(--space-2) var(--space-3);
   text-align: left;
   font-weight: var(--font-weight-semibold);
@@ -147,10 +106,6 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.more {
-  width: 100%;
-}
-
 /* The team bar's suggestions, under the input in the page's flow. */
 .combobox {
   position: relative;
@@ -168,7 +123,7 @@
   box-shadow: var(--shadow-2);
 }
 
-.option {
+.options > li {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -179,7 +134,7 @@
   cursor: pointer;
 }
 
-.option:hover {
+.options > li:hover {
   background: var(--color-surface-muted);
 }
 
@@ -187,39 +142,8 @@
  * The active option (aria-activedescendant points at it): an outline, which
  * forced-colors mode keeps, so it never depends on the fill alone.
  */
-.option[aria-selected="true"] {
+.options > li[aria-selected="true"] {
   background: var(--color-surface-muted);
   outline: 2px solid var(--color-focus);
   outline-offset: -2px;
-}
-
-/* Player results: one list card with dividers, as the Search page's accounts. */
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-block: var(--space-3);
-  overflow-wrap: anywhere;
-}
-
-.row:first-child {
-  padding-top: 0;
-}
-
-.row:last-child {
-  padding-bottom: 0;
-}
-
-.row + .row {
-  border-top: 1px solid var(--color-border);
-}
-
-.rowTitle {
-  font-weight: var(--font-weight-semibold);
 }
