@@ -766,6 +766,17 @@ describe("after a post", () => {
     const { user, app } = loaded;
     await user.click(plus());
     const dialog = await findComposeDialog();
+    // The app's own staleTime (30 s, App.tsx), so the new card's controls read
+    // the cached profile as they do in the app; with the test client's 0 they
+    // would refetch it, which is not one of compose's requests. Nothing is
+    // filtered out of the count, so compose reading the profile would fail it.
+    app.queryClient.setDefaultOptions({
+      ...app.queryClient.getDefaultOptions(),
+      queries: {
+        ...app.queryClient.getDefaultOptions().queries,
+        staleTime: 30_000,
+      },
+    });
     recorder = recordRequests();
 
     await user.type(
@@ -780,13 +791,10 @@ describe("after a post", () => {
     await waitFor(() => expect(cardUnderneath(NEW_TEXT)).toBeInTheDocument());
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // The recorder sees the client's `/api` base. The new card's controls
-    // read the shared profile query; the test client's staleTime is 0, so it
-    // refetches here, where the app's (30 s, App.tsx) would not: not one of
-    // compose's requests, so it is left out of the count.
-    const calls = recorder.calls
-      .map((call) => `${call.method} ${call.pathname.replace(/^\/api/, "")}`)
-      .filter((call) => call !== "GET /users/me");
+    // The recorder sees the client's `/api` base.
+    const calls = recorder.calls.map(
+      (call) => `${call.method} ${call.pathname.replace(/^\/api/, "")}`,
+    );
     expect(calls.filter((call) => call === "POST /posts")).toHaveLength(1);
     expect(calls.filter((call) => call === "GET /feed")).toHaveLength(2);
     expect(calls).toHaveLength(3);
