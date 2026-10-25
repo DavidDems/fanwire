@@ -1,5 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useId, useMemo, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -7,7 +7,11 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { AttachmentPicker, type AddressLink } from "./AttachmentPicker";
+import {
+  AttachmentPicker,
+  StatsToggle,
+  type AddressLink,
+} from "./AttachmentPicker";
 import { ComposeMediator } from "./ComposeMediator";
 import { ComposeTextBox } from "./ComposeTextBox";
 import { MediaWidget } from "./MediaWidget";
@@ -66,6 +70,15 @@ import styles from "./ComposePage.module.css";
  * refused by what the read returns — opens a plain composer with a note,
  * never a half-attached link. A reply cannot carry a link, so a reply address
  * offers no Attach stats, and says so if it was given a link anyway.
+ *
+ * **Shown in the compose dialog** (`FRONTEND-020`, `routes/ComposeModal.tsx`),
+ * whose title is its heading, so it renders none of its own. Under the text
+ * box is the attach row: the media widget's paperclip, and beside it Attach
+ * stats (`StatsToggle`), which shows and hides the picker's panel; this page
+ * holds whether it is open. Post waits while an image is being checked. A
+ * published post invalidates every feed query (the `["feed"]` prefix, spelled
+ * here because compose imports no other feature) and calls `onPosted`, which
+ * the dialog answers by closing.
  *
  * **Laid out as one form card** (`wiki/CodeContext/FrontendUI/layout.md` §3):
  * the three controls stacked inside a `Card`, then a footer row with Undo on
@@ -181,7 +194,15 @@ function failureMessage(error: unknown): string {
   return GENERIC_FAILURE;
 }
 
-export function ComposePage() {
+/** The feed's query-key prefix, as `features/feed` spells it. */
+const FEED_KEY_ROOT = ["feed"] as const;
+
+export interface ComposePageProps {
+  /** Called once the post exists on the server: the dialog closes. */
+  onPosted?: () => void;
+}
+
+export function ComposePage({ onPosted }: ComposePageProps = {}) {
   const [searchParams] = useSearchParams();
   const replyToPostId = postIdIn(searchParams, "reply_to");
   const repostOfPostId = postIdIn(searchParams, "repost_of");
@@ -209,18 +230,28 @@ export function ComposePage() {
     [replyToPostId, repostOfPostId],
   );
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
+  const checking = useSyncExternalStore(
+    mediator.subscribe,
+    mediator.isMediaChecking,
+  );
   const [failure, setFailure] = useState<string | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const statsPanelId = useId();
+  const statsToggleId = useId();
+  const queryClient = useQueryClient();
 
   // Rebuilt from the published draft on every render, so the submit control and
   // the request it sends can never disagree about what is in the composer.
   const builder = PostBuilder.from(draft);
-  const canPost = builder.canBuild();
+  const canPost = builder.canBuild() && !checking;
 
   const submit = useMutation({
     mutationFn: createPost,
     onSuccess: () => {
       setFailure(null);
       mediator.reset();
+      void queryClient.invalidateQueries({ queryKey: FEED_KEY_ROOT });
+      onPosted?.();
     },
     onError: (error) => {
       setFailure(failureMessage(error));
@@ -243,20 +274,38 @@ export function ComposePage() {
 
   return (
     <section className={styles.page}>
-      <h1>Compose</h1>
-
       <Card>
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
           <ComposeTextBox mediator={mediator} />
           {addressNote === null ? null : <StatusLine>{addressNote}</StatusLine>}
+          <MediaWidget
+            mediator={mediator}
+            tools={
+              attachable ? (
+                <StatsToggle
+                  id={statsToggleId}
+                  open={statsOpen}
+                  panelId={statsPanelId}
+                  onToggle={() => {
+                    setStatsOpen((open) => !open);
+                  }}
+                />
+              ) : null
+            }
+          />
           {attachable ? (
             <AttachmentPicker
               key={pickerKey}
               mediator={mediator}
               prefill={addressLink}
+              open={statsOpen}
+              onClose={() => {
+                setStatsOpen(false);
+              }}
+              panelId={statsPanelId}
+              toggleId={statsToggleId}
             />
           ) : null}
-          <MediaWidget mediator={mediator} />
 
           <div className={styles.footer}>
             {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}

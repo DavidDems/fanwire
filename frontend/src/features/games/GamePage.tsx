@@ -6,6 +6,7 @@ import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import { offersMemberLinks, useAccount } from "../../auth/account";
+import { useComposeLinkState } from "../../routes/modal-flow";
 import { fetchGame, gameKey, type GameDetailOut } from "./api";
 import { BoxScore } from "./BoxScore";
 import { formatGameDate } from "./format";
@@ -93,6 +94,8 @@ function Game({ game }: { game: GameDetailOut }) {
   // A signed-in account that is not deactivated (`FRONTEND-012`): a
   // deactivated one browses as a guest, and a guest is offered none.
   const canPost = offersMemberLinks(useAccount());
+  // FRONTEND-020: the composer opens over this page (or the flow's page).
+  const composeState = useComposeLinkState();
   // 0-0 is a game not yet played: there is no result to post about.
   const completed = homeScore !== 0 || awayScore !== 0;
 
@@ -113,7 +116,11 @@ function Game({ game }: { game: GameDetailOut }) {
         </h1>
         {canPost && completed ? (
           <p className={styles.postGame}>
-            <Link to={postAboutGameHref(game.id)} className={styles.postLink}>
+            <Link
+              to={postAboutGameHref(game.id)}
+              state={composeState}
+              className={styles.postLink}
+            >
               <SquarePenIcon size={16} />
               Post about this<VisuallyHidden> game</VisuallyHidden>
             </Link>

@@ -32,6 +32,17 @@ import { useLocation, useNavigate, type Location } from "react-router-dom";
  * first entry (`depth - 1`) and replace it with `/`, so nothing before the
  * app's own first entry is ever reached. Back is one entry, the previous
  * detail, and is offered only when there is one.
+ *
+ * **The compose overlay** (`FRONTEND-020`) is read here too. Its entry carries
+ * `{ background?, composeOpenedInApp: true }` (`ComposeState`): a link or the
+ * floating + on a page sets `background` to that page; a link inside the
+ * modal sets it to the flow's background, if there is one, so the detail
+ * closes under compose and only one dialog is ever open. `BackgroundRoutes`
+ * keeps that page (or the feed) underneath through `useFlowBackground`, as for
+ * a detail. Its way out (`useComposeClose`) is one entry back when the entry
+ * was opened in the app (to the page, or to the detail, whose own entry still
+ * carries its flow) and otherwise a replace with `/`, so a direct load never
+ * reaches an entry before the app's first.
  */
 
 /** What a detail's history entry carries. */
@@ -188,5 +199,53 @@ export function useModalFlow(): ModalFlowControls {
           }
         : undefined,
     close,
+  };
+}
+
+/** What a compose entry carries (`FRONTEND-020`). */
+export interface ComposeState {
+  /** The page kept rendered under the dialog; absent for the feed. */
+  background?: Location;
+  /** Set by every in-app way in: Close may then step back to it. */
+  composeOpenedInApp: true;
+}
+
+/**
+ * The `state` for a link (or the +) that opens compose: over this page, or,
+ * inside the modal, over the flow's own background, never over the detail.
+ */
+export function useComposeLinkState(): ComposeState {
+  const inFlow = useContext(InFlow);
+  const location = useLocation();
+  const background = inFlow ? flowOf(location).background : location;
+  return background === null
+    ? { composeOpenedInApp: true }
+    : { background, composeOpenedInApp: true };
+}
+
+/**
+ * Compose's way out, for Close, Escape, the backdrop and a published post: one
+ * entry back when the entry was opened in the app, otherwise `/` in its place.
+ */
+export function useComposeClose(): () => void {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const state: unknown = location.state;
+  const inApp =
+    typeof state === "object" &&
+    state !== null &&
+    (state as Record<string, unknown>).composeOpenedInApp === true;
+  // Set while a close is under way, so a second press does not step back twice.
+  const leavingRef = useRef(false);
+
+  useEffect(() => {
+    leavingRef.current = false;
+  }, [location.key]);
+
+  return () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    if (inApp) void navigate(-1);
+    else void navigate("/", { replace: true });
   };
 }

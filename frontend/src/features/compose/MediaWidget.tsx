@@ -1,13 +1,18 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState, useSyncExternalStore } from "react";
-import type { ChangeEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
-import { Field, describeField } from "../../components/FormField";
-import { Button } from "../../components/ui/Button";
-import { ImageIcon } from "../../components/ui/icons";
+import { buttonClass } from "../../components/ui/Button";
+import { CircleXIcon, PaperclipIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import messageStyles from "../../components/ui/message.module.css";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { config } from "../../config";
 import type { ComposeMediator } from "./ComposeMediator";
@@ -15,7 +20,7 @@ import styles from "./MediaWidget.module.css";
 
 /**
  * The media widget: choose a file, get it to the bucket, wait for the pipeline,
- * attach it to the draft.
+ * and the image is attached by itself (`FRONTEND-020`).
  *
  * **The file bytes never pass through the API.** `POST /media/uploads` returns a
  * presigned POST — `upload_url`, `fields` and `max_bytes` — and the browser then
@@ -24,22 +29,41 @@ import styles from "./MediaWidget.module.css";
  * attaches the Cognito ID token and the `/api` base URL, so using it here would
  * send our token to S3 and send the upload to the wrong origin.
  *
+ * **The paperclip opens a hidden file input**, which keeps no `accept` (the
+ * browser's own filter drops a file without saying why; the check below is the
+ * one that answers) and is no tab stop and no name of its own: the paperclip is
+ * the one control named for an image. `tools` sit beside it in the same row
+ * (the composer's Attach stats).
+ *
+ * **The check waits in place.** From the choice, a tile of fixed size shows the
+ * file's name under a static overlay, "Checking the image…", through the upload
+ * and the pipeline alike; on `processed` the served thumbnail takes the tile's
+ * place and the id goes into the draft with no second press. Meanwhile the
+ * mediator hears `media-checking`, so the composer's submit waits.
+ *
+ * **The clock is the client's, from the end of the bucket upload** (the human,
+ * 2026-10-24: a slow connection never fails a good image): one poll a second,
+ * the first at once, and at 30 s one last poll, then a refusal if that is not
+ * `processed` either. A timer of its own, not react-query's interval, which
+ * pauses in a hidden tab: the poll at the bound must still be made (R17). It
+ * stops at a terminal status, at the bound, on a new choice and on unmount.
+ *
+ * **Every refusal is one red line**: a type refused here, a file over the
+ * ticket's `max_bytes`, `rejected`, or the bound. The media row is left as it
+ * is: an unattached row is the normal case ([[0x04-media]]). A failure to reach
+ * the API or the bucket keeps its own words.
+ *
  * It reports to the mediator and reads the mediator's draft. It imports neither
  * of the other two compose controls.
  */
 
 type CreateUploadResponse = components["schemas"]["CreateUploadResponse"];
 type MediaOut = components["schemas"]["MediaOut"];
-type MediaStatus = components["schemas"]["MediaStatus"];
 
 /**
  * [[0x04-media]] "Security requirements": jpeg, png and webp only, SVG excluded
- * by name because it can carry script.
- *
- * This check is for the message the user sees, nothing more — S3's own policy
- * and the processing Lambda's Pillow parse are the real gates, and they run
- * whatever this file believes. It is still worth getting right, because it is the
- * only one of the three that can explain itself.
+ * by name because it can carry script. For the message only: S3's policy and
+ * the processing Lambda's Pillow parse are the real gates.
  */
 const ALLOWED_MIME_TYPES: readonly string[] = [
   "image/jpeg",
@@ -47,27 +71,17 @@ const ALLOWED_MIME_TYPES: readonly string[] = [
   "image/webp",
 ];
 
-/**
- * How often the pipeline is asked whether it has finished.
- *
- * Short, because the user is waiting and the poll stops at a terminal status.
- * Driven by react-query's own `refetchInterval` rather than a timer this file
- * owns, so unmounting the widget cancels it.
- */
-const POLL_INTERVAL_MS = 300;
+/** One poll a second: at most 31 in the 30 s, each a primary-key read. */
+const POLL_INTERVAL_MS = 1_000;
 
-const FILE_FIELD_ID = "compose-media";
+/** How long after the upload ends the pipeline has to answer `processed`. */
+const CHECK_BOUND_MS = 30_000;
 
-/** The one failure that needs to name a number back to the user. */
-class UploadTooLarge extends Error {
-  readonly maxBytes: number;
+const REFUSED = "The image you attached is too large or cannot be accepted";
+const UPLOAD_FAILED = "We could not upload that image. Please try again.";
 
-  constructor(maxBytes: number) {
-    super(`The chosen file is larger than ${maxBytes} bytes.`);
-    this.name = "UploadTooLarge";
-    this.maxBytes = maxBytes;
-  }
-}
+/** A refusal, as opposed to a failure to reach the API or the bucket. */
+class Refused extends Error {}
 
 /** The ticket. This one *does* go through `apiClient`, so it carries the token. */
 async function requestUploadTicket(
@@ -83,18 +97,11 @@ async function requestUploadTicket(
 }
 
 /**
- * The multipart POST to the bucket.
- *
- * A plain `fetch`, and **no `Authorization` header**: the bucket has no use for
- * our ID token and sending it there would leak it. No `Content-Type` header
- * either — `fetch` derives it from the `FormData`, and setting it by hand would
- * override the boundary the body was actually written with.
- *
- * **The presigned fields go first, in the order the API returned them, and the
- * file goes last**, because S3 ignores everything that follows the `file` part.
- * `FormData` serializes in insertion order, so appending in that order is the
- * whole of it; `MediaWidget.test.tsx` asserts the order that reaches the bucket
- * rather than trusting this comment.
+ * The multipart POST to the bucket: a plain `fetch` with **no `Authorization`
+ * header** (our ID token must not leak to S3) and no `Content-Type` (`fetch`
+ * writes the boundary). **The presigned fields go first, in the order the API
+ * returned them, and the file last**, because S3 ignores everything after the
+ * `file` part; `MediaWidget.test.tsx` asserts the order that reaches the bucket.
  */
 async function uploadToBucket(
   ticket: CreateUploadResponse,
@@ -121,205 +128,214 @@ async function fetchMedia(mediaId: number): Promise<MediaOut> {
   return data;
 }
 
-/** `processed` and `rejected` are the ends of the chain; there is nothing to wait for. */
-function isSettled(status: MediaStatus | undefined): boolean {
-  return status === "processed" || status === "rejected";
-}
-
 /**
- * The served thumbnail's URL.
- *
- * `URL.createObjectURL` is not used anywhere in this widget, and the reason is
- * not that jsdom lacks it — the served image is what everyone else will see once
- * the post is published, EXIF-stripped and resized by the pipeline, rather than
- * the original off the user's disk. So this is a product decision, not a harness
- * one, and it does not become a candidate for the kind of `setupTests.ts`
- * polyfill that `Blob`'s missing readers needed.
+ * The served thumbnail's URL. `URL.createObjectURL` is not used, by product
+ * decision: the first image anyone sees is the served one, EXIF-stripped and
+ * resized by the pipeline, never the original off the user's disk.
  */
 function thumbnailUrl(key: string): string {
   return `${config.mediaBaseUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
 }
 
-export interface MediaWidgetProps {
-  mediator: ComposeMediator;
+/**
+ * The chosen image. `mediaId` is `null` while the upload is in flight;
+ * `thumbnail` is `undefined` until the pipeline answers `processed` (and `null`
+ * if it answered with no thumbnail key).
+ */
+interface Chosen {
+  name: string;
+  mediaId: number | null;
+  thumbnail?: string | null;
 }
 
-export function MediaWidget({ mediator }: MediaWidgetProps) {
-  const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
+export interface MediaWidgetProps {
+  mediator: ComposeMediator;
+  /** Further controls for the attach row, after the paperclip. */
+  tools?: ReactNode;
+}
+
+export function MediaWidget({ mediator, tools }: MediaWidgetProps) {
   const resetCount = useSyncExternalStore(
     mediator.subscribe,
     mediator.getResetCount,
   );
-
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [mediaId, setMediaId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [chosen, setChosen] = useState<Chosen | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Bumped by every choice, removal, reset and unmount: an upload that answers
+  // for an older one is dropped, so it never lands in the next one's place.
+  const generation = useRef(0);
 
   useEffect(() => {
-    // Clearing the composer clears the attachment with it. The draft alone
-    // cannot say this happened — an emptied draft and a never-filled one are the
-    // same value — so the reset counter is what the widget watches. Without it a
-    // successful post leaves a stale thumbnail sitting over an empty composer.
-    setFileName(null);
-    setMediaId(null);
+    // Clearing the composer clears the image with it. The draft alone cannot
+    // say this happened (an emptied draft and a never-filled one are the same
+    // value), so the reset counter is what the widget watches.
+    generation.current += 1;
+    setChosen(null);
     setFailure(null);
   }, [resetCount]);
 
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
+  useEffect(() => {
+    const current = generation;
+    return () => {
+      current.current += 1;
+    };
+  }, []);
+
+  const checking = chosen !== null && chosen.thumbnail === undefined;
+  useEffect(() => {
+    if (!checking) return;
+    mediator.send("media", { kind: "media-checking", checking: true });
+    return () => {
+      mediator.send("media", { kind: "media-checking", checking: false });
+    };
+  }, [mediator, checking]);
+
+  // The poll, from the moment the upload has ended (its id is set then).
+  const pollId = checking ? chosen.mediaId : null;
+  useEffect(() => {
+    if (pollId === null) return;
+    const start = Date.now();
+    let stopped = false;
+    let polls = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function poll(id: number): Promise<void> {
+      polls += 1;
+      const last = Date.now() - start >= CHECK_BOUND_MS;
+      const media = await fetchMedia(id).catch(() => null);
+      if (stopped) return;
+      if (media?.status === "processed") {
+        mediator.send("media", { kind: "media-attached", mediaId: id });
+        setChosen(
+          (current) =>
+            current && {
+              ...current,
+              thumbnail: media.s3_key_thumbnail ?? null,
+            },
+        );
+      } else if (media?.status === "rejected" || last) {
+        setChosen(null);
+        setFailure(REFUSED);
+      } else {
+        // On each second from the upload's end; the last exactly at the bound.
+        const next = start + Math.min(polls * POLL_INTERVAL_MS, CHECK_BOUND_MS);
+        timer = setTimeout(() => void poll(id), next - Date.now());
+      }
+    }
+
+    void poll(pollId);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [mediator, pollId]);
+
+  async function upload(file: File, mine: number): Promise<void> {
+    try {
       const ticket = await requestUploadTicket(file.type);
-      // `max_bytes` only exists in the ticket, so this check necessarily comes
-      // after it — and necessarily before a single byte goes to the bucket.
-      if (file.size > ticket.max_bytes)
-        throw new UploadTooLarge(ticket.max_bytes);
+      // `max_bytes` only exists in the ticket, so this check comes after it,
+      // and before a single byte goes to the bucket.
+      if (file.size > ticket.max_bytes) throw new Refused();
       await uploadToBucket(ticket, file);
-      return ticket.media_id;
-    },
-    onSuccess: (id) => {
-      setMediaId(id);
-    },
-    onError: (error) => {
-      setFileName(null);
-      setFailure(
-        error instanceof UploadTooLarge
-          ? `That image is too large. The largest size this upload allows is ${error.maxBytes} bytes.`
-          : "We could not upload that image. Please try again.",
-      );
-    },
-  });
+      if (generation.current === mine)
+        setChosen({ name: file.name, mediaId: ticket.media_id });
+    } catch (error) {
+      if (generation.current !== mine) return;
+      setChosen(null);
+      setFailure(error instanceof Refused ? REFUSED : UPLOAD_FAILED);
+    }
+  }
 
-  const media = useQuery({
-    queryKey: ["media", mediaId],
-    queryFn: async () => {
-      if (mediaId === null)
-        throw new Error("The media poll ran with no media id.");
-      return fetchMedia(mediaId);
-    },
-    enabled: mediaId !== null,
-    refetchInterval: (query) =>
-      isSettled(query.state.data?.status) ? false : POLL_INTERVAL_MS,
-  });
-
-  const status = media.data?.status;
-  const processed = status === "processed";
-  const rejected = status === "rejected";
-  const thumbnail = media.data?.s3_key_thumbnail ?? null;
-  const attached = mediaId !== null && draft.mediaIds.includes(mediaId);
+  /** Take the current image out: the draft's id, the tile and its upload. */
+  function drop(): void {
+    generation.current += 1;
+    const id = chosen?.mediaId;
+    if (typeof id === "number")
+      mediator.send("media", { kind: "media-detached", mediaId: id });
+    setChosen(null);
+    setFailure(null);
+  }
 
   function handleFileChosen(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0];
+    // Emptied, so choosing the same file again (after a refusal) is a change.
+    event.target.value = "";
     if (file === undefined) return;
-
     // A second choice replaces the first, draft included.
-    if (mediaId !== null)
-      mediator.send("media", { kind: "media-detached", mediaId });
-    setFailure(null);
-    setMediaId(null);
-    setFileName(file.name);
-
+    drop();
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       // Refused here, so a type we already know is wrong never reaches the API.
-      setFileName(null);
-      setFailure(
-        "That file is not an image we can post. Choose a JPEG, PNG or WebP.",
-      );
+      setFailure(REFUSED);
       return;
     }
-
-    upload.mutate(file);
-  }
-
-  function attach(): void {
-    if (mediaId === null) return;
-    mediator.send("media", { kind: "media-attached", mediaId });
-  }
-
-  function detach(): void {
-    if (mediaId === null) return;
-    mediator.send("media", { kind: "media-detached", mediaId });
+    setChosen({ name: file.name, mediaId: null });
+    void upload(file, generation.current);
   }
 
   return (
     <div className={styles.widget}>
-      <Field id={FILE_FIELD_ID} label="Image">
-        {/*
-          Deliberately no `accept`: the browser's own filter drops a file the
-          user chose without telling them why, and the type rule is one the user
-          has to be able to read. The check below is the one that answers.
-        */}
-        <input
-          {...describeField(FILE_FIELD_ID, { error: failure ?? undefined })}
-          className={styles.file}
-          type="file"
-          name="image"
-          onChange={handleFileChosen}
-        />
-      </Field>
+      <div className={styles.row}>
+        <button
+          type="button"
+          className={`${buttonClass("ghost", "md")} ${styles.tool}`}
+          aria-label="Attach an image"
+          onClick={() => inputRef.current?.click()}
+        >
+          <PaperclipIcon />
+        </button>
+        {tools}
+      </div>
+      <input
+        ref={inputRef}
+        className="visually-hidden"
+        type="file"
+        name="image"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleFileChosen}
+      />
 
-      {/*
-        The field's own message *is* the alert, rather than a second copy of it:
-        `describeField` above points the input's `aria-describedby` at this id, so
-        the message is both announced when focus reaches the control and
-        announced immediately as a request failure. The id is on the alert
-        itself, and the description is the message alone, because the alert's
-        icon is `aria-hidden`.
-      */}
-      {failure === null ? null : (
-        <InlineAlert id={`${FILE_FIELD_ID}-error`}>{failure}</InlineAlert>
+      {failure === REFUSED ? (
+        <p
+          role="alert"
+          className={`${messageStyles.message} ${messageStyles.danger}`}
+        >
+          <CircleXIcon className={messageStyles.icon} />
+          <span>{REFUSED}</span>
+        </p>
+      ) : failure === null ? null : (
+        <InlineAlert>{failure}</InlineAlert>
       )}
 
-      {fileName === null ? null : (
-        <div className={styles.chosen}>
-          {processed && thumbnail !== null ? (
+      {chosen === null ? null : checking ? (
+        <div className={styles.tile}>
+          <span className={styles.name}>{chosen.name}</span>
+          <div className={styles.overlay}>
+            <StatusLine>Checking the image…</StatusLine>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.row}>
+          {chosen.thumbnail ? (
             <img
-              className={styles.preview}
-              src={thumbnailUrl(thumbnail)}
-              alt={`Preview of ${fileName}`}
+              className={styles.tile}
+              src={thumbnailUrl(chosen.thumbnail)}
+              alt={`Preview of ${chosen.name}`}
             />
           ) : (
-            <p className={styles.fileName}>
-              <ImageIcon className={styles.icon} />
-              {fileName}
-            </p>
+            <span className={`${styles.tile} ${styles.name}`}>
+              {chosen.name}
+            </span>
           )}
-
-          {rejected ? (
-            <InlineAlert>
-              That image did not pass our checks, so it cannot be posted. Choose
-              another one.
-            </InlineAlert>
-          ) : (
-            <>
-              <StatusLine>
-                {processed
-                  ? "This image is ready to attach."
-                  : // Locally there is no GuardDuty, so this is where an upload
-                    // against the real dev buckets stays. Correct behaviour, not
-                    // a hang — see the wiki entry and MEDIA-002.
-                    "Preparing this image. It can be attached once it has been checked."}
-              </StatusLine>
-              {attached ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={detach}
-                >
-                  Remove file
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={!processed}
-                  onClick={attach}
-                >
-                  Attach
-                </Button>
-              )}
-            </>
-          )}
+          <button
+            type="button"
+            className={`${buttonClass("ghost", "md")} ${styles.tool}`}
+            aria-label="Remove image"
+            onClick={drop}
+          >
+            <CircleXIcon />
+          </button>
         </div>
       )}
     </div>

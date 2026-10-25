@@ -54,6 +54,9 @@ export interface InlineComposerProps {
  * says so beside the button, as `ComposePage` does. Submit is disabled while
  * the request is in flight, so one press is one reply.
  *
+ * **The image flow is `/compose`'s** (`FRONTEND-020`): the same `MediaWidget`,
+ * its paperclip under the box, and Reply waits while an image is checked.
+ *
  * Mounted per parent (the caller keys it), so a reply started under one post
  * never carries over to the next thread opened in the same modal.
  */
@@ -69,10 +72,15 @@ export function InlineComposer({
     [parentPostId],
   );
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
+  const checking = useSyncExternalStore(
+    mediator.subscribe,
+    mediator.isMediaChecking,
+  );
   const [failure, setFailure] = useState<string | null>(null);
 
   const builder = PostBuilder.from(draft);
-  const canPost = builder.canBuild();
+  // An image still being checked holds the reply back (FRONTEND-020).
+  const canPost = builder.canBuild() && !checking;
 
   const submit = useMutation({
     mutationFn: createPost,

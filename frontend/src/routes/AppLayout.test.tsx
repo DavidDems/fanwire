@@ -33,7 +33,6 @@ import {
   ChartColumnIcon,
   HouseIcon,
   SearchIcon,
-  SquarePenIcon,
   UserIcon,
   type IconProps,
 } from "../components/ui/icons";
@@ -173,7 +172,7 @@ async function renderVisit({ path, as, heading }: Visit): Promise<void> {
 
 const NAV_ITEMS: [string, ComponentType<IconProps>][] = [
   ["Feed", HouseIcon],
-  ["Compose", SquarePenIcon],
+  // FRONTEND-020: Compose left the nav for the floating + (compose-modal.test.tsx).
   ["Notifications", BellIcon],
   ["Search", SearchIcon],
   // FRONTEND-009: between Search and the profile item.
@@ -394,7 +393,9 @@ describe("aria-current on the current route's nav link (criterion 5)", () => {
     { path: "/", as: "anonymous", current: "Feed" },
     { path: "/search", as: "anonymous", current: "Search" },
     { path: "/", as: "member", current: "Feed" },
-    { path: "/compose", as: "member", current: "Compose" },
+    // FRONTEND-020: compose is a dialog over the feed, and no nav item is the
+    // current page under an overlay (as under the thread modal).
+    { path: "/compose", as: "member", current: null },
     { path: "/notifications", as: "member", current: "Notifications" },
     { path: "/search", as: "member", current: "Search" },
     // FRONTEND-009: Stats is current on every /stats and /players route.

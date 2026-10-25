@@ -4,7 +4,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
-import { useInFlowLinkState } from "../../routes/modal-flow";
+import {
+  useComposeLinkState,
+  useInFlowLinkState,
+} from "../../routes/modal-flow";
 import type {
   BoxScorePlayerOut,
   DidNotPlayOut,
@@ -266,6 +269,8 @@ function PlayerRow({
   // Inside the modal, a player's name is the flow's next detail; on the page,
   // a plain link to the player's page.
   const state = useInFlowLinkState();
+  // FRONTEND-020: "Post" opens the composer over this page (or the flow's).
+  const composeState = useComposeLinkState();
 
   useEffect(() => {
     if (current && ref.current !== null) revealRow(ref.current);
@@ -327,7 +332,11 @@ function PlayerRow({
       {postHref === undefined ? null : (
         <td className={styles.postCell}>
           {postHref === null ? null : (
-            <Link to={postHref} className={styles.postLink}>
+            <Link
+              to={postHref}
+              state={composeState}
+              className={styles.postLink}
+            >
               <SquarePenIcon size={16} />
               Post
               <VisuallyHidden>
