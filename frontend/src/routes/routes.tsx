@@ -6,6 +6,7 @@ import { DetailModal } from "../features/thread/DetailModal";
 import { ThreadModal } from "../features/thread/ThreadModal";
 import { AppLayout } from "./AppLayout";
 import { BackgroundRoutes, flowOnly } from "./BackgroundRoutes";
+import { ComposeModal } from "./ComposeModal";
 import { GameDetail, PlayerDetail } from "./details";
 import { RequireAuth, RequireNewProfile } from "./guards";
 import { HomeView } from "./HomeView";
@@ -13,15 +14,11 @@ import { NotFoundView } from "./views";
 
 /*
  * Every page but the first paint loads as its own chunk (FRONTEND-015): the
- * feed, search, the thread modal and the shell stay in the main one. Each
+ * feed, search, the thread modal and the shell stay in the main one (the
+ * composer's chunk is loaded by `ComposeModal`, inside its dialog). Each
  * page is a named export, so `lazy` is handed an adapter to a default one.
  * `BackgroundRoutes` holds the one Suspense they wait behind.
  */
-const ComposePage = lazy(() =>
-  import("../features/compose/ComposePage").then((m) => ({
-    default: m.ComposePage,
-  })),
-);
 const NotificationsPage = lazy(() =>
   import("../features/notifications/NotificationsPage").then((m) => ({
     default: m.NotificationsPage,
@@ -98,14 +95,6 @@ const pages: RouteObject[] = [
   // Security).
   { index: true, element: <HomeView /> },
   {
-    path: "compose",
-    element: (
-      <RequireAuth>
-        <ComposePage />
-      </RequireAuth>
-    ),
-  },
-  {
     path: "notifications",
     element: (
       <RequireAuth>
@@ -173,6 +162,11 @@ const overlays: RouteObject[] = [
       flowOnly({ path: "players/:playerId", element: <PlayerDetail /> }),
     ],
   },
+  // FRONTEND-020: the composer, over the page it was opened from (or the
+  // feed, for a direct load). Its own dialog, never inside the detail's: a
+  // link to it from a detail carries the flow's background, so the detail
+  // closes under it. Signed-in only, with RequireAuth inside ComposeModal.
+  { path: "compose", element: <ComposeModal /> },
 ];
 
 export const routes: RouteObject[] = [

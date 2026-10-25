@@ -6,7 +6,10 @@
  * The header is target-min tall plus space-2 above and below; the bottom bar
  * is under space-8 tall plus the safe area. scroll-padding and main's bottom
  * padding are sized from those so nothing focused or last in the list is
- * hidden under either bar (accessibility.md A5).
+ * hidden under either bar (accessibility.md A5). main's bottom padding also
+ * reaches past the floating + (FRONTEND-020: FloatingButton, 3.5rem, its
+ * bottom space-8 + space-4 above the viewport's on phones and space-5 from
+ * 40em), so the last card's controls scroll fully clear of it.
  */
 
 :global(html) {
@@ -174,7 +177,10 @@
   max-width: var(--content-max);
   margin-inline: auto;
   padding: var(--space-5) var(--space-4)
-    calc(var(--space-5) + var(--space-8) + env(safe-area-inset-bottom));
+    calc(
+      var(--space-8) + var(--space-4) + 3.5rem + var(--space-4) +
+        env(safe-area-inset-bottom)
+    );
 }
 
 /* From 40em (640 px): the nav sits inline in the header, labels only. */
@@ -212,7 +218,7 @@
   }
 
   .main {
-    padding-bottom: var(--space-5);
+    padding-bottom: calc(var(--space-5) + 3.5rem + var(--space-4));
   }
 }
 

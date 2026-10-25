@@ -46,7 +46,8 @@ export type ComposeEvent =
   | { kind: "link-attached"; link: DataLink }
   | { kind: "link-removed" }
   | { kind: "media-attached"; mediaId: number }
-  | { kind: "media-detached"; mediaId: number };
+  | { kind: "media-detached"; mediaId: number }
+  | { kind: "media-checking"; checking: boolean };
 
 export interface ComposeMediatorOptions {
   /** The post this composer was opened to reply to. */
@@ -77,6 +78,14 @@ export class ComposeMediator {
    */
   private resets = 0;
 
+  /**
+   * Whether the media widget has an image on its way through the check
+   * (`FRONTEND-020`). Not part of the draft (nothing is sent for it), but the
+   * composer's submit waits on it: a post sent mid-check would drop the image
+   * the reader is watching.
+   */
+  private checking = false;
+
   constructor(options: ComposeMediatorOptions = {}) {
     this.initial = {
       ...emptyDraft(),
@@ -100,6 +109,9 @@ export class ComposeMediator {
   readonly getDraft = (): Draft => this.draft;
 
   readonly getResetCount = (): number => this.resets;
+
+  /** The `useSyncExternalStore` snapshot of whether an image is being checked. */
+  readonly isMediaChecking = (): boolean => this.checking;
 
   /** A colleague reports what it did. Nobody calls another colleague. */
   send(from: ComposeColleague, event: ComposeEvent): void {
@@ -135,6 +147,12 @@ export class ComposeMediator {
           ...this.draft,
           mediaIds: this.draft.mediaIds.filter((id) => id !== event.mediaId),
         });
+        return;
+
+      case "media-checking":
+        if (this.checking === event.checking) return;
+        this.checking = event.checking;
+        this.notify();
         return;
 
       default:
@@ -183,6 +201,10 @@ export class ComposeMediator {
    */
   private publish(next: Draft): void {
     this.draft = copyDraft(next);
+    this.notify();
+  }
+
+  private notify(): void {
     for (const listener of this.listeners) listener();
   }
 }

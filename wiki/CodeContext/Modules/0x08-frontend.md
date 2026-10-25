@@ -348,7 +348,8 @@ inconvenient:
 
 ## Compose (`FRONTEND-004`)
 
-`src/features/compose/`, wired at `/compose` behind `RequireAuth`. The page owns
+`src/features/compose/`, at `/compose` behind `RequireAuth`; since `FRONTEND-020`
+an overlay over the current page (below, "The compose modal"). The page owns
 one `ComposeMediator` and hands it to all three controls; that is the whole of
 the wiring between them.
 
@@ -394,13 +395,14 @@ each owns one piece:
   `rejected`** — lower-case, four of them, from `MediaStatus` in the generated
   schema. **There is no `Quarantined` value**: where prose says quarantined it
   means *not yet `processed`*, and both `uploaded` and `scanning` are
-  un-attachable. `rejected` is a visible failure with no attach control at all.
-  The widget polls `GET /media/{media_id}` through react-query's
-  `refetchInterval` and stops at a terminal status.
+  un-attachable. `rejected` is a refusal (`FRONTEND-020`: the image is
+  removed and one red line says so). The widget polls `GET /media/{media_id}`
+  once a second on its own timer, from the upload's end, and stops at a
+  terminal status or at the 30 s bound (below).
 - **Locally there is no GuardDuty, so an upload against the real dev buckets
   stays un-`processed` forever.** That is correct behaviour, not a hang: nothing
-  moves the row past `uploaded`, and the widget says so and leaves the attach
-  control disabled. The dev-only script that would run the processing pipeline on
+  moves the row past `uploaded`. Since `FRONTEND-020` the 30 s bound refuses it
+  with the red line, which is what local dev shows. The dev-only script that would run the processing pipeline on
   demand is `MEDIA-002` and does not exist yet ([[0x04-media]]).
 - **No `URL.createObjectURL` anywhere.** jsdom does not implement it and
   `setupTests.ts` is not this unit's to change — and the served thumbnail is the
@@ -496,6 +498,77 @@ opens a panel with three choices. Each sends `POST /posts`' `data_link`
   (exported from `ComposePage.tsx`) parses it and refuses anything malformed,
   missing or stray. The picker then checks the target, and a refusal opens a
   plain composer with a note, never a half-attached link.
+
+### The compose modal (`FRONTEND-020`)
+
+Brief 20, stage 2. You can post from anywhere: a floating **+** opens compose
+over the page you are on.
+
+- **`/compose` is an overlay route** (`routes/ComposeModal.tsx`), rendered by
+  `BackgroundRoutes` over the page it was opened from, which stays mounted
+  (the same recipe as the thread modal). It uses UI-010's `Dialog`, titled
+  "Compose". The composer is its own lazy chunk, waited for inside the
+  dialog and never behind the page's Suspense.
+- **The history state is read only in `modal-flow.tsx`.**
+  - A compose entry carries `{ background?, composeOpenedInApp: true }`.
+  - `useComposeLinkState()` builds it. On a page, `background` is that page.
+    Inside the detail modal, it is the flow's background, so the detail
+    closes under compose and only one dialog is ever open.
+  - `useComposeClose()` is the one way out, for Close, Escape, the backdrop
+    and a published post. It steps one entry back when the entry was opened
+    in the app, which returns you to the page, or to the detail, whose own
+    entry still carries its flow. A direct load or a reload has no flag, so
+    it replaces the entry with `/`.
+  - The "Post about this" links on the game page, box-score rows and the
+    player page carry this state. Their addresses are unchanged.
+- **The guard's rules are `RequireAuth`'s.** `ComposeModal` reads the
+  account status the shell already holds (`ShellAccountStatus`, provided by
+  `AppLayout`), so opening compose asks the API nothing.
+  - A guest is redirected to `/sign-in` with `from`, and a profile-less
+    account to `/create-profile`, before any dialog renders.
+  - Loading, deactivated and unavailable states render `RequireAuth` inside
+    the dialog.
+  - While the account or the chunk is still loading, the dialog waits up to
+    500 ms before showing a loading line. A guest's redirect therefore
+    never flashes a dialog first, and a quick chunk opens straight on the
+    composer.
+- **The + replaces the Compose nav item.** It is `FloatingButton` in its
+  `onClick` form, since its link form takes no state, named "Compose a
+  post", and shown only to an active account. `main` is padded at the bottom
+  so the last card's controls scroll clear of it: 8.5rem on phones and 5rem
+  from 40em (`floating-clearance.test.ts`).
+- **A published post closes the modal**, the same way Close does, and
+  invalidates the `["feed"]` prefix. Compose spells the key and doesn't
+  import the feed feature. A failed post keeps the draft and the modal.
+- **The attach row** sits under the text box. Both buttons are icon-only and
+  at least 44 px:
+  - the paperclip, "Attach an image", opens a visually hidden file input
+    with no `accept`;
+  - the bar chart, "Attach stats", shows and hides today's
+    `AttachmentPicker` in place (`aria-expanded`) and starts closed.
+  An attached link's summary shows whether the panel is open or not.
+  `FRONTEND-021` replaces the panel with the picker modal.
+- **The image check** (`MediaWidget`, shared with the thread's reply box):
+  - **The tile:** from the choice onward, a fixed-size tile shows the file
+    name under a static overlay. It has no animation (A8) and a `role=status`
+    line, "Checking the image…".
+  - **Auto-attach:** on `processed` the thumbnail replaces the tile and the
+    image is attached, with no second press, plus a "Remove image" control.
+  - **Polling:** the poll runs once a second on the widget's own timer,
+    starting when **the bucket upload finishes** (the human, 2026-10-24: a
+    slow uplink must never fail a good image). At most 31 polls; the last
+    one is at 30 s, and a hidden tab's paused timer can't skip it (R17).
+  - **The refusal line:** a refused type, a file over `max_bytes`,
+    `rejected`, or nothing by the bound removes the tile and shows one red
+    line with a ✕: "The image you attached is too large or cannot be
+    accepted".
+  - **Other failures:** a failure to reach the API or the bucket keeps "We
+    could not upload that image. Please try again.".
+  - **Post and Reply** are disabled while an image is being checked
+    (`ComposeMediator.isMediaChecking`).
+- **Bundle:** the overlay, the + and the new widget add about 0.66 kB gzip
+  to the entry, against an allowance of 1 kB
+  (`src/test/bundle-budgets/FRONTEND-020.ts`).
 
 ## Notifications (`FRONTEND-006`)
 
@@ -982,7 +1055,8 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
 `src/features/stats/` at `/stats/seasons` and `/stats/players`, and
 `src/features/players/` at `/players/:playerId`. **Public**: sports data is a
 read path ([[0x02-events]] "Players", "Seasons"). Every type is an alias of
-the generated schema; each feature has its own `api.ts`.
+the generated schema. The players feature has its own `api.ts`; since
+`FRONTEND-018` the stats reads are `src/api/stats.ts` (below).
 
 - **Tabs are routes, not state.** `/stats` redirects to `/stats/seasons`;
   the two tabs are child routes of `StatsPage` (one h1 "Stats", then
@@ -996,26 +1070,27 @@ the generated schema; each feature has its own `api.ts`.
   the profile item and is current on `/stats/*` and `/players/*`. `NavLink`
   can only mark its own address, so `NavItem` takes `alsoCurrentOn`
   patterns and renders a plain `Link` with `aria-current="page"` on them.
-  The phone bar holds six items for a signed-in visitor (`grid-auto-columns:
-  1fr`).
+  The phone bar holds five items for a signed-in visitor since `FRONTEND-020`
+  moved Compose to the floating + (`grid-auto-columns: 1fr`).
 - **URL state.** `?season=`, `?team=` and `?q=` live in the address through
   `useSearchParams`. The season defaults to the newest from
   `GET /events/seasons` **without being written to the URL** until the user
   picks one, so `/stats/seasons` stays the address of "the current season".
-- **The league view** (`LeagueView`): the champion and series result, or
-  that there is no champion yet; one standings table per conference, sorted
-  across divisions by the API's rule (win fraction, wins, name) with the
-  API's `tie_break` note; points, rebounds and assists leaders, each table
-  with the API's `rule` string, so a reader knows why a player is missing;
-  the season's games from `GET /events/games?season=`, newest first.
+- **The season view** (rebuilt by `FRONTEND-018`, below): the champion and
+  series result, or that there is no champion yet; one standings table per
+  conference, sorted across divisions by the API's rule (win fraction, wins,
+  name) with the API's `tie_break` note; points, rebounds and assists
+  leaders (`Leaders.tsx`), each table with the API's `rule` string, so a
+  reader knows why a player is missing. The season-wide games list is gone
+  (`FRONTEND-018`).
 - **The team search is a client-side combobox** (`TeamSearch`) over
   `GET /events/teams`, matching name or abbreviation case-insensitively: ARIA
   1.2 `role="combobox"` with a `listbox` and `aria-activedescendant`;
   ArrowDown/ArrowUp, Enter, Escape and click (options take `mousedown`
   with `preventDefault`, so the input keeps focus). Choosing a team sets
-  `?team=` and swaps the league view for `TeamSeasonView` (record, home and
-  away, every game with W/L as a letter in an `abbr`); clearing the box
-  returns to the league view. Every team in a table links to
+  `?team=`, which opens the navigator's team level (record, home and away,
+  every game with W/L as a letter in an `abbr`); clearing the box returns
+  to the season level. Every team in a table links to
   `/stats/seasons?team=<id>`, every game to `/games/<id>`.
 - **The player search hits the API**, debounced 250 ms, trimmed, and sends
   nothing for an empty box; the trimmed text goes into `?q=` with `replace`.
@@ -1033,11 +1108,12 @@ the generated schema; each feature has its own `api.ts`.
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not
-  (checked in Chromium, 2026-10-16). `ScrollTable` is copied in both
-  features, since neither may import the other; a shared table wrapper in
-  `components/ui/` is the fix, for a unit with that path in scope.
+  (checked in Chromium, 2026-10-16). Stats uses the navigator's
+  `ScrollTable` (its `classes` prop takes the caller's stylesheet). The
+  players feature keeps its own older copy; it may now import the
+  navigator's instead, in a unit with `features/players/` in scope.
 - **Teams are fetched in four places now**: profile, `ProfileSetupPage`,
-  `MentionAutocomplete` and `features/stats/api.ts` (search no longer
+  `MentionAutocomplete` and `src/api/stats.ts` (search no longer
   fetches them). They share the `["events", "teams"]` cache key; moving
   the fetch into `api/` is the fix, for a unit with all four in scope.
 
@@ -1063,6 +1139,55 @@ the generated schema; each feature has its own `api.ts`.
   360 px. The visible text is "Post" with `SquarePenIcon`; the accessible
   name says what about ("Post about Scottie Barnes’s game", "… LeBron James’s
   playoffs").
+
+### The stats navigator (`FRONTEND-018`)
+
+Brief 20, stage 2. One navigator for the Stats page now and the compose
+stats picker later (`FRONTEND-021`).
+
+- **Its home is `src/components/stats-nav/`**, outside `features/`, so
+  compose may use it. `StatsNavigator` renders a **stack of levels**:
+  - a breadcrumb, `nav` "Stats path", whose items return to their level,
+    with the last one `aria-current="location"`;
+  - Back, shown only when the stack is deeper than one;
+  - the top level's `h2` (`tabIndex -1`) and view.
+- **The levels are data** (`types.ts`): `{ kind: "season", season, conf }`
+  and `{ kind: "team", season, teamId }`. The union is meant to grow (the
+  picker adds a game and a box-score level). `SeasonLevel` shows the
+  champion and the standings under a `SegmentedTabs` "Conference" bar (All,
+  East, West), filtered on the client from the one standings read.
+  `TeamLevel` shows the record, the splits and the games. `PlayerResults` is
+  the Players search's result list.
+- **Router-agnostic, by test.** No file in `stats-nav/` imports
+  `react-router-dom` or `features/`, except `features/games/format`.
+  - The caller owns the stack, through `open`, `replace` (the conference
+    tab) and `pop(toDepth)`.
+  - An adapter says how a game or a player is linked. With `levelHref`, the
+    level controls are real links whose plain click calls the callback.
+  - `StatsNavigator.test.tsx` drives it from React state with no router,
+    as the picker will.
+- **`SeasonsTab` is the route adapter.**
+  - `?season=` and `?conf=east|west` give the season level; All is not
+    written, and an unknown value is All.
+  - `?team=` gives the team level.
+  - `open` and `pop` push the new address, and a conference tab replaces it.
+- **Focus** moves to the new level's heading only when a navigator control
+  moved the stack. A cold load, the browser's Back or a tab moves none.
+- **The reads are `src/api/stats.ts`.** It holds the old `features/stats/api.ts`
+  with the same keys, one `ok()` check per fetcher, and `queryOptions`
+  factories (`championQuery`, `standingsQuery`, `leadersQuery`,
+  `teamSeasonQuery`) with `staleTime` `SEASON_STALE_TIME` (5 minutes).
+  - Requests per screen, pinned in `stats-requests.test.tsx`: a cold
+    `/stats/seasons` makes 7 (was 8, with the games page); switching tabs
+    makes 0; opening a team makes 1; Back makes 0.
+- **Lazy.** Nothing in `stats-nav/` or `api/stats.ts` is reachable from the
+  entry (`stats-nav-lazy.test.ts`). The Stats chunks are budgeted in
+  `src/test/bundle-budgets/FRONTEND-018.ts`.
+- **No layout shift on load.** The champion's place is two lines tall in
+  every state, and the All standings' place is held at the two tables'
+  height by a static `Skeleton` while they load.
+- **The leaders stay on Seasons**, under the standings and hidden on the team
+  level, until `FRONTEND-019` moves them to Records.
 
 ## Post menu, deletion and account lifecycle (`FRONTEND-012`)
 

@@ -1,53 +1,57 @@
 /*
- * The media widget (wiki/CodeContext/FrontendUI/components.md §5). FormField's
- * Field owns the label and its spacing, and base.css already gives the file
- * input's ::file-selector-button the secondary look, so neither is restyled
- * here. Values come from tokens.css by name only.
+ * The media widget (wiki/CodeContext/FrontendUI/components.md §5; FRONTEND-020):
+ * the attach row, the one message, then the image tile. Values come from
+ * tokens.css by name only. Nothing here animates (accessibility.md A8): the
+ * check's overlay is a static fill with its words.
  */
 
-/* The field, its alert, then the chosen file, stacked. */
 .widget {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-/* A long file name never pushes the page sideways at 320 px. */
-.file {
-  max-width: 100%;
-}
-
-/* Preview or file name, the status or alert, then Attach / Remove file. */
-.chosen {
+/* The paperclip and its neighbours; the thumbnail and Remove image. */
+.row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
 
-/* 96 px, cropped rather than squashed. */
-.preview {
-  width: 6rem;
-  height: 6rem;
-  object-fit: cover;
+/* An icon-only control, a 44 px square at least. */
+.tool {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0;
+}
+
+/* One fixed size for the checking tile and the thumbnail, so the swap moves nothing. */
+.tile {
+  position: relative;
+  flex: none;
+  width: 8rem;
+  height: 8rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  object-fit: cover;
 }
 
-/* The file name while there is no preview yet, with the image icon beside it. */
-.fileName {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  min-width: 0;
-  max-width: 100%;
+.name {
+  display: block;
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
 }
 
-/* Sits on the first line of the name, at the text's size. */
-.icon {
-  flex: none;
-  width: 1.25em;
-  height: 1.25em;
-  margin-top: 0.125em;
-  color: var(--color-text-muted);
+/* Static: a muted band over the tile's lower half, holding the status line. */
+.overlay {
+  position: absolute;
+  inset: 50% 0 0;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-2);
+  background-color: var(--color-surface-muted);
 }

@@ -315,8 +315,10 @@ describe("recovering the account (criterion 12)", () => {
       within(main()).getAllByRole("button", { name: "Recover account" })[0],
     );
 
+    // FRONTEND-020: the composer is a dialog titled Compose (its title an h2).
+    const dialog = await screen.findByRole("dialog", { name: "Compose" });
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Compose" }),
+      await within(dialog).findByRole("textbox", { name: /post/i }),
     ).toBeInTheDocument();
     expect(app.router.state.location.pathname).toBe("/compose");
     expect(queryDeactivatedBanner()).toBeNull();

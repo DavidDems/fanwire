@@ -1,0 +1,10 @@
+/*
+ * The compose dialog (FRONTEND-020, Baseline e). The shared Dialog is centred
+ * (margin: auto), so a composer that grows (the image tile, a refusal line)
+ * would move the whole dialog up by half the growth. The dialog holding the
+ * composer is anchored at the top instead, so new content grows it downward.
+ * dialog:has(.composer) is (0,1,1), above Dialog.module.css's .dialog (0,1,0).
+ */
+:global(dialog):has(.composer) {
+  margin-block: var(--space-5) auto;
+}

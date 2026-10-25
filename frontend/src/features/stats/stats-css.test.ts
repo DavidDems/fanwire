@@ -33,6 +33,8 @@ const NEW_FOLDERS: [string, string][] = [
 const CHANGED_FOLDERS: [string, string][] = [
   ["features/games", join(SRC_DIR, "features", "games")],
   ["features/search", join(SRC_DIR, "features", "search")],
+  // FRONTEND-018: the shared navigator's stylesheets, held to the same rules.
+  ["components/stats-nav", join(SRC_DIR, "components", "stats-nav")],
 ];
 const TABS_CSS = join(SRC_DIR, "components", "ui", "Tabs.module.css");
 
@@ -52,17 +54,23 @@ function scrolls(files: string[]): boolean {
   );
 }
 
-describe.each(NEW_FOLDERS)("every *.module.css under src/%s", (_label, directory) => {
-  const files = moduleCssFiles(directory);
+describe.each(NEW_FOLDERS)(
+  "every *.module.css under src/%s",
+  (_label, directory) => {
+    const files = moduleCssFiles(directory);
 
-  it("has module CSS to check (not vacuously green)", () => {
-    expect(files.length, `no *.module.css under ${directory}`).toBeGreaterThan(0);
-  });
+    it("has module CSS to check (not vacuously green)", () => {
+      expect(
+        files.length,
+        `no *.module.css under ${directory}`,
+      ).toBeGreaterThan(0);
+    });
 
-  it("gives its tables a horizontal scroll container", () => {
-    expect(scrolls(files), "no rule sets overflow-x: auto").toBe(true);
-  });
-});
+    it("gives its tables a horizontal scroll container", () => {
+      expect(scrolls(files), "no rule sets overflow-x: auto").toBe(true);
+    });
+  },
+);
 
 describe("every *.module.css this unit adds or changes", () => {
   const files = [
@@ -73,9 +81,10 @@ describe("every *.module.css this unit adds or changes", () => {
   ];
 
   it("includes Tabs.module.css", () => {
-    expect(existsSync(TABS_CSS), "src/components/ui/Tabs.module.css must exist").toBe(
-      true,
-    );
+    expect(
+      existsSync(TABS_CSS),
+      "src/components/ui/Tabs.module.css must exist",
+    ).toBe(true);
   });
 
   it("uses only var(--color-…), no px font sizes, and a visible focus", () => {

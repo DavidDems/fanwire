@@ -1,4 +1,4 @@
-import { useRef, type ComponentType } from "react";
+import { createContext, useRef, type ComponentType } from "react";
 import {
   Link,
   NavLink,
@@ -6,25 +6,36 @@ import {
   matchPath,
   useLocation,
   useMatch,
+  useNavigate,
 } from "react-router-dom";
 
 import symbol from "../assets/brand/symbol.svg";
 import wordmarkDark from "../assets/brand/wordmark-dark.svg";
 import wordmarkLight from "../assets/brand/wordmark-light.svg";
-import { useAccount } from "../auth/account";
+import { useAccount, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { buttonClass } from "../components/ui/Button";
+import { FloatingButton } from "../components/ui/FloatingButton";
 import {
   BellIcon,
   ChartColumnIcon,
+  CirclePlusIcon,
   HouseIcon,
   SearchIcon,
-  SquarePenIcon,
   UserIcon,
   type IconProps,
 } from "../components/ui/icons";
 import styles from "./AppLayout.module.css";
 import { DeactivatedBanner } from "./Deactivated";
+import { useComposeLinkState } from "./modal-flow";
+
+/**
+ * The account state the shell has already read, for what renders inside it
+ * (`ComposeModal`): one more `useAccount()` would be one more observer of the
+ * profile query, and a stale query is read again when an observer mounts, so
+ * opening compose would cost a `GET /users/me`.
+ */
+export const ShellAccountStatus = createContext<AccountStatus>("loading");
 
 interface NavItemProps {
   to: string;
@@ -98,6 +109,12 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * page, between the header and `main`: a named region, so the header stays the
  * page's one banner landmark.
  *
+ * **The floating +** (`FRONTEND-020`) opens compose over the page the reader is
+ * on, for a signed-in active account only, on every page; it replaced the
+ * Compose nav item. A button (FloatingButton's `onClick` form), because its
+ * link form carries no history state. It sits outside `main`, so the compose
+ * dialog, shown modally, takes it out of the tab order while it is open.
+ *
  * "Sign in" is offered to an anonymous visitor only, and not on `/sign-in`
  * itself, where it would be a link to the page already open.
  */
@@ -107,6 +124,8 @@ export function AppLayout() {
   const ownUserId = account.status === "active" ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
   const mainRef = useRef<HTMLElement>(null);
+  const navigate = useNavigate();
+  const composeState = useComposeLinkState();
 
   return (
     <>
@@ -132,7 +151,6 @@ export function AppLayout() {
         <nav aria-label="Primary" className={styles.nav}>
           <ul className={styles.list}>
             <NavItem to="/" label="Feed" Icon={HouseIcon} end />
-            <NavItem to="/compose" label="Compose" Icon={SquarePenIcon} />
             <NavItem
               to="/notifications"
               label="Notifications"
@@ -165,8 +183,20 @@ export function AppLayout() {
       </header>
       {account.status === "deactivated" ? <DeactivatedBanner /> : null}
       <main id="main" tabIndex={-1} ref={mainRef} className={styles.main}>
-        <Outlet />
+        <ShellAccountStatus.Provider value={account.status}>
+          <Outlet />
+        </ShellAccountStatus.Provider>
       </main>
+      {ownUserId === null ? null : (
+        <FloatingButton
+          aria-label="Compose a post"
+          onClick={() => {
+            void navigate("/compose", { state: composeState });
+          }}
+        >
+          <CirclePlusIcon />
+        </FloatingButton>
+      )}
     </>
   );
 }

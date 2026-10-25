@@ -19,7 +19,7 @@
  * real route table by `routes.test.tsx`, `detail-flow.test.tsx` and
  * `modal-flow.test.tsx`, which already wait for every page with `findBy…`.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -133,6 +133,14 @@ function staticallyReachable(entry: string): Set<string> {
 
 const reachable = staticallyReachable(join(SRC_DIR, ENTRY));
 
+/** Every non-test source module directly under `routes/`. */
+function routeModules(): string[] {
+  const directory = join(SRC_DIR, "routes");
+  return readdirSync(directory)
+    .filter((name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))
+    .map((name) => join(directory, name));
+}
+
 describe("the import walk reads a real graph", () => {
   it("parses static and type-only imports apart, and skips import()", () => {
     expect(
@@ -179,16 +187,14 @@ describe("every other page loads as its own chunk (React.lazy)", () => {
   );
 
   it.each(LAZY_PAGES)("loads %s with import() from routes/", (page) => {
-    const importers = ["routes/routes.tsx", "routes/details.tsx"]
-      .map((file) => join(SRC_DIR, ...file.split("/")))
-      .filter((file) => existsSync(file))
-      .filter((file) =>
-        dynamicSpecifiers(read(file)).some(
-          (specifier) =>
-            resolveSource(file, specifier) ===
-            join(SRC_DIR, ...page.split("/")),
-        ),
-      );
+    // FRONTEND-020: any module under routes/ (the compose overlay may live in
+    // its own, ComposeModal.tsx), not only routes.tsx and details.tsx.
+    const importers = routeModules().filter((file) =>
+      dynamicSpecifiers(read(file)).some(
+        (specifier) =>
+          resolveSource(file, specifier) === join(SRC_DIR, ...page.split("/")),
+      ),
+    );
 
     expect(
       importers.map(posix),
@@ -227,5 +233,49 @@ describe("one Suspense for the pages, one inside the modal", () => {
     );
 
     expect(source).toMatch(/<Suspense\b/);
+  });
+});
+
+describe("the compose dialog waits for its own chunk (FRONTEND-020)", () => {
+  const COMPOSE_PAGE = join(SRC_DIR, "features", "compose", "ComposePage.tsx");
+
+  /** The routes/ modules that lazy-load the composer. */
+  function composeImporters(): string[] {
+    return routeModules().filter((file) =>
+      dynamicSpecifiers(read(file)).some(
+        (specifier) => resolveSource(file, specifier) === COMPOSE_PAGE,
+      ),
+    );
+  }
+
+  it("lazy-loads the composer from routes/ and renders it inside a Dialog titled Compose", () => {
+    const importers = composeImporters();
+    expect(importers.map(posix), "nothing lazy-loads ComposePage").not.toEqual(
+      [],
+    );
+
+    const dialogs = routeModules().filter((file) =>
+      /<Dialog\b[^>]*\btitle\s*=\s*(["'])Compose\1/.test(
+        withoutComments(read(file)),
+      ),
+    );
+    expect(
+      dialogs.map(posix),
+      'one routes/ module renders <Dialog title="Compose">',
+    ).toHaveLength(1);
+  });
+
+  it("puts a Suspense inside the compose Dialog, so the page underneath never waits for the chunk", () => {
+    const [file] = routeModules().filter((candidate) =>
+      /<Dialog\b[^>]*\btitle\s*=\s*(["'])Compose\1/.test(
+        withoutComments(read(candidate)),
+      ),
+    );
+    expect(file, "no routes/ module renders the compose Dialog").toBeDefined();
+    const source = withoutComments(read(file));
+    const dialog = source.slice(source.search(/<Dialog\b/));
+    const body = dialog.slice(0, dialog.indexOf("</Dialog>"));
+
+    expect(body).toMatch(/<Suspense\b[^>]*\bfallback\s*=/);
   });
 });

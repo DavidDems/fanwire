@@ -38,21 +38,18 @@ import {
   testUpload,
   uploadTicket,
 } from "../../test/compose";
+import {
+  IMAGE_CHECKING,
+  IMAGE_REFUSED,
+  IMAGE_UPLOAD_FAILED,
+  imageFileInput,
+} from "../../test/compose-modal";
 import { server } from "../../test/server";
 import { ComposeMediator } from "./ComposeMediator";
 import { ComposePage } from "./ComposePage";
 import { MediaWidget } from "./MediaWidget";
 import { QUICK_POST_TEMPLATES } from "./PostTemplate";
 
-const WRONG_TYPE =
-  "That file is not an image we can post. Choose a JPEG, PNG or WebP.";
-const TOO_LARGE =
-  "That image is too large. The largest size this upload allows is 64 bytes.";
-const REJECTED =
-  "That image did not pass our checks, so it cannot be posted. Choose another one.";
-const PREPARING =
-  "Preparing this image. It can be attached once it has been checked.";
-const READY = "This image is ready to attach.";
 const POST_FAILED =
   "We could not post that. Your draft is still here — please try again.";
 
@@ -98,13 +95,13 @@ function renderWidget() {
 }
 
 function fileInput(): HTMLElement {
-  return screen.getByLabelText(/image/i);
+  return imageFileInput();
 }
 
 describe("the compose form card (criterion 1)", () => {
   it("renders the compose form inside a Card", async () => {
     renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     const form = textBox().closest("form");
     expect(form, "the text box sits in a <form>").not.toBeNull();
@@ -135,7 +132,7 @@ describe("the compose form card (criterion 1)", () => {
   it("offers Undo, after an attach, as a ghost Button", async () => {
     server.use(...attachServer().handlers);
     const user = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     await attachGameResult(user);
     await summaryShown();
@@ -146,7 +143,7 @@ describe("the compose form card (criterion 1)", () => {
 
   it("offers every quick-post template as a secondary Button", async () => {
     renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     expect(QUICK_POST_TEMPLATES.length).toBeGreaterThan(0);
     for (const template of QUICK_POST_TEMPLATES) {
@@ -163,7 +160,7 @@ describe("the attachment picker is built from shared Buttons (FRONTEND-013)", ()
   it("renders its three choices as Buttons", async () => {
     server.use(...attachServer().handlers);
     const user = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     await openPicker(user);
 
@@ -178,7 +175,7 @@ describe("the attachment picker is built from shared Buttons (FRONTEND-013)", ()
   it("renders Remove in the summary as a Button", async () => {
     server.use(...attachServer().handlers);
     const user = renderComposer();
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
 
     await attachGameResult(user);
     const summary = await summaryShown();
@@ -189,8 +186,16 @@ describe("the attachment picker is built from shared Buttons (FRONTEND-013)", ()
   });
 });
 
-describe("the media widget's messages (criterion 3)", () => {
-  it("says the image is preparing through a neutral StatusLine", async () => {
+// FRONTEND-020 replaced the widget's five messages: the tile says "Checking
+// the image…" from the choice until the answer, a processed image attaches by
+// itself (no "ready to attach"), and every refusal (a wrong type, a file over
+// max_bytes, rejected, or the 30 s bound) is the one line
+// "The image you attached is too large or cannot be accepted". Only the
+// failure to reach the API or the bucket keeps its words. The hidden input is
+// no longer the described control (the paperclip opens it), so the
+// "described by its error" guards went with the old messages.
+describe("the media widget's messages (FRONTEND-020)", () => {
+  it("says the image is being checked in a status line", async () => {
     server.use(
       uploadTicket(),
       s3Upload(),
@@ -200,114 +205,64 @@ describe("the media widget's messages (criterion 3)", () => {
 
     await user.upload(fileInput(), testFile());
 
-    await screen.findByText(PREPARING);
-    const note = messageHolding(PREPARING, "status");
-    expect(note).toHaveClass(messageStyles.message, messageStyles.neutral);
-    expect(textOf(note)).toBe(PREPARING);
+    await screen.findByText(IMAGE_CHECKING);
+    expect(textOf(messageHolding(IMAGE_CHECKING, "status"))).toBe(
+      IMAGE_CHECKING,
+    );
   });
 
-  it("says the image is ready through a neutral StatusLine", async () => {
-    server.use(
-      uploadTicket(),
-      s3Upload(),
-      mediaStatuses({ statuses: ["processed"] }),
-    );
+  it.each([
+    [
+      "a wrong type",
+      () => {},
+      () => testFile({ name: "notes.pdf", type: "application/pdf" }),
+    ],
+    [
+      "a file over max_bytes",
+      () => {
+        server.use(
+          uploadTicket({ response: testUpload({ max_bytes: 64 }) }),
+          s3Upload(),
+        );
+      },
+      () => testFile({ bytes: 128 }),
+    ],
+    [
+      "rejected media",
+      () => {
+        server.use(
+          uploadTicket(),
+          s3Upload(),
+          mediaStatuses({ statuses: ["rejected"] }),
+        );
+      },
+      () => testFile(),
+    ],
+  ] as const)(
+    "refuses %s with the one line, as an alert",
+    async (_name, arrange, file) => {
+      arrange();
+      const user = renderWidget();
+
+      await user.upload(fileInput(), file());
+
+      await screen.findByText(IMAGE_REFUSED);
+      expect(textOf(messageHolding(IMAGE_REFUSED, "alert"))).toBe(
+        IMAGE_REFUSED,
+      );
+    },
+  );
+
+  it("keeps the upload failure as InlineAlert, with the same words", async () => {
+    server.use(uploadTicket({ status: 500 }));
     const user = renderWidget();
 
     await user.upload(fileInput(), testFile());
 
-    await screen.findByText(READY);
-    const note = messageHolding(READY, "status");
-    expect(note).toHaveClass(messageStyles.message, messageStyles.neutral);
-    expect(textOf(note)).toBe(READY);
-  });
-
-  it("refuses a wrong type through InlineAlert, with the same words", async () => {
-    const user = renderWidget();
-
-    await user.upload(
-      fileInput(),
-      testFile({ name: "notes.pdf", type: "application/pdf" }),
-    );
-
-    await screen.findByText(WRONG_TYPE);
-    const alert = messageHolding(WRONG_TYPE, "alert");
+    await screen.findByText(IMAGE_UPLOAD_FAILED);
+    const alert = messageHolding(IMAGE_UPLOAD_FAILED, "alert");
     expect(alert).toHaveClass(messageStyles.message, messageStyles.danger);
-    expect(textOf(alert)).toBe(WRONG_TYPE);
-  });
-
-  it("refuses a too-large file through InlineAlert, with the same words", async () => {
-    server.use(
-      uploadTicket({ response: testUpload({ max_bytes: 64 }) }),
-      s3Upload(),
-    );
-    const user = renderWidget();
-
-    await user.upload(fileInput(), testFile({ bytes: 128 }));
-
-    await screen.findByText(TOO_LARGE);
-    const alert = messageHolding(TOO_LARGE, "alert");
-    expect(alert).toHaveClass(messageStyles.message, messageStyles.danger);
-    expect(textOf(alert)).toBe(TOO_LARGE);
-  });
-
-  it("reports rejected media through InlineAlert, with the same words", async () => {
-    server.use(
-      uploadTicket(),
-      s3Upload(),
-      mediaStatuses({ statuses: ["rejected"] }),
-    );
-    const user = renderWidget();
-
-    await user.upload(fileInput(), testFile());
-
-    await screen.findByText(REJECTED);
-    const alert = messageHolding(REJECTED, "alert");
-    expect(alert).toHaveClass(messageStyles.message, messageStyles.danger);
-    expect(textOf(alert)).toBe(REJECTED);
-  });
-});
-
-describe("the file input is still described by its error (criterion 3, guard)", () => {
-  it("describes the input with the wrong-type message", async () => {
-    const user = renderWidget();
-
-    await user.upload(
-      fileInput(),
-      testFile({ name: "notes.pdf", type: "application/pdf" }),
-    );
-
-    await screen.findByText(WRONG_TYPE);
-    expect(fileInput()).toHaveAccessibleDescription(WRONG_TYPE);
-  });
-
-  it("points the description at the alert itself, not a wrapper", async () => {
-    const user = renderWidget();
-
-    await user.upload(
-      fileInput(),
-      testFile({ name: "notes.pdf", type: "application/pdf" }),
-    );
-
-    await screen.findByText(WRONG_TYPE);
-    const describedBy = fileInput().getAttribute("aria-describedby") ?? "";
-    expect(describedBy).not.toBe("");
-    expect(document.getElementById(describedBy)).toBe(
-      messageHolding(WRONG_TYPE, "alert"),
-    );
-  });
-
-  it("describes the input with the too-large message", async () => {
-    server.use(
-      uploadTicket({ response: testUpload({ max_bytes: 64 }) }),
-      s3Upload(),
-    );
-    const user = renderWidget();
-
-    await user.upload(fileInput(), testFile({ bytes: 128 }));
-
-    await screen.findByText(TOO_LARGE);
-    expect(fileInput()).toHaveAccessibleDescription(TOO_LARGE);
+    expect(textOf(alert)).toBe(IMAGE_UPLOAD_FAILED);
   });
 });
 

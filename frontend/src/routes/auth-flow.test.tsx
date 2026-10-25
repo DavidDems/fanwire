@@ -32,6 +32,7 @@ import {
   testProfile,
   testSession,
 } from "../test/auth";
+import { emptyFeed } from "../test/feed";
 import { server } from "../test/server";
 import { routes } from "./routes";
 
@@ -90,7 +91,9 @@ describe("an anonymous visitor asking for a protected route", () => {
     await user.click(screen.getByRole("button", { name: /sign\s*-?\s*in/i }));
 
     // …and on to /compose, not to the feed.
-    expect(await screen.findByRole("heading", { name: /^compose$/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^compose$/i }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -98,7 +101,9 @@ describe("a confirmed account with no profile yet", () => {
   it("is routed to profile creation, creates one, and can then reach the protected route", async () => {
     const user = userEvent.setup();
     profileCreatedOnDemand();
-    server.use(teamsAre());
+    // The feed stays mounted under the compose overlay (FRONTEND-020), so its
+    // read is answered rather than refused.
+    server.use(teamsAre(), emptyFeed());
 
     renderApp("/compose", new FakeAuthService({ session: testSession() }));
 
@@ -114,21 +119,35 @@ describe("a confirmed account with no profile yet", () => {
 
     // The feed, and no longer the form.
     await screen.findByRole("heading", { name: /^feed$/i });
-    expect(screen.queryByRole("heading", { name: /create your profile/i })).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: /create your profile/i }),
+    ).toBeNull();
 
     // And the route that sent them here is now reachable — the stale 404 must
     // not survive the profile that answered it.
-    await user.click(screen.getByRole("link", { name: /^compose$/i }));
+    // FRONTEND-020: the Compose nav item is now the floating +.
+    await user.click(
+      await screen.findByRole("button", { name: "Compose a post" }),
+    );
 
-    expect(await screen.findByRole("heading", { name: /^compose$/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^compose$/i }),
+    ).toBeInTheDocument();
   });
 
   it("cannot reach profile creation once a profile exists", async () => {
     server.use(profileFound(), teamsAre());
 
-    renderApp("/create-profile", new FakeAuthService({ session: testSession() }));
+    renderApp(
+      "/create-profile",
+      new FakeAuthService({ session: testSession() }),
+    );
 
-    expect(await screen.findByRole("heading", { name: /^feed$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /create your profile/i })).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: /^feed$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /create your profile/i }),
+    ).toBeNull();
   });
 });

@@ -222,7 +222,7 @@ describe("a valid pre-filled address opens with the link attached", () => {
   it("a plain /compose shows neither a summary nor a note", async () => {
     renderAt("");
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     expect(attachedSummary()).toBeNull();
     expect(notes()).toEqual([]);
   });
@@ -250,7 +250,7 @@ describe("an address that is wrong in any way opens with no attachment and a not
   ])("%s", async (_name, query) => {
     const { user } = renderAt(query);
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     await waitFor(() => expect(notes().length).toBeGreaterThan(0));
     expect(attachedSummary()).toBeNull();
 
@@ -263,7 +263,7 @@ describe("an address that is wrong in any way opens with no attachment and a not
       career: noPlayoffsCareer(),
     });
 
-    await screen.findByRole("heading", { name: /^compose$/i });
+    await screen.findByRole("textbox", { name: /post/i });
     await waitFor(() => expect(notes().length).toBeGreaterThan(0));
     expect(attachedSummary()).toBeNull();
 

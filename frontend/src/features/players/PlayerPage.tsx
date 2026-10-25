@@ -8,7 +8,10 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { useInFlowLinkState } from "../../routes/modal-flow";
+import {
+  useComposeLinkState,
+  useInFlowLinkState,
+} from "../../routes/modal-flow";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import {
   formatAverage,
@@ -294,6 +297,8 @@ function CareerRow({
   line: StatLineOut;
   post: CareerPost | null;
 }) {
+  // FRONTEND-020: "Post" opens the composer over this page (or the flow's).
+  const composeState = useComposeLinkState();
   return (
     <tr>
       <th scope="row" className={styles.name}>
@@ -305,6 +310,7 @@ function CareerRow({
           {line.games_played === 0 ? null : (
             <Link
               to={postAboutCareerHref(post.playerId, post.scope)}
+              state={composeState}
               className={styles.postLink}
             >
               <SquarePenIcon size={16} />
