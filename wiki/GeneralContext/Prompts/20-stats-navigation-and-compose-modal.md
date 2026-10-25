@@ -486,15 +486,40 @@ Update this section in every spec PR and unit PR of this thread.
 - **2026-10-25, stage 2 done:** #237, #238 and #239 merged and deployed.
   The new dataset is in `C:\data\nba` and the live database has the first
   2026-27 games ("Local data").
+- **2026-10-25, the FRONTEND-019 spec** (one Director PR, which also writes
+  `frontend/src/test/`).
+  - **Decided by the human** (by `AskUserQuestion`): a record's ranked list
+    opens as a **navigator level** in the page (breadcrumb, Back, its own
+    `?record=` address), not in a `Dialog`. So **R22 stays with
+    FRONTEND-021** or a small Director UI PR.
+  - **The budget fold.** The test's own build on `main` 4fc9b46: entry
+    149,444 B gzip and 470,954 B raw, entry CSS 5,543 B. That is 9,046 B raw
+    under R1's 480 kB. The FRONTEND-018 and FRONTEND-020 files are deleted,
+    and the combine test's "already in the base" case now uses `format`
+    (`links` left the base).
+  - **The skeptic's first pass: proceed with changes,** all in the spec. Its
+    prototype grows the entry by 69 B gzip. The navigator becomes a shared
+    `StatsNavigator` chunk (4,359 B), so a cold Seasons loads about 1.66 kB
+    gzip of records views it doesn't show. That is accepted. R24 saves only
+    67 B gzip. Every request count held: Records opens with 1 and a card adds
+    1 (R11), and a cold Seasons goes from 7 to 4.
+    - It found eight contract defects, D1–D8, all fixed in the spec: the
+      budget lines, a `teamLink` adapter, the record level's group, headings
+      that are never empty, the leaders' cell classes, the full list of
+      tests the move breaks, history for the bars, and the wording.
+  - **Risks carried:**
+    - **R25 (FRONTEND-021):** the picker's navigator chunk carries the
+      records views (about 3 kB gzip), though a record is never selectable.
+      Accept it or split it there, and budget it.
+    - **R26 (019):** the shared chunk's name. The Director may correct the
+      budget names, keeping the sums of 9,850 JS and 1,800 CSS.
+    - **R27 (019):** the cards' hold height at 360, where holder lines wrap.
+    - **R28 (019):** the 100-row list's long task is reasoned, not measured.
+    - **R29 (a later unit or a Director PR):** `api/records.ts` will duplicate
+      `api/stats.ts`'s private `ok()` helper, because `api/stats.ts` is
+      forbidden to this unit. Fold the two later.
 - **Next:**
-  1. The FRONTEND-019 spec (stage 3: Records, needs EVENTS-010 and
-     FRONTEND-018), carrying R19 (adds nothing to the entry), R24, and the
-     leaders' move from Seasons. Its Director spec PR folds FRONTEND-018's and
-     FRONTEND-020's budget files into the base (`src/test/bundle-budget.ts`).
-     The skeptic's first pass declares its Baseline before the branch is cut.
-     If a record's ranked list opens in a `Dialog`, take R22 (the Dialog's
-     initial focus) into its scope.
-  2. Hand-run FRONTEND-019 on `agent/FRONTEND-019`, cut from `main` after the
+  1. Hand-run FRONTEND-019 on `agent/FRONTEND-019`, cut from `main` after the
      spec merges.
 
 ## Limits
