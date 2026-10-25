@@ -40,7 +40,7 @@ Specs for units not yet specced are Director work, merged before the unit runs
 ## Where things stand (2026-10-14)
 
 Verify each: `git log origin/main`, `gh pr list`,
-`python .ai/bin/agentctl.py status`, `ls C:\data\nba-eoin`.
+`python .ai/bin/agentctl.py status`, `ls C:\data\nba`.
 
 - **`EVENTS-003` (#142) and `EVENTS-004` (#144) are merged, deployed and
   migrated** (head `d9f3b6a1e2c4`, 2026-10-14).
@@ -62,8 +62,9 @@ Verify each: `git log origin/main`, `gh pr list`,
   routes on the changed tables answer 500. Check
   (`curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams`
   prints `200`) before the next such deploy.
-- The new dataset is at `C:\data\nba-eoin` (version of 2026-06-15). Verified
-  2026-10-13 against it:
+- The dataset is at `C:\data\nba` (downloaded 2026-10-25; it replaces the
+  2026-06-15 copy that was in `C:\data\nba-eoin`, against which this was
+  verified on 2026-10-13):
   - **Same ids as `EVENTS-001`:** all 3,637 games loaded from the old dataset
     match on `gameId`, home/away `teamId` and both scores.
   - **Complete 2003-04 to 2025-26** (regular season, playoffs, play-in;

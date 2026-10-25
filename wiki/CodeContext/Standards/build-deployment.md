@@ -203,7 +203,7 @@ A standalone workflow deploys all eight stacks as `GitHubActionsDeployRole`. It 
      ```
   2. Upload the four files the loader reads (about 440 MB) under `nba-eoin/`. The bucket encrypts with the CMK, so the upload needs `kms:GenerateDataKey` on it as well as `s3:PutObject`. An `AccessDenied` that names KMS means the profile lacks it.
      ```powershell
-     foreach ($f in 'Games.csv','PlayerStatistics.csv','TeamStatistics.csv','Players.csv') { aws s3 cp "C:\data\nba-eoin\$f" "s3://$bucket/nba-eoin/$f" --profile fanwire-workload --region ca-central-1 }
+     foreach ($f in 'Games.csv','PlayerStatistics.csv','TeamStatistics.csv','Players.csv') { aws s3 cp "C:\data\nba\$f" "s3://$bucket/nba-eoin/$f" --profile fanwire-workload --region ca-central-1 }
      ```
   3. Find the function. `$fn` then prints a name containing `SportsDataLoad`.
      ```powershell
@@ -227,7 +227,7 @@ A standalone workflow deploys all eight stacks as `GitHubActionsDeployRole`. It 
      curl.exe -s "https://fanwire.daviddems.com/api/events/games?limit=1"
      ```
 
-  The function is re-runnable. A season already loaded reports its games as "already present" and writes nothing again. A new dataset version is uploaded over the same keys (step 2) and loaded the same way.
+  The function is re-runnable. A season already loaded reports its games as "already present" and writes nothing again. A new dataset version is uploaded over the same keys (step 2) and loaded the same way: only games not yet stored are added, so step 4's event names just the seasons that gained games (on 2026-10-25, `{"seasons":["2026-27"]}` loaded the new season's first 28 games). The human's copy of the four files is `C:\data\nba`.
 - **Deploy a merge that changes nothing AWS is built from.** Human decision 2026-10-05, after two clean dispatched runs: the workflow runs on `push` to `main`, filtered by `paths` to what a stack, the backend image or the bundle is built from: `backend/**`, `frontend/**`, `docker/**`, `.dockerignore`, `infra/bin/**`, `infra/lib/**`, `infra/cdk.json`, `infra/package.json`, `infra/package-lock.json` and `deploy.yml`. Markdown files and frontend test files are excluded. **`wiki/` and `.ai/` never trigger it.** The agent system runs in GitHub Actions and no stack reads it. Neither do `infra/test/` (tests change no template) or `infra/iam/` (applied by a human, never by CDK). `backend/tests/` does trigger it, because the image asset hashes it. A merge outside these paths deploys nothing. Dispatch by hand when needed, for instance after rolling out a new `FanwireCdkCfnExecPolicy` version. `.ai/tests/test_deploy_workflow.py` pins the list.
 - **Deploy without approval.** Every run waits for the required reviewer, so a merge queues a deploy rather than starting one. GitHub keeps one *pending* run per concurrency group: merging twice while a deploy runs leaves only the newer one waiting, which is harmless because it deploys `main` as of that merge.
 - **The first deploy.** The production Cognito ids do not exist until `Fanwire-Auth` has deployed, so the bundle cannot be built before then (`0x00-architecture.md` → "First deploy"). That deploy has already happened by hand, so every deploy from now on is the steady-state case.

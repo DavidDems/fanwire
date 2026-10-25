@@ -189,22 +189,21 @@ no unit role may write `FrontendUI/`.
 
 - **The dataset:** the Eoin Moore Kaggle dataset "NBA Dataset: Box Scores and
   Stats (1947–Today)". Its four CSVs (`Games.csv`, `PlayerStatistics.csv`,
-  `TeamStatistics.csv` and `Players.csv`) go straight into
-  `C:\Users\david\data\nba`. That folder is outside the repository and is
-  never committed.
-  - **Status, 2026-10-24:** still pending. Kaggle updated the dataset on
-    2026-10-23, and the download still waits on "awaiting compression".
-    EVENTS-010 measured on the human's June 15 2026 download in
-    `C:\data\nba-eoin` instead: it is complete through the 2025-26 Finals.
-  - **Before loading,** check the four files are there. A newer dataset may
-    hold a few more 2025-26 games than the live load, and that's fine for
-    measuring.
+  `TeamStatistics.csv` and `Players.csv`) are in `C:\data\nba`. That folder
+  is outside the repository and is never committed.
+  - **Status, 2026-10-25:** downloaded. The four files have the same columns
+    as the June 2026 copy, and add the first 28 games of 2026-27. The
+    June copy (`C:\data\nba-eoin`, which EVENTS-010 measured on) is retired.
+  - **The live database has them** (2026-10-25: the human uploaded the four
+    files and loaded `2026-27` by `build-deployment.md` "Load sports data").
+  - **`fanwire_perf`,** the Director's measuring database in the dev Postgres,
+    holds the full load through 2025-26 plus those 28 games.
 - **Load it into `backend-dev`'s Postgres** from the host, with the backend
   venv. Load one season per run: one run holds its whole box score in memory
   (`backend/scripts/load_nba_history.py`).
   - One PowerShell line, from the repository root, with `backend-dev` and
     `postgres` running:
-    `$env:DATABASE_URL='postgresql+psycopg://fanwire:fanwire@localhost:5432/fanwire'; foreach ($y in 2003..2025) { $s = "$y-$((($y + 1) % 100).ToString('00'))"; backend\.venv\Scripts\python backend\scripts\load_nba_history.py --data-dir C:\Users\david\data\nba --season $s; if ($LASTEXITCODE -ne 0) { break } }`
+    `$env:DATABASE_URL='postgresql+psycopg://fanwire:fanwire@localhost:5432/fanwire'; foreach ($y in 2003..2025) { $s = "$y-$((($y + 1) % 100).ToString('00'))"; backend\.venv\Scripts\python backend\scripts\load_nba_history.py --data-dir C:\data\nba --season $s; if ($LASTEXITCODE -ne 0) { break } }`
 - **The dev database is ephemeral.** `docker compose down` and a fresh `up`
   start it empty, so leave `postgres` running until EVENTS-010's measurements
   and the stage 2 browser rows are done.
@@ -484,12 +483,19 @@ Update this section in every spec PR and unit PR of this thread.
     command line match that also stopped about 20 other `vite preview`
     processes on the machine, some days old. From now on, stop processes by
     the port that was started.
+- **2026-10-25, stage 2 done:** #237, #238 and #239 merged and deployed.
+  The new dataset is in `C:\data\nba` and the live database has the first
+  2026-27 games ("Local data").
 - **Next:**
-  1. The human reviews and merges #237 and #238.
-  2. Then the FRONTEND-019 spec (stage 3: Records, needs EVENTS-010 and
+  1. The FRONTEND-019 spec (stage 3: Records, needs EVENTS-010 and
      FRONTEND-018), carrying R19 (adds nothing to the entry), R24, and the
      leaders' move from Seasons. Its Director spec PR folds FRONTEND-018's and
      FRONTEND-020's budget files into the base (`src/test/bundle-budget.ts`).
+     The skeptic's first pass declares its Baseline before the branch is cut.
+     If a record's ranked list opens in a `Dialog`, take R22 (the Dialog's
+     initial focus) into its scope.
+  2. Hand-run FRONTEND-019 on `agent/FRONTEND-019`, cut from `main` after the
+     spec merges.
 
 ## Limits
 
