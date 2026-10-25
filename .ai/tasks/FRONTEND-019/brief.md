@@ -62,10 +62,36 @@ default.
 
 ## The skeptic
 
-**First pass: pending** (this spec's Baseline is the Director's provisional
-one until it lands).
+**First pass, 2026-10-25: proceed with changes, all landed in this spec.**
+It built a bare prototype on 4cefa2c and measured it with the budget test's
+own build:
+- the entry grows 69 B gzip and 241 B raw;
+- once two tabs import `StatsNavigator`, Rollup splits the navigator into a
+  shared chunk of its own (`StatsNavigator`, 4,359 B gzip, with
+  `css:StatsNavigator.css` replacing `css:SeasonsTab.css`), and SeasonsTab
+  drops from 4,637 to 1,771;
+- a cold Seasons therefore downloads the records views it doesn't render,
+  about +1.66 kB gzip net. Accepted: splitting them out would add a third
+  serial chunk load;
+- R24 saves only 67 B gzip, because the copy already gzipped away; the cards'
+  CSS adds 233;
+- every provisional request count held in msw.
+
+Its fixes, D1–D8: the budget lines (three were unmeetable, and the shared
+chunk wasn't declared); a `teamLink` on the adapter, because the navigator
+can't import `features/stats/links.ts`; where a record level's group comes
+from; the headings (never empty, so focus never lands on a blank); a home for
+the leaders' cell classes; the full list of tests the move breaks; the bars
+replace history; and the wording of ties, empty columns and the + row.
 
 Risks carried into this unit (Prompt 20 Progress):
+- **R26:** the shared chunk's name comes from the prototype. If Rollup names
+  it otherwise, the Director corrects the budget file's names, keeping the
+  sums 9,850 JS and 1,800 CSS.
+- **R27:** at 360 a holder line wraps two or three lines, so the cards' hold
+  height may be short. The CLS row decides it.
+- **R28:** the 100-row list's long task is reasoned (100–130 ms, from the
+  team level), not measured. The `player-points-game` row decides it.
 - **R11:** Records opens with one call, and "View all" adds one.
 - **R19:** after FRONTEND-020 the entry is 470,954 B raw and 149,444 B gzip
   (the test's build on 4fc9b46). This unit adds nothing to it but the route.
@@ -103,7 +129,9 @@ Risks carried into this unit (Prompt 20 Progress):
   component.
 - **The navigator assumes a season today.** `StatsNavigator` reads
   `top.season` for its heading and team links. The union grows, so narrow by
-  `kind` everywhere.
+  `kind` everywhere, including `StatsNavigator.test.tsx`'s typing.
+- **`teamLink` is optional.** `StatsNavigator.test.tsx`'s state-driven
+  `pickerAdapter` has none, and FRONTEND-021's picker may not want one.
 - **The stretched link.** The card must be `position: relative` and nothing
   inside it may sit above the `::after`. Check at 360 that the + button
   doesn't cover a card's "View all" (FRONTEND-020's row).
