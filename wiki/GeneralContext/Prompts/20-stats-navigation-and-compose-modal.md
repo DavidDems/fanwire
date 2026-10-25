@@ -433,11 +433,63 @@ Update this section in every spec PR and unit PR of this thread.
       Director may correct the budget file before the implementation commit.
     - **R21:** the headroom figure in R13 above was 0.88 kB on 041e1c1, not
       0.77.
+- **2026-10-24, the stage-2 specs merged as #236.**
+- **2026-10-25, `FRONTEND-018` hand-run, PR #237, and `FRONTEND-020`
+  hand-run, PR #238** (both awaiting review). Hand-run in parallel. The pair
+  passes on a merged preview: 157 files and 2,188 tests, with typecheck, lint,
+  build and both budget files. They merge with no conflicts, in either order.
+  - **FRONTEND-018 meets every Baseline line.**
+    - Measured on the full load in `fanwire_perf`, at 360 wide with the CPU
+      throttled 4×. The cold Seasons load's long task has a median of 102 ms
+      (before 141) and a worst of 134 (before 345).
+    - CLS is 0.0013 in every run (before 0.365 on the full load).
+    - Requests: a cold Seasons load is 7 (before 8), and tabs and Back cost 0.
+    - The Stats JS is 7,650 B gzip, against a ceiling of 7,800.
+    - The Director corrected the budget file's chunk names after a build
+      (R20).
+    - The skeptic's second pass found that focus landed on a "Team"
+      placeholder, a raw-HTML sweep had stopped covering the moved views,
+      and the ceilings had thin margins. All three are fixed, test-first.
+  - **FRONTEND-020 meets every Baseline line but one focus criterion.**
+    - Entry: +661 B gzip, against an allowance of 1,000.
+    - Opening compose with a cold chunk: a median long task of 116 ms, worst
+      165, with 42–43 cards on the feed.
+    - **The browser rows found a layout shift of 0.24** when the image tile
+      appeared: the shared `Dialog` is centred, so the compose dialog jumped.
+      Fixed test-first by anchoring the compose dialog at the top. The shift
+      is now 0.052.
+    - **Six test corrections by the Director**, each one the spec required
+      (the `/api` base, the feed under `/compose`, the exact name of the old
+      Attach button). From the skeptic's second pass, the publish count runs
+      at the app's `staleTime` instead of filtering a request out.
+    - **Local uploads can't run.** The quarantine bucket's CORS allows only
+      the production domain, and `backend-dev` answers `POST /media/uploads`
+      with 500. So the image rows stub the ticket, the bucket and the poll.
+  - **Missed and carried:**
+    - **R22 (FRONTEND-020 criterion 2 → FRONTEND-021, or a small Director UI
+      PR):** focus after Close from inside the detail modal lands on the
+      Dialog's content scroller.
+      - `components/ui/Dialog.tsx` leaves initial focus to the browser. On
+        cached, tall content, Chrome takes the scroller, and that affects
+        every `Dialog`.
+      - Fix: `autoFocus` on Close, or focus it after `showModal()`.
+    - **R23 (→ FRONTEND-021):** a compose chunk that fails to load stays
+      failed until a reload, because `loadComposer` caches the rejected
+      promise.
+    - **R24 (FRONTEND-019):** retire the Stats copy of the table CSS when the
+      leaders move.
+    - **R16** still stands: time the image pipeline on the live stack after
+      deploy.
+  - **Rule slip, reported:** the Director stopped its own preview servers with a
+    command line match that also stopped about 20 other `vite preview`
+    processes on the machine, some days old. From now on, stop processes by
+    the port that was started.
 - **Next:**
-  1. The human reviews and merges this spec PR.
-  2. Hand-run FRONTEND-018 and FRONTEND-020 in parallel, each on
-     `agent/<ID>` cut from `main` after the merge. Test the pair on a merged
-     preview before the second one merges.
+  1. The human reviews and merges #237 and #238.
+  2. Then the FRONTEND-019 spec (stage 3: Records, needs EVENTS-010 and
+     FRONTEND-018), carrying R19 (adds nothing to the entry), R24, and the
+     leaders' move from Seasons. Its Director spec PR folds FRONTEND-018's and
+     FRONTEND-020's budget files into the base (`src/test/bundle-budget.ts`).
 
 ## Limits
 
