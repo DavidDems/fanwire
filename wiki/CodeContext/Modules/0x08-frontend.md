@@ -1055,7 +1055,8 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
 `src/features/stats/` at `/stats/seasons` and `/stats/players`, and
 `src/features/players/` at `/players/:playerId`. **Public**: sports data is a
 read path ([[0x02-events]] "Players", "Seasons"). Every type is an alias of
-the generated schema; each feature has its own `api.ts`.
+the generated schema. The players feature has its own `api.ts`; since
+`FRONTEND-018` the stats reads are `src/api/stats.ts` (below).
 
 - **Tabs are routes, not state.** `/stats` redirects to `/stats/seasons`;
   the two tabs are child routes of `StatsPage` (one h1 "Stats", then
@@ -1075,20 +1076,21 @@ the generated schema; each feature has its own `api.ts`.
   `useSearchParams`. The season defaults to the newest from
   `GET /events/seasons` **without being written to the URL** until the user
   picks one, so `/stats/seasons` stays the address of "the current season".
-- **The league view** (`LeagueView`): the champion and series result, or
-  that there is no champion yet; one standings table per conference, sorted
-  across divisions by the API's rule (win fraction, wins, name) with the
-  API's `tie_break` note; points, rebounds and assists leaders, each table
-  with the API's `rule` string, so a reader knows why a player is missing;
-  the season's games from `GET /events/games?season=`, newest first.
+- **The season view** (rebuilt by `FRONTEND-018`, below): the champion and
+  series result, or that there is no champion yet; one standings table per
+  conference, sorted across divisions by the API's rule (win fraction, wins,
+  name) with the API's `tie_break` note; points, rebounds and assists
+  leaders (`Leaders.tsx`), each table with the API's `rule` string, so a
+  reader knows why a player is missing. The season-wide games list is gone
+  (`FRONTEND-018`).
 - **The team search is a client-side combobox** (`TeamSearch`) over
   `GET /events/teams`, matching name or abbreviation case-insensitively: ARIA
   1.2 `role="combobox"` with a `listbox` and `aria-activedescendant`;
   ArrowDown/ArrowUp, Enter, Escape and click (options take `mousedown`
   with `preventDefault`, so the input keeps focus). Choosing a team sets
-  `?team=` and swaps the league view for `TeamSeasonView` (record, home and
-  away, every game with W/L as a letter in an `abbr`); clearing the box
-  returns to the league view. Every team in a table links to
+  `?team=`, which opens the navigator's team level (record, home and away,
+  every game with W/L as a letter in an `abbr`); clearing the box returns
+  to the season level. Every team in a table links to
   `/stats/seasons?team=<id>`, every game to `/games/<id>`.
 - **The player search hits the API**, debounced 250 ms, trimmed, and sends
   nothing for an empty box; the trimmed text goes into `?q=` with `replace`.
@@ -1106,11 +1108,12 @@ the generated schema; each feature has its own `api.ts`.
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not
-  (checked in Chromium, 2026-10-16). `ScrollTable` is copied in both
-  features, since neither may import the other; a shared table wrapper in
-  `components/ui/` is the fix, for a unit with that path in scope.
+  (checked in Chromium, 2026-10-16). Stats uses the navigator's
+  `ScrollTable` (its `classes` prop takes the caller's stylesheet). The
+  players feature keeps its own older copy; it may now import the
+  navigator's instead, in a unit with `features/players/` in scope.
 - **Teams are fetched in four places now**: profile, `ProfileSetupPage`,
-  `MentionAutocomplete` and `features/stats/api.ts` (search no longer
+  `MentionAutocomplete` and `src/api/stats.ts` (search no longer
   fetches them). They share the `["events", "teams"]` cache key; moving
   the fetch into `api/` is the fix, for a unit with all four in scope.
 
@@ -1136,6 +1139,55 @@ the generated schema; each feature has its own `api.ts`.
   360 px. The visible text is "Post" with `SquarePenIcon`; the accessible
   name says what about ("Post about Scottie Barnes’s game", "… LeBron James’s
   playoffs").
+
+### The stats navigator (`FRONTEND-018`)
+
+Brief 20, stage 2. One navigator for the Stats page now and the compose
+stats picker later (`FRONTEND-021`).
+
+- **Its home is `src/components/stats-nav/`**, outside `features/`, so
+  compose may use it. `StatsNavigator` renders a **stack of levels**:
+  - a breadcrumb, `nav` "Stats path", whose items return to their level,
+    with the last one `aria-current="location"`;
+  - Back, shown only when the stack is deeper than one;
+  - the top level's `h2` (`tabIndex -1`) and view.
+- **The levels are data** (`types.ts`): `{ kind: "season", season, conf }`
+  and `{ kind: "team", season, teamId }`. The union is meant to grow (the
+  picker adds a game and a box-score level). `SeasonLevel` shows the
+  champion and the standings under a `SegmentedTabs` "Conference" bar (All,
+  East, West), filtered on the client from the one standings read.
+  `TeamLevel` shows the record, the splits and the games. `PlayerResults` is
+  the Players search's result list.
+- **Router-agnostic, by test.** No file in `stats-nav/` imports
+  `react-router-dom` or `features/`, except `features/games/format`.
+  - The caller owns the stack, through `open`, `replace` (the conference
+    tab) and `pop(toDepth)`.
+  - An adapter says how a game or a player is linked. With `levelHref`, the
+    level controls are real links whose plain click calls the callback.
+  - `StatsNavigator.test.tsx` drives it from React state with no router,
+    as the picker will.
+- **`SeasonsTab` is the route adapter.**
+  - `?season=` and `?conf=east|west` give the season level; All is not
+    written, and an unknown value is All.
+  - `?team=` gives the team level.
+  - `open` and `pop` push the new address, and a conference tab replaces it.
+- **Focus** moves to the new level's heading only when a navigator control
+  moved the stack. A cold load, the browser's Back or a tab moves none.
+- **The reads are `src/api/stats.ts`.** It holds the old `features/stats/api.ts`
+  with the same keys, one `ok()` check per fetcher, and `queryOptions`
+  factories (`championQuery`, `standingsQuery`, `leadersQuery`,
+  `teamSeasonQuery`) with `staleTime` `SEASON_STALE_TIME` (5 minutes).
+  - Requests per screen, pinned in `stats-requests.test.tsx`: a cold
+    `/stats/seasons` makes 7 (was 8, with the games page); switching tabs
+    makes 0; opening a team makes 1; Back makes 0.
+- **Lazy.** Nothing in `stats-nav/` or `api/stats.ts` is reachable from the
+  entry (`stats-nav-lazy.test.ts`). The Stats chunks are budgeted in
+  `src/test/bundle-budgets/FRONTEND-018.ts`.
+- **No layout shift on load.** The champion's place is two lines tall in
+  every state, and the All standings' place is held at the two tables'
+  height by a static `Skeleton` while they load.
+- **The leaders stay on Seasons**, under the standings and hidden on the team
+  level, until `FRONTEND-019` moves them to Records.
 
 ## Post menu, deletion and account lifecycle (`FRONTEND-012`)
 

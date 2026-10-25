@@ -1,48 +1,67 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { EmptyState } from "../../components/ui/EmptyState";
-import { InlineAlert } from "../../components/ui/InlineAlert";
-import { StatusLine } from "../../components/ui/StatusLine";
-import { formatGameDate } from "../games/format";
 import {
-  fetchTeamSeason,
-  teamSeasonKey,
+  TEAMS_KEY,
+  teamSeasonQuery,
   type TeamOut,
   type TeamSeasonGameOut,
   type TeamSeasonOut,
-} from "./api";
+} from "../../api/stats";
+import { EmptyState } from "../ui/EmptyState";
+import { InlineAlert } from "../ui/InlineAlert";
+import { Skeleton } from "../ui/Skeleton";
+import { StatusLine } from "../ui/StatusLine";
+import { formatGameDate } from "../../features/games/format";
 import { formatGameType, formatRecord } from "./labels";
-import { gameHref, teamHref } from "./links";
+import { LevelLink } from "./LevelLink";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
-import styles from "./Stats.module.css";
+import styles from "./StatsNav.module.css";
+import type { StatsLevel, StatsNavAdapter } from "./types";
 
-export interface TeamSeasonViewProps {
+type TeamLevelData = Extract<StatsLevel, { kind: "team" }>;
+
+/**
+ * A team's name for its level: from the teams list when it is already cached
+ * (read without asking), else from the team's season (the read its view
+ * makes), else "Team".
+ */
+export function TeamName({
+  teamId,
+  season,
+}: {
   teamId: number;
   season: string;
-  seasonInUrl: string | null;
-  teams: TeamOut[] | undefined;
+}) {
+  const cached = useQueryClient()
+    .getQueryData<TeamOut[]>(TEAMS_KEY)
+    ?.find((team) => team.id === teamId)?.name;
+  const teamSeason = useQuery(teamSeasonQuery(teamId, season));
+  return <>{cached ?? teamSeason.data?.team.name ?? "Team"}</>;
 }
 
 /**
- * One team's season, in place of the league view: its record and home and
- * away splits, then its games from its own side, newest first, from
- * `GET /events/teams/{id}/seasons/{season}`.
+ * The team season level: the team's record and home and away splits, then
+ * its games from its own side, newest first (the API's order). An opponent
+ * opens its own team level in this one's place.
  */
-export function TeamSeasonView({
-  teamId,
-  season,
-  seasonInUrl,
-  teams,
-}: TeamSeasonViewProps) {
-  const teamSeason = useQuery({
-    queryKey: teamSeasonKey(teamId, season),
-    queryFn: () => fetchTeamSeason(teamId, season),
-  });
-  const known = teams?.find((team) => team.id === teamId);
+export function TeamLevel({
+  level,
+  adapter,
+  onTeam,
+}: {
+  level: TeamLevelData;
+  adapter: StatsNavAdapter;
+  onTeam: (teamId: number) => void;
+}) {
+  const teamSeason = useQuery(teamSeasonQuery(level.teamId, level.season));
 
   if (teamSeason.isPending)
-    return <StatusLine>Loading the team’s season…</StatusLine>;
+    return (
+      <>
+        <StatusLine>Loading the team’s season…</StatusLine>
+        <Skeleton variant="line" />
+      </>
+    );
   if (teamSeason.isError)
     return (
       <InlineAlert>
@@ -51,29 +70,27 @@ export function TeamSeasonView({
     );
   if (teamSeason.data === null)
     return (
-      <EmptyState>
-        There is no {season} season for {known?.name ?? "that team"}.
-      </EmptyState>
+      <EmptyState>There is no {level.season} season for that team.</EmptyState>
     );
 
-  return <TeamSeason data={teamSeason.data} seasonInUrl={seasonInUrl} />;
+  return (
+    <TeamSeason data={teamSeason.data} adapter={adapter} onTeam={onTeam} />
+  );
 }
 
 function TeamSeason({
   data,
-  seasonInUrl,
+  adapter,
+  onTeam,
 }: {
   data: TeamSeasonOut;
-  seasonInUrl: string | null;
+  adapter: StatsNavAdapter;
+  onTeam: (teamId: number) => void;
 }) {
   const { team, record, season, games } = data;
-  const headingId = `stats-team-${team.id}`;
 
   return (
-    <section className={styles.section} aria-labelledby={headingId}>
-      <h2 id={headingId}>
-        {team.name}, {season}
-      </h2>
+    <>
       <dl className={styles.facts}>
         <div>
           <dt>Record</dt>
@@ -108,22 +125,28 @@ function TeamSeason({
               <GameRow
                 key={game.game_id}
                 game={game}
-                seasonInUrl={seasonInUrl}
+                season={season}
+                adapter={adapter}
+                onTeam={onTeam}
               />
             ))}
           </tbody>
         </ScrollTable>
       )}
-    </section>
+    </>
   );
 }
 
 function GameRow({
   game,
-  seasonInUrl,
+  season,
+  adapter,
+  onTeam,
 }: {
   game: TeamSeasonGameOut;
-  seasonInUrl: string | null;
+  season: string;
+  adapter: StatsNavAdapter;
+  onTeam: (teamId: number) => void;
 }) {
   const label = [game.label, game.sub_label]
     .filter((part): part is string => part !== null && part !== "")
@@ -132,13 +155,17 @@ function GameRow({
   return (
     <tr>
       <th scope="row" className={styles.name}>
-        <Link to={gameHref(game.game_id)}>{formatGameDate(game.date)}</Link>
+        {adapter.gameLink(game.game_id, formatGameDate(game.date))}
       </th>
       <td className={styles.name}>
         {game.is_home ? "vs " : "at "}
-        <Link to={teamHref(game.opponent.id, seasonInUrl)}>
+        <LevelLink
+          level={{ kind: "team", season, teamId: game.opponent.id }}
+          adapter={adapter}
+          onGo={() => onTeam(game.opponent.id)}
+        >
           {game.opponent.name}
-        </Link>
+        </LevelLink>
       </td>
       <td className={styles.name}>
         {/* The result in a letter and a word, never by colour alone. */}

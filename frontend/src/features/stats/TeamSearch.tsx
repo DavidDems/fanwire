@@ -1,7 +1,7 @@
 import { useId, useState, type KeyboardEvent } from "react";
 
 import { Field, describeField } from "../../components/FormField";
-import type { TeamOut } from "./api";
+import type { TeamOut } from "../../api/stats";
 import styles from "./Stats.module.css";
 
 const INPUT_ID = "stats-team-search";
@@ -143,7 +143,6 @@ export function TeamSearch({
               id={`${optionId}-${index}`}
               role="option"
               aria-selected={index === active}
-              className={styles.option}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(team)}
             >

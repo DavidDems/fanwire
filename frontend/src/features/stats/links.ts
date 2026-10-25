@@ -1,3 +1,8 @@
+import { createElement, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+import type { StatsNavAdapter } from "../../components/stats-nav/types";
+
 /**
  * The addresses the Stats page links to. Games and players are other pages,
  * reached by address only; a team is this page's own Seasons tab, filtered.
@@ -22,3 +27,11 @@ export function teamHref(teamId: number, season: string | null): string {
   params.set("team", String(teamId));
   return `/stats/seasons?${params.toString()}`;
 }
+
+/** The stats navigator's game and player links, as router links. */
+export const ROUTE_LINKS: StatsNavAdapter = {
+  gameLink: (gameId: number, children: ReactNode) =>
+    createElement(Link, { to: gameHref(gameId) }, children),
+  playerLink: (playerId: number, children: ReactNode) =>
+    createElement(Link, { to: playerHref(playerId) }, children),
+};

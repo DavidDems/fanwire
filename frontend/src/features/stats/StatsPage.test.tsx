@@ -27,7 +27,9 @@ function tabNav(): HTMLElement {
 
 async function seasonsTabShown(): Promise<void> {
   await screen.findByRole("combobox", { name: "Season" });
-  expect(screen.queryByRole("searchbox", { name: "Search players" })).toBeNull();
+  expect(
+    screen.queryByRole("searchbox", { name: "Search players" }),
+  ).toBeNull();
 }
 
 async function playersTabShown(): Promise<void> {
@@ -105,9 +107,24 @@ describe("the URL decides the tab", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
-  it("is not ARIA tabs: no tab, tablist or tabpanel role on the page", async () => {
+  // FRONTEND-018 changed this test: the Seasons tab now holds one in-page
+  // ARIA tablist of its own, the "Conference" bar (UI-010's SegmentedTabs).
+  // The route tabs are still links, never ARIA tabs.
+  it("the route tabs are not ARIA tabs: the only tablist is Seasons' Conference bar", async () => {
     renderAppAt("/stats/seasons", "anonymous");
     await seasonsTabShown();
+
+    expect(within(tabNav()).queryAllByRole("tab")).toEqual([]);
+    const tablists = await screen.findAllByRole("tablist");
+    expect(tablists.map((list) => list.getAttribute("aria-label"))).toEqual([
+      "Conference",
+    ]);
+    expect(tabNav().contains(tablists[0])).toBe(false);
+  });
+
+  it("the Players tab has no ARIA tabs at all", async () => {
+    renderAppAt("/stats/players", "anonymous");
+    await playersTabShown();
 
     expect(screen.queryAllByRole("tab")).toEqual([]);
     expect(screen.queryAllByRole("tablist")).toEqual([]);
