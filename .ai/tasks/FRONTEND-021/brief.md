@@ -25,9 +25,26 @@ the risks the thread carried here: R22, R23, R25, R29, R30 and R32.
     are picked in one place.
   - **The picker's tabs are Seasons and Players.** A record can't be attached,
     so Records isn't offered.
+  - **Compose opens with focus in the text box** (R38). Today it opens on
+    Close, because the text box has no autofocus.
 
 ## Decided by the Director
 
+- **The navigator takes the levels it doesn't own from its caller** (the
+  skeptic's D3 and D4). `StatsNavigator` draws the season and team levels.
+  Every other level's breadcrumb name and view come from a `LevelViews` prop:
+  - `RecordsTab` passes the records views;
+  - the picker passes the game, players and player views, which live in
+    `features/compose/`, beside the selection rules.
+
+  `stats-nav` may import nothing under `features/` but
+  `features/games/format`. The records views leave the shared chunk with no
+  extra serial load.
+- **The picker's `Dialog` sits outside the compose `<form>`.** A nested
+  `<dialog>` still belongs to the form around it. In the skeptic's prototype,
+  Enter in the search box and Enter on a radio each posted the draft (D6).
+- **The picker's `Dialog` is anchored at the top,** as compose's is. Centred,
+  it scored a CLS of 0.17–0.27 as levels landed (D7).
 - **Nested `Dialog`, not a panel.** The picker is a `Dialog` opened inside
   the compose `Dialog`, as a confirm opens inside the thread modal
   (`FRONTEND-012`). The browser stacks them, Escape is the inner one's, and
@@ -56,16 +73,22 @@ the risks the thread carried here: R22, R23, R25, R29, R30 and R32.
   content scroller on tall, cached content. The fix is in `Dialog` itself:
   focus Close after `showModal()`, and let a child's own effect move it
   further.
-- **R23:** `loadComposer` caches a rejected import, so a chunk that failed once
-  stays failed until a reload. The picker's chunk must not copy that.
+- **R23:** `loadComposer` caches a rejected import. On `main`, the skeptic
+  measured worse than "stays failed": the whole app is replaced by React
+  Router's error page. Two traps (D11):
+  - `React.lazy` caches its rejection too, so use a module-level promise
+    that is cleared on failure;
+  - Vite never requests a stylesheet twice, so Try again re-requests the
+    failed ones first, or the recovered content renders unstyled.
 - **R25:** the picker would load the shared `StatsNavigator` chunk (4,696 B
-  gzip on 47b6ffd), which also carries the records views and `SeasonSelect`,
-  though no record is selectable. Split them out, or budget their cost by
-  name. The skeptic's prototype decides.
+  gzip on 47b6ffd, of which the records views are about 1,450 B), though no
+  record is selectable. Decided by the injection above (D3): the chunk drops
+  to about 3,243 B, and the records views move into `RecordsTab`.
 - **R29:** `api/records.ts` has a copy of `api/stats.ts`'s private `ok()`.
   Fold them into one.
 - **R30:** Back pressed before a cold record's list lands goes to the Team
-  tab, even for a player record.
+  tab, even for a player record. Until the group is known, it comes from the
+  id's prefix (`team-` or `player-`, D12).
 - **R32:** the StatsPage and routes tests that reach a lazy tab have no
   warm-up, so a cold-chunk `findBy` can flake under the full suite.
 - **R33:** done in this spec's PR. `bundle-budgets/FRONTEND-019.ts` is folded
@@ -79,19 +102,68 @@ the risks the thread carried here: R22, R23, R25, R29, R30 and R32.
   chunk after its first module, so build a scratch copy of the planned layout
   before declaring. The Director may correct chunk names in its own commit
   after a build of the implementation, keeping the sums (R20).
-- **The entry.** `Dialog` is in the entry (the detail modal uses it), so
-  R22's focus line is the only entry growth allowed. Anything the picker
-  imports statically from the entry graph pulls it into the main chunk.
+- **The entry.** `Dialog` and `routes/ComposeModal.tsx` are in the entry.
+  R22's line and R23's retry grow it, and so do the new outputs' names in
+  Vite's preload map. The prototype measured +215 gzip and +500 raw, and the
+  ceiling is +300 and +700. Anything the picker imports statically from the
+  entry graph pulls it into the main chunk.
 - **The Stats page must not change.** The game, players and player levels are
   only reachable in select mode. A team's game row on Stats still links
   `/games/<id>`.
-- **Tests that pin the panel** change in the test commit and are named in the
-  PR: `AttachmentPicker.test.tsx`, `attach-row.test.tsx`'s disclosure checks,
-  `component-isolation.test.ts`'s file list, and the `Dialog` focus tests.
+- **Tests that pin the panel** change in the test commit, and the PR names
+  each one, test by test. The prototype broke 47 tests in 6 files:
+  - `AttachmentPicker.test.tsx` (25);
+  - `ComposePage.test.tsx` (15);
+  - `attach-row.test.tsx` (2);
+  - `compose-style.test.tsx` (3);
+  - `RecordLevel.test.tsx`'s breadcrumb-before-the-list test;
+  - `lazy-routes.test.ts`'s compose Suspense test.
+- **Two `id="stats-season"`s.** With compose over `/stats/seasons`, the
+  Stats page's select and the picker's shared an id, and the picker's select
+  lost its name. `SeasonSelect` takes its id from `useId` (D5).
+- **The measuring databases.** `fanwire_perf` has the full stats load but no
+  posts, so the compose rows run over the `fanwire` dev database's feed (20
+  cards on its first page). The CLS rows delay every `/api/events/` read by
+  800 ms: a faster read lands inside the 500 ms input window and scores 0 by
+  definition.
 - **`staleTime` and the test clients.** The test kit's clients use
   `staleTime: 0`, so a "makes 0" line passes only through the read's own
   `staleTime`. Declare it on the query options in `src/api/`.
 - **`prettier --write` on named files only.**
+
+## The skeptic
+
+**First pass, 2026-10-26: proceed with changes, all landed in this spec.** It
+built a bare prototype on 741944e and measured it with the budget test's own
+build. Its build of 47b6ffd matched the Director's fold byte for byte.
+- **Bundle:** the entry grows +215 gzip and +500 raw. Compose open gets
+  lighter: `ComposePage` plus `stats` is 4,566 B, against 5,373 before. The
+  picker cold loads 6,998 B of JS and 1,862 of CSS.
+- **Requests:** opening the picker cold makes 3, and reopening it makes 0.
+  Every level makes 1, and choosing, Select and Cancel make 0.
+- **Long tasks** at 4× CPU and 360 wide: the worst row was 137 ms (opening a
+  96-game team), and the picker cold had a median of 55 ms.
+- **Its defects, D1–D16:**
+  - the under-declared bundle lines, and the entry's real growth;
+  - the R25 split by injection;
+  - where the select-mode views live;
+  - the missing season select, and its duplicate id;
+  - Enter posting the draft;
+  - the centred dialog's CLS;
+  - the request counts, and the shared cache keys;
+  - the full list of broken tests;
+  - `attachmentReads.ts`'s contradiction;
+  - R23's two traps, and R30's group prefix;
+  - compose's initial focus (the human's R38);
+  - a database for the feed rows;
+  - the PR body's test list;
+  - a wrong number.
+
+Risks carried (Prompt 20 Progress):
+- **R34:** a cold Seasons or Records fetches 3 more, smaller files.
+- **R35:** new chunk names that the Director may need to correct.
+- **R36:** a full playoff season's team table is the heaviest DOM.
+- **R37:** nested `Dialog`s are proven for one level only.
 
 ## Not in this task
 
