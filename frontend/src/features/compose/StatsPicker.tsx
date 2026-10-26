@@ -126,30 +126,37 @@ export function StatsPicker({
                       selection={selection}
                       choose={choose}
                     />
-                  ) : level.kind === "player" ? (
-                    <CareerChoice
-                      id={level.playerId}
-                      selection={selection}
-                      choose={choose}
-                    />
-                  ) : level.kind === "players" ? (
-                    <Players
-                      text={text}
-                      q={q}
-                      setText={setText}
-                      adapter={{
-                        ...adapter,
-                        playerLink: (playerId, words) => (
-                          <button
-                            type="button"
-                            className={styles.level}
-                            onClick={() => open({ kind: "player", playerId })}
-                          >
-                            {words}
-                          </button>
-                        ),
-                      }}
-                    />
+                  ) : level.kind === "players" || level.kind === "player" ? (
+                    <>
+                      <div hidden={level.kind === "player"}>
+                        <Players
+                          text={text}
+                          q={q}
+                          setText={setText}
+                          adapter={{
+                            ...adapter,
+                            playerLink: (playerId, words) => (
+                              <button
+                                type="button"
+                                className={styles.level}
+                                onClick={() =>
+                                  open({ kind: "player", playerId })
+                                }
+                              >
+                                {words}
+                              </button>
+                            ),
+                          }}
+                        />
+                      </div>
+                      {level.kind === "player" ? (
+                        <CareerChoice
+                          id={level.playerId}
+                          selection={selection}
+                          choose={choose}
+                        />
+                      ) : null}
+                    </>
                   ) : null,
               }}
             />
