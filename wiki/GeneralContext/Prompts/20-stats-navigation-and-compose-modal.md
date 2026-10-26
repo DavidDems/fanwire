@@ -566,10 +566,17 @@ Update this section in every spec PR and unit PR of this thread.
       36 B. The next fold re-measures `main`.
     - **R25 and R29 still stand.** The picker's chunk now carries the records
       views and `SeasonSelect` too.
+- **2026-10-26, stage 3 done:** #242 and #243 merged and deployed.
 - **Next:**
-  1. After #242 merges: the FRONTEND-021 spec (stage 4: the stats picker
-     modal). Its Director spec PR folds `bundle-budgets/FRONTEND-019.ts` into
-     the base and takes R22, R23, R25 and R30 into its scope.
+  1. The FRONTEND-021 spec (stage 4: the stats picker modal), with the
+     skeptic's first pass. Its Director spec PR folds
+     `bundle-budgets/FRONTEND-019.ts` into the base (R33) and takes R22, R23,
+     R25, R29, R30 and R32 into its scope.
+     **Paused 2026-10-26:** the spec draft and the fold are on
+     `director/frontend-021-spec` (741944e, not pushed). The skeptic's first
+     pass stopped partway, on the session limit. Its prototype worktree
+     (`fanwire-wt/f021-skeptic`) and its scratch measurements are kept. It
+     still owes the stage 1–3 thread verdict and the Baseline.
 
 ## Limits
 
