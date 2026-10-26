@@ -43,6 +43,8 @@ const STATS_NAV_DIR = join(COMPONENTS_DIR, "stats-nav");
 const MODULES: [string, string][] = [
   ["stats", "StatsPage.tsx"],
   ["stats", "SeasonsTab.tsx"],
+  // FRONTEND-019: the Records tab.
+  ["stats", "RecordsTab.tsx"],
   ["stats", "PlayersTab.tsx"],
   ["players", "PlayerPage.tsx"],
 ];
@@ -276,6 +278,29 @@ describe("the navigator's place (FRONTEND-018)", () => {
     expect(
       importers(STATS_DIR, /(^|\/)components\/stats-nav\/StatsNavigator$/),
     ).toContain("features/stats/SeasonsTab.tsx");
+  });
+
+  // FRONTEND-019: the record levels are the navigator's, and RecordsTab is
+  // their route adapter.
+  it("RecordsTab renders StatsNavigator from components/stats-nav/", () => {
+    expect(
+      importers(STATS_DIR, /(^|\/)components\/stats-nav\/StatsNavigator$/),
+    ).toContain("features/stats/RecordsTab.tsx");
+  });
+
+  it("the records reads live in api/records.ts, which fetches through api/client", () => {
+    const file = join(SRC_DIR, "api", "records.ts");
+    expect(existsSync(file)).toBe(true);
+    expect(importSpecifiers(read(file))).toContain("./client");
+    expect(
+      [...shipped(STATS_DIR), ...shipped(STATS_NAV_DIR)]
+        .filter((source) =>
+          importSpecifiers(read(source)).some((specifier) =>
+            /(^|\/)api\/records$/.test(specifier),
+          ),
+        )
+        .map(posix),
+    ).not.toEqual([]);
   });
 
   it("PlayersTab renders the navigator's PlayerResults view", () => {

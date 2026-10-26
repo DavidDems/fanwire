@@ -2,8 +2,9 @@
  * FRONTEND-018, Baseline (b), and the router-agnostic criterion, pinned
  * structurally from disk.
  *
- * - **Lazy.** Nothing under `components/stats-nav/`, and not `api/stats.ts`,
- *   is reachable from the entry (`src/main.tsx`) by static imports alone, so
+ * - **Lazy.** Nothing under `components/stats-nav/`, and not `api/stats.ts`
+ *   or `api/records.ts` (FRONTEND-019), is reachable from the entry
+ *   (`src/main.tsx`) by static imports alone, so
  *   the navigator and the stats reads load with the lazy Stats page and never
  *   in the main chunk. The walk is a copy of `routes/lazy-routes.test.ts`'s
  *   (FRONTEND-020 owns that file in this stage), guarded against passing
@@ -143,9 +144,10 @@ describe("the import walk reads a real graph", () => {
     expect(reachable.size).toBeGreaterThan(20);
   });
 
-  it("has a navigator and api/stats.ts on disk to look for", () => {
+  it("has a navigator, api/stats.ts and api/records.ts on disk to look for", () => {
     expect(existsSync(join(NAV_DIR, "StatsNavigator.tsx"))).toBe(true);
     expect(existsSync(join(SRC_DIR, "api", "stats.ts"))).toBe(true);
+    expect(existsSync(join(SRC_DIR, "api", "records.ts"))).toBe(true);
     expect(
       sourceFiles(NAV_DIR).filter((file) => !isTest(file)).length,
     ).toBeGreaterThan(0);
@@ -157,6 +159,15 @@ describe("the navigator and the stats reads stay out of the main chunk", () => {
     expect(
       reachable.has("api/stats.ts"),
       `api/stats.ts is statically reachable from src/${ENTRY}, so it is in the main chunk`,
+    ).toBe(false);
+  });
+
+  // FRONTEND-019, Baseline (b): the records reads load with the Records tab.
+  it("does not reach api/records.ts from the entry without an import()", () => {
+    expect(existsSync(join(SRC_DIR, "api", "records.ts"))).toBe(true);
+    expect(
+      reachable.has("api/records.ts"),
+      `api/records.ts is statically reachable from src/${ENTRY}, so it is in the main chunk`,
     ).toBe(false);
   });
 

@@ -15,8 +15,9 @@
  *   case-insensitive, on the team's name or its abbreviation, as the user
  *   types. Typing asks the API nothing more.
  * - **Choosing a team** writes `?team=<id>` (keeping any `?season=`), puts the
- *   team's name in the bar, and replaces the league view (its Champion,
- *   Standings and Leaders sections are gone) with that team's season from
+ *   team's name in the bar, and replaces the league view (its Champion and
+ *   Standings sections are gone; FRONTEND-019 moved the Leaders to Records)
+ *   with that team's season from
  *   `GET /events/teams/{id}/seasons/{season}`: a heading naming the team, its
  *   record and home and away splits, and its games, each a link to
  *   `/games/<id>`, in the API's order, with a win or a loss marked in words
@@ -355,7 +356,10 @@ describe("the team view (criteria 5, 6)", () => {
 
     await waitFor(() => expect(search(router).has("team")).toBe(false));
     expect(await screen.findByRole("region", { name: "Standings" })).toBeVisible();
-    expect(screen.getByRole("region", { name: "Leaders" })).toBeVisible();
+    // FRONTEND-019 changed this line, which expected the Leaders region: the
+    // leaders moved to Records > Seasonal, and the league view is now the
+    // champion and the standings.
+    expect(screen.getByRole("region", { name: "Champion" })).toBeVisible();
   });
 
   it("its tables have captions, scoped headers and their own scroll regions", async () => {

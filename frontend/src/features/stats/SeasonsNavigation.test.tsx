@@ -10,8 +10,8 @@
  *   written; East and West are `?conf=east` and `?conf=west`, so a reload, a
  *   shared link and Back keep them; an unknown `?conf=` shows All. All shows
  *   both conference tables, East and West one each.
- * - **Leaders** stay on Seasons as they were, below the standings, whatever
- *   the conference.
+ * - **No leaders** (FRONTEND-019): they moved to Records > Seasonal, so no
+ *   conference of Seasons shows them.
  * - **Team level.** Opened from a standings row (a link, as today) or the team
  *   search, at today's `?team=` address, keeping `?season=` and `?conf=`. The
  *   breadcrumb (a nav named "Stats path", an ordered list) reads season ›
@@ -200,17 +200,14 @@ describe("the conference bar", () => {
     expect(selectedTab()).toBe("All");
   });
 
-  it("keeps the leaders below the standings, three boards, on every conference", async () => {
+  // FRONTEND-019 changed this test, which was "keeps the leaders below the
+  // standings, three boards, on every conference": the leaders moved to
+  // Records > Seasonal, so it pins them gone instead.
+  it("shows no leaders below the standings, on any conference", async () => {
     openSeasons("/stats/seasons?season=2023-24&conf=east");
 
-    const standings = await screen.findByRole("region", { name: "Standings" });
-    const leaders = await screen.findByRole("region", { name: "Leaders" });
-    expect(await within(leaders).findAllByRole("table")).toHaveLength(3);
-    expect(
-      standings.compareDocumentPosition(leaders) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(standings.contains(leaders)).toBe(false);
+    expect(await standingsCaptions()).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Leaders" })).toBeNull();
   });
 
   it("moves no focus on a cold load", async () => {

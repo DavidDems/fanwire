@@ -18,6 +18,7 @@ import {
 } from "./auth";
 import { emptyFeed } from "./feed";
 import { notificationsAre, preferenceIs } from "./notifications";
+import { recordsDefaults } from "./records";
 import { gameFiltersAre } from "./search";
 import { server } from "./server";
 import { statsDefaults } from "./stats";
@@ -52,14 +53,15 @@ export const OWN_USER_ID = testProfile().id;
  * with `onUnhandledRequest: "error"`): the feed, public profiles, teams, and
  * the notification list and preference, the search page's game filters (its
  * teams are the same `GET /events/teams`), the stats and player routes' reads
- * (`statsDefaults`, `FRONTEND-009`), and (signed in) the follow set. Nothing
+ * (`statsDefaults`, `FRONTEND-009`) and the records reads (`recordsDefaults`,
+ * `FRONTEND-019`), and (signed in) the follow set. Nothing
  * the shell's tests assert depends on them.
  */
 export function arrangeVisitor(as: Visitor): AuthService {
   server.use(publicProfilesById(), teamsAre(), emptyFeed());
   server.use(notificationsAre([]), preferenceIs(true));
   server.use(gameFiltersAre());
-  server.use(...statsDefaults());
+  server.use(...statsDefaults(), ...recordsDefaults());
   if (as === "anonymous") return new FakeAuthService();
 
   if (as === "deactivated") {

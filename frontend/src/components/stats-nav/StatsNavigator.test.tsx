@@ -13,7 +13,9 @@
  * // Levels are data; the union may grow (FRONTEND-021 adds game, box score).
  * type StatsLevel =
  *   | { kind: "season"; season: string; conf: Conference }
- *   | { kind: "team"; season: string; teamId: number };
+ *   | { kind: "team"; season: string; teamId: number }
+ *   | ...; // FRONTEND-019 adds the records levels, which carry no season
+ *          // (their shapes are the implementation's; every use narrows by kind)
  *
  * interface StatsNavAdapter {
  *   // How a game or a player is linked: the route adapter renders a router
@@ -24,6 +26,9 @@
  *   // returns to a level is an <a href={levelHref(level)}> whose plain click
  *   // calls open / pop (preventDefault); when absent it is a <button>.
  *   levelHref?(level: StatsLevel): string;
+ *   // FRONTEND-019, optional: a team's link, for that season or none; without
+ *   // it a team's name is plain text. This file's picker adapter has none.
+ *   teamLink?(teamId: number, season: string | null, children: ReactNode): ReactNode;
  * }
  *
  * interface StatsNavigatorProps {
@@ -463,12 +468,16 @@ describe("Season → Team season → Back, through a state adapter", () => {
 
 describe("an adapter that gives levels an address", () => {
   it("renders level controls as links to that address, whose plain click opens the level", async () => {
+    // FRONTEND-019 changed this adapter's typing: the StatsLevel union grew
+    // (the records levels carry no season), so it narrows by kind.
     const withHref: StatsNavAdapter = {
       ...pickerAdapter,
       levelHref: (level: StatsLevel) =>
         level.kind === "team"
           ? `/somewhere?team=${level.teamId}`
-          : `/somewhere?season=${level.season}`,
+          : level.kind === "season"
+            ? `/somewhere?season=${level.season}`
+            : "/somewhere",
     };
     const { calls } = renderState(undefined, withHref);
     const user = userEvent.setup();
