@@ -45,43 +45,45 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main 4fc9b46 (after
- * UI-010, EVENTS-010, FRONTEND-018 and FRONTEND-020, whose files are folded
- * in): the entry, its stylesheet, and every lazy output → gzip bytes.
- * Measure with the test's build, not `npm run build`: the two differ by
- * about 0.2 kB raw on the entry.
+ * The base, measured by this test's own build on origin/main 47b6ffd (after
+ * UI-010, EVENTS-010, FRONTEND-018, FRONTEND-020 and FRONTEND-019, whose files
+ * are folded in): the entry, its stylesheet, and every lazy output → gzip
+ * bytes. Measure with the test's build, not `npm run build`: the two differ
+ * by about 0.2 kB raw on the entry.
  */
 export const BASE = {
-  entryJsGzip: 149_444,
-  entryJsRaw: 470_954,
+  entryJsGzip: 149_517,
+  entryJsRaw: 471_195,
   entryCssGzip: 5_543,
   lazy: {
     "AuthPage.module": 158,
     ComposePage: 5_373,
-    ConfirmPage: 1_054,
+    ConfirmPage: 1_055,
     errors: 243,
-    ForgotPasswordPage: 1_082,
-    format: 432,
-    GamePage: 3_405,
-    NotificationsPage: 1_666,
-    PlayerPage: 3_050,
+    ForgotPasswordPage: 1_084,
+    format: 431,
+    GamePage: 3_404,
+    NotificationsPage: 1_668,
+    PlayerPage: 3_049,
     PlayersTab: 1_144,
     ProfilePage: 2_783,
-    ProfileSetupPage: 1_416,
-    SeasonsTab: 4_637,
-    SignInPage: 987,
-    SignUpPage: 877,
-    "Stats.module": 1_055,
-    StatsPage: 391,
-    VisuallyHidden: 144,
+    ProfileSetupPage: 1_414,
+    RecordsTab: 1_538,
+    SeasonsTab: 1_631,
+    SignInPage: 989,
+    SignUpPage: 876,
+    "Stats.module": 1_164,
+    StatsNavigator: 4_696,
+    StatsPage: 401,
+    VisuallyHidden: 143,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 602,
     "css:GamePage.css": 860,
     "css:NotificationsPage.css": 451,
     "css:PlayerPage.css": 704,
     "css:ProfilePage.css": 577,
-    "css:SeasonsTab.css": 364,
-    "css:Stats.css": 1_099,
+    "css:Stats.css": 1_278,
+    "css:StatsNavigator.css": 364,
     "css:StatsPage.css": 398,
   } as Record<string, number>,
 };

@@ -566,10 +566,93 @@ Update this section in every spec PR and unit PR of this thread.
       36 B. The next fold re-measures `main`.
     - **R25 and R29 still stand.** The picker's chunk now carries the records
       views and `SeasonSelect` too.
+- **2026-10-26, stage 3 done:** #242 and #243 merged and deployed.
+- **2026-10-26, the skeptic's verdict on the thread so far (stages 1–3): the
+  complexity is earned, and latency held.**
+  - **One navigator serves Seasons and Records.** A cold Seasons went from 8
+    requests to 7, then to 4. The leaders and the season-wide games list are
+    off Seasons.
+  - **Every measured row passed.** The worst cold long tasks were 134 ms
+    (018), 165 (020) and 170 (019), all under the 200 ms median and 250 ms
+    worst-run caps. CLS was 0.0013, 0.052 and 0.0056, and 018 fixed the
+    0.365 Seasons regression.
+  - **R1 holds.** Over four units the entry grew from 148,797 to 149,517 B
+    gzip and from 468,568 to 471,195 B raw, which leaves 8,805 B of raw
+    headroom. Its own build of 47b6ffd matched the R33 fold byte for byte.
+  - **What slipped:**
+    - FRONTEND-020 criterion 2 (R22), reproduced on `main`: focus lands on
+      the Dialog's content scroller;
+    - R16: the image pipeline has still never been timed live, and every
+      image row has used stubs;
+    - the process kill by command-line pattern, already reported.
+  - **R23 is worse than recorded.** On `main`, a compose chunk that fails to
+    load replaces the whole app with React Router's "Unexpected Application
+    Error".
+  - **R32's flake is real.** It took a Director correction (`d30f892`), and
+    StatsPage and routes are still open.
+  - **Data gaps for later rows:**
+    - `fanwire_perf` has no posts and 1 user;
+    - `fanwire` has a 20-card feed and only 2 games.
+- **2026-10-26, the FRONTEND-021 spec** (one Director PR, which also writes
+  `frontend/src/test/`).
+  - **Decided by the human** (by `AskUserQuestion`):
+    - a game's result is picked on the game's level, beside its box-score
+      lines;
+    - the picker's tabs are Seasons and Players;
+    - compose opens with focus in its text box (R38).
+  - **The budget fold (R33).** The test's own build on `main` 47b6ffd
+    measured the entry at 149,517 B gzip and 471,195 B raw, and the entry CSS
+    at 5,543 B. `bundle-budgets/FRONTEND-019.ts` is deleted. The combine
+    test's "added" case now uses `PickerTab`, because `RecordsTab` is in the
+    base.
+  - **The skeptic's first pass: proceed with changes,** all of them in the
+    spec. It built a prototype on 741944e.
+    - **Bundle:** the entry grows +215 B gzip and +500 B raw, declared at 300
+      and 700.
+    - **Compose open gets lighter:** `ComposePage` plus `stats` is 4,566 B,
+      against 5,373 before.
+    - **R25 is split by injection.** `StatsNavigator` takes the levels it
+      doesn't own from its caller, so the shared chunk goes from 4,696 to
+      3,243 B and the records views move into `RecordsTab`. A cold Records
+      has no extra serial load.
+    - **Requests:** opening the picker cold makes 3, reopening it makes 0,
+      and every level makes 1.
+    - **Long tasks:** the worst prototype row was 137 ms (a 96-game team),
+      and the picker cold had a median of 55 ms.
+    - **CLS:** anchoring the picker at the top keeps it at 0.0275 or less. It
+      was 0.27 centred.
+    - **Two blocking defects:**
+      - **D6:** Enter inside a picker nested in the compose `<form>` posted
+        the draft;
+      - **D4:** the select-mode views can't live in `stats-nav`.
+    - **The other defects (D1–D16):**
+      - the under-declared bundle lines, and the entry's real growth;
+      - a season select, whose duplicate id cost it its name;
+      - the request counts, and the shared cache keys;
+      - the 47 tests in 6 files that the change breaks;
+      - R23's two traps: `React.lazy` caches its rejection, and Vite never
+        re-requests a stylesheet;
+      - R30's group from the record id's prefix;
+      - a database for the feed rows;
+      - the PR body's test list;
+      - a wrong number.
+    - **Closed or held by the design:** R18, R19, R1, R22, R25, R29 and R30.
+      R32 stays open.
+  - **Risks carried:**
+    - **R34 (021):** sharing the navigator splits the Stats chunks. A cold
+      Seasons or Records fetches 3 more files, in parallel, with +247 B gzip
+      of CSS, though the Seasons JS drops 1,137.
+    - **R35 (021):** the `stats` and `StatsNav.module` chunk names depend on
+      the import graph, so the Director may correct them (R20).
+    - **R36:** a 96-game team table plus 27 radios is the heaviest DOM, with
+      a worst of 146 ms. A full playoff season (about 110 games) has no
+      measured margin.
+    - **R37:** Escape and Back in nested Dialogs are proven for one level
+      only.
+    - **R16** still stands.
 - **Next:**
-  1. After #242 merges: the FRONTEND-021 spec (stage 4: the stats picker
-     modal). Its Director spec PR folds `bundle-budgets/FRONTEND-019.ts` into
-     the base and takes R22, R23, R25 and R30 into its scope.
+  1. After this spec PR merges: hand-run FRONTEND-021 on
+     `agent/FRONTEND-021`.
 
 ## Limits
 
