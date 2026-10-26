@@ -44,7 +44,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { formatGameDate } from "../games/format";
 import {
@@ -85,6 +85,15 @@ import {
   rowText,
   tableProblems,
 } from "../../test/tables";
+
+// The Director's correction (FRONTEND-019): the Records tab is a lazy route,
+// and the first test of a file to open it waited on the cold transform of its
+// chunk (RecordsTab and the shared navigator), which overran findBy's 1 s
+// under the full suite's load. Importing it once here does that work outside
+// any test; no assertion changes.
+beforeAll(async () => {
+  await import("./RecordsTab");
+}, 30_000);
 
 type User = ReturnType<typeof userEvent.setup>;
 
