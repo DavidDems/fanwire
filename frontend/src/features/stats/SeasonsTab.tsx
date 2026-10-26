@@ -1,12 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  SEASONS_KEY,
-  TEAMS_KEY,
-  fetchSeasons,
-  fetchTeams,
-} from "../../api/stats";
+import { seasonsQuery, TEAMS_KEY, fetchTeams } from "../../api/stats";
 import {
   NoSeason,
   SeasonSelect,
@@ -44,7 +39,7 @@ function conference(value: string | null): Conference {
  */
 export function SeasonsTab() {
   const [params, setParams] = useSearchParams();
-  const seasons = useQuery({ queryKey: SEASONS_KEY, queryFn: fetchSeasons });
+  const seasons = useQuery(seasonsQuery());
   const teams = useQuery({ queryKey: TEAMS_KEY, queryFn: fetchTeams });
 
   const picked = params.get("season");

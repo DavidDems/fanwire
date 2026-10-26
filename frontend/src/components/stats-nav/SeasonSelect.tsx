@@ -1,11 +1,10 @@
+import { useId } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import { Field, describeField } from "../FormField";
 import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { StatusLine } from "../ui/StatusLine";
-
-const SEASON_ID = "stats-season";
 
 /**
  * The season picker Seasons and Records > Seasonal share (FRONTEND-019): a
@@ -22,10 +21,11 @@ export function SeasonSelect({
   options: string[];
   onPick: (season: string) => void;
 }) {
+  const id = useId();
   return (
-    <Field id={SEASON_ID} label="Season">
+    <Field id={id} label="Season">
       <select
-        {...describeField(SEASON_ID)}
+        {...describeField(id)}
         value={season ?? ""}
         disabled={options.length === 0}
         onChange={(event) => onPick(event.target.value)}

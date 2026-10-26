@@ -1,3 +1,4 @@
+import { ok } from "./ok";
 import { queryOptions } from "@tanstack/react-query";
 
 import { apiClient } from "./client";
@@ -32,16 +33,6 @@ export const RECORDS_KEY = ["events", "records"] as const;
 
 export function recordKey(id: string) {
   return ["events", "records", id] as const;
-}
-
-/** An answer's data, or an error naming the request and its status. */
-function ok<T>(
-  { data, response }: { data?: T; response: Response },
-  path: string,
-): T {
-  if (!response.ok || data === undefined)
-    throw new Error(`GET ${path} answered ${response.status}`);
-  return data;
 }
 
 /** Every record with its holder, team records first, and the data window. */

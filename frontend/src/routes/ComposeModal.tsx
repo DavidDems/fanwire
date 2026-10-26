@@ -1,6 +1,9 @@
-import { Suspense, lazy, useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import { Dialog } from "../components/ui/Dialog";
+import { Button } from "../components/ui/Button";
+import { InlineAlert } from "../components/ui/InlineAlert";
+import { retryStyles } from "../features/compose/retryStyles";
 import { StatusLine } from "../components/ui/StatusLine";
 import { ShellAccountStatus } from "./AppLayout";
 import styles from "./ComposeModal.module.css";
@@ -9,23 +12,20 @@ import { useComposeClose } from "./modal-flow";
 
 type ComposeModule = typeof import("../features/compose/ComposePage");
 
-/** The composer's chunk, once it has arrived. */
-let loaded: ComposeModule | null = null;
+/** One import, retained on success and cleared on failure. */
+let rejected = false;
 let loading: Promise<ComposeModule> | null = null;
 
 function loadComposer(): Promise<ComposeModule> {
-  loading ??= import("../features/compose/ComposePage").then((module) => {
-    loaded = module;
-    return module;
-  });
+  loading ??= (rejected ? retryStyles() : Promise.resolve())
+    .then(() => import("../features/compose/ComposePage"))
+    .catch((error: unknown) => {
+      loading = null;
+      rejected = true;
+      throw error;
+    });
   return loading;
 }
-
-// Its own chunk, waited for inside the dialog: the page underneath never
-// waits for it (lazy-routes.test.ts).
-const ComposePage = lazy(() =>
-  loadComposer().then((m) => ({ default: m.ComposePage })),
-);
 
 /**
  * How long the dialog waits for what it shows before it opens on a loading
@@ -55,16 +55,15 @@ const LOADING_GRACE_MS = 500;
  *
  * **The composer is its own chunk**, fetched when an active account opens
  * the dialog. The dialog opens once it has arrived, or after the grace on a
- * loading line inside it (the Suspense), never the page's.
+ * loading line inside it, never the page's.
  */
 export function ComposeModal() {
   const status = useContext(ShellAccountStatus);
   const close = useComposeClose();
   const [graceOver, setGraceOver] = useState(false);
-  const [ready, setReady] = useState(loaded !== null);
-  // Whether the composer is rendered from the arrived chunk or through the
-  // lazy one, decided once, so the chunk arriving never re-mounts it.
-  const direct = useRef<boolean | null>(null);
+  // null waits, false failed, and a module is ready to render.
+  const [content, setContent] = useState<ComposeModule | null | false>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setGraceOver(true), LOADING_GRACE_MS);
@@ -73,16 +72,27 @@ export function ComposeModal() {
 
   const active = status === "active";
   useEffect(() => {
-    if (active) void loadComposer().then(() => setReady(true));
-  }, [active]);
+    let current = true;
+    if (active)
+      void loadComposer().then(
+        (module) => {
+          if (current) setContent(module);
+        },
+        () => {
+          if (current) setContent(false);
+        },
+      );
+    return () => {
+      current = false;
+    };
+  }, [active, attempt]);
 
   if (status === "anonymous" || status === "no-profile") {
     return <RequireAuth>{null}</RequireAuth>;
   }
-  const waiting = status === "loading" || (active && !ready);
+  const waiting = status === "loading" || (active && content === null);
   if (waiting && !graceOver) return null;
-  if (active) direct.current ??= ready;
-  const Loaded = direct.current === true ? loaded?.ComposePage : undefined;
+  const Loaded = content ? content.ComposePage : undefined;
 
   return (
     <Dialog title="Compose" open onClose={close}>
@@ -92,10 +102,25 @@ export function ComposeModal() {
           <RequireAuth>{null}</RequireAuth>
         ) : Loaded ? (
           <Loaded onPosted={close} />
+        ) : content === false ? (
+          <>
+            <InlineAlert>
+              We could not open this just now. Please try again.
+            </InlineAlert>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setContent(null);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </>
         ) : (
-          <Suspense fallback={<StatusLine>Loading…</StatusLine>}>
-            <ComposePage onPosted={close} />
-          </Suspense>
+          <StatusLine>Loading…</StatusLine>
         )}
       </div>
     </Dialog>

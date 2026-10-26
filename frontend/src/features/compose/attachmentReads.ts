@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 
-import { apiClient } from "../../api/client";
+import { fetchGameDetail, fetchPlayerDetail } from "../../api/stats";
 import type { components } from "../../api/schema";
 import type { CareerScope, DataLink } from "./dataLink";
 
@@ -28,9 +28,8 @@ import type { CareerScope, DataLink } from "./dataLink";
  * picker already holds (or, for a pre-filled address, the one read it makes).
  * It is not `FRONTEND-014`'s feed preview, which needs `POSTS-006`.
  *
- * The fetchers live here rather than being shared with `features/games`,
- * `features/players` or `features/stats`: one feature folder does not import
- * another (`0x00-architecture.md`, connection rule).
+ * Shared fetchers live in src/api/stats.ts; this module owns only selection
+ * rules, summary wording and the pre-filled address check.
  */
 
 export type TeamOut = components["schemas"]["TeamOut"];
@@ -41,85 +40,6 @@ export type TeamRefOut = components["schemas"]["TeamRefOut"];
 export type PlayerListItemOut = components["schemas"]["PlayerListItemOut"];
 export type PlayerDetailOut = components["schemas"]["PlayerDetailOut"];
 export type StatLineOut = components["schemas"]["StatLineOut"];
-
-/** The backend's own ceiling for one page of `GET /events/games`. */
-const GAMES_PAGE = 200;
-
-/** Results per player search: enough to scroll, few enough to read. */
-const PLAYERS_PAGE = 20;
-
-/** A read answered 404: what an unknown game or player is, as opposed to a failure. */
-export class NotFound extends Error {
-  constructor(what: string) {
-    super(`${what} answered 404`);
-    this.name = "NotFound";
-  }
-}
-
-function failed(what: string, status: number): Error {
-  return status === 404
-    ? new NotFound(what)
-    : new Error(`${what} answered ${status}`);
-}
-
-export async function fetchTeams(): Promise<TeamOut[]> {
-  const { data, response } = await apiClient.GET("/events/teams");
-  if (!response.ok || data === undefined)
-    throw failed("GET /events/teams", response.status);
-  return data;
-}
-
-export async function fetchSeasons(): Promise<string[]> {
-  const { data, response } = await apiClient.GET("/events/seasons");
-  if (!response.ok || data === undefined)
-    throw failed("GET /events/seasons", response.status);
-  return data;
-}
-
-/** One team's games in one season. Both filters, always: neither alone narrows enough. */
-export async function fetchTeamGames(
-  teamId: number,
-  season: string,
-): Promise<GameOut[]> {
-  const { data, response } = await apiClient.GET("/events/games", {
-    params: { query: { team_id: teamId, season, limit: GAMES_PAGE } },
-  });
-  if (!response.ok || data === undefined)
-    throw failed("GET /events/games", response.status);
-  return data;
-}
-
-export async function fetchGameDetail(gameId: number): Promise<GameDetailOut> {
-  const { data, response } = await apiClient.GET("/events/games/{game_id}", {
-    params: { path: { game_id: gameId } },
-  });
-  if (!response.ok || data === undefined)
-    throw failed(`GET /events/games/${gameId}`, response.status);
-  return data;
-}
-
-export async function searchPlayers(q: string): Promise<PlayerListItemOut[]> {
-  const { data, response } = await apiClient.GET("/events/players", {
-    params: { query: { q, limit: PLAYERS_PAGE } },
-  });
-  if (!response.ok || data === undefined)
-    throw failed("GET /events/players", response.status);
-  return data;
-}
-
-export async function fetchPlayerDetail(
-  playerId: number,
-): Promise<PlayerDetailOut> {
-  const { data, response } = await apiClient.GET(
-    "/events/players/{player_id}",
-    {
-      params: { path: { player_id: playerId } },
-    },
-  );
-  if (!response.ok || data === undefined)
-    throw failed(`GET /events/players/${playerId}`, response.status);
-  return data;
-}
 
 // ------------------------------------------------------------ the rules
 
@@ -299,6 +219,8 @@ export async function checkAddressLink(
     switch (link.type) {
       case "game_final": {
         const game = await fetchGameDetail(link.ref_id);
+        if (game === null)
+          return refused("The game or player in this link could not be found");
         if (!isCompleted(game))
           return refused("The game in this link has not finished yet");
         return { ok: true, summary: describeGameDetail(game) };
@@ -307,6 +229,8 @@ export async function checkAddressLink(
         if (gameId === null)
           return refused("This link does not say which game the line is in");
         const game = await fetchGameDetail(gameId);
+        if (game === null)
+          return refused("The game or player in this link could not be found");
         const all = [
           ...game.home_box_score.players,
           ...game.away_box_score.players,
@@ -325,6 +249,8 @@ export async function checkAddressLink(
       }
       case "player_career": {
         const player = await fetchPlayerDetail(link.ref_id);
+        if (player === null)
+          return refused("The game or player in this link could not be found");
         if (careerLine(player, link.scope).games_played === 0)
           return refused(
             `${playerName(player)} has no ${scopeName(link.scope).toLowerCase()} games`,
@@ -332,9 +258,7 @@ export async function checkAddressLink(
         return { ok: true, summary: describeCareer(player, link.scope) };
       }
     }
-  } catch (error) {
-    if (error instanceof NotFound)
-      return refused("The game or player in this link could not be found");
+  } catch {
     return refused("We could not load the stats in this link just now");
   }
 }

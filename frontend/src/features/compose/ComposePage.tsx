@@ -8,7 +8,8 @@ import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
 import {
-  AttachmentPicker,
+  PickerDialog,
+  useAttachments,
   StatsToggle,
   type AddressLink,
 } from "./AttachmentPicker";
@@ -236,9 +237,9 @@ export function ComposePage({ onPosted }: ComposePageProps = {}) {
   );
   const [failure, setFailure] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
-  const statsPanelId = useId();
   const statsToggleId = useId();
   const queryClient = useQueryClient();
+  const attachments = useAttachments(mediator, attachable ? addressLink : null);
 
   // Rebuilt from the published draft on every render, so the submit control and
   // the request it sends can never disagree about what is in the composer.
@@ -265,18 +266,11 @@ export function ComposePage({ onPosted }: ComposePageProps = {}) {
     submit.mutate(builder.build());
   }
 
-  // The picker is remounted for a new context or a new address link, so a
-  // link checked for one composer is never attached to the next.
-  const pickerKey = [
-    repostOfPostId ?? "",
-    ...LINK_PARAMS.map((name) => searchParams.getAll(name).join(",")),
-  ].join("|");
-
   return (
     <section className={styles.page}>
       <Card>
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
-          <ComposeTextBox mediator={mediator} />
+          <ComposeTextBox mediator={mediator} autoFocus />
           {addressNote === null ? null : <StatusLine>{addressNote}</StatusLine>}
           <MediaWidget
             mediator={mediator}
@@ -284,8 +278,6 @@ export function ComposePage({ onPosted }: ComposePageProps = {}) {
               attachable ? (
                 <StatsToggle
                   id={statsToggleId}
-                  open={statsOpen}
-                  panelId={statsPanelId}
                   onToggle={() => {
                     setStatsOpen((open) => !open);
                   }}
@@ -293,19 +285,7 @@ export function ComposePage({ onPosted }: ComposePageProps = {}) {
               ) : null
             }
           />
-          {attachable ? (
-            <AttachmentPicker
-              key={pickerKey}
-              mediator={mediator}
-              prefill={addressLink}
-              open={statsOpen}
-              onClose={() => {
-                setStatsOpen(false);
-              }}
-              panelId={statsPanelId}
-              toggleId={statsToggleId}
-            />
-          ) : null}
+          {attachable ? attachments.summary : null}
 
           <div className={styles.footer}>
             {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
@@ -337,6 +317,12 @@ export function ComposePage({ onPosted }: ComposePageProps = {}) {
           </div>
         </form>
       </Card>
+      {attachable && statsOpen ? (
+        <PickerDialog
+          onClose={() => setStatsOpen(false)}
+          onAttach={attachments.attach}
+        />
+      ) : null}
 
       <section className={styles.quick}>
         <h2>Quick posts</h2>

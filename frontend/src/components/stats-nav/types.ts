@@ -8,19 +8,21 @@ export type Conference = "all" | "east" | "west";
 export type { RecordGroup };
 
 /**
- * One level of the stats navigator, as data. The union may grow
- * (FRONTEND-021 adds a game and a box score); each kind has a view here, and
- * every use narrows by `kind`.
+ * One level of the stats navigator, as data. Each use narrows by `kind`;
+ * callers supply the records and select-mode game/player views.
  *
  * The records levels (FRONTEND-019) carry no season: `records` is a group's
- * record cards (`group` is `null` while the record level above it has not
- * yet said which group it belongs to), and `record` is one record's list.
+ * record cards (`group` is null only while an unknown id's group has not
+ * arrived), and `record` is one record's list.
  */
 export type StatsLevel =
   | { kind: "season"; season: string; conf: Conference }
   | { kind: "team"; season: string; teamId: number }
   | { kind: "records"; group: RecordGroup | null }
-  | { kind: "record"; id: string };
+  | { kind: "record"; id: string }
+  | { kind: "game"; gameId: number }
+  | { kind: "players" }
+  | { kind: "player"; playerId: number };
 
 /** What the caller decides: how a game, a player and a level are reached. */
 export interface StatsNavAdapter {
