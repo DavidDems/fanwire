@@ -6,27 +6,25 @@ import styles from "./StatsNav.module.css";
  * A data table in its own scroll container: a `role="region"` named by the
  * caption and focusable (`tabIndex` 0) so a keyboard user can scroll it
  * sideways on a phone. `children` are the table's `thead` and `tbody`, with
- * `scope` on every header cell. `classes` is the stylesheet that draws it
- * (its `scroll`, `table` and `name` classes): the navigator's own by default,
- * the Stats page's for its leaders.
+ * `scope` on every header cell. Every stats table is drawn by this one with
+ * the navigator's stylesheet (FRONTEND-019 retired the Stats page's copy), so
+ * a caller's cells take that stylesheet's `name` and `figure` classes.
  */
 export function ScrollTable({
   caption,
   children,
-  classes = styles,
 }: {
   caption: string;
   children: ReactNode;
-  classes?: CSSModuleClasses;
 }) {
   return (
     <div
-      className={classes.scroll}
+      className={styles.scroll}
       role="region"
       aria-label={caption}
       tabIndex={0}
     >
-      <table className={classes.table}>
+      <table className={styles.table}>
         <caption>{caption}</caption>
         {children}
       </table>
@@ -39,16 +37,14 @@ export function ColumnHeader({
   label,
   title,
   name = false,
-  classes = styles,
 }: {
   label: string;
   title?: string;
   /** The left-aligned name column. */
   name?: boolean;
-  classes?: CSSModuleClasses;
 }) {
   return (
-    <th scope="col" className={name ? classes.name : undefined}>
+    <th scope="col" className={name ? styles.name : undefined}>
       {title === undefined ? label : <abbr title={title}>{label}</abbr>}
     </th>
   );

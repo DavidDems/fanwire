@@ -6,23 +6,32 @@ import type { StatsLevel, StatsNavAdapter } from "./types";
 /**
  * A control that opens or returns to a level: a link to the level's address
  * when the adapter gives one (a plain click calls `onGo` instead of loading
- * it; a modified click opens it as any link), else a button.
+ * it; a modified click opens it as any link), else a button. `label`, when
+ * given, is its accessible name, for a control whose text says less (a
+ * record card's View all).
  */
 export function LevelLink({
   level,
   adapter,
   onGo,
+  label,
   children,
 }: {
   level: StatsLevel;
   adapter: StatsNavAdapter;
   onGo: () => void;
+  label?: string;
   children: ReactNode;
 }) {
   const href = adapter.levelHref?.(level);
   if (href === undefined)
     return (
-      <button type="button" className={styles.control} onClick={onGo}>
+      <button
+        type="button"
+        className={styles.control}
+        aria-label={label}
+        onClick={onGo}
+      >
         {children}
       </button>
     );
@@ -41,7 +50,7 @@ export function LevelLink({
   }
 
   return (
-    <a href={href} onClick={handleClick}>
+    <a href={href} aria-label={label} onClick={handleClick}>
       {children}
     </a>
   );

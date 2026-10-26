@@ -45,6 +45,11 @@ const SeasonsTab = lazy(() =>
     default: m.SeasonsTab,
   })),
 );
+const RecordsTab = lazy(() =>
+  import("../features/stats/RecordsTab").then((m) => ({
+    default: m.RecordsTab,
+  })),
+);
 const PlayersTab = lazy(() =>
   import("../features/stats/PlayersTab").then((m) => ({
     default: m.PlayersTab,
@@ -110,8 +115,8 @@ const pages: RouteObject[] = [
   // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
   // and every other feature reaches it by this address, never by import.
   { path: "games/:gameId", element: <GamePage /> },
-  // FRONTEND-009's pages. Public: sports data is a read path. The two
-  // tabs are child routes, so the address alone decides which one shows;
+  // FRONTEND-009's pages. Public: sports data is a read path. The tabs
+  // (FRONTEND-019 added Records) are child routes, so the address alone decides which one shows;
   // `/stats` itself is the Seasons tab's.
   {
     path: "stats",
@@ -119,6 +124,7 @@ const pages: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to="seasons" replace /> },
       { path: "seasons", element: <SeasonsTab /> },
+      { path: "records", element: <RecordsTab /> },
       { path: "players", element: <PlayersTab /> },
     ],
   },

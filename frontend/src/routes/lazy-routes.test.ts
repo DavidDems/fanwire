@@ -30,6 +30,8 @@ import { SRC_DIR } from "../test/css";
 const LAZY_PAGES = [
   "features/stats/StatsPage.tsx",
   "features/stats/SeasonsTab.tsx",
+  // FRONTEND-019: the Records tab, a lazy child route of its own.
+  "features/stats/RecordsTab.tsx",
   "features/stats/PlayersTab.tsx",
   "features/games/GamePage.tsx",
   "features/players/PlayerPage.tsx",
