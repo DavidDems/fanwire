@@ -1,5 +1,7 @@
 # 20 — Stats navigation and the compose modal: one stats navigator, records, and posting from anywhere
 
+**Update, 2026-10-26:** FRONTEND-021 is implemented in [PR #249](https://github.com/DavidDems/fanwire/pull/249), awaiting human review. The handoff below is retained as the runbook; do not start another hand-run. Stage-4 measurements and the independent skeptic's verdict are recorded in Progress. Merge the unit before this Director documentation PR.
+
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). The units are hand-run on `agent/<ID>` and held by `agent-guard`.
 Self-contained: read this file, then what it names.
@@ -656,8 +658,53 @@ Update this section in every spec PR and unit PR of this thread.
   here, because the human's weekly Claude limit is nearly used. The hand-run
   of FRONTEND-021 is handed to another agent, which may not be Claude Code.
   Nothing for it has started: no branch, no `state.json`.
-- **Next: hand-run FRONTEND-021, the last unit of this brief.** The
-  `## Handoff: hand-running FRONTEND-021` section below is self-contained.
+- **2026-10-26, FRONTEND-021 hand-run, PR #249** (awaiting review), the
+  final feature unit of this brief. Its FrontendUI rows are in this separate
+  Director PR, which deliberately writes `FrontendUI/` and `GeneralContext/`.
+  - **Every Baseline line is met.** Full frontend container: 170 files and
+    2,335 tests; typecheck, lint, production build and both bundle suites pass.
+  - **Bundle:** entry 471,844 B raw and 149,814 B gzip;
+    growth +649 raw and +297 gzip,
+    within +700/+300 without tolerance. Every declared chunk name matched;
+    no budget correction, dependency change or records code in the picker.
+  - **Requests:** compose 0 (prefill 1), picker cold 3 and cached/reopen 0;
+    season change 2, search/team/game/player 1 each, tabs/Back/selection and
+    dismissal 0. The real route-table tests pin these on a staleTime-0 client.
+  - **Measured on the full load**, 360 x 780, Chrome at CPU 4x, five alternating
+    runs per side, as medians (worsts): picker cold 88 ms
+    (95), warm 0 (0), the 96-game team
+    67 (82). Compose over the dev database's first
+    20 cards is 60 (73).
+  - **Delayed CLS**, with every events read delayed 800 ms: picker
+    0.0275, team 0.0025,
+    player 0, summary after Select
+    0; all below 0.1.
+  - **Browser rows pass**, signed in, light/dark at 360/1280: the three link
+    types publish; Undo, disabled Select, Enter safety, Cancel/Escape,
+    focus return, native keyboard controls and rings, no page overflow and
+    the sticky footer. Own local test posts are cleaned up. Images use the
+    required stubbed ticket/bucket/poll; Cancel and Escape preserve them.
+  - **R22/R23/R25/R29/R30/R32 are closed.** Chrome returns from compose to the
+    detail's Close. Offline compose and picker imports recover through both
+    Try again and close/reopen, with computed sticky styling restored. Early
+    Back from a cold player record returns to Player.
+  - **Decided by the human:** Back from a player restores search text and
+    cached results, without another request.
+  - **The skeptic's second pass: hand over.** It found a search refetch after
+    a 30-second player visit. Fixed test-first by keeping the search mounted
+    and natively hidden while showing the player, retaining its observer and
+    excluding its controls from accessibility/tab order. A 31-second real
+    browser dwell keeps search requests at 1 before and after Back.
+  - **Director test corrections**, each separate from implementation and
+    named in the unit PR: the retained attachment-shell isolation check, an
+    awaited season value, and two awaited Cancel controls during lazy loading.
+    Mutation checks preserve their assertions. A separate regression also
+    fixes record-group arrow keys losing tab focus after view injection.
+  - **Carried:** R16, production image-pipeline timing, remains an operational
+    check after deploy. No live pipeline timing is claimed here.
+- **Next:** review and merge the unit first, then this Director documentation
+  PR. Keep this prompt while human review/deployment and the carried R16 check
+  remain open; close it by the index's lifecycle rule once the thread is finished.
 
 ## Handoff: hand-running FRONTEND-021
 
