@@ -2,32 +2,48 @@ import { useEffect, useRef } from "react";
 
 import { Button } from "../ui/Button";
 import { LevelLink } from "./LevelLink";
+import { groupTitle } from "./recordLabels";
+import { RecordLevel, RecordTitle } from "./RecordLevel";
+import { RecordsLevel } from "./RecordsLevel";
 import { SeasonLevel } from "./SeasonLevel";
 import styles from "./StatsNav.module.css";
 import { TeamLevel, TeamName } from "./TeamLevel";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
-export type { Conference, StatsLevel, StatsNavAdapter } from "./types";
+export type {
+  Conference,
+  RecordGroup,
+  StatsLevel,
+  StatsNavAdapter,
+} from "./types";
 
 export interface StatsNavigatorProps {
   /** Non-empty; the last level is the one shown. */
   stack: StatsLevel[];
-  /** Push a level (a standings team). */
+  /** Push a level (a standings team, a record). */
   open(level: StatsLevel): void;
-  /** Swap the top level (a conference tab, an opponent). */
+  /** Swap the top level (a conference tab, an opponent, a records group). */
   replace(level: StatsLevel): void;
   /** Keep the first `toDepth` levels. */
   pop(toDepth: number): void;
   adapter: StatsNavAdapter;
 }
 
-/** A level's name in the breadcrumb: the season, or the team. */
+/**
+ * A level's name in the breadcrumb: the season, the team, the records'
+ * group, or the record's title.
+ */
 function levelName(level: StatsLevel) {
-  return level.kind === "season" ? (
-    level.season
-  ) : (
-    <TeamName teamId={level.teamId} season={level.season} />
-  );
+  switch (level.kind) {
+    case "season":
+      return level.season;
+    case "team":
+      return <TeamName teamId={level.teamId} season={level.season} />;
+    case "records":
+      return groupTitle(level.group);
+    case "record":
+      return <RecordTitle id={level.id} />;
+  }
 }
 
 /**
@@ -36,7 +52,10 @@ function levelName(level: StatsLevel) {
  * one, and the top level's heading and view. It is router-agnostic: the
  * caller owns the stack and turns `open`, `replace` and `pop` into a route
  * (the Stats page) or state (the compose picker), and its adapter says how a
- * game, a player or a level is linked.
+ * game, a player, a team or a level is linked.
+ *
+ * Its levels are a season and a team's season (Seasons), and a group's
+ * record cards and a record's list (Records, FRONTEND-019).
  *
  * Its parts are laid out by the caller's column (the Stats page's tab).
  *
@@ -67,8 +86,42 @@ export function StatsNavigator({
     change();
   }
 
-  const onTeam = (teamId: number, how: typeof open) =>
-    move(() => how({ kind: "team", season: top.season, teamId }));
+  function view() {
+    switch (top.kind) {
+      case "season":
+        return (
+          <SeasonLevel
+            level={top}
+            adapter={adapter}
+            onConference={(conf) => replace({ ...top, conf })}
+            onTeam={(teamId) =>
+              move(() => open({ kind: "team", season: top.season, teamId }))
+            }
+          />
+        );
+      case "team":
+        return (
+          <TeamLevel
+            level={top}
+            adapter={adapter}
+            onTeam={(teamId) =>
+              move(() => replace({ kind: "team", season: top.season, teamId }))
+            }
+          />
+        );
+      case "records":
+        return (
+          <RecordsLevel
+            level={top}
+            adapter={adapter}
+            onGroup={(group) => replace({ kind: "records", group })}
+            onRecord={(id) => move(() => open({ kind: "record", id }))}
+          />
+        );
+      case "record":
+        return <RecordLevel level={top} adapter={adapter} />;
+    }
+  }
 
   return (
     <>
@@ -107,27 +160,16 @@ export function StatsNavigator({
       <h2 ref={heading} tabIndex={-1}>
         {top.kind === "season" ? (
           `${top.season} season`
-        ) : (
+        ) : top.kind === "team" ? (
           <>
             {levelName(top)}, {top.season}
           </>
+        ) : (
+          levelName(top)
         )}
       </h2>
 
-      {top.kind === "season" ? (
-        <SeasonLevel
-          level={top}
-          adapter={adapter}
-          onConference={(conf) => replace({ ...top, conf })}
-          onTeam={(teamId) => onTeam(teamId, open)}
-        />
-      ) : (
-        <TeamLevel
-          level={top}
-          adapter={adapter}
-          onTeam={(teamId) => onTeam(teamId, replace)}
-        />
-      )}
+      {view()}
     </>
   );
 }

@@ -10,11 +10,13 @@
  *   the user picks one, `/stats/seasons` stays the address of "the current
  *   season". A picked season is `?season=`, and a page opened at
  *   `?season=` shows that season (a reload or a shared link).
- * - **The league view** is three sections, each a region named by its
- *   heading: "Champion", "Standings" and "Leaders". (FRONTEND-018 dropped the
- *   fourth, "Games": the human, 2026-10-24. Its tests are replaced by one that
- *   pins it gone; the conference tabs, the team level and the request counts
- *   are `SeasonsNavigation.test.tsx` and `stats-requests.test.tsx`.)
+ * - **The league view** is two sections, each a region named by its
+ *   heading: "Champion" and "Standings". (FRONTEND-018 dropped the fourth,
+ *   "Games": the human, 2026-10-24. FRONTEND-019 moved the third, "Leaders",
+ *   to Records > Seasonal, and its tests with it, to
+ *   `RecordsSeasonal.test.tsx`; here one test pins it gone. The conference
+ *   tabs, the team level and the request counts are
+ *   `SeasonsNavigation.test.tsx` and `stats-requests.test.tsx`.)
  *   - Champion: the champion's and the runner-up's names and the series
  *     result from `GET /events/seasons/{season}/champion`, or a line saying
  *     the season has no champion (matching /no champion/i) when they are null.
@@ -25,10 +27,8 @@
  *     in the section. Each team's row header is a link to the Seasons tab
  *     filtered to that team (`/stats/seasons?team=<id>`, with `season=` the
  *     season shown when it carries one).
- *   - Leaders: points, rebounds and assists, one request each to
- *     `GET /events/seasons/{season}/leaders?stat=`, one table each captioned
- *     with the stat's name, every leader's name a link to `/players/<id>`, and
- *     the `rule` string the API names shown in the section.
+ *   - No leaders (FRONTEND-019): no "Leaders" region, and
+ *     `GET /events/seasons/{season}/leaders` is never asked.
  *   - No season-wide games: no "Games" region, and `GET /events/games` is
  *     never asked.
  * - Every table has a caption, a scope on every header cell, and its own
@@ -47,10 +47,7 @@ import {
   NEWEST_SEASON,
   NUGGETS,
   RAPTORS,
-  RULE_65,
-  RULE_70,
   SUNS,
-  TEST_LEADERS,
   TEST_SEASON_LIST,
   TIE_BREAK,
   championStub,
@@ -148,20 +145,23 @@ describe("the season picker (criterion 3)", () => {
     ).toBe(false);
   });
 
+  // FRONTEND-019 changed this test: the leaders are no longer a league read
+  // of Seasons, so it pins that they are not asked instead.
   it("asks every league read for the newest season by default", async () => {
     const { stubs } = openSeasons();
 
     await waitFor(() => {
       expect(seasonsAsked(stubs.champion)).toEqual([NEWEST_SEASON]);
       expect(seasonsAsked(stubs.standings)).toEqual([NEWEST_SEASON]);
-      expect(new Set(seasonsAsked(stubs.leaders))).toEqual(
-        new Set([NEWEST_SEASON]),
-      );
     });
+    await within(await region("Standings")).findAllByRole("table");
     // FRONTEND-018: the season-wide games list is gone, and so is its read.
     expect(stubs.games.requests).toEqual([]);
+    // FRONTEND-019: the leaders moved to Records > Seasonal.
+    expect(stubs.leaders.requests).toEqual([]);
   });
 
+  // FRONTEND-019 changed this test: it asked about the leaders' season.
   it("honours ?season= on load: that season selected, and only it asked for", async () => {
     const { stubs } = openSeasons("/stats/seasons?season=2023-24");
 
@@ -172,7 +172,7 @@ describe("the season picker (criterion 3)", () => {
     expect(new Set(seasonsAsked(stubs.standings))).toEqual(
       new Set(["2023-24"]),
     );
-    expect(new Set(seasonsAsked(stubs.leaders))).toEqual(new Set(["2023-24"]));
+    expect(stubs.leaders.requests).toEqual([]);
     // FRONTEND-018: the season-wide games list is gone, and so is its read.
     expect(stubs.games.requests).toEqual([]);
   });
@@ -336,59 +336,21 @@ describe("the standings (criterion 4)", () => {
   });
 });
 
-describe("the leaders (criterion 4)", () => {
-  it("asks for the points, rebounds and assists leaders of the season", async () => {
-    const { stubs } = openSeasons();
+// FRONTEND-019 replaced the six leaders tests that stood here ("asks for the
+// points, rebounds and assists leaders", the three boards, the rule and a
+// different season's rule): the leaders moved to Records > Seasonal, and
+// those tests moved with them, unchanged, to `RecordsSeasonal.test.tsx`.
+describe("the leaders moved to Records > Seasonal (FRONTEND-019)", () => {
+  it("shows no Leaders section and never asks GET /events/seasons/{season}/leaders", async () => {
+    const { stubs } = openSeasons("/stats/seasons?season=2023-24");
 
-    await waitFor(() =>
-      expect(
-        new Set(stubs.leaders.requests.map((r) => r.query.get("stat"))),
-      ).toEqual(new Set(["points", "rebounds", "assists"])),
-    );
-  });
+    await within(await region("Standings")).findAllByRole("table");
+    await within(await region("Champion")).findByText(/Boston Celtics/);
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-  it.each(["points", "rebounds", "assists"] as const)(
-    "shows the %s leaders in a table of their own, each linking to the player",
-    async (stat) => {
-      openSeasons();
-
-      const leaders = await region("Leaders");
-      await within(leaders).findAllByRole("table");
-      const table = tableCaptioned(leaders, new RegExp(stat, "i"));
-      const rows = bodyRows(table);
-      expect(rows).toHaveLength(TEST_LEADERS[stat].length);
-
-      TEST_LEADERS[stat].forEach((leader, index) => {
-        const name = `${leader.first_name} ${leader.last_name}`;
-        const link = within(rows[index]).getByRole("link", {
-          name: new RegExp(name),
-        });
-        expect(link).toHaveAttribute("href", `/players/${leader.player_id}`);
-        expect(rowText(rows[index])).toMatch(figure(leader.average.toFixed(1)));
-        for (const abbreviation of leader.teams) {
-          expect(rowText(rows[index])).toContain(abbreviation);
-        }
-      });
-    },
-  );
-
-  it("shows the qualifying rule the API names", async () => {
-    openSeasons();
-
-    const leaders = await region("Leaders");
-    await within(leaders).findAllByRole("table");
-    expect(leaders.textContent).toContain(RULE_65);
-  });
-
-  it("shows a different season's rule when that season's is different", async () => {
-    openSeasons("/stats/seasons?season=2022-23", {
-      rules: { "2022-23": RULE_70 },
-    });
-
-    const leaders = await region("Leaders");
-    await within(leaders).findAllByRole("table");
-    expect(leaders.textContent).toContain(RULE_70);
-    expect(leaders.textContent).not.toContain(RULE_65);
+    expect(screen.queryByRole("region", { name: "Leaders" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /leaders/i })).toBeNull();
+    expect(stubs.leaders.requests).toEqual([]);
   });
 });
 
@@ -396,8 +358,9 @@ describe("the season-wide games list is gone (FRONTEND-018)", () => {
   it("shows no Games section and never asks GET /events/games", async () => {
     const { stubs } = openSeasons("/stats/seasons?season=2023-24");
 
+    // FRONTEND-019 changed this wait: it waited on the Leaders too.
     await within(await region("Standings")).findAllByRole("table");
-    await within(await region("Leaders")).findAllByRole("table");
+    await within(await region("Champion")).findByText(/Boston Celtics/);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(screen.queryByRole("region", { name: "Games" })).toBeNull();
@@ -408,15 +371,17 @@ describe("the season-wide games list is gone (FRONTEND-018)", () => {
   });
 });
 
+// FRONTEND-019 changed both tests: they waited on the Leaders' tables, and
+// the first counted them (five tables; the two standings tables now).
 describe("the league view's tables (criterion 13)", () => {
   it("each has a caption, scoped headers and its own scroll region", async () => {
     openSeasons("/stats/seasons?season=2023-24");
 
     await within(await region("Standings")).findAllByRole("table");
-    await within(await region("Leaders")).findAllByRole("table");
+    await within(await region("Champion")).findByText(/Boston Celtics/);
     const main = screen.getByRole("main");
 
-    expect(main.querySelectorAll("table").length).toBeGreaterThanOrEqual(5);
+    expect(main.querySelectorAll("table")).toHaveLength(2);
     expect(tableProblems(main)).toEqual([]);
   });
 
@@ -424,7 +389,7 @@ describe("the league view's tables (criterion 13)", () => {
     openSeasons();
 
     await within(await region("Standings")).findAllByRole("table");
-    await within(await region("Leaders")).findAllByRole("table");
+    await within(await region("Champion")).findByText(/no champion/i);
     expect(screen.getByRole("main").textContent).not.toMatch(
       /\bnull\b|\bundefined\b|\bNaN\b/,
     );

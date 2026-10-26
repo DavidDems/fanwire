@@ -1052,14 +1052,16 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
 
 ## Stats and player pages (`FRONTEND-009`)
 
-`src/features/stats/` at `/stats/seasons` and `/stats/players`, and
+`src/features/stats/` at `/stats/seasons`, `/stats/records` and
+`/stats/players`, and
 `src/features/players/` at `/players/:playerId`. **Public**: sports data is a
 read path ([[0x02-events]] "Players", "Seasons"). Every type is an alias of
 the generated schema. The players feature has its own `api.ts`; since
 `FRONTEND-018` the stats reads are `src/api/stats.ts` (below).
 
 - **Tabs are routes, not state.** `/stats` redirects to `/stats/seasons`;
-  the two tabs are child routes of `StatsPage` (one h1 "Stats", then
+  the three tabs (Seasons, Records, Players) are lazy child routes of
+  `StatsPage` (one h1 "Stats", then
   `<Tabs label="Stats">`, then the `Outlet`), so the address alone decides
   the tab and Back moves between them. **`components/ui/Tabs` is links that
   look like tabs**: a `<nav aria-label>` of `NavLink`s with
@@ -1079,10 +1081,9 @@ the generated schema. The players feature has its own `api.ts`; since
 - **The season view** (rebuilt by `FRONTEND-018`, below): the champion and
   series result, or that there is no champion yet; one standings table per
   conference, sorted across divisions by the API's rule (win fraction, wins,
-  name) with the API's `tie_break` note; points, rebounds and assists
-  leaders (`Leaders.tsx`), each table with the API's `rule` string, so a
-  reader knows why a player is missing. The season-wide games list is gone
-  (`FRONTEND-018`).
+  name) with the API's `tie_break` note. The season-wide games list is gone
+  (`FRONTEND-018`), and the leaders moved to Records > Seasonal
+  (`FRONTEND-019`, below).
 - **The team search is a client-side combobox** (`TeamSearch`) over
   `GET /events/teams`, matching name or abbreviation case-insensitively: ARIA
   1.2 `role="combobox"` with a `listbox` and `aria-activedescendant`;
@@ -1108,8 +1109,10 @@ the generated schema. The players feature has its own `api.ts`; since
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not
-  (checked in Chromium, 2026-10-16). Stats uses the navigator's
-  `ScrollTable` (its `classes` prop takes the caller's stylesheet). The
+  (checked in Chromium, 2026-10-16). Every Stats table, the leaders'
+  included, is the navigator's `ScrollTable` drawn by the navigator's own
+  stylesheet; `features/stats/Stats.module.css` holds no table rules since
+  `FRONTEND-019` (R24). The
   players feature keeps its own older copy; it may now import the
   navigator's instead, in a unit with `features/players/` in scope.
 - **Teams are fetched in four places now**: profile, `ProfileSetupPage`,
@@ -1178,16 +1181,72 @@ stats picker later (`FRONTEND-021`).
   factories (`championQuery`, `standingsQuery`, `leadersQuery`,
   `teamSeasonQuery`) with `staleTime` `SEASON_STALE_TIME` (5 minutes).
   - Requests per screen, pinned in `stats-requests.test.tsx`: a cold
-    `/stats/seasons` makes 7 (was 8, with the games page); switching tabs
-    makes 0; opening a team makes 1; Back makes 0.
+    `/stats/seasons` makes 4 (8 before this unit, with the games page; 7
+    after it, until `FRONTEND-019` moved the three leader boards); switching
+    tabs makes 0; opening a team makes 1; Back makes 0.
 - **Lazy.** Nothing in `stats-nav/` or `api/stats.ts` is reachable from the
-  entry (`stats-nav-lazy.test.ts`). The Stats chunks are budgeted in
-  `src/test/bundle-budgets/FRONTEND-018.ts`.
+  entry (`stats-nav-lazy.test.ts`). Since two tabs import it, Rollup puts
+  the navigator in a shared `StatsNavigator` chunk (`FRONTEND-019`).
 - **No layout shift on load.** The champion's place is two lines tall in
   every state, and the All standings' place is held at the two tables'
   height by a static `Skeleton` while they load.
-- **The leaders stay on Seasons**, under the standings and hidden on the team
-  level, until `FRONTEND-019` moves them to Records.
+- **The leaders left Seasons** in `FRONTEND-019`, for Records > Seasonal.
+
+### Records (`FRONTEND-019`)
+
+Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
+
+- **`/stats/records` is `RecordsTab`**, the route adapter for a `SegmentedTabs`
+  "Records view" bar, Historical / Seasonal. The address is the state:
+
+  | Address | Shows |
+  |---|---|
+  | `/stats/records` | Historical, Team cards |
+  | `?group=player` | Historical, Player cards |
+  | `?record=<id>` | that record's ranked list |
+  | `?view=seasonal[&season=<s>]` | the season's leaders (newest by default) |
+
+  Defaults are never written, and an unknown value is the default. Both bars
+  replace the history entry; switching the view drops `group`, `record` and
+  `season`. Opening and popping a level push.
+- **Two navigator levels**, `{ kind: "records", group }` and
+  `{ kind: "record", id }` (`types.ts`), so the breadcrumb, Back and the
+  focus rule are the navigator's. Every use of a level narrows by `kind`.
+  - `RecordsLevel`: a "Record group" bar (Team / Player), the data window
+    ("Since 2003-04, through 2026-27") and the cards. A card's one control is
+    "View all" (named "View all: <title>", a real `?record=` link), its
+    `::after` stretched over the card so the whole card is the hit area; the
+    holder is plain text. While the summary loads, skeleton cards hold the
+    place.
+  - `RecordLevel`: the rule, "Since <season>" and the whole list (up to 100)
+    in one `ScrollTable`, with the API's ranks as given; a column the record
+    has no value for is left out. A season record notes that it ranks the
+    exact percentage, so equal three-place figures can rank apart. An unknown
+    id is "Record not found" in place, with Back.
+  - **The record level's group is its list's.** `?record=` never carries
+    `group`; until the list (or the cached summary) says, the breadcrumb's
+    first item reads "Records". The heading is the record's title from the
+    cached summary, else the list.
+- **The adapter's optional `teamLink(teamId, season, children)`**: without it
+  a team is plain text. `ROUTE_LINKS` gives it through `teamHref`.
+- **`SeasonSelect`** (`components/stats-nav/`) is the season picker and its
+  loading, error and empty states, shared by Seasons and Seasonal. Keep it
+  there: it is also what makes Rollup name the shared chunk `StatsNavigator`.
+- **The reads are `src/api/records.ts`**: `recordsQuery()` and
+  `recordQuery(id)`, both `staleTime: Infinity` (the routes are cached five
+  minutes at the edge, R7). A list is one call at `limit=100`; nothing sends
+  `offset`; a 404 is `null`. It has its own `ok()`, a copy of
+  `api/stats.ts`'s private one (R29: fold them in a unit with both in
+  scope).
+- **Requests per screen**, pinned in `records-requests.test.tsx`: a cold
+  `/stats/records` makes 1; Team and Player make 0; opening a card makes 1,
+  and Back and reopening it make 0; a cold `?record=` makes 1 and Back from
+  it 1; a cold Seasonal makes 4 (seasons and the three boards).
+- **Measured** (2026-10-26, `vite preview` against the full load in
+  `fanwire_perf`, 360 wide, CPU 4x, five runs): the longest task on a cold
+  Records is a median of 108 ms (worst 127); opening the 100-row
+  `player-points-game` list 99 ms (142); a cold `?record=` 138 ms (170);
+  tabs and Back 0. CLS is 0 on a cold Records and 0.0056 on a cold record.
 
 ## Post menu, deletion and account lifecycle (`FRONTEND-012`)
 

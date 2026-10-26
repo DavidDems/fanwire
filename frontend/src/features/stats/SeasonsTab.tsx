@@ -7,22 +7,20 @@ import {
   fetchSeasons,
   fetchTeams,
 } from "../../api/stats";
-import { Field, describeField } from "../../components/FormField";
+import {
+  NoSeason,
+  SeasonSelect,
+} from "../../components/stats-nav/SeasonSelect";
 import {
   StatsNavigator,
   type Conference,
   type StatsLevel,
   type StatsNavAdapter,
 } from "../../components/stats-nav/StatsNavigator";
-import { EmptyState } from "../../components/ui/EmptyState";
 import { InlineAlert } from "../../components/ui/InlineAlert";
-import { StatusLine } from "../../components/ui/StatusLine";
-import { Leaders } from "./Leaders";
 import { ROUTE_LINKS } from "./links";
 import styles from "./Stats.module.css";
 import { TeamSearch } from "./TeamSearch";
-
-const SEASON_ID = "stats-season";
 
 function conference(value: string | null): Conference {
   return value === "east" || value === "west" ? value : "all";
@@ -30,7 +28,8 @@ function conference(value: string | null): Conference {
 
 /**
  * `/stats/seasons`: a season picker and a team search bar over the stats
- * navigator, with the season's leaders under its season level.
+ * navigator (the season's leaders moved to Records > Seasonal in
+ * FRONTEND-019).
  *
  * **The URL is the state, and this is the navigator's route adapter.**
  * `?season=` is the picked season, `?conf=` the standings tab (`east` or
@@ -101,27 +100,11 @@ export function SeasonsTab() {
   return (
     <div className={styles.tab}>
       <div className={styles.controls}>
-        <Field id={SEASON_ID} label="Season">
-          <select
-            {...describeField(SEASON_ID)}
-            value={season ?? ""}
-            disabled={options.length === 0}
-            onChange={(event) => {
-              const value = event.target.value;
-              update((next) => next.set("season", value));
-            }}
-          >
-            {/* A season in the address the list does not hold still shows. */}
-            {season !== null && !options.includes(season) ? (
-              <option value={season}>{season}</option>
-            ) : null}
-            {options.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <SeasonSelect
+          season={season}
+          options={options}
+          onPick={(value) => update((next) => next.set("season", value))}
+        />
         <TeamSearch
           teams={teams.data}
           selectedId={teamId}
@@ -139,30 +122,19 @@ export function SeasonsTab() {
       ) : null}
 
       {base === null ? (
-        seasons.isError ? (
-          <InlineAlert>
-            We could not load the seasons just now. Please try again.
-          </InlineAlert>
-        ) : seasons.isPending ? (
-          <StatusLine>Loading the seasons…</StatusLine>
-        ) : (
-          <EmptyState>There are no seasons to show yet.</EmptyState>
-        )
+        <NoSeason seasons={seasons} />
       ) : (
-        <>
-          <StatsNavigator
-            stack={stack}
-            adapter={adapter}
-            open={(level) => setParams(search([...stack, level]))}
-            replace={(level) =>
-              setParams(search([...stack.slice(0, -1), level]), {
-                replace: level.kind === "season",
-              })
-            }
-            pop={(toDepth) => setParams(search(stack.slice(0, toDepth)))}
-          />
-          {teamId === null ? <Leaders season={base.season} /> : null}
-        </>
+        <StatsNavigator
+          stack={stack}
+          adapter={adapter}
+          open={(level) => setParams(search([...stack, level]))}
+          replace={(level) =>
+            setParams(search([...stack.slice(0, -1), level]), {
+              replace: level.kind === "season",
+            })
+          }
+          pop={(toDepth) => setParams(search(stack.slice(0, toDepth)))}
+        />
       )}
     </div>
   );

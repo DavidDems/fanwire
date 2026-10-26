@@ -5,15 +5,17 @@ import styles from "./StatsPage.module.css";
 
 const TABS = [
   { to: "/stats/seasons", label: "Seasons" },
+  { to: "/stats/records", label: "Records" },
   { to: "/stats/players", label: "Players" },
 ];
 
 /**
  * `/stats/*`: one "Stats" heading, the tab list, and the current tab's route.
  *
- * **Tabs are routes, not state.** `/stats/seasons` and `/stats/players` are
- * child routes rendered into the `Outlet`, so the address alone decides which
- * tab shows, a tab can be linked to or reloaded, and Back moves between them.
+ * **Tabs are routes, not state.** `/stats/seasons`, `/stats/records` and
+ * `/stats/players` are child routes rendered into the `Outlet`, so the
+ * address alone decides which tab shows, a tab can be linked to or reloaded,
+ * and Back moves between them.
  * Public, like every other read of sports data ([[0x02-events]]).
  */
 export function StatsPage() {

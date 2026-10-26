@@ -3,14 +3,16 @@
  * through the real route table (`renderAppAt`).
  *
  * - `/stats` redirects to `/stats/seasons`.
- * - `/stats/seasons` and `/stats/players` are public, and render one level-one
- *   "Stats" heading above a tab list (the shared `Tabs`, a `<nav>` named
- *   "Stats") with two links, Seasons and Players. The current one carries
+ * - `/stats/seasons`, `/stats/records` and `/stats/players` are public, and
+ *   render one level-one "Stats" heading above a tab list (the shared `Tabs`,
+ *   a `<nav>` named "Stats") with three links, Seasons, Records and Players
+ *   (FRONTEND-019 added Records, between the two). The current one carries
  *   `aria-current="page"`.
  * - **The URL alone decides which tab shows.** The Seasons tab is the one with
  *   the season picker (a select named "Season"); the Players tab is the one
- *   with the player search box (a searchbox named "Search players"). Following
- *   a tab changes the address, and Back moves between them.
+ *   with the player search box (a searchbox named "Search players"); the
+ *   Records tab is the one with the Historical / Seasonal bar. Following a tab
+ *   changes the address, and Back moves between them.
  *
  * The tab bodies are the other files' (`SeasonsTab.test.tsx`,
  * `PlayersTab.test.tsx`); this file only tells them apart.
@@ -27,6 +29,13 @@ function tabNav(): HTMLElement {
 
 async function seasonsTabShown(): Promise<void> {
   await screen.findByRole("combobox", { name: "Season" });
+  expect(
+    screen.queryByRole("searchbox", { name: "Search players" }),
+  ).toBeNull();
+}
+
+async function recordsTabShown(): Promise<void> {
+  await screen.findByRole("tab", { name: "Historical" });
   expect(
     screen.queryByRole("searchbox", { name: "Search players" }),
   ).toBeNull();
@@ -51,8 +60,10 @@ describe("/stats", () => {
 describe.each<Visitor>(["anonymous", "member"])(
   "the Stats page for a %s visitor",
   (as) => {
-    it.each(["/stats/seasons", "/stats/players"])(
-      "%s is public: one Stats heading above the two tabs",
+    // FRONTEND-019 changed these tests: three route tabs (Records joins
+    // between Seasons and Players), and /stats/records is one more path.
+    it.each(["/stats/seasons", "/stats/records", "/stats/players"])(
+      "%s is public: one Stats heading above the three tabs",
       async (path) => {
         const { router } = renderAppAt(path, as);
 
@@ -68,10 +79,12 @@ describe.each<Visitor>(["anonymous", "member"])(
         const links = within(tabNav()).getAllByRole("link");
         expect(links.map((link) => link.textContent?.trim())).toEqual([
           "Seasons",
+          "Records",
           "Players",
         ]);
         expect(links[0]).toHaveAttribute("href", "/stats/seasons");
-        expect(links[1]).toHaveAttribute("href", "/stats/players");
+        expect(links[1]).toHaveAttribute("href", "/stats/records");
+        expect(links[2]).toHaveAttribute("href", "/stats/players");
         // The heading comes before the tab list.
         expect(
           headings[0].compareDocumentPosition(tabNav()) &
@@ -93,6 +106,19 @@ describe("the URL decides the tab", () => {
     expect(
       within(tabNav()).getByRole("link", { name: "Players" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  it("/stats/records shows the Records tab, marked current", async () => {
+    renderAppAt("/stats/records", "anonymous");
+
+    await recordsTabShown();
+    expect(
+      within(tabNav()).getByRole("link", { name: "Records" }),
+    ).toHaveAttribute("aria-current", "page");
+    for (const other of ["Seasons", "Players"])
+      expect(
+        within(tabNav()).getByRole("link", { name: other }),
+      ).not.toHaveAttribute("aria-current");
   });
 
   it("/stats/players shows the Players tab, marked current", async () => {
@@ -120,6 +146,27 @@ describe("the URL decides the tab", () => {
       "Conference",
     ]);
     expect(tabNav().contains(tablists[0])).toBe(false);
+  });
+
+  it("on Records the tablists are the Historical / Seasonal and Team / Player bars, outside the route tabs", async () => {
+    renderAppAt("/stats/records", "anonymous");
+    await recordsTabShown();
+    await screen.findByRole("tab", { name: "Player" });
+
+    expect(within(tabNav()).queryAllByRole("tab")).toEqual([]);
+    const tablists = screen.getAllByRole("tablist");
+    expect(tablists).toHaveLength(2);
+    expect(
+      tablists.map((list) =>
+        within(list)
+          .getAllByRole("tab")
+          .map((t) => t.textContent?.trim()),
+      ),
+    ).toEqual([
+      ["Historical", "Seasonal"],
+      ["Team", "Player"],
+    ]);
+    for (const list of tablists) expect(tabNav().contains(list)).toBe(false);
   });
 
   it("the Players tab has no ARIA tabs at all", async () => {
@@ -153,5 +200,19 @@ describe("the URL decides the tab", () => {
 
     await router.navigate(1);
     await playersTabShown();
+  });
+
+  it("following the Records tab changes the address to /stats/records", async () => {
+    const { router } = renderAppAt("/stats/seasons", "anonymous");
+    const user = userEvent.setup();
+    await seasonsTabShown();
+
+    await user.click(within(tabNav()).getByRole("link", { name: "Records" }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/stats/records"),
+    );
+    await recordsTabShown();
+    expect(router.state.location.search).toBe("");
   });
 });

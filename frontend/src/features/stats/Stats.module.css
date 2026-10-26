@@ -1,10 +1,9 @@
 /*
- * The Stats page's tabs (/stats/seasons, /stats/players): the tab's controls,
- * the stats navigator (whose own styles are
- * components/stats-nav/) and the leaders, stacked in one column. The tables are
- * wider than a phone, so each scrolls sideways inside its own focusable
- * container and the page itself never does. Values come from tokens.css by
- * name only.
+ * The Stats page's tabs (/stats/seasons, /stats/records, /stats/players): the
+ * tab's controls, the stats navigator and the leaders, stacked in one column.
+ * Every table, the leaders' included, is drawn by the navigator's ScrollTable
+ * with the navigator's own stylesheet (components/stats-nav/), so no table
+ * rule lives here (R24). Values come from tokens.css by name only.
  */
 
 .tab {
@@ -21,6 +20,10 @@
 .controls {
   display: flex;
   flex-direction: column;
+}
+
+.tab h2 {
+  margin: 0;
 }
 
 .controls select,
@@ -44,66 +47,6 @@
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-}
-
-/*
- * The scroll container. Focusable (tabIndex 0) so a keyboard user can scroll
- * it with the arrow keys; base.css's :focus-visible ring shows it has focus.
- */
-.scroll {
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.table caption {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-
-.table th,
-.table td {
-  padding: var(--space-1) var(--space-2);
-  text-align: right;
-}
-
-.table thead th {
-  border-bottom: 1px solid var(--color-border-strong);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-
-.table tbody tr + tr {
-  border-top: 1px solid var(--color-border);
-}
-
-.table abbr {
-  text-decoration: none;
-}
-
-/* Names, teams and words read left to right; figures stay right-aligned. */
-.table .name {
-  text-align: left;
-}
-
-.table tbody th.name {
-  font-weight: var(--font-weight-regular);
-}
-
-.figure {
-  font-weight: var(--font-weight-semibold);
 }
 
 /* The team bar's suggestions, under the input in the page's flow. */

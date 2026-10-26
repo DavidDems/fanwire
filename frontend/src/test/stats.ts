@@ -599,8 +599,9 @@ export interface Stub {
 /**
  * A GET stub: `answer` returns the body, or `null` for a 404. Requests are
  * recorded before answering, so a failed one is still observable as sent.
+ * Exported for the other stats kits (`test/records.ts`, `FRONTEND-019`).
  */
-function stub(
+export function stub(
   path: string,
   answer: (request: RecordedRequest) => unknown,
 ): Stub {

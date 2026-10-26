@@ -28,10 +28,12 @@ export function teamHref(teamId: number, season: string | null): string {
   return `/stats/seasons?${params.toString()}`;
 }
 
-/** The stats navigator's game and player links, as router links. */
+/** The stats navigator's game, player and team links, as router links. */
 export const ROUTE_LINKS: StatsNavAdapter = {
   gameLink: (gameId: number, children: ReactNode) =>
     createElement(Link, { to: gameHref(gameId) }, children),
   playerLink: (playerId: number, children: ReactNode) =>
     createElement(Link, { to: playerHref(playerId) }, children),
+  teamLink: (teamId: number, season: string | null, children: ReactNode) =>
+    createElement(Link, { to: teamHref(teamId, season) }, children),
 };

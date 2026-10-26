@@ -7,14 +7,16 @@
  *
  * The counts, exactly:
  *
- * - a cold `/stats/seasons` makes **7**: seasons, teams, champion, standings
- *   and the three leader boards (whose rule line shares the points read).
- *   Before this unit it made **8**: the same seven and the season's games page
- *   (`GET /events/games`), which is dropped;
+ * - a cold `/stats/seasons` makes **4**: seasons, teams, champion and
+ *   standings. FRONTEND-019 changed it from **7**: the three leader boards
+ *   moved to Records > Seasonal (its counts are `records-requests.test.tsx`'s).
+ *   Before FRONTEND-018 it made **8**, with the season's games page
+ *   (`GET /events/games`), which that unit dropped;
  * - switching to East, West and back to All makes 0;
  * - opening a team makes 1 (its season), and Back to the season makes 0;
  * - a cold `/stats/seasons?team=<id>` makes 3 (seasons, teams, its season),
- *   and Back from it makes 5 (champion, standings, the three boards);
+ *   and Back from it makes **2** (champion, standings; FRONTEND-019 changed
+ *   it from 5, the three boards having left);
  * - `/stats/players` makes 0 until a query is typed, and one debounced query
  *   makes 1.
  */
@@ -81,12 +83,15 @@ function open(path: string) {
   ]);
 }
 
+// FRONTEND-019 changed this wait: it waited on the Leaders region too, which
+// Seasons no longer renders. The season level is loaded once its standings
+// tables are on screen and the champion has stopped loading.
 async function seasonLevelLoaded(): Promise<void> {
   const standings = await screen.findByRole("region", { name: "Standings" });
   await within(standings).findAllByRole("table");
-  const leaders = await screen.findByRole("region", { name: "Leaders" });
+  const champion = await screen.findByRole("region", { name: "Champion" });
   await waitFor(() =>
-    expect(within(leaders).getAllByRole("table")).toHaveLength(3),
+    expect(within(champion).queryByRole("status")).toBeNull(),
   );
 }
 
@@ -104,13 +109,16 @@ function backButton(): HTMLElement {
 }
 
 describe("requests per screen (Baseline c)", () => {
-  it("a cold /stats/seasons as a guest makes 7 (before: 8, with the games page)", async () => {
+  // FRONTEND-019 changed this count from 7: the leaders left Seasons.
+  it("a cold /stats/seasons as a guest makes 4 (before: 7, with the three leader boards)", async () => {
     open("/stats/seasons");
     await seasonLevelLoaded();
 
     const requests = await quietAfter(0);
-    expect(requests, requests.join("\n")).toHaveLength(7);
+    expect(requests, requests.join("\n")).toHaveLength(4);
     expect(requests.filter((r) => r.includes("/events/games"))).toEqual([]);
+    expect(requests.filter((r) => r.includes("/leaders"))).toEqual([]);
+    expect(requests.filter((r) => r.includes("/events/records"))).toEqual([]);
   });
 
   it("switching to East, West and back to All makes 0", async () => {
@@ -154,7 +162,8 @@ describe("requests per screen (Baseline c)", () => {
     expect(requests, requests.join("\n")).toEqual([]);
   });
 
-  it("a cold /stats/seasons?team=<id> makes 3, and Back from it makes 5", async () => {
+  // FRONTEND-019 changed the Back count from 5: the three boards left.
+  it("a cold /stats/seasons?team=<id> makes 3, and Back from it makes 2", async () => {
     open(`/stats/seasons?team=${CELTICS.id}`);
     const user = userEvent.setup();
     await screen.findByRole("heading", { name: new RegExp(CELTICS.name) });
@@ -170,10 +179,10 @@ describe("requests per screen (Baseline c)", () => {
     await seasonLevelLoaded();
 
     requests = await quietAfter(mark);
-    expect(requests, requests.join("\n")).toHaveLength(5);
+    expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests.filter((r) => /\/champion/.test(r))).toHaveLength(1);
     expect(requests.filter((r) => /\/standings/.test(r))).toHaveLength(1);
-    expect(requests.filter((r) => /\/leaders/.test(r))).toHaveLength(3);
+    expect(requests.filter((r) => /\/leaders/.test(r))).toEqual([]);
   });
 
   it("/stats/players makes 0 until a query is typed, and one debounced query makes 1", async () => {
