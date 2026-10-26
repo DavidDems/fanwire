@@ -518,9 +518,58 @@ Update this section in every spec PR and unit PR of this thread.
     - **R29 (a later unit or a Director PR):** `api/records.ts` will duplicate
       `api/stats.ts`'s private `ok()` helper, because `api/stats.ts` is
       forbidden to this unit. Fold the two later.
+- **2026-10-26, `FRONTEND-019` hand-run, PR #242** (awaiting review). Its
+  `FrontendUI/components.md` rows are in this Director PR, with the
+  navigator's rows FRONTEND-018 never got.
+  - **It meets every Baseline line.**
+    - Bundle: the entry grows 65 B gzip and 241 B raw (to 149,509 and
+      471,195). The navigator is a shared `StatsNavigator` chunk of 4,696 B,
+      RecordsTab is 1,536 B, and SeasonsTab drops from 4,637 to 1,627. Every
+      chunk name came out as declared.
+    - Requests: Records opens with 1 call, and a card adds 1 (R11). A cold
+      Seasons makes 4, down from 7.
+    - It was measured on the full load in `fanwire_perf`, served by the
+      branch's backend on its own port. Long tasks at 360 with the CPU
+      throttled 4×, as medians (worst):
+      - a cold Records, 108 ms (127);
+      - opening the 100-row `player-points-game` list, 99 ms (142);
+      - a cold record address, 138 ms (170);
+      - a cold Seasons, 101 ms (107), against 95 ms (118) on `main`;
+      - tabs and Back, 0.
+    - CLS is 0 on a cold Records and 0.0056 on a cold record.
+    - The container suite passes: 163 files and 2,308 tests.
+  - **One Director test correction** (`d30f892`). A `beforeAll` warm-up of the
+    lazy Records chunk went into four test files. The first test of a file
+    had overrun `findBy`'s 1 s under the full suite's load. No assertion
+    changed.
+  - **The browser rows** ran signed out and signed in, light and dark, at 360
+    and 1280.
+    - The holders match the real records: the Warriors' .890, the Kings' 176
+      and Kobe's 81 second to Adebayo's 83, which is in the dataset.
+    - The test account's profile was created in `fanwire_perf` on its first
+      sign-in.
+  - **Decided by the human** (by `AskUserQuestion`), both kept as built:
+    - at depth 1, the lone breadcrumb and the heading both read "Team
+      records";
+    - Seasonal opens on the newest season, which early in 2026-27 shows "No
+      player qualifies" on every board (**R31**).
+  - **The skeptic's second pass: hand over.** R26–R28 are closed by the
+    measurements.
+  - **Risks carried:**
+    - **R30 (FRONTEND-021, or a Director UI PR):** Back pressed before a cold
+      record's list lands goes to the Team tab, even for a player record.
+    - **R32 (watch CI):** the StatsPage and routes tests that reach
+      `/stats/records` have no warm-up, so a cold-chunk `findBy` flake is
+      possible there.
+    - **R33 (the next spec PR):** the margins are thin. The entry has 59 B raw
+      left under this unit's +300 allowance, and `css:StatsNavigator.css` has
+      36 B. The next fold re-measures `main`.
+    - **R25 and R29 still stand.** The picker's chunk now carries the records
+      views and `SeasonSelect` too.
 - **Next:**
-  1. Hand-run FRONTEND-019 on `agent/FRONTEND-019`, cut from `main` after the
-     spec merges.
+  1. After #242 merges: the FRONTEND-021 spec (stage 4: the stats picker
+     modal). Its Director spec PR folds `bundle-budgets/FRONTEND-019.ts` into
+     the base and takes R22, R23, R25 and R30 into its scope.
 
 ## Limits
 
