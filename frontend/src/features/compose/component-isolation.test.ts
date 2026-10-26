@@ -38,7 +38,11 @@ function findSrcDir(): string {
 const COMPOSE_DIR = join(findSrcDir(), "features", "compose");
 
 /** The three colleagues. Each name is also what its module is imported as. */
-const COLLEAGUES = ["ComposeTextBox", "StatsPicker", "MediaWidget"] as const;
+const COLLEAGUES = [
+  "ComposeTextBox",
+  "AttachmentPicker",
+  "MediaWidget",
+] as const;
 
 type Colleague = (typeof COLLEAGUES)[number];
 
