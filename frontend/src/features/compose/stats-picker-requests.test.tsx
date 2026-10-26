@@ -44,6 +44,24 @@ async function rootSettled(dialog: HTMLElement) {
 }
 
 describe("picker API request counts and private navigation", () => {
+  it("Back restores player search text and cached results without another request", async () => {
+    const flow = arrange();
+    try {
+      await screen.findByRole("textbox", { name: /post/i });
+      await openPicker(flow.user);
+      const dialog = await pickerShown();
+      await rootSettled(dialog);
+      await openLebron(flow.user);
+      const before = flow.events.length;
+      await flow.user.click(within(dialog).getByRole("button", { name: "Back" }));
+      expect(await findPlayerSearch()).toHaveValue("James");
+      await within(dialog).findByRole("button", { name: /LeBron James/ });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(flow.events).toHaveLength(before);
+    } finally {
+      flow.stop();
+    }
+  });
   it("compose is silent; picker cold makes exactly three, switching tabs and Back add none, each level adds one, and reopening adds none", async () => {
     const flow = arrange();
     try {
