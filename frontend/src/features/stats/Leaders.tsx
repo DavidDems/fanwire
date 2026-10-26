@@ -8,6 +8,7 @@ import {
   ColumnHeader,
   ScrollTable,
 } from "../../components/stats-nav/ScrollTable";
+import table from "../../components/stats-nav/StatsNav.module.css";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { formatAverage } from "../games/format";
 import { playerHref } from "./links";
@@ -21,8 +22,8 @@ const BOARDS: ReadonlyArray<readonly [LeaderStat, string, string]> = [
 
 /**
  * A season's leaders: points, rebounds and assists, one read and one table
- * each, under the season level's standings (FRONTEND-019 moves them to
- * Records).
+ * each, on Records > Seasonal (moved there from Seasons by FRONTEND-019). The
+ * tables are the navigator's `ScrollTable`, and their cells take its classes.
  */
 export function Leaders({ season }: { season: string }) {
   // The rule is the same for every board of a season; it is read from the
@@ -82,28 +83,28 @@ function LeaderBoard({
     );
 
   return (
-    <ScrollTable caption={caption} classes={styles}>
+    <ScrollTable caption={caption}>
       <thead>
         <tr>
-          <ColumnHeader classes={styles} label="#" title="Rank" />
-          <ColumnHeader classes={styles} label="Player" name />
-          <ColumnHeader classes={styles} label="Team" name />
-          <ColumnHeader classes={styles} label="GP" title="Games played" />
-          <ColumnHeader classes={styles} label={abbreviation} title={caption} />
+          <ColumnHeader label="#" title="Rank" />
+          <ColumnHeader label="Player" name />
+          <ColumnHeader label="Team" name />
+          <ColumnHeader label="GP" title="Games played" />
+          <ColumnHeader label={abbreviation} title={caption} />
         </tr>
       </thead>
       <tbody>
         {board.data.leaders.map((leader, index) => (
           <tr key={leader.player_id}>
             <td>{index + 1}</td>
-            <th scope="row" className={styles.name}>
+            <th scope="row" className={table.name}>
               <Link to={playerHref(leader.player_id)}>
                 {`${leader.first_name} ${leader.last_name}`.trim()}
               </Link>
             </th>
-            <td className={styles.name}>{leader.teams.join(", ")}</td>
+            <td className={table.name}>{leader.teams.join(", ")}</td>
             <td>{leader.games_played}</td>
-            <td className={styles.figure}>{formatAverage(leader.average)}</td>
+            <td className={table.figure}>{formatAverage(leader.average)}</td>
           </tr>
         ))}
       </tbody>
