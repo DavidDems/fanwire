@@ -650,9 +650,132 @@ Update this section in every spec PR and unit PR of this thread.
     - **R37:** Escape and Back in nested Dialogs are proven for one level
       only.
     - **R16** still stands.
-- **Next:**
-  1. After this spec PR merges: hand-run FRONTEND-021 on
-     `agent/FRONTEND-021`.
+- **2026-10-26, the FRONTEND-021 spec merged as #247.** The human approved
+  its deploy (the spec and the budget base only, so the app doesn't change).
+- **2026-10-26, handoff.** The Director session that wrote the spec stopped
+  here, because the human's weekly Claude limit is nearly used. The hand-run
+  of FRONTEND-021 is handed to another agent, which may not be Claude Code.
+  Nothing for it has started: no branch, no `state.json`.
+- **Next: hand-run FRONTEND-021, the last unit of this brief.** The
+  `## Handoff: hand-running FRONTEND-021` section below is self-contained.
+
+## Handoff: hand-running FRONTEND-021
+
+For whichever agent picks this up, Claude Code or not. You are a
+**Director**: an interactive session driven by the human. Read `AGENTS.md`
+first, then this brief from the top. The contract is
+`.ai/tasks/FRONTEND-021/task.json`, and `brief.md` beside it is its prose,
+its traps and the skeptic's findings. The loop is
+`wiki/GeneralContext/Architecture/director-sessions.md`, "The loop, per
+unit". What follows is that loop for this unit, with what this thread
+learned.
+
+### Steps, in order
+
+1. **Cut the branch from `origin/main`**, in a worktree of its own: other
+   sessions may share the main checkout.
+   `git fetch; git worktree add -b agent/FRONTEND-021 ../fanwire-wt/FRONTEND-021 origin/main`
+   - Then run `python .ai/bin/agentctl.py hand start FRONTEND-021`, and
+     commit `.ai/tasks/FRONTEND-021/state.json` alone.
+   - Run `npm ci` in the worktree's `frontend/`.
+2. **The test commit,** test-first and alone. It holds:
+   - every new test the acceptance criteria need;
+   - the changes to the 47 broken tests in 6 files, which the spec's
+     "Every existing frontend test passes" criterion names;
+   - `frontend/src/test/bundle-budgets/FRONTEND-021.ts`, with exactly the
+     Baseline (a) lines: entry +300 gzip and +700 raw, the seven changed
+     outputs and the six added ones, summing to 17,250 JS and 2,700 CSS;
+   - the R32 warm-ups.
+
+   Prove the red is red for the right reason: the thing under test is
+   missing, not a broken test file. The implementation can't edit tests
+   (`allow_test_edits_during_impl` is false), so get every test right here.
+3. **The implementation commit,** separate. Follow the spec's design:
+   - `LevelViews` injection: the game, players and player views live in
+     `features/compose/`, and the records views in `RecordsTab`;
+   - the picker `Dialog` outside the compose `<form>`, anchored at the top;
+   - `seasonsQuery`, the game and player reads in `api/stats.ts` with the
+     game page's and player page's keys, and `api/ok.ts`;
+   - R23's retry: no `React.lazy`, and the failed stylesheets re-requested;
+   - R22's focus line in `Dialog`, and `autoFocus` on compose's text box;
+   - R30's group from the record id's prefix.
+
+   Run `prettier --write` on **named files only**: a glob also reformats
+   the committed tests.
+4. **If a chunk name differs** from the budget file once built (R20, R35),
+   correct the names in a separate Director commit, keeping both sums. Any
+   test correction is likewise its own commit, before the implementation,
+   and the PR body names it.
+5. **Gates,** all green, before pushing:
+   - `docker compose run --rm frontend-test`, the full suite: run it once,
+     and never while another heavy job runs, because the machine has 16 GB;
+   - from `frontend/`: `npm run typecheck`, `npm run lint`, `npm run build`;
+   - `npx vitest run src/test/bundle-budget.test.ts src/test/bundle-budget-combine.test.ts`.
+6. **Check every changed path** against the spec's `allowed_paths` and
+   `forbidden_paths` before you push. Restricted trees are never yours on
+   this branch: `.ai/` (except `state.json`), `wiki/GeneralContext/` and
+   `wiki/CodeContext/FrontendUI/`.
+7. **Measure Baseline (c), (d) and (e)** with a host Playwright script, as
+   (d) and (e) describe.
+   - **Method:** CPU 4x over CDP, 360 x 780, PerformanceObserver for
+     `longtask` and `layout-shift`, a fresh context per run, and five runs
+     alternating `origin/main` and the branch. For (e), delay every
+     `/api/events/` read by 800 ms.
+   - **Backend:** the branch's backend on its own port, from the backend
+     venv, with `DATABASE_URL` set to the `fanwire_perf` database in the
+     running dev Postgres (localhost:5432). The compose-over-a-feed rows use
+     the `fanwire` database instead, which has 20 cards.
+   - **Frontend:** `vite preview` of each side on its own port.
+   - **Signing in:** the test accounts are in `.env.test-accounts.local`,
+     and the Cognito settings in `backend/.env`. Never print either.
+   - The skeptic's stage-4 scripts may still be in the Director's temp
+     scratchpad:
+     `%TEMP%\claude\C--Users-david-source-repos-fanwire\94bbf625-97cd-4f30-9cf2-1232def03eca\scratchpad\skeptic\scripts\`.
+     If they are gone, rebuild them from this method.
+   - **Stop only the servers you started, and only by their port.** Never
+     by a command-line pattern: that killed about 20 other servers on
+     2026-10-24. Leave `fanwire-postgres-1` and `fanwire-backend-dev-1`
+     running.
+8. **The browser rows** in the spec's last criterion: light and dark, 360
+   and 1280, signed in.
+9. **Update `wiki/CodeContext/Modules/0x08-frontend.md`** with a section of
+   its own for this unit (the spec says what goes in it).
+10. **Push and open the PR. Merge nothing.** The PR body holds:
+    - the before and after build tables;
+    - the request counts, and the (d) and (e) rows as medians and worsts;
+    - **every test file the test commit changed, test by test**;
+    - every Director test or budget correction, by commit;
+    - the browser rows.
+11. **The skeptic's second pass,** before handing over. It is a
+    fresh-context reviewer, separate from whoever wrote the code. It reads
+    the diff and the measured numbers, and lists every Baseline line as met,
+    missed or unmeasured. It also checks the PR body's test list and named
+    corrections. A missed line is fixed, test-first, or taken to the human.
+    It is never waived silently. If your tool can't spawn a separate agent,
+    tell the human, and ask how they want the second pass run.
+12. **Record the finish:**
+    `python .ai/bin/agentctl.py hand finish FRONTEND-021 --pr <N>`, then
+    commit `state.json` and push it to the PR.
+13. **A Director PR, after the unit's PR:**
+    - this brief's Progress, with the stage-4 result and the skeptic's
+      verdict on the whole thread;
+    - the unit's `FrontendUI/components.md` rows: no unit role may write
+      `FrontendUI/`;
+    - then, if the thread is finished, the lifecycle rule in
+      `wiki/GeneralContext/index.md`, "Task prompts".
+
+### What is known not to block
+
+- **The advisory coverage check** fails on long specs, because Haiku hits
+  its 4,000-token output cap. Raising the cap is a Director PR to `.ai/` and
+  the human's call. Don't rerun it.
+- **R16** (timing the image pipeline live) is not this unit's.
+- **Local uploads can't run** (FRONTEND-020): stub the image rows.
+
+### Ask the human, don't decide
+
+Any UI or UX choice the spec leaves open. Give manual steps as an ordered
+list, with one PowerShell line per command.
 
 ## Limits
 
