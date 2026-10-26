@@ -1,7 +1,7 @@
 /** Baseline (c), through the real route table and the kit's staleTime-0 client. */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { renderAppAt } from "../../test/app-route";
 import {
   attachServer,
@@ -44,6 +44,27 @@ async function rootSettled(dialog: HTMLElement) {
 }
 
 describe("picker API request counts and private navigation", () => {
+  it("Back does not refetch search after its freshness window expires on a player", async () => {
+    const flow = arrange();
+    const clock = vi.spyOn(Date, "now");
+    try {
+      await screen.findByRole("textbox", { name: /post/i });
+      await openPicker(flow.user);
+      const dialog = await pickerShown();
+      await rootSettled(dialog);
+      await openLebron(flow.user);
+      const before = flow.events.length;
+      clock.mockReturnValue(Date.now() + 31_000);
+      await flow.user.click(within(dialog).getByRole("button", { name: "Back" }));
+      expect(await findPlayerSearch()).toHaveValue("James");
+      await within(dialog).findByRole("button", { name: /LeBron James/ });
+      await waitFor(() => expect(flow.queryClient.isFetching()).toBe(0));
+      expect(flow.events).toHaveLength(before);
+    } finally {
+      clock.mockRestore();
+      flow.stop();
+    }
+  });
   it("Back restores player search text and cached results without another request", async () => {
     const flow = arrange();
     try {
