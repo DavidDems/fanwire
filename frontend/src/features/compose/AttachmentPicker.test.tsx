@@ -93,9 +93,11 @@ describe("the picker modal", () => {
       within(dialog).getByRole("tab", { name: "Players" }),
     ).toBeInTheDocument();
     expect(within(dialog).queryByRole("tab", { name: "Records" })).toBeNull();
-    expect(
-      within(dialog).getByRole("combobox", { name: "Season" }),
-    ).toHaveValue("2023-24");
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("combobox", { name: "Season" }),
+      ).toHaveValue("2023-24"),
+    );
     expect(
       within(dialog).getByRole("button", { name: "Select" }),
     ).toBeDisabled();
