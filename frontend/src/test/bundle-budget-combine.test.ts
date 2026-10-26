@@ -47,17 +47,17 @@ describe("combine", () => {
       {
         unit: "A",
         changed: { SeasonsTab: 4_000, "css:Stats.css": 1_000 },
-        added: { RecordsTab: 2_000 },
+        added: { PickerTab: 2_000 },
         removed: ["PlayersTab"],
       },
     ]);
 
     expect(budget.lazyMax.SeasonsTab).toBe(4_000);
     expect(budget.lazyMax["css:Stats.css"]).toBe(1_000);
-    expect(budget.lazyMax.RecordsTab).toBe(2_000);
+    expect(budget.lazyMax.PickerTab).toBe(2_000);
     expect(budget.lazyMax).not.toHaveProperty("PlayersTab");
     expect(budget.unchanged).not.toHaveProperty("SeasonsTab");
-    expect(budget.unchanged).not.toHaveProperty("RecordsTab");
+    expect(budget.unchanged).not.toHaveProperty("PickerTab");
     expect(budget.unchanged).not.toHaveProperty("PlayersTab");
     expect(budget.unchanged.ComposePage).toBe(BASE.lazy.ComposePage);
   });
