@@ -196,7 +196,7 @@ describe("the bar chart: Attach stats", () => {
     await user.click(chart());
     const dialog = await screen.findByRole("dialog", { name: "Attach stats" });
     expect(
-      within(dialog).getByRole("button", { name: "Cancel" }),
+      await within(dialog).findByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog", { name: "Attach stats" })).toBeNull();
@@ -229,9 +229,9 @@ describe("an attached link shows its summary, panel open or not", () => {
     expect(attachedSummary()).not.toBeNull();
 
     await user.click(
-      within(
+      await within(
         await screen.findByRole("dialog", { name: "Attach stats" }),
-      ).getByRole("button", { name: "Cancel" }),
+      ).findByRole("button", { name: "Cancel" }),
     );
     expect(chart()).not.toHaveAttribute("aria-expanded");
     await waitFor(() => expect(attachedSummary()).not.toBeNull());
