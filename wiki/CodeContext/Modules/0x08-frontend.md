@@ -627,6 +627,18 @@ submits the draft.
   a cold load, without another read.
 - **Cold route test warm-ups close R32.** Route-table tests that reach lazy
   Stats tabs warm the chunks in `beforeAll`, preserving their assertions.
+- **Measured** (2026-10-26, Chrome, 360 × 780, CPU 4×, five alternating
+  baseline/branch runs): a cold picker is 88 ms median / 95 ms worst;
+  the 96-game team level is 67 / 82 ms. Compose over the dev feed's first
+  20 cards is 60 / 73 ms. No required row exceeds 200 ms median or 250 ms
+  worst. With every events read delayed 800 ms, worst CLS is 0.0275 for
+  picker opening, 0.0025 for a team, and 0 for player opening and Select.
+  The entry grows 297 B gzip / 649 B raw; the independent skeptic's
+  second pass found every Baseline line met. The final frontend container
+  passes 170 files / 2,335 tests.
+- **Operational follow-up R16 remains separate:** time the image pipeline
+  on the live stack after deploy. Local image-preservation checks stub
+  the ticket, bucket and poll; no live pipeline timing is claimed.
 
 ## Notifications (`FRONTEND-006`)
 
