@@ -19,7 +19,7 @@
  */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { renderAppAt, type Visitor } from "../../test/app-route";
 
@@ -216,3 +216,10 @@ describe("the URL decides the tab", () => {
     expect(router.state.location.search).toBe("");
   });
 });
+
+// FRONTEND-021 R32: transform lazy tabs before timed findBy assertions.
+beforeAll(async () => {
+  await import("./RecordsTab");
+  await import("./SeasonsTab");
+  await import("./PlayersTab");
+}, 30_000);

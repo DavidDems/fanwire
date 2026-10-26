@@ -314,3 +314,27 @@ describe("a Dialog opened inside another", () => {
     expect(onInnerClose).not.toHaveBeenCalled();
   });
 });
+
+// R22: Chrome may focus a tall content scroller during showModal().
+it("takes initial focus from a browser-selected scroller and puts it on Close", () => {
+  vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(
+    function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+      const scroller = this.querySelector<HTMLElement>("[data-scroller]");
+      scroller?.focus();
+    },
+  );
+  render(
+    <Dialog open title="Tall detail" onClose={() => {}}>
+      <div data-scroller tabIndex={-1}>
+        Tall content
+      </div>
+    </Dialog>,
+  );
+  expect(
+    within(screen.getByRole("dialog", { name: "Tall detail" })).getByRole(
+      "button",
+      { name: "Close" },
+    ),
+  ).toHaveFocus();
+});

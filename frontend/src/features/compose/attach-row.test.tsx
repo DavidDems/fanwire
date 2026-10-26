@@ -186,27 +186,20 @@ describe("the bar chart: Attach stats", () => {
     expectTarget(chart());
   });
 
-  it("is closed by default and shows and hides the picker panel in place", async () => {
+  it("opens a dialog, with aria-haspopup and no disclosure attributes", async () => {
     server.use(...attachServer().handlers);
     const { user } = renderComposer();
-
-    expect(chart()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("group", { name: "Attach stats" })).toBeNull();
-
+    expect(chart()).toHaveAttribute("aria-haspopup", "dialog");
+    expect(chart()).not.toHaveAttribute("aria-expanded");
+    expect(chart()).not.toHaveAttribute("aria-controls");
+    expect(screen.queryByRole("dialog", { name: "Attach stats" })).toBeNull();
     await user.click(chart());
-
-    expect(chart()).toHaveAttribute("aria-expanded", "true");
-    const panel = screen.getByRole("group", { name: "Attach stats" });
-    expect(panel.id).not.toBe("");
-    expect(chart()).toHaveAttribute("aria-controls", panel.id);
+    const dialog = await screen.findByRole("dialog", { name: "Attach stats" });
     expect(
-      within(panel).getByRole("button", { name: /^game result$/i }),
+      within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
-
-    await user.click(chart());
-
-    expect(chart()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("group", { name: "Attach stats" })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Attach stats" })).toBeNull();
   });
 
   it("is not offered for a reply address, which still has the paperclip", () => {
@@ -230,13 +223,17 @@ describe("an attached link shows its summary, panel open or not", () => {
 
     const summary = await summaryShown();
     expect(textOf(summary)).toMatch(/\b117\b/);
-    expect(chart()).toHaveAttribute("aria-expanded", "false");
+    expect(chart()).not.toHaveAttribute("aria-expanded");
 
     await user.click(chart());
     expect(attachedSummary()).not.toBeNull();
 
-    await user.click(chart());
-    expect(chart()).toHaveAttribute("aria-expanded", "false");
+    await user.click(
+      within(
+        await screen.findByRole("dialog", { name: "Attach stats" }),
+      ).getByRole("button", { name: "Cancel" }),
+    );
+    expect(chart()).not.toHaveAttribute("aria-expanded");
     await waitFor(() => expect(attachedSummary()).not.toBeNull());
   });
 });

@@ -327,8 +327,8 @@ describe("a cold ?record= (a reload or a shared link)", () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it("reads Records in the breadcrumb until the list lands", async () => {
-    openRecords("/stats/records?record=player-points-game", {
+  it("uses a cold record id prefix immediately, so Back before its list lands keeps Player selected", async () => {
+    const { router } = openRecords("/stats/records?record=player-points-game", {
       handlers: [
         http.get("*/events/records/:record_id", async () => {
           await delay("infinite");
@@ -336,8 +336,10 @@ describe("a cold ?record= (a reload or a shared link)", () => {
       ],
     });
 
-    await waitFor(() => expect(crumbTexts()[0]).toBe("Records"));
-    expect(crumbTexts()).toHaveLength(2);
+    await waitFor(() => expect(crumbTexts()[0]).toBe("Player records"));
+    await userEvent.setup().click(backButton() as HTMLElement);
+    await waitFor(() => expect(params(router).get("group")).toBe("player"));
+    expect(selectedTab(groupBar())).toBe("Player");
     expect(screen.getByRole("main").textContent).not.toMatch(MISSING);
   });
 

@@ -23,7 +23,6 @@ import buttonStyles from "../../components/ui/Button.module.css";
 import cardStyles from "../../components/ui/Card.module.css";
 import messageStyles from "../../components/ui/message.module.css";
 import {
-  CHOICES,
   attachGameResult,
   attachServer,
   openPicker,
@@ -157,19 +156,18 @@ describe("the compose form card (criterion 1)", () => {
 });
 
 describe("the attachment picker is built from shared Buttons (FRONTEND-013)", () => {
-  it("renders its three choices as Buttons", async () => {
+  it("renders Cancel secondary and Select primary and disabled until a row is chosen", async () => {
     server.use(...attachServer().handlers);
     const user = renderComposer();
-    await screen.findByRole("textbox", { name: /post/i });
-
     await openPicker(user);
-
-    for (const choice of Object.values(CHOICES)) {
-      expect(
-        screen.getByRole("button", { name: choice }),
-        String(choice),
-      ).toHaveClass(buttonStyles.button);
-    }
+    const dialog = await screen.findByRole("dialog", { name: "Attach stats" });
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveClass(
+      buttonStyles.button,
+      buttonStyles.secondary,
+    );
+    const select = within(dialog).getByRole("button", { name: "Select" });
+    expect(select).toHaveClass(buttonStyles.button, buttonStyles.primary);
+    expect(select).toBeDisabled();
   });
 
   it("renders Remove in the summary as a Button", async () => {
