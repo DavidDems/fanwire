@@ -584,6 +584,9 @@ submits the draft.
   player search → player. Back restores the search text and cached results
   without another request (the human, 2026-10-26). Every level control is a
   button, and the picker contains no page links or modal-flow navigation (R18).
+  The search subtree stays mounted with native `hidden` while a player is
+  displayed, so Back stays silent even after its 30-second freshness expires;
+  its controls and results leave the accessibility tree and tab order.
 - **One choice, held across levels.** Native radios share a name within
   each level, labelled by its heading. A completed game's Final score,
   played box-score lines (home first), and career scopes with games are
