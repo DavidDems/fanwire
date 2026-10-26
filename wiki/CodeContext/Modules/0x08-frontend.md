@@ -460,21 +460,20 @@ each owns one piece:
   because `components/ui` was outside its paths; the prop replaced it. The
   description is the message alone, because the alert's icon is `aria-hidden`;
   `compose-style.test.tsx` pins both that and that the target is the alert.
-- **The attachment picker sits in the form's flow, not over it**, as the mention
-  panel did (`UI-006`): the composer may itself be open over a page. Each of the
-  three colleagues has its own module CSS and imports no other, which
-  `component-isolation.test.ts` reads from disk.
+- **The stats picker opens over compose** (`FRONTEND-021`, below). Its dialog
+  sits outside the compose form so Enter cannot publish the draft. The three
+  mediator colleagues remain isolated by `component-isolation.test.ts`.
 
 ### Sports-data attachments (`FRONTEND-013`)
 
-`AttachmentPicker` is the third colleague. "Attach stats" (`aria-expanded`)
-opens a panel with three choices. Each sends `POST /posts`' `data_link`
-([[0x03-posts]] "Sports-data attachments"):
+The attachment colleague preserves the three `POST /posts` `data_link` types
+([[0x03-posts]] "Sports-data attachments"). `FRONTEND-021` replaces the old
+panel with the navigator modal described below:
 
 | Choice | Reads | Not offered | Sends |
 |---|---|---|---|
-| Game result | `GET /events/teams`, `/events/seasons`, `/events/games?team_id&season` | a game at 0–0 (the backend's `Game.completed` rule; `GameOut` has no flag) | `{type: "game_final", ref_id: <game id>}` |
-| Player's game | the same game finder, then `GET /events/games/{id}` | a row with `seconds_played` null (did not play) | `{type: "player_game", ref_id: <line_id>}` |
+| Game result | seasons, champion and standings, then a team's season and `GET /events/games/{id}` | a game at 0–0 (the backend's `Game.completed` rule; `GameOut` has no flag) | `{type: "game_final", ref_id: <game id>}` |
+| Player's game | the same navigator, then the game's box score | a row with `seconds_played` null (did not play) | `{type: "player_game", ref_id: <line_id>}` |
 | Player career | `GET /events/players?q=` (debounced), then `GET /events/players/{id}` | a scope whose career line has `games_played` 0 | `{type: "player_career", ref_id: <player id>, scope}` |
 
 - **Only what the server accepts is offered**, but the six POSTS-005 422 codes
@@ -544,10 +543,9 @@ over the page you are on.
   at least 44 px:
   - the paperclip, "Attach an image", opens a visually hidden file input
     with no `accept`;
-  - the bar chart, "Attach stats", shows and hides today's
-    `AttachmentPicker` in place (`aria-expanded`) and starts closed.
-  An attached link's summary shows whether the panel is open or not.
-  `FRONTEND-021` replaces the panel with the picker modal.
+  - the bar chart, "Attach stats", opens the stats picker dialog
+    (`aria-haspopup="dialog"`, since `FRONTEND-021`).
+  An attached link's summary shows whether the picker is open or not.
 - **The image check** (`MediaWidget`, shared with the thread's reply box):
   - **The tile:** from the choice onward, a fixed-size tile shows the file
     name under a static overlay. It has no animation (A8) and a `role=status`
@@ -569,6 +567,63 @@ over the page you are on.
 - **Bundle:** the overlay, the + and the new widget add about 0.66 kB gzip
   to the entry, against an allowance of 1 kB
   (`src/test/bundle-budgets/FRONTEND-020.ts`).
+
+### The stats picker modal (`FRONTEND-021`)
+
+Brief 20, stage 4. The bar chart opens a second native `Dialog`, titled
+"Attach stats", over compose. It is outside the compose `<form>`, anchored
+at the top, with a sticky footer: Cancel and Select, disabled until a row
+is chosen. Escape, the backdrop and Close leave only the picker, preserve
+the draft and return focus to the bar chart. Enter in the picker never
+submits the draft.
+
+- **Select mode owns its stack.** Seasons and Players are `SegmentedTabs`;
+  opening starts on the newest season, All, with nothing selected. The
+  season select uses `useId`, so a Stats page underneath has its own label.
+  Picking a season resets the stack. Levels are season → team → game, or
+  player search → player. Back restores the search text and cached results
+  without another request (the human, 2026-10-26). Every level control is a
+  button, and the picker contains no page links or modal-flow navigation (R18).
+- **One choice, held across levels.** Native radios share a name within
+  each level, labelled by its heading. A completed game's Final score,
+  played box-score lines (home first), and career scopes with games are
+  selectable. An unavailable result or empty scope is plain text. A polite
+  status says "Nothing selected" or names the choice. Select sends
+  `link-attached` and remembers its existing summary words; Undo restores
+  the previous link and its summary. Pre-filled addresses retain their
+  checks and messages.
+- **`LevelViews` injection closes R25.** `StatsNavigator` draws season and
+  team levels. Its caller supplies the other levels' names and views,
+  through controls that keep the navigator's heading focus rule.
+  `RecordsTab` supplies records views; the picker supplies game, players
+  and player views from `features/compose/`. `TeamLevel` takes an optional
+  `onGame`; select mode opens a level, while Stats keeps its game links.
+  Records views and reads stay outside the picker's loaded chunks.
+- **Shared reads close R29.** `api/stats.ts` owns `seasonsQuery` (five-minute
+  freshness), game and player detail fetchers and query options. Detail
+  keys match the unchanged pages and hold the complete response or null
+  on 404; their freshness is the app's 30 seconds. Season and team reads
+  share Stats' five-minute cache. `attachmentReads.ts` keeps eligibility,
+  summary words and address checks, with no fetchers of its own.
+  `api/ok.ts` is the response helper shared by stats and records.
+- **Lazy loading and recovery close R23.** Compose loads its read module
+  with its own chunk; picker and navigator code load only after the chart
+  is pressed. Both chunk loaders keep failures inside their dialog, with
+  the message "We could not open this just now. Please try again." and
+  Try again. Rejected module promises are cleared, without `React.lazy`'s
+  cached rejection. Retry replaces failed same-origin stylesheets before
+  importing again, so recovered content has its styles. Closing and
+  reopening can retry too.
+- **Initial focus closes R22.** `Dialog` focuses Close after `showModal`,
+  then a child's effect may move it: compose's text box takes autofocus,
+  the picker starts on Close, and confirms keep Cancel. Returning from
+  compose to a detail focuses that detail's Close.
+- **Early record Back closes R30.** Before the list or cached summary
+  arrives, the record id's `team-` or `player-` prefix determines its group.
+  Back and the first breadcrumb therefore keep the right group throughout
+  a cold load, without another read.
+- **Cold route test warm-ups close R32.** Route-table tests that reach lazy
+  Stats tabs warm the chunks in `beforeAll`, preserving their assertions.
 
 ## Notifications (`FRONTEND-006`)
 
@@ -1145,8 +1200,8 @@ the generated schema. The players feature has its own `api.ts`; since
 
 ### The stats navigator (`FRONTEND-018`)
 
-Brief 20, stage 2. One navigator for the Stats page now and the compose
-stats picker later (`FRONTEND-021`).
+Brief 20, stage 2. One navigator for the Stats page and the compose stats
+picker (`FRONTEND-021`).
 
 - **Its home is `src/components/stats-nav/`**, outside `features/`, so
   compose may use it. `StatsNavigator` renders a **stack of levels**:
@@ -1224,20 +1279,19 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     exact percentage, so equal three-place figures can rank apart. An unknown
     id is "Record not found" in place, with Back.
   - **The record level's group is its list's.** `?record=` never carries
-    `group`; until the list (or the cached summary) says, the breadcrumb's
-    first item reads "Records". The heading is the record's title from the
-    cached summary, else the list.
+    `group`; until the list or cached summary arrives, the id's prefix
+    supplies the group (`FRONTEND-021`, R30). Unknown prefixes retain the
+    "Records" fallback. The heading is the record's title from the cached
+    summary, else the list.
 - **The adapter's optional `teamLink(teamId, season, children)`**: without it
   a team is plain text. `ROUTE_LINKS` gives it through `teamHref`.
 - **`SeasonSelect`** (`components/stats-nav/`) is the season picker and its
-  loading, error and empty states, shared by Seasons and Seasonal. Keep it
-  there: it is also what makes Rollup name the shared chunk `StatsNavigator`.
+  loading, error and empty states, shared by Seasons, Seasonal and the picker.
 - **The reads are `src/api/records.ts`**: `recordsQuery()` and
   `recordQuery(id)`, both `staleTime: Infinity` (the routes are cached five
   minutes at the edge, R7). A list is one call at `limit=100`; nothing sends
-  `offset`; a 404 is `null`. It has its own `ok()`, a copy of
-  `api/stats.ts`'s private one (R29: fold them in a unit with both in
-  scope).
+  `offset`; a 404 is `null`. Stats and records share `api/ok.ts` since
+  `FRONTEND-021` (R29).
 - **Requests per screen**, pinned in `records-requests.test.tsx`: a cold
   `/stats/records` makes 1; Team and Player make 0; opening a card makes 1,
   and Back and reopening it make 0; a cold `?record=` makes 1 and Back from
