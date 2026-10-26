@@ -64,7 +64,7 @@ describe("combine", () => {
 
   it.each<[string, UnitBudget]>([
     ["a changed chunk not in the base", { unit: "A", changed: { Nope: 1 } }],
-    ["an added chunk already in the base", { unit: "A", added: { links: 1 } }],
+    ["an added chunk already in the base", { unit: "A", added: { format: 1 } }],
     ["a removed chunk not in the base", { unit: "A", removed: ["Nope"] }],
   ])("refuses %s", (_name, unit) => {
     expect(() => combine([unit])).toThrow();
