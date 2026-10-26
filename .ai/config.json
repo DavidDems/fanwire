@@ -18,7 +18,7 @@
       "api_key_secret": "ANTHROPIC_API_KEY",
       "invoke": "claude",
       "cli_package": "@anthropic-ai/claude-code",
-      "cli_version": "2.1.295",
+      "cli_version": "2.1.309",
       "_cli_note": "The one place the provider CLI's version lives (handoff.md section 5.6). agent-worker.yml reads it from main's copy, checks it is an exact x.y.z, installs it and refuses to run if `claude --version` reports anything else. 2.1.295 is what the last live runs installed and ran (MEDIA-002, worker runs 37874920927 and 37876678705, 2026-10-09); `claude --help` on it was re-checked 2026-10-19 for --setting-sources and --strict-mcp-config, the flags invoke_agent.sh starts it with (D2b). A bump means re-checking those two flags on the new version first, and is a reviewed diff to this line.",
       "_api_note": "api_key_env, endpoint and api_version are for the direct Messages API calls the cheap automations make (automations below), stdlib urllib, no SDK. The roles above go through the claude CLI instead.",
       "api_key_env": "ANTHROPIC_API_KEY",
