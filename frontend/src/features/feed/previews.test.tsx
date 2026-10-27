@@ -127,7 +127,7 @@ describe("a game_final preview", () => {
     expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
   });
 
-  it("shows period values in a semantic table and names both teams and score in its link", () => {
+  it("shows period values in a semantic table and names both teams and score in its link", async () => {
     const preview = {
       ...gameFinalPreview(),
       home_line_score: [25, 30, 30, 32],
@@ -138,7 +138,7 @@ describe("a game_final preview", () => {
     expect(onlyDetailLink(card())).toHaveAccessibleName(
       /Phoenix Suns.*109.*Toronto Raptors.*117/,
     );
-    const table = screen.getByRole("table", { name: /period score/i });
+    const table = await screen.findByRole("table", { name: /period score/i });
     expect(table).toHaveTextContent(/Q1.*20.*25/);
     expect(table).toHaveTextContent(/Q4.*32.*32/);
   });
@@ -155,7 +155,7 @@ describe("a game_final preview", () => {
     expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
   });
 
-  it("labels overtime periods and keeps the displayed final totals canonical", () => {
+  it("labels overtime periods and keeps the displayed final totals canonical", async () => {
     const preview = {
       ...gameFinalPreview(),
       home_line_score: [25, 30, 30, 22, 10],
@@ -163,18 +163,20 @@ describe("a game_final preview", () => {
     };
     renderCard(postWithPreview(preview));
 
-    screen.getByRole("table", { name: /period score/i });
+    await screen.findByRole("table", { name: /period score/i });
     expect(
-      screen.getByRole("columnheader", { name: "Q4" }),
+      await screen.findByRole("columnheader", { name: "Q4" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("columnheader", { name: "OT" }),
+      await screen.findByRole("columnheader", { name: "OT" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("row", { name: /Phoenix Suns 20 25 25 29 10/ }),
+      await screen.findByRole("row", { name: /Phoenix Suns 20 25 25 29 10/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("row", { name: /Toronto Raptors 25 30 30 22 10/ }),
+      await screen.findByRole("row", {
+        name: /Toronto Raptors 25 30 30 22 10/,
+      }),
     ).toBeInTheDocument();
     expect(onlyDetailLink(card())).toHaveAccessibleName(
       /Phoenix Suns.*109.*Toronto Raptors.*117/,

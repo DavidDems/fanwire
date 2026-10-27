@@ -73,6 +73,8 @@ export function gameFinalPreview(
     away_team: SUNS,
     home_score: 117,
     away_score: 109,
+    home_line_score: null,
+    away_line_score: null,
     ...overrides,
   };
 }
