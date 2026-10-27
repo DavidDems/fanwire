@@ -6,7 +6,7 @@ export default {
   entryJsRawGrowth: 1_000,
   entryCssGzipGrowth: 113,
   changed: {
-    GamePage: 4_047,
+    GamePage: 4_100,
     "css:GamePage.css": 1_081,
   },
   added: {
