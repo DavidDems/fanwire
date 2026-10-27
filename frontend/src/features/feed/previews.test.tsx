@@ -130,8 +130,8 @@ describe("a game_final preview", () => {
   it("shows period values in a semantic table and names both teams and score in its link", () => {
     const preview = {
       ...gameFinalPreview(),
-      home_line_score: [25, 25, 25, 25],
-      away_line_score: [20, 20, 25, 25],
+      home_line_score: [25, 30, 30, 32],
+      away_line_score: [20, 25, 32, 32],
     };
     renderCard(postWithPreview(preview));
 
@@ -140,7 +140,7 @@ describe("a game_final preview", () => {
     );
     const table = screen.getByRole("table", { name: /period score/i });
     expect(table).toHaveTextContent(/Q1.*20.*25/);
-    expect(table).toHaveTextContent(/Q4.*25.*25/);
+    expect(table).toHaveTextContent(/Q4.*32.*32/);
   });
 
   it("omits only the period breakdown when line scores are unavailable", () => {
