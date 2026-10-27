@@ -163,8 +163,19 @@ describe("a game_final preview", () => {
     };
     renderCard(postWithPreview(preview));
 
-    const table = screen.getByRole("table", { name: /period score/i });
-    expect(table).toHaveTextContent(/Q4.*OT.*29.*22.*10.*10/);
+    screen.getByRole("table", { name: /period score/i });
+    expect(
+      screen.getByRole("columnheader", { name: "Q4" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "OT" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("row", { name: /Phoenix Suns 20 25 25 29 10/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("row", { name: /Toronto Raptors 25 30 30 22 10/ }),
+    ).toBeInTheDocument();
     expect(onlyDetailLink(card())).toHaveAccessibleName(
       /Phoenix Suns.*109.*Toronto Raptors.*117/,
     );
