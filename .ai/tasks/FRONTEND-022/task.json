@@ -22,6 +22,7 @@
     "backend/openapi.json",
     "frontend/src/api/schema.d.ts",
     "frontend/src/features/feed/previews/**",
+    "frontend/src/test/previews.ts",
     "frontend/src/features/feed/*preview*.test.ts",
     "frontend/src/features/feed/*preview*.test.tsx",
     "frontend/src/features/games/**",
