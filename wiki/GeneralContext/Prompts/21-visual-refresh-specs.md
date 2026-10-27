@@ -132,6 +132,11 @@ composer/stats picker, own-profile setup/edit, and sign-in were **NOT DONE**:
 the worktree had no verified dev-pool configuration, and this session did not
 read `.env.local` or submit test-account credentials.
 
+Keyboard-only traversal, table-scroll keyboard operation, 200% zoom,
+forced-colors, reduced-motion, numerical contrast/target-size checks, and axe
+were also **NOT DONE**. Horizontal overflow was checked only at the document
+level, not within each scrollable table.
+
 ### Findings and release map
 
 **Confirmed current states:** the feed's sampled posts are text-only and use
