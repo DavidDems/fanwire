@@ -16,6 +16,14 @@ The local browser pass showed this at 360 px on `/games/502`.
   batched query count and return null when that game has no line scores.
 - Regenerate both committed OpenAPI artifacts from their sources. Do not hand
   edit either generated file.
+- In the test-only commit, update the typed `frontend/src/test/previews.ts`
+  game-final factory to return `null` for both new fields by default. This
+  keeps existing preview fixtures aligned with the generated API contract;
+  the implementation role must not edit this test kit file.
+- The test-only commit must also declare this unit's measured lazy bundle
+  changes in `frontend/src/test/bundle-budgets/FRONTEND-022.ts`. The bundle
+  gate requires each changed async output and entry allowance to be declared;
+  keep the unit within the measured limits in this task's acceptance criteria.
 - Give the game preview and detail a shared scoreboard hierarchy. Show regular
   periods and overtime periods from the source data; totals and winner text
   must agree with the canonical final score.
