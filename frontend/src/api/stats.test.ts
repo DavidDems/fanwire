@@ -23,6 +23,16 @@
  *   `{ queryKey, queryFn, staleTime }`. The teams and seasons lists keep the
  *   client's default.
  */
+import { http, HttpResponse } from "msw";
+import { gameDetailStub, testGameDetail } from "../test/games";
+import { playerDetailStub, seasonsStub, testPlayerDetail } from "../test/stats";
+import {
+  fetchGameDetail,
+  fetchPlayerDetail,
+  gameDetailQuery,
+  playerDetailQuery,
+  seasonsQuery,
+} from "./stats";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
@@ -198,5 +208,65 @@ describe("the season reads carry staleTime 300,000 ms", () => {
     await expect(
       client().fetchQuery(teamSeasonQuery(CELTICS.id, "1999-00")),
     ).resolves.toBeNull();
+  });
+});
+
+describe("FRONTEND-021 shared read shapes and freshness", () => {
+  it("seasonsQuery carries the same key and five-minute freshness even on a staleTime-0 client", async () => {
+    const seasons = seasonsStub();
+    server.use(seasons.handler);
+    const query = seasonsQuery();
+    expect(query.queryKey).toEqual(SEASONS_KEY);
+    expect(query.staleTime).toBe(SEASON_STALE_TIME);
+    const queries = client();
+    await queries.fetchQuery(query);
+    await queries.fetchQuery(query);
+    expect(seasons.requests).toHaveLength(1);
+  });
+  it("game and player keys hold full detail objects, share page keys and make one read within freshness", async () => {
+    const game = testGameDetail();
+    const player = testPlayerDetail();
+    const games = gameDetailStub([game]);
+    const players = playerDetailStub([player]);
+    server.use(games.handler, players.handler);
+    const queries = client();
+    const gameQuery = gameDetailQuery(game.id);
+    const playerQuery = playerDetailQuery(player.id);
+    expect(gameQuery.queryKey).toEqual(["events", "games", game.id]);
+    expect(playerQuery.queryKey).toEqual(["events", "players", player.id]);
+    expect(Number(gameQuery.staleTime)).toBeGreaterThan(0);
+    expect(Number(playerQuery.staleTime)).toBeGreaterThan(0);
+    for (let i = 0; i < 2; i++) {
+      expect(await queries.fetchQuery(gameQuery)).toEqual(game);
+      expect(await queries.fetchQuery(playerQuery)).toEqual(player);
+    }
+    expect(games.requests).toEqual([game.id]);
+    expect(players.requests).toHaveLength(1);
+  });
+  it("404 detail reads cache null, whereas server errors reject", async () => {
+    server.use(
+      http.get(
+        "*/events/games/:id",
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+      http.get(
+        "*/events/players/:id",
+        () => new HttpResponse(null, { status: 404 }),
+      ),
+    );
+    await expect(fetchGameDetail(999)).resolves.toBeNull();
+    await expect(fetchPlayerDetail(999)).resolves.toBeNull();
+    server.use(
+      http.get(
+        "*/events/games/:id",
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+      http.get(
+        "*/events/players/:id",
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    await expect(fetchGameDetail(999)).rejects.toThrow(/500/);
+    await expect(fetchPlayerDetail(999)).rejects.toThrow(/500/);
   });
 });

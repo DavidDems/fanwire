@@ -182,6 +182,18 @@ describe("the view bar: Historical / Seasonal", () => {
 });
 
 describe("the group bar: Team / Player", () => {
+  it("keeps focus on the selected group tab while using the arrow keys", async () => {
+    openRecords();
+    const user = userEvent.setup();
+    await findCards("team");
+    tab(groupBar(), "Team").focus();
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => expect(tab(groupBar(), "Player")).toHaveFocus());
+    expect(selectedTab(groupBar())).toBe("Player");
+    await user.keyboard("{ArrowLeft}");
+    await waitFor(() => expect(tab(groupBar(), "Team")).toHaveFocus());
+    expect(selectedTab(groupBar())).toBe("Team");
+  });
   it("opens on Team, with ?group= not written, and the h2 Team records", async () => {
     const { router } = openRecords();
 

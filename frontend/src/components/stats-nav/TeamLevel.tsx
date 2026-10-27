@@ -48,10 +48,12 @@ export function TeamLevel({
   level,
   adapter,
   onTeam,
+  onGame,
 }: {
   level: TeamLevelData;
   adapter: StatsNavAdapter;
   onTeam: (teamId: number) => void;
+  onGame?: (gameId: number) => void;
 }) {
   const teamSeason = useQuery(teamSeasonQuery(level.teamId, level.season));
 
@@ -74,7 +76,12 @@ export function TeamLevel({
     );
 
   return (
-    <TeamSeason data={teamSeason.data} adapter={adapter} onTeam={onTeam} />
+    <TeamSeason
+      data={teamSeason.data}
+      adapter={adapter}
+      onTeam={onTeam}
+      onGame={onGame}
+    />
   );
 }
 
@@ -82,10 +89,12 @@ function TeamSeason({
   data,
   adapter,
   onTeam,
+  onGame,
 }: {
   data: TeamSeasonOut;
   adapter: StatsNavAdapter;
   onTeam: (teamId: number) => void;
+  onGame?: (gameId: number) => void;
 }) {
   const { team, record, season, games } = data;
 
@@ -128,6 +137,7 @@ function TeamSeason({
                 season={season}
                 adapter={adapter}
                 onTeam={onTeam}
+                onGame={onGame}
               />
             ))}
           </tbody>
@@ -142,11 +152,13 @@ function GameRow({
   season,
   adapter,
   onTeam,
+  onGame,
 }: {
   game: TeamSeasonGameOut;
   season: string;
   adapter: StatsNavAdapter;
   onTeam: (teamId: number) => void;
+  onGame?: (gameId: number) => void;
 }) {
   const label = [game.label, game.sub_label]
     .filter((part): part is string => part !== null && part !== "")
@@ -155,7 +167,17 @@ function GameRow({
   return (
     <tr>
       <th scope="row" className={styles.name}>
-        {adapter.gameLink(game.game_id, formatGameDate(game.date))}
+        {onGame ? (
+          <LevelLink
+            level={{ kind: "game", gameId: game.game_id }}
+            adapter={adapter}
+            onGo={() => onGame(game.game_id)}
+          >
+            {formatGameDate(game.date)}
+          </LevelLink>
+        ) : (
+          adapter.gameLink(game.game_id, formatGameDate(game.date))
+        )}
       </th>
       <td className={styles.name}>
         {game.is_home ? "vs " : "at "}

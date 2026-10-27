@@ -7,7 +7,7 @@ import {
   type RecordGroup,
   type RecordsSummaryOut,
 } from "../../api/records";
-import { SEASONS_KEY, fetchSeasons } from "../../api/stats";
+import { seasonsQuery } from "../../api/stats";
 import {
   NoSeason,
   SeasonSelect,
@@ -17,6 +17,12 @@ import {
   type StatsLevel,
   type StatsNavAdapter,
 } from "../../components/stats-nav/StatsNavigator";
+import { groupTitle } from "../../components/stats-nav/recordLabels";
+import {
+  RecordLevel,
+  RecordTitle,
+} from "../../components/stats-nav/RecordLevel";
+import { RecordsLevel } from "../../components/stats-nav/RecordsLevel";
 import { SegmentedTabs } from "../../components/ui/SegmentedTabs";
 import { Leaders } from "./Leaders";
 import { ROUTE_LINKS } from "./links";
@@ -56,8 +62,9 @@ function href(stack: StatsLevel[]): string {
  * a level push the address of the new stack.
  *
  * A record level's group is its list's (or the cached summary's, which says
- * the same), so `?record=` never carries `group`; until it is known, the
- * records level under it reads "Records".
+ * the same), so `?record=` never carries `group`; until the read lands,
+ * the id's team- or player- prefix supplies it. Unknown prefixes keep the
+ * "Records" fallback.
  */
 export function RecordsTab() {
   const [params, setParams] = useSearchParams();
@@ -121,7 +128,17 @@ function Historical({
     recordId === null
       ? [{ kind: "records", group }]
       : [
-          { kind: "records", group: list.data?.group ?? cached ?? null },
+          {
+            kind: "records",
+            group:
+              list.data?.group ??
+              cached ??
+              (recordId.startsWith("player-")
+                ? "player"
+                : recordId.startsWith("team-")
+                  ? "team"
+                  : null),
+          },
           { kind: "record", id: recordId },
         ];
 
@@ -136,6 +153,25 @@ function Historical({
     <StatsNavigator
       stack={stack}
       adapter={adapter}
+      levelViews={{
+        name: (level) =>
+          level.kind === "records" ? (
+            groupTitle(level.group)
+          ) : level.kind === "record" ? (
+            <RecordTitle id={level.id} />
+          ) : null,
+        view: (level, { open, replace }) =>
+          level.kind === "records" ? (
+            <RecordsLevel
+              level={level}
+              adapter={adapter}
+              onGroup={(group) => replace({ kind: "records", group })}
+              onRecord={(id) => open({ kind: "record", id })}
+            />
+          ) : level.kind === "record" ? (
+            <RecordLevel level={level} adapter={adapter} />
+          ) : null,
+      }}
       open={(level) => go([...stack, level], false)}
       replace={(level) => go([...stack.slice(0, -1), level], true)}
       pop={(toDepth) => go(stack.slice(0, toDepth), false)}
@@ -150,7 +186,7 @@ function Seasonal({
   picked: string | null;
   onPick: (season: string) => void;
 }) {
-  const seasons = useQuery({ queryKey: SEASONS_KEY, queryFn: fetchSeasons });
+  const seasons = useQuery(seasonsQuery());
   const season = picked ?? seasons.data?.[0] ?? null;
 
   return (

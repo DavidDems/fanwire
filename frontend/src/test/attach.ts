@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import type userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import { expect } from "vitest";
@@ -19,6 +19,12 @@ import {
   type GameDetailStub,
 } from "./games";
 import {
+  championStub,
+  standingsStub,
+  RAPTORS,
+  SUNS,
+  ref,
+  testTeamSeason,
   playerDetailStub,
   playersStub,
   seasonsStub,
@@ -215,6 +221,31 @@ export function attachServer(options: AttachServerOptions = {}): {
     handlers: [
       teamsAre(),
       seasonsStub([ATTACH_SEASON, "2022-23"]).handler,
+      championStub().handler,
+      standingsStub().handler,
+      http.get("*/events/teams/:team_id/seasons/:season", ({ params }) =>
+        HttpResponse.json({
+          ...testTeamSeason(
+            Number(params.team_id) === 1 ? RAPTORS : SUNS,
+            String(params.season),
+          ),
+          team: Number(params.team_id) === 1 ? RAPTORS : SUNS,
+          games: (options.games ?? [UNPLAYED_GAME, COMPLETED_GAME]).map(
+            (game) => ({
+              game_id: game.id,
+              date: game.date,
+              game_type: game.game_type,
+              label: null,
+              sub_label: null,
+              opponent: ref(SUNS),
+              is_home: true,
+              team_score: game.home_score,
+              opponent_score: game.away_score,
+              won: game.home_score > game.away_score,
+            }),
+          ),
+        }),
+      ),
       games.handler,
       detail.handler,
       players.handler,
@@ -268,53 +299,77 @@ export async function openPicker(user: User): Promise<void> {
   await user.click(attachStatsButton());
 }
 
-/** Choose `choice`, then narrow to Toronto in 2023-24. */
-async function narrowToTorontoIn202324(user: User, choice: RegExp) {
-  await user.click(await screen.findByRole("button", { name: choice }));
-  await user.selectOptions(
-    await screen.findByRole("combobox", { name: /team/i }),
-    await screen.findByRole("option", { name: /Toronto Raptors/ }),
+/** The picker owns navigation and never changes the address. */
+export async function pickerShown(): Promise<HTMLElement> {
+  const dialog = await screen.findByRole("dialog", { name: "Attach stats" });
+  await within(dialog).findByRole("combobox", { name: "Season" });
+  return dialog;
+}
+
+export async function openGame(
+  user: User,
+  gameName: RegExp = /Jan.*15|15.*Jan/,
+) {
+  const dialog = await pickerShown();
+  await user.click(
+    await within(dialog).findByRole("button", { name: /^Toronto Raptors$/ }),
   );
-  await user.selectOptions(
-    await screen.findByRole("combobox", { name: /season/i }),
-    await screen.findByRole("option", { name: ATTACH_SEASON }),
+  await user.click(
+    await within(dialog).findByRole("button", { name: gameName }),
+  );
+  await within(dialog).findByText("Final score", { exact: false });
+  return dialog;
+}
+
+export async function confirmSelection(user: User) {
+  const dialog = await screen.findByRole("dialog", { name: "Attach stats" });
+  await user.click(within(dialog).getByRole("button", { name: "Select" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog", { name: "Attach stats" })).toBeNull(),
   );
 }
 
-/** Open the picker and attach game 501 as a game result. */
 export async function attachGameResult(user: User): Promise<void> {
   await openPicker(user);
-  await narrowToTorontoIn202324(user, CHOICES.game);
+  const dialog = await openGame(user);
   await user.click(
-    await screen.findByRole("button", { name: COMPLETED_GAME_NAME }),
+    await within(dialog).findByRole("radio", { name: /Final score/ }),
   );
+  await confirmSelection(user);
 }
 
-/** Open the picker, choose game 501 and attach Scottie Barnes's line. */
 export async function attachBarnesLine(user: User): Promise<void> {
   await openPicker(user);
-  await narrowToTorontoIn202324(user, CHOICES.playerGame);
+  const dialog = await openGame(user);
   await user.click(
-    await screen.findByRole("button", { name: COMPLETED_GAME_NAME }),
+    await within(dialog).findByRole("radio", { name: /Barnes/ }),
   );
-  await user.click(await screen.findByRole("button", { name: /Barnes/ }));
+  await confirmSelection(user);
 }
 
-/** The player search box in the career picker. */
 export async function findPlayerSearch(): Promise<HTMLElement> {
   return screen.findByLabelText(/player/i, { selector: "input" });
 }
 
-/** Open the picker, find LeBron by name and attach a career scope. */
+export async function openLebron(user: User) {
+  const dialog = await pickerShown();
+  await user.click(within(dialog).getByRole("tab", { name: "Players" }));
+  await user.type(await findPlayerSearch(), "James");
+  await user.click(
+    await within(dialog).findByRole("button", { name: /LeBron James/ }),
+  );
+  await within(dialog).findByRole("heading", { name: "LeBron James" });
+  return dialog;
+}
+
 export async function attachLebronCareer(
   user: User,
   scope: RegExp = /^regular season/i,
 ): Promise<void> {
   await openPicker(user);
-  await user.click(await screen.findByRole("button", { name: CHOICES.career }));
-  await user.type(await findPlayerSearch(), "James");
-  await user.click(await screen.findByRole("button", { name: /LeBron James/ }));
-  await user.click(await screen.findByRole("button", { name: scope }));
+  const dialog = await openLebron(user);
+  await user.click(await within(dialog).findByRole("radio", { name: scope }));
+  await confirmSelection(user);
 }
 
 /** Wait until the summary is on screen and return it. */

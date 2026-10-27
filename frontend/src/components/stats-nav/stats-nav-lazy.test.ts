@@ -244,3 +244,65 @@ describe("the navigator is router-agnostic", () => {
     expect(featurePath("../ui/Button", from)).toBeNull();
   });
 });
+
+describe("FRONTEND-021 chunk boundaries", () => {
+  const compose = "features/compose/ComposePage.tsx";
+  const picker = "features/compose/StatsPicker.tsx";
+  const records = ["RecordsLevel.tsx", "RecordLevel.tsx", "recordLabels.ts"];
+  it("opening compose reaches the stats read module but no navigator or picker code", () => {
+    const graph = staticallyReachable(join(SRC_DIR, compose));
+    expect(graph.has("api/stats.ts")).toBe(true);
+    expect(
+      [...graph].filter((name) => name.startsWith("components/stats-nav/")),
+    ).toEqual([]);
+    expect(graph.has(picker)).toBe(false);
+    const files = sourceFiles(join(SRC_DIR, "features", "compose")).filter(
+      (file) => !isTest(file),
+    );
+    expect(
+      files.some((file) =>
+        /import\s*\(\s*["'][^"']*StatsPicker["']/.test(read(file)),
+      ),
+    ).toBe(true);
+  });
+  it("picker reaches navigator and shared player results but no records views or reads", () => {
+    expect(existsSync(join(SRC_DIR, picker))).toBe(true);
+    const graph = staticallyReachable(join(SRC_DIR, picker));
+    expect(graph.has("components/stats-nav/StatsNavigator.tsx")).toBe(true);
+    expect(graph.has("components/stats-nav/PlayerResults.tsx")).toBe(true);
+    expect(graph.has("api/records.ts")).toBe(false);
+    expect(
+      [...graph].filter((name) =>
+        records.some((file) => name.endsWith("/" + file)),
+      ),
+    ).toEqual([]);
+    expect(
+      [...graph].some((name) => name.startsWith("features/compose/")),
+    ).toBe(true);
+  });
+  it("the records tab owns the records views through LevelViews injection", () => {
+    const graph = staticallyReachable(
+      join(SRC_DIR, "features/stats/RecordsTab.tsx"),
+    );
+    for (const file of records)
+      expect([...graph].some((name) => name.endsWith("/" + file))).toBe(true);
+    const source = read(join(NAV_DIR, "StatsNavigator.tsx"));
+    expect(source).toMatch(/\bLevelViews\b/);
+    expect(source).not.toMatch(
+      /import[^;]*from\s*["'][^"']*(?:RecordLevel|RecordsLevel|recordLabels)["']/,
+    );
+  });
+  it("attachment address checks use shared reads instead of defining fetchers", () => {
+    const source = withoutComments(
+      read(join(SRC_DIR, "features/compose/attachmentReads.ts")),
+    );
+    expect(source).not.toMatch(/apiClient|\bfetch\s*\(/);
+    expect(source).toContain("fetchGameDetail");
+    expect(source).toContain("fetchPlayerDetail");
+    for (const file of ["stats.ts", "records.ts"]) {
+      const api = withoutComments(read(join(SRC_DIR, "api", file)));
+      expect(api).toMatch(/from\s*["']\.\/ok["']/);
+      expect(api).not.toMatch(/function\s+ok\b/);
+    }
+  });
+});

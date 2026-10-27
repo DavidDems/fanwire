@@ -28,7 +28,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeAll, afterEach, describe, expect, it } from "vitest";
 
 import { AuthProvider } from "../auth/AuthContext";
 import type { AuthService } from "../auth/AuthService";
@@ -265,3 +265,10 @@ describe("the guards are wired into the table, not just written", () => {
     }
   });
 });
+
+// FRONTEND-021 R32: transform lazy tabs before timed findBy assertions.
+beforeAll(async () => {
+  await import("../features/stats/RecordsTab");
+  await import("../features/stats/SeasonsTab");
+  await import("../features/stats/PlayersTab");
+}, 30_000);

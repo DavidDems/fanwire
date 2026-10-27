@@ -34,6 +34,7 @@ export function PlayerResults({
     queryKey: playerSearchKey(q),
     queryFn: ({ pageParam }) => fetchPlayersPage(q, pageParam),
     initialPageParam: 0,
+    staleTime: 30_000,
     getNextPageParam: (lastPage, _pages, lastOffset) =>
       nextOffset(lastPage, lastOffset, PLAYERS_PAGE_SIZE),
   });

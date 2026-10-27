@@ -267,7 +267,7 @@ describe("the compose dialog waits for its own chunk (FRONTEND-020)", () => {
     ).toHaveLength(1);
   });
 
-  it("puts a Suspense inside the compose Dialog, so the page underneath never waits for the chunk", () => {
+  it("handles a failed composer import inside its Dialog without React.lazy caching the failure", () => {
     const [file] = routeModules().filter((candidate) =>
       /<Dialog\b[^>]*\btitle\s*=\s*(["'])Compose\1/.test(
         withoutComments(read(candidate)),
@@ -278,6 +278,11 @@ describe("the compose dialog waits for its own chunk (FRONTEND-020)", () => {
     const dialog = source.slice(source.search(/<Dialog\b/));
     const body = dialog.slice(0, dialog.indexOf("</Dialog>"));
 
-    expect(body).toMatch(/<Suspense\b[^>]*\bfallback\s*=/);
+    expect(source).not.toMatch(/\blazy\s*\(/);
+    expect(source).toContain(
+      "We could not open this just now. Please try again.",
+    );
+    expect(body).toMatch(/Try again|<[^>]*[Rr]etry/);
+    expect(source).toMatch(/\.catch\s*\(|catch\s*\(/);
   });
 });

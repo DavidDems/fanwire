@@ -1,10 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { Button } from "../ui/Button";
 import { LevelLink } from "./LevelLink";
-import { groupTitle } from "./recordLabels";
-import { RecordLevel, RecordTitle } from "./RecordLevel";
-import { RecordsLevel } from "./RecordsLevel";
 import { SeasonLevel } from "./SeasonLevel";
 import styles from "./StatsNav.module.css";
 import { TeamLevel, TeamName } from "./TeamLevel";
@@ -17,7 +14,20 @@ export type {
   StatsNavAdapter,
 } from "./types";
 
+export interface LevelViews {
+  name(level: StatsLevel): ReactNode;
+  view(
+    level: StatsLevel,
+    controls: {
+      open(level: StatsLevel): void;
+      replace(level: StatsLevel): void;
+    },
+  ): ReactNode;
+}
+
 export interface StatsNavigatorProps {
+  levelViews?: LevelViews;
+  selectMode?: boolean;
   /** Non-empty; the last level is the one shown. */
   stack: StatsLevel[];
   /** Push a level (a standings team, a record). */
@@ -33,16 +43,14 @@ export interface StatsNavigatorProps {
  * A level's name in the breadcrumb: the season, the team, the records'
  * group, or the record's title.
  */
-function levelName(level: StatsLevel) {
+function levelName(level: StatsLevel, views?: LevelViews) {
   switch (level.kind) {
     case "season":
       return level.season;
     case "team":
       return <TeamName teamId={level.teamId} season={level.season} />;
-    case "records":
-      return groupTitle(level.group);
-    case "record":
-      return <RecordTitle id={level.id} />;
+    default:
+      return views?.name(level);
   }
 }
 
@@ -54,8 +62,8 @@ function levelName(level: StatsLevel) {
  * (the Stats page) or state (the compose picker), and its adapter says how a
  * game, a player, a team or a level is linked.
  *
- * Its levels are a season and a team's season (Seasons), and a group's
- * record cards and a record's list (Records, FRONTEND-019).
+ * It draws season and team levels, and takes other names and views from
+ * its caller: records on Stats, or game and player choices in the picker.
  *
  * Its parts are laid out by the caller's column (the Stats page's tab).
  *
@@ -69,6 +77,8 @@ export function StatsNavigator({
   replace,
   pop,
   adapter,
+  levelViews,
+  selectMode = false,
 }: StatsNavigatorProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
@@ -107,19 +117,18 @@ export function StatsNavigator({
             onTeam={(teamId) =>
               move(() => replace({ kind: "team", season: top.season, teamId }))
             }
+            onGame={
+              selectMode
+                ? (gameId) => move(() => open({ kind: "game", gameId }))
+                : undefined
+            }
           />
         );
-      case "records":
-        return (
-          <RecordsLevel
-            level={top}
-            adapter={adapter}
-            onGroup={(group) => replace({ kind: "records", group })}
-            onRecord={(id) => move(() => open({ kind: "record", id }))}
-          />
-        );
-      case "record":
-        return <RecordLevel level={top} adapter={adapter} />;
+      default:
+        return levelViews?.view(top, {
+          open: (level) => move(() => open(level)),
+          replace,
+        });
     }
   }
 
@@ -131,14 +140,16 @@ export function StatsNavigator({
             {stack.map((level, index) => (
               <li key={index}>
                 {index === stack.length - 1 ? (
-                  <span aria-current="location">{levelName(level)}</span>
+                  <span aria-current="location">
+                    {levelName(level, levelViews)}
+                  </span>
                 ) : (
                   <LevelLink
                     level={level}
                     adapter={adapter}
                     onGo={() => move(() => pop(index + 1))}
                   >
-                    {levelName(level)}
+                    {levelName(level, levelViews)}
                   </LevelLink>
                 )}
               </li>
@@ -162,10 +173,10 @@ export function StatsNavigator({
           `${top.season} season`
         ) : top.kind === "team" ? (
           <>
-            {levelName(top)}, {top.season}
+            {levelName(top, levelViews)}, {top.season}
           </>
         ) : (
-          levelName(top)
+          levelName(top, levelViews)
         )}
       </h2>
 

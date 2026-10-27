@@ -1,33 +1,10 @@
-/**
- * FRONTEND-013 criteria 1–5 and the keyboard row of 12: attaching one
- * sports-data link from `/compose`, as the user does it.
- *
- * Everything is driven through the rendered page and asserted on what reaches
- * the network: which `events/` reads the picker made (and with which query),
- * and the `data_link` in the `POST /posts` body. What is *not offered* is
- * asserted as the absence of a button, because a choice that is never shown
- * is the whole of "matches what the server accepts".
- *
- * The names a user reaches things by are the contract here, and the picker
- * drivers in `src/test/attach.ts` hold them in one place:
- * - "Attach stats" (a button with `aria-expanded`) opens the picker;
- * - its choices are buttons named "Game result", "Player's game" and
- *   "Player career";
- * - a game is narrowed with two native selects labelled Team and Season; a
- *   game, a box-score player, a search result and a career scope are each a
- *   button; the player search is an input labelled with "player";
- * - the attachment is summarised in a region named "Attached stats", with
- *   Remove inside it and Undo beside Post.
- */
-import { screen, waitFor, within } from "@testing-library/react";
+/** FRONTEND-021: navigator selections replace FRONTEND-013's panel. */
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
-
 import type { components } from "../../api/schema";
 import {
   BARNES_LINE_ID,
-  CHOICES,
-  COMPLETED_GAME_NAME,
   attachBarnesLine,
   attachGameResult,
   attachLebronCareer,
@@ -37,7 +14,10 @@ import {
   findPlayerSearch,
   noPlayoffsCareer,
   openPicker,
-  queryAttachStatsButton,
+  openGame,
+  openLebron,
+  pickerShown,
+  confirmSelection,
   summaryShown,
   textOf,
   type AttachServerOptions,
@@ -47,319 +27,366 @@ import { createPost } from "../../test/compose";
 import { server } from "../../test/server";
 import { ComposePage } from "./ComposePage";
 import { InlineComposer } from "./InlineComposer";
+import { Dialog } from "../../components/ui/Dialog";
+import { tableProblems } from "../../test/tables";
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
-
 let bodies: CreatePostRequest[] = [];
-
 afterEach(() => {
   bodies = [];
 });
-
-function renderComposer(route = "/compose", options: AttachServerOptions = {}) {
+function renderComposer(
+  route = "/compose",
+  options: AttachServerOptions = {},
+  nested = false,
+) {
   const { handlers, stubs } = attachServer(options);
   server.use(
     ...handlers,
     createPost({ onRequest: (body) => bodies.push(body) }),
   );
-  renderWithAuth(<ComposePage />, { route });
+  renderWithAuth(
+    nested ? (
+      <Dialog open title="Compose" onClose={() => {}}>
+        <ComposePage />
+      </Dialog>
+    ) : (
+      <ComposePage />
+    ),
+    { route },
+  );
   return { user: userEvent.setup(), stubs };
 }
-
-function textBox(): HTMLElement {
+function textBox() {
   return screen.getByRole("textbox", { name: /post/i });
 }
-
-function postButton(): HTMLElement {
+function postButton() {
   return screen.getByRole("button", { name: /^post$/i });
 }
-
-function undoButton(): HTMLElement {
+function undoButton() {
   return screen.getByRole("button", { name: /^undo/i });
 }
-
 async function postWithText(
   user: ReturnType<typeof userEvent.setup>,
   text = "What a night",
-): Promise<CreatePostRequest> {
+) {
   await user.type(textBox(), text);
   await user.click(postButton());
   await waitFor(() => expect(bodies).toHaveLength(1));
   return bodies[0];
 }
 
-// ----------------------------------------------------------- criterion 1
-
-describe("Attach stats is offered where a link may be attached (criterion 1)", () => {
-  it("is on /compose, closed until pressed", async () => {
-    renderComposer();
-
-    await screen.findByRole("textbox", { name: /post/i });
-    expect(attachStatsButton()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: CHOICES.game })).toBeNull();
-  });
-
-  it("opens a picker with exactly the three choices", async () => {
+describe("the picker modal", () => {
+  it("opens only on request with two tabs and disabled Select, replacing the three panel choices", async () => {
     const { user } = renderComposer();
-
+    expect(screen.queryByRole("dialog", { name: "Attach stats" })).toBeNull();
+    expect(attachStatsButton()).toHaveAttribute("aria-haspopup", "dialog");
+    expect(attachStatsButton()).not.toHaveAttribute("aria-expanded");
+    expect(attachStatsButton()).not.toHaveAttribute("aria-controls");
     await openPicker(user);
-
-    expect(attachStatsButton()).toHaveAttribute("aria-expanded", "true");
+    const dialog = await pickerShown();
+    expect(dialog.tagName).toBe("DIALOG");
     expect(
-      screen.getByRole("button", { name: CHOICES.game }),
-    ).toBeInTheDocument();
+      within(dialog).getByRole("tab", { name: "Seasons" }),
+    ).toHaveAttribute("aria-selected", "true");
     expect(
-      screen.getByRole("button", { name: CHOICES.playerGame }),
+      within(dialog).getByRole("tab", { name: "Players" }),
     ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("tab", { name: "Records" })).toBeNull();
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("combobox", { name: "Season" }),
+      ).toHaveValue("2023-24"),
+    );
     expect(
-      screen.getByRole("button", { name: CHOICES.career }),
-    ).toBeInTheDocument();
+      within(dialog).getByRole("button", { name: "Select" }),
+    ).toBeDisabled();
+    expect(within(dialog).getByText("Nothing selected")).toBeInTheDocument();
+    for (const name of ["Game result", "Player's game", "Player career"])
+      expect(within(dialog).queryByRole("button", { name })).toBeNull();
+    expect(
+      within(dialog).queryByRole("combobox", { name: /team/i }),
+    ).toBeNull();
   });
-
-  it("is absent from /compose?reply_to=<id>, though /compose has it", async () => {
-    // Asserted against the page that does have it, so the absence is the
-    // reply context's doing rather than a control that does not exist yet.
-    const plain = renderWithAuth(<ComposePage />, { route: "/compose" });
-    expect(
-      await screen.findByRole("button", { name: /^attach stats$/i }),
-    ).toBeInTheDocument();
-    plain.unmount();
-
-    renderComposer("/compose?reply_to=42");
-
-    await screen.findByRole("textbox", { name: /post/i });
+  it.each(["/compose?reply_to=42"])("offers no stats on %s", async (route) => {
+    renderComposer(route);
+    expect(screen.queryByRole("button", { name: "Attach stats" })).toBeNull();
     expect(textBox()).toBeInTheDocument();
-    expect(queryAttachStatsButton()).toBeNull();
   });
-
-  it("is present on /compose?repost_of=<id>", async () => {
+  it("offers stats on a quote repost", () => {
     renderComposer("/compose?repost_of=7");
-
-    await screen.findByRole("textbox", { name: /post/i });
     expect(attachStatsButton()).toBeInTheDocument();
   });
-
-  it("is absent from InlineComposer, the thread's reply box, though /compose has it", async () => {
-    const plain = renderWithAuth(<ComposePage />, { route: "/compose" });
-    expect(
-      await screen.findByRole("button", { name: /^attach stats$/i }),
-    ).toBeInTheDocument();
-    plain.unmount();
-
+  it("offers no stats in the inline reply composer", () => {
     renderWithAuth(
       <InlineComposer parentPostId={101} parentUsername="raptorsfan" />,
     );
-
     expect(
-      await screen.findByRole("textbox", { name: /your reply/i }),
+      screen.getByRole("textbox", { name: /your reply/i }),
     ).toBeInTheDocument();
-    expect(queryAttachStatsButton()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach stats" })).toBeNull();
   });
-});
-
-// ----------------------------------------------------------- criterion 2
-
-describe("Game result (criterion 2)", () => {
-  it("narrows by team and season through GET /events/games?team_id&season", async () => {
+  it("attaches the game's final score only after Select", async () => {
     const { user, stubs } = renderComposer();
-
-    await attachGameResult(user);
-
+    await openPicker(user);
+    const dialog = await openGame(user);
+    expect(stubs.detail.requests).toEqual([501]);
+    const radio = within(dialog).getByRole("radio", { name: /Final score/ });
+    await user.click(radio);
+    expect(radio).toBeChecked();
+    expect(attachedSummary()).toBeNull();
     expect(
-      stubs.games.queries.some(
-        (query) =>
-          query.get("team_id") === "1" && query.get("season") === "2023-24",
+      within(dialog)
+        .getByText(/^Selected:/)
+        .closest('[role="status"], [aria-live="polite"]'),
+    ).not.toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: "Select" }),
+    ).toBeEnabled();
+    await confirmSelection(user);
+    expect((await postWithText(user)).data_link).toEqual({
+      type: "game_final",
+      ref_id: 501,
+    });
+  });
+  it("shows both game types together and only played lines, ordered home then away, in labelled radio groups and accessible tables", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    const dialog = await openGame(user);
+    const radios = within(dialog).getAllByRole("radio");
+    expect(radios[0]).toHaveAccessibleName(/Final score/);
+    const names = radios.map(
+      (radio) =>
+        radio.getAttribute("aria-label") ??
+        (radio as HTMLInputElement).labels?.[0]?.textContent ??
+        radio.closest("label")?.textContent ??
+        "",
+    );
+    expect(names.join(" ")).toMatch(/Barnes/);
+    expect(names.join(" ")).toMatch(/Booker/);
+    for (const name of [/Poeltl/, /Damion Lee/, /Rowman/])
+      expect(within(dialog).queryByRole("radio", { name })).toBeNull();
+    const barnes = within(dialog).getByRole("radio", { name: /Barnes/ });
+    const booker = within(dialog).getByRole("radio", { name: /Booker/ });
+    expect(
+      Boolean(
+        barnes.compareDocumentPosition(booker) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
       ),
-      "no GET /events/games carried team_id=1 and season=2023-24",
     ).toBe(true);
+    const heading = within(dialog)
+      .getAllByRole("heading")
+      .filter((node) => node.tagName === "H2")
+      .at(-1);
+    const group = within(dialog).getByRole("group", {
+      name: heading?.textContent ?? "",
+    });
+    expect(group).toContainElement(barnes);
+    for (const table of dialog.querySelectorAll("table"))
+      expect(tableProblems(table)).toEqual([]);
+    expect(dialog.textContent).not.toMatch(/null|undefined|NaN/);
   });
-
-  it("does not offer a game whose scores are both 0", async () => {
+  it("native radios share one name and support Space and arrow selection", async () => {
     const { user } = renderComposer();
-
     await openPicker(user);
-    await user.click(await screen.findByRole("button", { name: CHOICES.game }));
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /team/i }),
-      await screen.findByRole("option", { name: /Toronto Raptors/ }),
-    );
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /season/i }),
-      await screen.findByRole("option", { name: "2023-24" }),
-    );
-
-    // Both stubbed games are Toronto against Phoenix, so every game choice
-    // names the Suns; only the completed one may be there.
-    await screen.findByRole("button", { name: COMPLETED_GAME_NAME });
-    const gameChoices = screen.getAllByRole("button", { name: /Suns|PHX/ });
-    expect(gameChoices).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /\b0\D+0\b/ })).toBeNull();
-  });
-
-  it("attaches {type: 'game_final', ref_id: <game id>}", async () => {
-    const { user } = renderComposer();
-
-    await attachGameResult(user);
-    await summaryShown();
-    const body = await postWithText(user);
-
-    expect(body.data_link).toEqual({ type: "game_final", ref_id: 501 });
-  });
-});
-
-// ----------------------------------------------------------- criterion 3
-
-describe("Player's game (criterion 3)", () => {
-  it("lists the chosen game's box score from GET /events/games/{id}", async () => {
-    const { user, stubs } = renderComposer();
-
-    await openPicker(user);
-    await user.click(
-      await screen.findByRole("button", { name: CHOICES.playerGame }),
-    );
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /team/i }),
-      await screen.findByRole("option", { name: /Toronto Raptors/ }),
-    );
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /season/i }),
-      await screen.findByRole("option", { name: "2023-24" }),
-    );
-    await user.click(
-      await screen.findByRole("button", { name: COMPLETED_GAME_NAME }),
-    );
-
-    // A starter from each side.
+    const dialog = await openGame(user);
+    const radios = within(dialog).getAllByRole("radio");
     expect(
-      await screen.findByRole("button", { name: /Barnes/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Booker/ })).toBeInTheDocument();
-    expect(stubs.detail.requests).toContain(501);
+      new Set(radios.map((radio) => (radio as HTMLInputElement).name)).size,
+    ).toBe(1);
+    expect((radios[0] as HTMLInputElement).name).not.toBe("");
+    radios[0].focus();
+    await user.keyboard(" ");
+    expect(radios[0]).toBeChecked();
+    await user.keyboard("{ArrowDown}");
+    expect(radios[1]).toBeChecked();
+    expect(radios[0]).not.toBeChecked();
   });
-
-  it("does not offer a player who did not play", async () => {
+  it("an unplayed Final score is plain text with no disabled or selectable radio", async () => {
     const { user } = renderComposer();
-
     await openPicker(user);
-    await user.click(
-      await screen.findByRole("button", { name: CHOICES.playerGame }),
-    );
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /team/i }),
-      await screen.findByRole("option", { name: /Toronto Raptors/ }),
-    );
-    await user.selectOptions(
-      await screen.findByRole("combobox", { name: /season/i }),
-      await screen.findByRole("option", { name: "2023-24" }),
-    );
-    await user.click(
-      await screen.findByRole("button", { name: COMPLETED_GAME_NAME }),
-    );
-    await screen.findByRole("button", { name: /Barnes/ });
-
-    // The box score's did_not_play lists, on both sides…
-    expect(screen.queryByRole("button", { name: /Poeltl/ })).toBeNull();
+    const dialog = await openGame(user, /Jan.*18|18.*Jan/);
+    expect(within(dialog).getByText(/Final score/)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Damion Lee|Lee\b/ }),
+      within(dialog).queryByRole("radio", { name: /Final score/ }),
     ).toBeNull();
-    // …and a stored DNP row (seconds_played null) among the players.
-    expect(screen.queryByRole("button", { name: /Rowman/ })).toBeNull();
+    expect(dialog.querySelector("input:disabled")).toBeNull();
   });
-
-  it("attaches {type: 'player_game', ref_id: <line_id>}", async () => {
+  it("attaches a played line id, never the player's id", async () => {
     const { user } = renderComposer();
-
     await attachBarnesLine(user);
-    await summaryShown();
-    const body = await postWithText(user);
-
-    expect(body.data_link).toEqual({
+    expect((await postWithText(user)).data_link).toEqual({
       type: "player_game",
       ref_id: BARNES_LINE_ID,
     });
   });
-});
-
-// ----------------------------------------------------------- criterion 4
-
-describe("Player career (criterion 4)", () => {
-  it("searches players by name through GET /events/players?q=", async () => {
+  it("searches by name and offers the two career scopes", async () => {
     const { user, stubs } = renderComposer();
-
     await openPicker(user);
-    await user.click(
-      await screen.findByRole("button", { name: CHOICES.career }),
-    );
-    await user.type(await findPlayerSearch(), "James");
-
+    const dialog = await openLebron(user);
+    expect(stubs.players.requests.map((r) => r.query.get("q"))).toEqual([
+      "James",
+    ]);
+    expect(stubs.player.requests.map((r) => r.path.player_id)).toEqual([
+      "2544",
+    ]);
     expect(
-      await screen.findByRole("button", { name: /LeBron James/ }),
+      within(dialog).getByRole("radio", { name: /^regular season/i }),
+    ).toHaveAccessibleName(/1,?492/);
+    expect(
+      within(dialog).getByRole("radio", { name: /^playoffs/i }),
     ).toBeInTheDocument();
-    expect(
-      stubs.players.requests.some(
-        (request) => request.query.get("q") === "James",
-      ),
-      "no GET /events/players carried q=James",
-    ).toBe(true);
   });
-
-  it("reads the two scopes from GET /events/players/{id}", async () => {
-    const { user, stubs } = renderComposer();
-
-    await openPicker(user);
-    await user.click(
-      await screen.findByRole("button", { name: CHOICES.career }),
-    );
-    await user.type(await findPlayerSearch(), "James");
-    await user.click(
-      await screen.findByRole("button", { name: /LeBron James/ }),
-    );
-
-    expect(
-      await screen.findByRole("button", { name: /^regular season/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^playoffs/i }),
-    ).toBeInTheDocument();
-    expect(
-      stubs.player.requests.map((request) => request.path.player_id),
-    ).toContain("2544");
-  });
-
-  it("does not offer a scope whose career line has games_played 0", async () => {
+  it("a zero-game career scope is plain text, never disabled", async () => {
     const { user } = renderComposer("/compose", { career: noPlayoffsCareer() });
-
     await openPicker(user);
-    await user.click(
-      await screen.findByRole("button", { name: CHOICES.career }),
-    );
-    await user.type(await findPlayerSearch(), "James");
-    await user.click(
-      await screen.findByRole("button", { name: /LeBron James/ }),
-    );
-
+    const dialog = await openLebron(user);
     expect(
-      await screen.findByRole("button", { name: /^regular season/i }),
+      within(dialog).getByRole("radio", { name: /^regular season/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^playoffs/i })).toBeNull();
+    expect(within(dialog).getByText(/Playoffs/)).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("radio", { name: /^playoffs/i }),
+    ).toBeNull();
+    expect(dialog.querySelector("input:disabled")).toBeNull();
   });
-
-  it("attaches {type: 'player_career', ref_id: <player id>, scope}", async () => {
+  it("attaches a career's player id and scope", async () => {
     const { user } = renderComposer();
-
     await attachLebronCareer(user, /^playoffs/i);
-    await summaryShown();
-    const body = await postWithText(user);
-
-    expect(body.data_link).toEqual({
+    expect((await postWithText(user)).data_link).toEqual({
       type: "player_career",
       ref_id: 2544,
       scope: "playoffs",
     });
   });
+  it("keeps one choice across levels; choosing another replaces it", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    const dialog = await openGame(user);
+    await user.click(within(dialog).getByRole("radio", { name: /Barnes/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Back" }));
+    expect(within(dialog).getByText(/^Selected:/)).toHaveTextContent(/Barnes/);
+    await user.click(
+      within(dialog).getByRole("button", { name: /Jan.*15|15.*Jan/ }),
+    );
+    expect(within(dialog).getByRole("radio", { name: /Barnes/ })).toBeChecked();
+    await user.click(
+      within(dialog).getByRole("radio", { name: /Final score/ }),
+    );
+    expect(
+      within(dialog)
+        .getAllByRole("radio")
+        .filter((radio) => (radio as HTMLInputElement).checked),
+    ).toHaveLength(1);
+    await confirmSelection(user);
+    expect(textOf(await summaryShown())).not.toMatch(/Barnes/);
+  });
+  it.each(["Cancel", "Escape", "backdrop", "Close"])(
+    "%s closes only the nested picker and preserves draft and existing attachment",
+    async (method) => {
+      const { user } = renderComposer(
+        "/compose?link=game_final&ref=501",
+        {},
+        true,
+      );
+      await summaryShown();
+      await user.type(textBox(), "Keep my draft");
+      await openPicker(user);
+      const dialog = await openLebron(user);
+      await user.click(
+        within(dialog).getByRole("radio", { name: /^playoffs/i }),
+      );
+      if (method === "Escape")
+        fireEvent(dialog, new Event("cancel", { cancelable: true }));
+      else if (method === "backdrop") {
+        fireEvent.mouseDown(dialog);
+        fireEvent.click(dialog);
+      } else
+        await user.click(within(dialog).getByRole("button", { name: method }));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("dialog", { name: "Attach stats" }),
+        ).toBeNull(),
+      );
+      expect(screen.getByRole("dialog", { name: "Compose" })).toHaveAttribute(
+        "open",
+      );
+      expect(attachStatsButton()).toHaveFocus();
+      expect(textBox()).toHaveValue("Keep my draft");
+      expect(textOf(await summaryShown())).toMatch(/117/);
+      expect(bodies).toEqual([]);
+    },
+  );
+  it("starts afresh on reopening and picking a season resets the stack", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    let dialog = await openGame(user);
+    await user.click(within(dialog).getByRole("radio", { name: /Barnes/ }));
+    await user.selectOptions(
+      within(dialog).getByRole("combobox", { name: "Season" }),
+      "2022-23",
+    );
+    expect(within(dialog).queryByRole("button", { name: "Back" })).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await openPicker(user);
+    dialog = await pickerShown();
+    expect(
+      within(dialog).getByRole("combobox", { name: "Season" }),
+    ).toHaveValue("2023-24");
+    expect(
+      within(dialog).getByRole("tab", { name: "Seasons" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(within(dialog).getByRole("tab", { name: "All" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      within(dialog).getByRole("button", { name: "Select" }),
+    ).toBeDisabled();
+    expect(within(dialog).getByText("Nothing selected")).toBeInTheDocument();
+  });
+  it("no level contains a page link, including game and player levels", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    const dialog = await pickerShown();
+    expect(dialog.querySelectorAll("a[href]")).toHaveLength(0);
+    await openGame(user);
+    expect(dialog.querySelectorAll("a[href]")).toHaveLength(0);
+    await user.click(within(dialog).getByRole("tab", { name: "Players" }));
+    expect(dialog.querySelectorAll("a[href]")).toHaveLength(0);
+    await user.type(await findPlayerSearch(), "James");
+    await user.click(
+      await within(dialog).findByRole("button", { name: /LeBron James/ }),
+    );
+    await within(dialog).findByRole("radio", { name: /^regular season/i });
+    expect(dialog.querySelectorAll("a[href]")).toHaveLength(0);
+  });
+  it("Enter in search and on a radio never posts the draft or closes the composer", async () => {
+    const { user } = renderComposer("/compose", {}, true);
+    await user.type(textBox(), "Do not publish this");
+    await openPicker(user);
+    const dialog = await pickerShown();
+    await user.click(within(dialog).getByRole("tab", { name: "Players" }));
+    const search = await findPlayerSearch();
+    await user.type(search, "James{Enter}");
+    await user.click(
+      await within(dialog).findByRole("button", { name: /LeBron James/ }),
+    );
+    const radio = await within(dialog).findByRole("radio", {
+      name: /^regular season/i,
+    });
+    radio.focus();
+    await user.keyboard(" {Enter}");
+    expect(radio).toBeChecked();
+    expect(bodies).toEqual([]);
+    expect(screen.getByRole("dialog", { name: "Compose" })).toHaveAttribute(
+      "open",
+    );
+    expect(textBox()).toHaveValue("Do not publish this");
+    const form = dialog.closest("form");
+    expect(form === null || !form.contains(textBox())).toBe(true);
+  });
 });
-
-// ----------------------------------------------------------- criterion 5
 
 describe("the attachment's summary (criterion 5)", () => {
   it("names a game result by its teams, score and date", async () => {
@@ -487,94 +514,5 @@ describe("the attachment's summary (criterion 5)", () => {
 
     expect(screen.queryByRole("button", { name: /undo mention/i })).toBeNull();
     expect(undoButton()).toBeInTheDocument();
-  });
-});
-
-// ------------------------------------------------- criterion 12, keyboard
-
-describe("the picker by keyboard alone (criterion 12)", () => {
-  it("opens from Attach stats and moves focus into the panel", async () => {
-    const { user } = renderComposer();
-    await screen.findByRole("textbox", { name: /post/i });
-
-    attachStatsButton().focus();
-    await user.keyboard("{Enter}");
-
-    expect(attachStatsButton()).toHaveAttribute("aria-expanded", "true");
-    await waitFor(() => {
-      expect(document.activeElement).not.toBe(attachStatsButton());
-      expect(document.activeElement).not.toBe(document.body);
-    });
-  });
-
-  it("reaches every choice by Tab", async () => {
-    const { user } = renderComposer();
-    await screen.findByRole("textbox", { name: /post/i });
-
-    attachStatsButton().focus();
-    await user.keyboard("{Enter}");
-    await screen.findByRole("button", { name: CHOICES.game });
-
-    const reached = new Set<Element | null>([document.activeElement]);
-    for (let step = 0; step < 6; step += 1) {
-      await user.tab();
-      reached.add(document.activeElement);
-    }
-
-    for (const choice of Object.values(CHOICES)) {
-      expect(
-        reached.has(screen.getByRole("button", { name: choice })),
-        String(choice),
-      ).toBe(true);
-    }
-  });
-
-  it("reaches the team and season selects by Tab after Game result", async () => {
-    const { user } = renderComposer();
-    await screen.findByRole("textbox", { name: /post/i });
-
-    attachStatsButton().focus();
-    await user.keyboard("{Enter}");
-    const game = await screen.findByRole("button", { name: CHOICES.game });
-    game.focus();
-    await user.keyboard("{Enter}");
-    const team = await screen.findByRole("combobox", { name: /team/i });
-    const season = await screen.findByRole("combobox", { name: /season/i });
-
-    const reached = new Set<Element | null>([document.activeElement]);
-    for (let step = 0; step < 8; step += 1) {
-      await user.tab();
-      reached.add(document.activeElement);
-    }
-
-    expect(reached.has(team), "Team select").toBe(true);
-    expect(reached.has(season), "Season select").toBe(true);
-  });
-
-  it("closes on Escape and returns focus to Attach stats", async () => {
-    const { user } = renderComposer();
-    await screen.findByRole("textbox", { name: /post/i });
-
-    attachStatsButton().focus();
-    await user.keyboard("{Enter}");
-    await screen.findByRole("button", { name: CHOICES.game });
-    await user.tab();
-    await user.keyboard("{Escape}");
-
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: CHOICES.game })).toBeNull(),
-    );
-    expect(attachStatsButton()).toHaveAttribute("aria-expanded", "false");
-    expect(attachStatsButton()).toHaveFocus();
-  });
-
-  it("returns focus to Attach stats when a choice attaches and the picker closes", async () => {
-    const { user } = renderComposer();
-
-    await attachGameResult(user);
-    await summaryShown();
-
-    await waitFor(() => expect(attachStatsButton()).toHaveFocus());
-    expect(attachStatsButton()).toHaveAttribute("aria-expanded", "false");
   });
 });

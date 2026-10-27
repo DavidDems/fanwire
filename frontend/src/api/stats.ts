@@ -1,3 +1,4 @@
+import { ok } from "./ok";
 import { queryOptions } from "@tanstack/react-query";
 
 import { apiClient } from "./client";
@@ -16,8 +17,9 @@ import type { components } from "./schema";
  *
  * **Freshness.** A season's data changes once a day at most, so the season
  * reads (`championQuery` and friends) are fresh for `SEASON_STALE_TIME`:
- * returning to a level already shown asks nothing. The teams and seasons
- * lists keep the client's default.
+ * returning to a level already shown asks nothing. `seasonsQuery` uses the
+ * same freshness; game and player details use the app's 30 seconds. The
+ * teams list keeps the client's default.
  */
 
 export type TeamOut = components["schemas"]["TeamOut"];
@@ -71,16 +73,6 @@ export function teamSeasonKey(teamId: number, season: string) {
 
 export function playerSearchKey(q: string) {
   return ["events", "players", "search", q] as const;
-}
-
-/** An answer's data, or an error naming the request and its status. */
-function ok<T>(
-  { data, response }: { data?: T; response: Response },
-  path: string,
-): T {
-  if (!response.ok || data === undefined)
-    throw new Error(`GET ${path} answered ${response.status}`);
-  return data;
 }
 
 export async function fetchTeams(): Promise<TeamOut[]> {
@@ -195,5 +187,49 @@ export function teamSeasonQuery(teamId: number, season: string) {
     queryKey: teamSeasonKey(teamId, season),
     queryFn: () => fetchTeamSeason(teamId, season),
     staleTime: SEASON_STALE_TIME,
+  });
+}
+
+export type GameDetailOut = components["schemas"]["GameDetailOut"];
+export type PlayerDetailOut = components["schemas"]["PlayerDetailOut"];
+export async function fetchGameDetail(
+  id: number,
+): Promise<GameDetailOut | null> {
+  const answer = await apiClient.GET("/events/games/{game_id}", {
+    params: { path: { game_id: id } },
+  });
+  return answer.response.status === 404
+    ? null
+    : ok(answer, `/events/games/${id}`);
+}
+export async function fetchPlayerDetail(
+  id: number,
+): Promise<PlayerDetailOut | null> {
+  const answer = await apiClient.GET("/events/players/{player_id}", {
+    params: { path: { player_id: id } },
+  });
+  return answer.response.status === 404
+    ? null
+    : ok(answer, `/events/players/${id}`);
+}
+export function seasonsQuery() {
+  return queryOptions({
+    queryKey: SEASONS_KEY,
+    queryFn: fetchSeasons,
+    staleTime: SEASON_STALE_TIME,
+  });
+}
+export function gameDetailQuery(id: number) {
+  return queryOptions({
+    queryKey: ["events", "games", id] as const,
+    queryFn: () => fetchGameDetail(id),
+    staleTime: 30_000,
+  });
+}
+export function playerDetailQuery(id: number) {
+  return queryOptions({
+    queryKey: ["events", "players", id] as const,
+    queryFn: () => fetchPlayerDetail(id),
+    staleTime: 30_000,
   });
 }

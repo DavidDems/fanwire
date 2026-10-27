@@ -113,9 +113,9 @@ function OpenDialog({
         : null;
 
     dialog.showModal();
-    // The browser focuses the first focusable descendant itself; where it
-    // does not (jsdom), the Close button is that descendant.
-    if (!dialog.contains(document.activeElement)) closeRef.current?.focus();
+    // Chrome may choose a tall content scroller: always start on Close.
+    // A child may move focus further in its passive effect.
+    closeRef.current?.focus();
 
     return () => {
       closingRef.current = true;
