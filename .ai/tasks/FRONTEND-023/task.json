@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-023",
+  "objective": "Add accessible player and team-season charts that turn existing game logs and season results into clear, comparable visual summaries without hiding their source data.",
+  "acceptance_criteria": [
+    "Test-first: commit failing test-only changes before implementation; tests pin chart data, labels, scales, accessible equivalents, filter updates, empty states and reduced-motion behavior.",
+    "Add a player game-log points chart for the 10 most recent completed games, ordered oldest to newest on the x-axis by short date; the y-axis starts at zero, uses integer ticks at a 5-point interval up to the next 5 above the maximum, and marks each exact points value in text.",
+    "Add a team-season game-margin chart using the existing season game records, x-axis dates in chronological order and a symmetric y-axis around zero with 5-point ticks; label wins/losses in text and use a non-color cue for positive versus negative results.",
+    "For each chart, expose a caption naming the metric, range and selected player/team/season, and a screen-reader-accessible data table containing exactly the plotted values; retain the current game-log and season tables as full data views.",
+    "When fewer than two points exist, show the exact existing values in the table and a useful text explanation instead of a misleading line; no-data, loading and request-error states remain distinct and keep their current accessible roles.",
+    "A selected season/team or player selection updates the chart from the matching API response without a new endpoint or duplicate read. Animate only plotted value positions on a settled filter change (at most 180 ms); do not animate initial paint, and use zero-duration motion under prefers-reduced-motion.",
+    "At 320, 360 and 1280 CSS px the chart and its controls do not cause page-level horizontal overflow; labels remain readable in both themes and keyboard focus remains visible.",
+    "Use code-native SVG/CSS only, existing Fanwire tokens, no third-party chart package and no remote assets. No chart relies on color alone, hover-only labels or pointer-only tooltips.",
+    "No new dependency. Keep initial entry growth within 1 KiB raw and 512 bytes gzip; chart code remains in existing lazy feature outputs, with no more than 8 KiB gzip total added across changed async outputs and no output at or above 500,000 raw bytes. Include before/after bundle measurements.",
+    "Browser evidence covers a populated player log, a selected team-season, fewer than two plotted games and an empty/API-error state at 360 and 1280 in light and dark Chrome/Chromium. Identify the local dataset and synthetic cases.",
+    "Update wiki/CodeContext/Modules/0x08-frontend.md if the chart behavior changes the documented player or Stats pages; the context-maintainer role must be able to write that exact file."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/players/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/api/stats.ts",
+    "frontend/src/api/stats.test.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-023.ts",
+    "frontend/src/test/bundle-budget.test.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/**",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/routes/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/feed/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/direction.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

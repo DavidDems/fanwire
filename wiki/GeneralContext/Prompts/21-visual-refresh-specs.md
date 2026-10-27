@@ -59,6 +59,117 @@ GeneralContext prompt index. Do not change `FrontendUI/decisions.md` or treat a
 proposal as a settled design decision. Any edits under `.ai/` or
 `wiki/GeneralContext/` must be named plainly in the Director PR.
 
+## Progress update (2026-10-27)
+
+### Branch and overlap check
+
+- This Director branch is `director/visual-refresh-prompt`, based on
+  `origin/main` at `ae7414a` with its existing one prompt-preparation commit.
+- The public GitHub API showed only unrelated open PRs #244 (GitHub Actions
+  non-major updates) and #202 (Node 24 runtime). No open visual-refresh task
+  branch exists. The next free IDs used here are `FRONTEND-022` through
+  `FRONTEND-024`, and `USERS-004`.
+- The four specs are independent. Each worker branch must be created from
+  `main` after this Director PR merges. The backlog's displayed order is a
+  suggested review sequence, not a dependency chain.
+- The human chose that selecting a preset avatar replaces an uploaded profile
+  photo. `USERS-004` records the server contract and mutual-exclusion rules.
+
+### Baseline
+
+Commands were run in `frontend/` unless stated otherwise:
+
+- First `npm test` could not find Vitest because the worktree had no
+  `node_modules`. `npm ci` installed the locked dependencies without changing
+  manifests or lockfiles; npm reported two moderate audit findings.
+- Host `npm test` then failed before tests started: Vite/esbuild could not
+  resolve the worktree config because sandbox access to the shared worktree
+  parent was denied. This is an environment failure, not a test assertion.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed; 611 modules transformed. Entry output measured
+  471.65 kB raw / 149.75 kB gzip; no code was changed in this session.
+- From the worktree root, `docker compose run --rm frontend-test`: passed,
+  163 files and 2,308 tests. Several existing MSW unhandled `/api/feed`
+  warnings appeared on stderr; no test failed.
+- Each of the four `agentctl task validate` commands passed. `python -m pytest
+  .ai -q` ran 1,350 passed and 78 skipped, with one failure in
+  `TestGuardTested.test_the_checked_out_commit_is_tested`: its subprocess
+  strips `GIT_*` as required, then the sandbox Git ownership check rejects the
+  shared worktree `.git` file before `merge-base` can inspect `HEAD`.
+  `git -c safe.directory=<this worktree> merge-base --is-ancestor HEAD HEAD`
+  succeeds, and `python .ai/bin/agentctl.py selfcheck` passes. No pinned tests
+  or Git config were changed.
+
+### Browser pass and data limits
+
+Chrome via Playwright Chromium, 2026-10-27, local Vite from this worktree on
+5173 and the already-running localhost backend health endpoint. Vite received
+the fake public test values committed in `vite.config.ts`; no local `.env`
+file was read and no Cognito request was made. The backend's compose project
+could not be identified, so these rows describe the worktree UI against the
+currently running local API only.
+
+The sampled API data has one season (2023–24), a single-game player record, and
+seeded `fwtest1` posts marked `FRONTEND-020`/performance rows. The feed sample
+has no member-uploaded images. A test-only response override supplied a
+synthetic, league-neutral 4:3 court image and an empty feed; both are labelled
+synthetic in the evidence. No user data was written.
+
+Screenshots live only in the ignored
+`.playwright-mcp/visual-refresh/` directory. The base evidence set covers
+`/`, `/games/502`, `/stats/seasons`, `/stats/records`, `/stats/players`,
+`/players/12`, and `/profile/1`, each at 360 and 1280 px in light and dark.
+The additional single-state captures are `feed-synthetic-image-360-light.png`,
+`feed-synthetic-empty-360-light.png`, and
+`players-no-results-360-light.png`. The run completed with no browser console
+or page errors; every captured page had `scrollWidth == clientWidth`.
+
+Driven interactions: the feed's game preview opened `/games/501`; a player
+name in `/games/502` opened `/players/11`. Anonymous navigation to
+`/create-profile` and `/compose` redirected to `/sign-in`. The authenticated
+composer/stats picker, own-profile setup/edit, and sign-in were **NOT DONE**:
+the worktree had no verified dev-pool configuration, and this session did not
+read `.env.local` or submit test-account credentials.
+
+### Findings and release map
+
+**Confirmed current states:** the feed's sampled posts are text-only and use
+initial avatars; the synthetic image uses the existing 4:3 media frame. A
+zero-post feed displays only “There is nothing here yet.” A no-match player
+search shows “No players match …” with a large quiet region. A public profile
+with zero posts shows its summary and then a blank region, with no “No posts
+yet” message. Records has several cards saying “Nothing qualifies yet.” The
+player page is otherwise career/season/game-log tables with no chart. At 360,
+the game line score fits; each box-score table shows only its first columns
+until scrolled horizontally, without an obvious scroll cue. The document
+itself does not overflow.
+
+These are visual opportunities, not claims that the underlying data is wrong.
+No contrast, target-size, keyboard ring, forced-colors, 200%-zoom, reduced
+motion, or axe audit was run here. The small one-season data sample cannot
+establish multi-season chart behavior.
+
+The fewest coherent user-visible units that cover the request are:
+
+1. `FRONTEND-022` — one game story across preview and detail: period lines,
+   result context, original code-native matchup geometry, and mobile table
+   access. It includes the existing events preview contract extension needed
+   to show periods in a feed card.
+2. `FRONTEND-023` — player points-by-game and team-season margin charts with
+   explicit scales, full text data tables, truthful sparse-data states, and
+   reduced-motion-aware transitions when filters change.
+3. `FRONTEND-024` — one reusable original motif for empty feed/profile,
+   unmatched player search, and non-qualifying records; no decoration on
+   ordinary text-only posts.
+4. `USERS-004` — one persisted avatar/API/frontend release. Users own the
+   nullable stable avatar key; feed/search read it through the existing user
+   interface. Presets and uploaded photos are mutually exclusive.
+
+There is no `FrontendUI/` design decision, dependency change, asset download,
+or application implementation in this Director PR. Task specs and backlog
+are the reviewable planning artifacts.
+
 ## Exercise the current app before designing
 
 1. Establish the frontend test, typecheck, lint, and build baseline. Record
