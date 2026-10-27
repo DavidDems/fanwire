@@ -788,4 +788,12 @@ describe("the box-score scroll containers", () => {
       ).toBe(true);
     }
   });
+
+  it("shows a visible instruction for the horizontally scrollable columns", async () => {
+    await openGame();
+
+    expect(
+      within(main()).getAllByText(/scroll horizontally to see all columns/i),
+    ).toHaveLength(2);
+  });
 });

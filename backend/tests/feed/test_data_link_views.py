@@ -23,7 +23,7 @@ import pytest
 from sqlalchemy import update
 
 from app.db import Base, make_session_factory
-from app.events.models import Player, PlayerGameStats
+from app.events.models import Game, Player, PlayerGameStats
 from app.events.service import (
     game_final_previews,
     player_career_previews,
@@ -243,6 +243,21 @@ def test_the_previews_carry_the_destination_ids_and_real_figures(client, session
         1,
     )
     assert career["points_per_game"] == pytest.approx(25.0)
+
+
+def test_game_final_preview_exposes_stored_period_scores(client, session_factory, world):
+    with session_factory() as session:
+        game = session.get(Game, world.game)
+        assert game is not None
+        game.home_line_score = [25, 25, 25, 25]
+        game.away_line_score = [20, 20, 25, 25]
+        post_id = publish(session, world.author_id, text="periods", link=game_final(world.game))
+        session.commit()
+
+    preview = _feed_item(client, post_id)["data_link_preview"]
+
+    assert preview["home_line_score"] == [25, 25, 25, 25]
+    assert preview["away_line_score"] == [20, 20, 25, 25]
 
 
 @pytest.mark.parametrize("surface", ["feed", "search", "thread"])

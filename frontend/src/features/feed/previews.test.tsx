@@ -126,6 +126,34 @@ describe("a game_final preview", () => {
 
     expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
   });
+
+  it("shows period values in a semantic table and names both teams and score in its link", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [25, 25, 25, 25],
+      away_line_score: [20, 20, 25, 25],
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAccessibleName(
+      /Phoenix Suns.*109.*Toronto Raptors.*117/,
+    );
+    const table = screen.getByRole("table", { name: /period score/i });
+    expect(table).toHaveTextContent(/Q1.*20.*25/);
+    expect(table).toHaveTextContent(/Q4.*25.*25/);
+  });
+
+  it("omits only the period breakdown when line scores are unavailable", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: null,
+      away_line_score: null,
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
+    expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
+  });
 });
 
 describe("a player_game preview", () => {
