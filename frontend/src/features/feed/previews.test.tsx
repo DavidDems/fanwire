@@ -127,6 +127,12 @@ describe("a game_final preview", () => {
     expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
   });
 
+  it("names the winner from the canonical final scores", () => {
+    renderCard(postWithPreview(gameFinalPreview()));
+
+    expect(screen.getByText(/Final.*Toronto Raptors won/i)).toBeInTheDocument();
+  });
+
   it("shows period values in a semantic table and names both teams and score in its link", async () => {
     const preview = {
       ...gameFinalPreview(),
