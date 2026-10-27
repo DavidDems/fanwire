@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -91,97 +92,106 @@ export function BoxScore({ team, boxScore, gameId, canPost }: BoxScoreProps) {
       {players.length === 0 ? (
         <EmptyState>No box score is available for {team.name}.</EmptyState>
       ) : (
-        <div
-          className={styles.scroll}
-          role="region"
-          aria-label={`${team.name} box score`}
-          tabIndex={0}
-        >
-          <table className={styles.table}>
-            <caption className={styles.caption}>{team.name} box score</caption>
-            <thead>
-              <tr>
-                {COLUMNS.map(([label, title]) => (
-                  <th
-                    key={label}
-                    scope="col"
-                    className={label === "Player" ? styles.name : undefined}
-                  >
-                    {title === null ? (
-                      label
-                    ) : (
-                      <abbr title={title}>{label}</abbr>
-                    )}
-                  </th>
+        <>
+          <p className={styles.scrollHint} id={`${headingId}-scroll-hint`}>
+            Scroll horizontally to see all columns
+          </p>
+          <div
+            className={styles.scroll}
+            role="region"
+            aria-label={`${team.name} box score`}
+            aria-describedby={`${headingId}-scroll-hint`}
+            tabIndex={0}
+            onKeyDown={scrollWithKeyboard}
+          >
+            <table className={styles.table}>
+              <caption className={styles.caption}>
+                {team.name} box score
+              </caption>
+              <thead>
+                <tr>
+                  {COLUMNS.map(([label, title]) => (
+                    <th
+                      key={label}
+                      scope="col"
+                      className={label === "Player" ? styles.name : undefined}
+                    >
+                      {title === null ? (
+                        label
+                      ) : (
+                        <abbr title={title}>{label}</abbr>
+                      )}
+                    </th>
+                  ))}
+                  {canPost ? (
+                    <th scope="col" className={styles.postCell}>
+                      <VisuallyHidden>Post</VisuallyHidden>
+                    </th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody>
+                {starters.map((player) => (
+                  <PlayerRow
+                    key={player.player_id}
+                    player={player}
+                    current={player.line_id === line}
+                    postHref={rowPostHref(player, gameId, canPost)}
+                  />
                 ))}
-                {canPost ? (
-                  <th scope="col" className={styles.postCell}>
-                    <VisuallyHidden>Post</VisuallyHidden>
+                {bench.map((player, index) => (
+                  <PlayerRow
+                    key={player.player_id}
+                    player={player}
+                    firstOfBench={index === 0 && starters.length > 0}
+                    current={player.line_id === line}
+                    postHref={rowPostHref(player, gameId, canPost)}
+                  />
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className={styles.totals}>
+                  <th scope="row" className={styles.name}>
+                    Totals
                   </th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {starters.map((player) => (
-                <PlayerRow
-                  key={player.player_id}
-                  player={player}
-                  current={player.line_id === line}
-                  postHref={rowPostHref(player, gameId, canPost)}
-                />
-              ))}
-              {bench.map((player, index) => (
-                <PlayerRow
-                  key={player.player_id}
-                  player={player}
-                  firstOfBench={index === 0 && starters.length > 0}
-                  current={player.line_id === line}
-                  postHref={rowPostHref(player, gameId, canPost)}
-                />
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className={styles.totals}>
-                <th scope="row" className={styles.name}>
-                  Totals
-                </th>
-                <td>{formatMinutes(totals.seconds_played)}</td>
-                <td>
-                  {formatMadeAttempted(
-                    totals.field_goals_made,
-                    totals.field_goals_attempted,
-                  )}
-                </td>
-                <td>
-                  {formatMadeAttempted(
-                    totals.three_pointers_made,
-                    totals.three_pointers_attempted,
-                  )}
-                </td>
-                <td>
-                  {formatMadeAttempted(
-                    totals.free_throws_made,
-                    totals.free_throws_attempted,
-                  )}
-                </td>
-                <td>{formatPercentage(totals.field_goal_pct)}</td>
-                <td>{formatPercentage(totals.three_point_pct)}</td>
-                <td>{formatPercentage(totals.free_throw_pct)}</td>
-                <td>{totals.offensive_rebounds}</td>
-                <td>{totals.defensive_rebounds}</td>
-                <td>{totals.rebounds}</td>
-                <td>{totals.assists}</td>
-                <td>{totals.steals}</td>
-                <td>{totals.blocks}</td>
-                <td>{totals.turnovers}</td>
-                <td>{totals.personal_fouls}</td>
-                <td />
-                <td>{totals.points}</td>
-                {canPost ? <td /> : null}
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                  <td>{formatMinutes(totals.seconds_played)}</td>
+                  <td>
+                    {formatMadeAttempted(
+                      totals.field_goals_made,
+                      totals.field_goals_attempted,
+                    )}
+                  </td>
+                  <td>
+                    {formatMadeAttempted(
+                      totals.three_pointers_made,
+                      totals.three_pointers_attempted,
+                    )}
+                  </td>
+                  <td>
+                    {formatMadeAttempted(
+                      totals.free_throws_made,
+                      totals.free_throws_attempted,
+                    )}
+                  </td>
+                  <td>{formatPercentage(totals.field_goal_pct)}</td>
+                  <td>{formatPercentage(totals.three_point_pct)}</td>
+                  <td>{formatPercentage(totals.free_throw_pct)}</td>
+                  <td>{totals.offensive_rebounds}</td>
+                  <td>{totals.defensive_rebounds}</td>
+                  <td>{totals.rebounds}</td>
+                  <td>{totals.assists}</td>
+                  <td>{totals.steals}</td>
+                  <td>{totals.blocks}</td>
+                  <td>{totals.turnovers}</td>
+                  <td>{totals.personal_fouls}</td>
+                  <td />
+                  <td>{totals.points}</td>
+                  {canPost ? <td /> : null}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
 
       {didNotPlay.length === 0 ? null : (
@@ -206,6 +216,34 @@ function lineIdFrom(raw: string | null): number | null {
   if (raw === null || !/^\d+$/.test(raw)) return null;
   const id = Number(raw);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function scrollWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+  const region = event.currentTarget;
+  if (region.scrollWidth <= region.clientWidth) return;
+
+  const maxScroll = region.scrollWidth - region.clientWidth;
+  const step = Math.max(80, Math.round(region.clientWidth * 0.8));
+  let next: number;
+  switch (event.key) {
+    case "ArrowLeft":
+      next = region.scrollLeft - step;
+      break;
+    case "ArrowRight":
+      next = region.scrollLeft + step;
+      break;
+    case "Home":
+      next = 0;
+      break;
+    case "End":
+      next = maxScroll;
+      break;
+    default:
+      return;
+  }
+
+  event.preventDefault();
+  region.scrollLeft = Math.min(maxScroll, Math.max(0, next));
 }
 
 /**

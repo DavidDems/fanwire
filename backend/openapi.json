@@ -861,6 +861,20 @@
       "GameFinalPreviewView": {
         "description": "A game_final link's preview: every field of\napp.events.service.GameFinalPreview.",
         "properties": {
+          "away_line_score": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Line Score"
+          },
           "away_score": {
             "title": "Away Score",
             "type": "integer"
@@ -887,6 +901,20 @@
               }
             ],
             "title": "Game Type"
+          },
+          "home_line_score": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Line Score"
           },
           "home_score": {
             "title": "Home Score",
@@ -950,7 +978,9 @@
           "home_team",
           "away_team",
           "home_score",
-          "away_score"
+          "away_score",
+          "home_line_score",
+          "away_line_score"
         ],
         "title": "GameFinalPreviewView",
         "type": "object"

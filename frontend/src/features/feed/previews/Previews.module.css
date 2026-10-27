@@ -51,6 +51,42 @@
   text-decoration: none;
 }
 
+.periodScroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.periods {
+  min-width: max-content;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.periodCaption {
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.periods th,
+.periods td {
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: right;
+}
+
+.periods th:first-child {
+  text-align: left;
+}
+
+.periods thead th {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+}
+
 /* Each figure is its abbreviation over its value; the row wraps on a phone. */
 .figures {
   display: flex;

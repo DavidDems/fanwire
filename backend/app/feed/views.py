@@ -96,6 +96,8 @@ class GameFinalPreviewView(BaseModel):
     away_team: TeamRefView
     home_score: int
     away_score: int
+    home_line_score: list[int] | None
+    away_line_score: list[int] | None
 
 
 class PlayerGamePreviewView(BaseModel):
