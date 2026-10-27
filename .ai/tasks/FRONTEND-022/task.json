@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-022",
+  "objective": "Make game result cards and game detail pages read as one clear, league-neutral scoreboard story, including period scores, final context and a compact original Fanwire matchup illustration.",
+  "acceptance_criteria": [
+    "Test-first: commit failing backend and frontend tests alone before implementation; the tests prove the preview contract and the visible card/detail states, and the implementation commit changes no tests.",
+    "Extend the existing game-final preview contract with nullable away and home period-score arrays sourced from the existing Game row; keep the existing read count and add no endpoint or database query. Regenerate backend/openapi.json and frontend/src/api/schema.d.ts from the committed backend contract.",
+    "A game preview card shows both team names and final scores, date, verified game label/result and each available period score with Q1–Q4 and OT labels; overtime periods are numbered, totals reconcile to the existing final score, and missing line scores omit only the period row.",
+    "The game detail page presents the same teams, score, winner/result and date context as its heading hierarchy, followed by the existing period line score and both box scores; stat values and team names come only from the API response.",
+    "Add one original, code-native SVG matchup illustration using only court/ball geometry and the game’s existing team names, date and score; it contains no logos, crests, uniforms, team-color bars, player likenesses/photos, external asset requests or third-party artwork. Record its authorship as original project code in the PR.",
+    "At 320, 360 and 1280 CSS px, the page has no document-level horizontal overflow; box-score tables expose all columns through a labelled, keyboard-focusable horizontal scroll region with a visible scroll cue when needed.",
+    "The preview remains one link with an accessible name containing both teams and score; period values have visible text labels and a semantic table/list equivalent, and no result meaning depends on color or SVG alone.",
+    "Preserve the current light/dark token palette, focus treatment, minimum target sizes and reduced-motion behavior. If the preview-to-detail modal flow receives motion, limit it to a 150–200 ms relationship/state transition and disable it under prefers-reduced-motion; do not animate score values.",
+    "No new dependency. Keep the initial JS entry increase within 1 KiB raw and 512 bytes gzip; keep any new or enlarged async output within 8 KiB gzip total, and no built file at or above 500,000 raw bytes. Include the measured before/after bundle table in the PR.",
+    "Browser evidence in the PR covers a seeded game card and game detail at 360 and 1280 px in light and dark Chrome/Chromium, keyboard access to the table scroll region, missing period data, and a game with overtime if representative data is available; label fixture/override data synthetic.",
+    "Update wiki/CodeContext/Modules/0x02-events.md and wiki/CodeContext/Modules/0x08-frontend.md only if their API/UI contracts changed; the context-maintainer role can write both module files."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/features/feed/previews/**",
+    "frontend/src/features/feed/*preview*.test.ts",
+    "frontend/src/features/feed/*preview*.test.tsx",
+    "frontend/src/features/games/**",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/src/styles/**",
+    "frontend/public/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/direction.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": ["frontend-unit", "fastapi-module", "backend-testing", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

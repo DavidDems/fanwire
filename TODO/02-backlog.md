@@ -87,6 +87,23 @@ its answer.
 
 The human's request of 2026-10-23: the stats screens and the inputs are rebuilt, and compose becomes a modal. Six `hand` units in four stages: UI-010, EVENTS-010 → FRONTEND-018, FRONTEND-020 → FRONTEND-019 → FRONTEND-021. A skeptic agent declares each unit's Baseline (latency, query counts, bundle size, freezing). Brief, design and order: `wiki/GeneralContext/Prompts/20-stats-navigation-and-compose-modal.md`.
 
+## Fanwire visual refresh
+
+From the human's 2026-10-27 request and the browser audit in
+`Prompts/21-visual-refresh-specs.md`. These are `hand` units because each
+needs visual judgement and a real browser pass. **The Director spec PR must
+merge before any `agent/<ID>` branch is created.** Every task below is
+independent and must be cut directly from `main`; none may use another task
+branch as its base. Suggested review order is the order shown, not a dependency
+order.
+
+| Order | Task | Mode | Shippable outcome | Source | Dependencies / branch base |
+|---:|---|---|---|---|---|
+| 1 | `FRONTEND-022` | `hand` | Game cards and game detail share a league-neutral scoreboard story with period scores, final context, and an original code-native matchup motif. | Human request; `Prompts/21` game and game-detail audit | None. Create from `main` after this Director PR merges. |
+| 2 | `FRONTEND-023` | `hand` | Player game-log points and team-season margins become labelled, accessible charts with full text data equivalents. | Human request; `Prompts/21` player and Stats audit | None. Create from `main` after this Director PR merges. |
+| 3 | `FRONTEND-024` | `hand` | Empty feed/profile, unmatched player search, and non-qualifying record states share an original Fanwire sports-geometry motif. | Human request; `Prompts/21` quiet-state audit | None. Create from `main` after this Director PR merges. |
+| 4 | `USERS-004` | `hand` | Members can persist one of eight original geometric avatars; a saved preset replaces a profile photo, while the existing username initial remains the default/reset. | Human request; `Prompts/21` avatar/API-boundary audit; avatar replacement decision in this Director PR | None. Create from `main` after this Director PR merges. |
+
 ## Workflow ideas, not yet designed
 
 From the human's whiteboard (2026-10-17). Each needs a design discussion

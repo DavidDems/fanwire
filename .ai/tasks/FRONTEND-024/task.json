@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-024",
+  "objective": "Give Fanwire's quiet and empty feed, profile, player-search and records states a consistent original sports visual identity that works without member-uploaded imagery.",
+  "acceptance_criteria": [
+    "Test-first: commit failing tests alone before implementation; tests pin the named empty states, accessible text, SVG treatment, theme behavior and absence of new network requests.",
+    "Add one reusable, original code-native SVG/CSS court/scoreboard motif and apply it to the zero-post feed, a public profile with no posts, a player search with no matches, and record groups with no qualifying result; add the concise text 'No posts yet.' to the empty public-profile post area, and do not add artwork to every ordinary text post.",
+    "Each state keeps its heading and explanatory text as the accessible source of truth; the motif is decorative with aria-hidden=true and no focusable descendants, and the state continues to distinguish loading, error, empty and zero-result cases.",
+    "The motif uses only existing Fanwire color and spacing tokens, has light/dark values, and contains no NBA/league/team/player marks, uniform cues, team-color bars, likenesses, gradients, external assets or added font requests.",
+    "Keep SVG code in the frontend source; record it as original project-authored code in the PR. Do not download, generate, or add raster/stock assets. If implementation discovers a raster need, stop and propose a separate Director decision with purpose, rights/provenance, exact dimensions/variants, compression, storage and alt-text behavior.",
+    "At 320, 360 and 1280 CSS px, empty-state content remains readable and has no page-level horizontal overflow in light and dark themes; no artwork pushes the primary action below the existing content flow.",
+    "Keep existing landmarks, heading levels, focus order, target sizes and status/alert roles. The artwork adds no motion; reduced-motion and forced-colors modes preserve readable text and interactive boundaries.",
+    "No new dependency or external network request. Keep the initial JS entry increase within 1 KiB raw and 512 bytes gzip, add at most 2 KiB gzip of shared SVG/style code, and keep all built files below 500,000 raw bytes; include before/after bundle measurements.",
+    "Browser evidence covers all four named states at 360 and 1280 in light and dark Chrome/Chromium, checks that the SVG is decorative and no horizontal overflow appears, and labels fixture/override content synthetic.",
+    "Update wiki/CodeContext/Modules/0x08-frontend.md only if the documented empty/loading behavior changed; the context-maintainer role must be able to write that exact file."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/ui/EmptyState.tsx",
+    "frontend/src/components/ui/EmptyState.module.css",
+    "frontend/src/components/ui/EmptyState.test.tsx",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/profile/**",
+    "frontend/src/features/players/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/components/visuals/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/**",
+    "frontend/public/**",
+    "frontend/src/api/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/direction.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
