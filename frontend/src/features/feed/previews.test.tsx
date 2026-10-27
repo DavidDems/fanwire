@@ -154,6 +154,21 @@ describe("a game_final preview", () => {
     expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
     expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
   });
+
+  it("labels overtime periods and keeps the displayed final totals canonical", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [25, 30, 30, 22, 10],
+      away_line_score: [20, 25, 25, 29, 10],
+    };
+    renderCard(postWithPreview(preview));
+
+    const table = screen.getByRole("table", { name: /period score/i });
+    expect(table).toHaveTextContent(/Q4.*OT.*29.*22.*10.*10/);
+    expect(onlyDetailLink(card())).toHaveAccessibleName(
+      /Phoenix Suns.*109.*Toronto Raptors.*117/,
+    );
+  });
 });
 
 describe("a player_game preview", () => {
