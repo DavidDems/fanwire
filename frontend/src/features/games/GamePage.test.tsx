@@ -789,6 +789,29 @@ describe("the box-score scroll containers", () => {
     }
   });
 
+  it("scrolls its focused region with arrow, Home and End keys", async () => {
+    await openGame();
+    const region = scrollRegionFor(boxScoreFor(TEST_HOME_TEAM));
+    expect(region).toBeDefined();
+    if (region === undefined) return;
+
+    Object.defineProperties(region, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 900 },
+    });
+    region.focus();
+    const user = userEvent.setup();
+
+    await user.keyboard("{ArrowRight}");
+    expect(region.scrollLeft).toBe(240);
+    await user.keyboard("{End}");
+    expect(region.scrollLeft).toBe(600);
+    await user.keyboard("{ArrowLeft}");
+    expect(region.scrollLeft).toBe(360);
+    await user.keyboard("{Home}");
+    expect(region.scrollLeft).toBe(0);
+  });
+
   it("shows a visible instruction for the horizontally scrollable columns", async () => {
     await openGame();
 
