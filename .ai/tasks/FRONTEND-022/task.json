@@ -13,10 +13,11 @@
     "Preserve the current light/dark token palette, focus treatment, minimum target sizes and reduced-motion behavior. If the preview-to-detail modal flow receives motion, limit it to a 150–200 ms relationship/state transition and disable it under prefers-reduced-motion; do not animate score values.",
     "No new dependency. Keep the initial JS entry increase within 1 KiB raw and 512 bytes gzip; keep any new or enlarged async output within 8 KiB gzip total, and no built file at or above 500,000 raw bytes. Include the measured before/after bundle table in the PR.",
     "Browser evidence in the PR covers a seeded game card and game detail at 360 and 1280 px in light and dark Chrome/Chromium, keyboard access to the table scroll region, missing period data, and a game with overtime if representative data is available; label fixture/override data synthetic.",
-    "Update wiki/CodeContext/Modules/0x02-events.md and wiki/CodeContext/Modules/0x08-frontend.md only if their API/UI contracts changed; the context-maintainer role can write both module files."
+    "Update wiki/CodeContext/Modules/0x02-events.md and wiki/CodeContext/Modules/0x08-frontend.md if their API/UI contracts changed, and update wiki/CodeContext/Modules/0x06-feed.md when the public feed preview contract changes; the context-maintainer role can write all three module files."
   ],
   "allowed_paths": [
     "backend/app/events/**",
+    "backend/app/feed/views.py",
     "backend/tests/**",
     "backend/openapi.json",
     "frontend/src/api/schema.d.ts",
@@ -25,6 +26,7 @@
     "frontend/src/features/feed/*preview*.test.tsx",
     "frontend/src/features/games/**",
     "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
     "wiki/CodeContext/Modules/0x08-frontend.md"
   ],
   "forbidden_paths": [
@@ -46,6 +48,7 @@
   "required_context": [
     "wiki/CodeContext/Modules/0x02-events.md",
     "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
     "wiki/CodeContext/Modules/0x08-frontend.md",
     "wiki/CodeContext/FrontendUI/decisions.md",
     "wiki/CodeContext/FrontendUI/direction.md",

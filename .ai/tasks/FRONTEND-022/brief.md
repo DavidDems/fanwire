@@ -11,7 +11,8 @@ The local browser pass showed this at 360 px on `/games/502`.
 ## Scope and implementation notes
 
 - Extend `GameFinalPreview` in `events/` with the stored line-score arrays and
-  carry them through the existing post preview interface. Keep the existing
+  carry them through `feed/views.py`'s existing post preview response model.
+  Keep the existing
   batched query count and return null when that game has no line scores.
 - Regenerate both committed OpenAPI artifacts from their sources. Do not hand
   edit either generated file.
@@ -45,6 +46,7 @@ build, and the container frontend suite per the repository gates.
 ## Module note
 
 The event preview interface changes, so the context maintainer updates
-`0x02-events.md`; the frontend game and preview behavior belongs in
-`0x08-frontend.md`. The workers receive neither GeneralContext nor FrontendUI
-write access.
+`0x02-events.md`; exposing the new fields on feed preview responses also
+changes the feed contract, so update `0x06-feed.md`. The frontend game and
+preview behavior belongs in `0x08-frontend.md`. The workers receive neither
+GeneralContext nor FrontendUI write access.
