@@ -155,11 +155,23 @@ describe("a game_final preview", () => {
     expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
   });
 
+  it("omits period values that do not reconcile with the final score", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [25, 30, 30, 31],
+      away_line_score: [20, 25, 32, 32],
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
+    expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
+  });
+
   it("labels overtime periods and keeps the displayed final totals canonical", async () => {
     const preview = {
       ...gameFinalPreview(),
-      home_line_score: [25, 30, 30, 22, 10],
-      away_line_score: [20, 25, 25, 29, 10],
+      home_line_score: [20, 20, 25, 30, 12, 10],
+      away_line_score: [20, 20, 24, 25, 10, 10],
     };
     renderCard(postWithPreview(preview));
 
@@ -171,11 +183,16 @@ describe("a game_final preview", () => {
       await screen.findByRole("columnheader", { name: "OT" }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByRole("row", { name: /Phoenix Suns 20 25 25 29 10/ }),
+      await screen.findByRole("columnheader", { name: "2OT" }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("row", {
-        name: /Toronto Raptors 25 30 30 22 10/,
+        name: /Phoenix Suns 20 20 24 25 10 10/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("row", {
+        name: /Toronto Raptors 20 20 25 30 12 10/,
       }),
     ).toBeInTheDocument();
     expect(onlyDetailLink(card())).toHaveAccessibleName(
