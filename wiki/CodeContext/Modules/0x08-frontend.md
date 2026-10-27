@@ -963,7 +963,8 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   each sum matches its canonical final score. Periods are Q1–Q4 followed by
   OT, 2OT, and so on. Missing or inconsistent arrays omit the table. The
   card remains one detail link named from both teams and their final scores;
-  period values also have visible team/period text labels.
+  its result line names the team with the higher final score as the winner,
+  and period values have visible team/period text labels.
 - **The game detail (`FRONTEND-022`)** keeps the API's team names, date, score,
   result and period line score as text. `MatchupArtwork` is original inline
   SVG court geometry and does not supply data or team identity graphics.
