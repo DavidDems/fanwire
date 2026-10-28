@@ -424,13 +424,28 @@ describe("the cards", () => {
     expect(card.querySelectorAll(FOCUSABLE)).toHaveLength(1);
   });
 
-  it("every card says nothing qualifies on an empty database", async () => {
-    openRecords("/stats/records", { summary: emptyRecordsSummary() });
+  it.each(["team", "player"] as const)(
+    "every empty %s record card says nothing qualifies and has decorative artwork",
+    async (group) => {
+      openRecords(
+        group === "player" ? "/stats/records?group=player" : "/stats/records",
+        { summary: emptyRecordsSummary() },
+      );
 
-    const cards = await findCards("team");
-    expect(cards).toHaveLength(recordsOf("team").length);
-    for (const card of cards) expect(rowText(card)).toMatch(/qualif/i);
-  });
+      const cards = await findCards(group);
+      expect(cards).toHaveLength(recordsOf(group).length);
+      for (const card of cards) {
+        expect(rowText(card)).toMatch(/qualif/i);
+        const artwork = card.querySelector("svg[aria-hidden='true']");
+        expect(artwork).not.toBeNull();
+        expect(
+          artwork?.querySelectorAll(
+            "a, button, input, select, textarea, [tabindex]",
+          ),
+        ).toHaveLength(0);
+      }
+    },
+  );
 
   it("a player's single-game record: first and last name, the team he played for, the value, the date and opponent", async () => {
     openRecords("/stats/records?group=player");

@@ -172,7 +172,8 @@ describe("the feed's loading, failed and empty states (criterion 3)", () => {
   });
 
   it("shows an empty feed through EmptyState, with the same words", async () => {
-    server.use(feedStub([feedPage([], null)]).handler);
+    const feed = feedStub([feedPage([], null)]);
+    server.use(feed.handler);
     const { container } = renderFeed();
 
     const message = await screen.findByText(NOTHING_HERE);
@@ -180,6 +181,14 @@ describe("the feed's loading, failed and empty states (criterion 3)", () => {
     const empties = withClass(container, emptyStyles.empty);
     expect(empties).toHaveLength(1);
     expect(empties[0].contains(message)).toBe(true);
+    const artwork = empties[0].querySelector("svg[aria-hidden='true']");
+    expect(artwork).not.toBeNull();
+    expect(
+      artwork?.querySelectorAll(
+        "a, button, input, select, textarea, [tabindex]",
+      ),
+    ).toHaveLength(0);
+    expect(feed.requests).toHaveLength(1);
   });
 });
 
