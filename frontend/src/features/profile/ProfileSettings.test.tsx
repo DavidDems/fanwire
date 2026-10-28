@@ -18,6 +18,7 @@
  */
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -49,10 +50,10 @@ const OWN_PROFILE: MeOut = testProfile({
   preferred_team_id: 1,
 });
 
-function renderSettings(): PatchMeStub {
-  const patch = patchMeStub(OWN_PROFILE);
+function renderSettings(profile: MeOut = OWN_PROFILE): PatchMeStub {
+  const patch = patchMeStub(profile);
   server.use(
-    meStub(OWN_PROFILE).handler,
+    meStub(profile).handler,
     patch.handler,
     publicProfilesById(),
     followingStub().handler,
@@ -64,7 +65,7 @@ function renderSettings(): PatchMeStub {
     </Routes>,
     {
       authService: new FakeAuthService({ session: testSession() }),
-      route: `/profile/${OWN_PROFILE.id}`,
+      route: `/profile/${profile.id}`,
     },
   );
 
@@ -175,12 +176,63 @@ describe("the settings form", () => {
     });
   });
 
-  it("does not offer a profile-picture control in this unit", async () => {
-    // FRONTEND-004 owns the uploader. Building a second one here would be a
-    // duplicate media path, and would then need deleting rather than merging.
+  it("offers a keyboard-operable single-choice avatar grid", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    const choices = await screen.findAllByRole("radio");
+    expect(choices).toHaveLength(9);
+    await user.click(choices[0]);
+    await user.keyboard("{ArrowDown}");
+    expect(choices[1]).toBeChecked();
+    expect(choices[1]).toHaveFocus();
+  });
+
+  it("saves a selected preset", async () => {
+    const user = userEvent.setup();
+    const patch = renderSettings();
+    const courtLines = await screen.findByRole("radio", { name: /court lines/i });
+    await user.click(courtLines);
+    await user.click(save());
+
+    await waitFor(() => expect(patch.bodies).toHaveLength(1));
+    expect(patch.onlyBody().profile_avatar_key).toBe("court-lines");
+  });
+
+  it("uses null for the explicit initials reset", async () => {
+    const user = userEvent.setup();
+    const resetPatch = renderSettings(testProfile({ profile_avatar_key: "net-grid" }));
+    await user.click(await screen.findByRole("radio", { name: /use initials/i }));
+    await user.click(save());
+    await waitFor(() => expect(resetPatch.bodies).toHaveLength(1));
+    expect(resetPatch.onlyBody()).toHaveProperty("profile_avatar_key", null);
+  });
+
+  it("keeps the previous avatar visible and reports a failed save", async () => {
+    const user = userEvent.setup();
+    const profile = testProfile({ profile_avatar_key: "net-grid" });
+    server.use(
+      meStub(profile).handler,
+      http.patch("*/users/me", () => HttpResponse.json({}, { status: 500 })),
+      publicProfilesById(),
+    );
+    renderWithAuth(
+      <Routes><Route path="/profile/:userId" element={<ProfilePage />} /></Routes>,
+      { authService: new FakeAuthService({ session: testSession() }), route: `/profile/${profile.id}` },
+    );
+    expect(await screen.findByRole("radio", { name: /net grid/i })).toBeChecked();
+    await user.click(await screen.findByRole("radio", { name: /court lines/i }));
+    await user.click(save());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not save/i);
+    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
+    expect(document.querySelector("[data-avatar-key='court-lines']")).toBeNull();
+  });
+
+  it("keeps the initials default available when no preset is selected", async () => {
     renderSettings();
     await description();
 
-    expect(screen.queryByLabelText(/picture|photo|avatar/i)).toBeNull();
+    expect(screen.getByRole("radio", { name: /use initials/i })).toBeInTheDocument();
   });
 });

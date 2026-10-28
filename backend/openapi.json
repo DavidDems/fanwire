@@ -18,6 +18,28 @@
             "title": "Id",
             "type": "integer"
           },
+          "profile_avatar_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Avatar Key"
+          },
+          "profile_picture_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Picture Key"
+          },
           "profile_picture_media_id": {
             "anyOf": [
               {
@@ -76,6 +98,28 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "profile_avatar_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Avatar Key"
+          },
+          "profile_picture_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Picture Key"
           },
           "profile_picture_media_id": {
             "anyOf": [
@@ -1255,6 +1299,28 @@
               }
             ],
             "title": "Preferred Team Id"
+          },
+          "profile_avatar_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Avatar Key"
+          },
+          "profile_picture_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Picture Key"
           },
           "profile_picture_media_id": {
             "anyOf": [
@@ -2792,6 +2858,28 @@
             ],
             "title": "Preferred Team Id"
           },
+          "profile_avatar_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Avatar Key"
+          },
+          "profile_picture_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Picture Key"
+          },
           "profile_picture_media_id": {
             "anyOf": [
               {
@@ -4235,6 +4323,17 @@
               }
             ],
             "title": "Preferred Team Id"
+          },
+          "profile_avatar_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Avatar Key"
           },
           "profile_picture_media_id": {
             "anyOf": [

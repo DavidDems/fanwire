@@ -90,6 +90,7 @@ class User(Base):
         ForeignKey("media.id", use_alter=True, name="fk_users_profile_picture_media_id_media"),
         nullable=True,
     )
+    profile_avatar_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

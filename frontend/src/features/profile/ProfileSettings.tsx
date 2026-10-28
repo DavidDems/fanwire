@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/Dialog";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import { Avatar, AVATAR_OPTIONS } from "../../components/ui/Avatar";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { focusDeactivatedBanner } from "../../routes/Deactivated";
 import { TEAMS_QUERY_KEY, fetchTeams, updateMe } from "./api";
@@ -57,6 +58,8 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
   const [preferredTeamId, setPreferredTeamId] = useState(
     teamValue(profile.preferred_team_id),
   );
+  const [avatarKey, setAvatarKey] = useState<string | null>(profile.profile_avatar_key ?? null);
+  const [avatarTouched, setAvatarTouched] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   /** What the status line says, and whether it is the saved confirmation or a neutral aside. */
   const [note, setNote] = useState<{
@@ -74,9 +77,12 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
         queryKey: PROFILE_QUERY_KEY,
         exact: true,
       });
+      setAvatarTouched(false);
       setNote({ text: "Your profile has been saved.", variant: "success" });
     },
     onError: () => {
+      setAvatarKey(profile.profile_avatar_key ?? null);
+      setAvatarTouched(false);
       setFailure("We could not save your profile. Please try again.");
     },
   });
@@ -97,6 +103,9 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
     if (preferredTeamId !== teamValue(profile.preferred_team_id)) {
       body.preferred_team_id =
         preferredTeamId === "" ? null : Number(preferredTeamId);
+    }
+    if (avatarTouched || avatarKey !== (profile.profile_avatar_key ?? null)) {
+      body.profile_avatar_key = avatarKey;
     }
 
     if (Object.keys(body).length === 0) {
@@ -152,6 +161,42 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
             ))}
           </select>
         </Field>
+
+        <fieldset className={styles.avatarChoices}>
+          <legend>Profile avatar</legend>
+          <p>Preview</p>
+          <Avatar
+            username={profile.username}
+            size="lg"
+            avatarKey={avatarKey}
+            pictureKey={avatarTouched ? null : profile.profile_picture_key}
+          />
+          <span>{avatarKey === null ? "Using initials" : "Preset selected"}</span>
+          <label className={styles.avatarChoice}>
+            <input
+              type="radio"
+              name="profile-avatar"
+              value=""
+              checked={avatarKey === null && (avatarTouched || profile.profile_picture_key === null)}
+              onChange={() => { setAvatarKey(null); setAvatarTouched(true); }}
+            />
+            <Avatar username={profile.username} size="sm" avatarKey={null} exposeKey={false} />
+            Use initials
+          </label>
+          {AVATAR_OPTIONS.map(([key, label]) => (
+            <label className={styles.avatarChoice} key={key}>
+              <input
+                type="radio"
+                name="profile-avatar"
+                value={key}
+                checked={avatarKey === key}
+                onChange={() => { setAvatarKey(key); setAvatarTouched(true); }}
+              />
+              <Avatar username={profile.username} size="sm" avatarKey={key} exposeKey={false} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
 
         <Button
           type="submit"

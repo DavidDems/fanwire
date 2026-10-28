@@ -805,6 +805,10 @@ export interface components {
             description: string | null;
             /** Id */
             id: number;
+            /** Profile Avatar Key */
+            profile_avatar_key?: string | null;
+            /** Profile Picture Key */
+            profile_picture_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id: number | null;
             /** Username */
@@ -821,6 +825,10 @@ export interface components {
         AuthorView: {
             /** Id */
             id: number;
+            /** Profile Avatar Key */
+            profile_avatar_key?: string | null;
+            /** Profile Picture Key */
+            profile_picture_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id: number | null;
             /** Username */
@@ -1217,6 +1225,10 @@ export interface components {
             id: number;
             /** Preferred Team Id */
             preferred_team_id: number | null;
+            /** Profile Avatar Key */
+            profile_avatar_key?: string | null;
+            /** Profile Picture Key */
+            profile_picture_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id: number | null;
             /** Username */
@@ -1701,6 +1713,10 @@ export interface components {
             id: number;
             /** Preferred Team Id */
             preferred_team_id: number | null;
+            /** Profile Avatar Key */
+            profile_avatar_key?: string | null;
+            /** Profile Picture Key */
+            profile_picture_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id: number | null;
             /** Username */
@@ -2191,6 +2207,8 @@ export interface components {
             description?: string | null;
             /** Preferred Team Id */
             preferred_team_id?: number | null;
+            /** Profile Avatar Key */
+            profile_avatar_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id?: number | null;
         };

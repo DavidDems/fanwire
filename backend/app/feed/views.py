@@ -66,6 +66,8 @@ class AuthorView(BaseModel):
     id: int
     username: str
     profile_picture_media_id: int | None
+    profile_avatar_key: str | None = None
+    profile_picture_key: str | None = None
 
 
 class MediaItemView(BaseModel):
@@ -310,6 +312,8 @@ def assemble_post_views(
                 id=author.id,
                 username=author.username,
                 profile_picture_media_id=author.profile_picture_media_id,
+                profile_avatar_key=author.profile_avatar_key,
+                profile_picture_key=author.profile_picture_key,
             ),
             like_count=likes.get(post.id, 0),
             liked_by_viewer=post.id in liked,

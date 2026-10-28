@@ -162,8 +162,10 @@ a second route would be a second place to decide who is allowed to see it.
 - **Date of birth is private, and the component tree is what guarantees it.**
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
   `PublicUserOut` (which does not). The one thing they share, `ProfileSummary`,
-  takes a username and two numbers — **not a user object** — so it cannot render
-  a field it was never handed. Since `UI-008` it also takes one optional
+  takes a username, two counts and the safe avatar rendering keys — **not a
+  user object** — so it cannot render a field it was never handed. Since
+  `USERS-004` it can render the saved preset or public picture key without
+  receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control
   sits in the header card: a slot for a control, never user data, so the
   guarantee stands. The own profile's date of birth row now says "Only you can
@@ -207,6 +209,13 @@ a second route would be a second place to decide who is allowed to see it.
   Emptying the description is the one case `null` is correct for — that is the
   user asking for it to be cleared. `username` and `date_of_birth` are not on
   `UpdateMeRequest` and are not editable here.
+- **Profile avatars are one persisted choice across surfaces.** The settings
+  form offers the eight `users/` preset keys and an explicit initials choice
+  in a labelled radio grid; the preview follows the pending choice and a failed
+  save restores the persisted one. Own/public profile summaries, feed authors
+  and account search render the same key. A processed uploaded picture takes
+  priority until the member saves a preset or chooses initials; avatar geometry
+  is code-drawn SVG and uses semantic text colours.
 - **This unit ships without a profile-picture control.** The upload widget
   belongs to `FRONTEND-004`, which has not landed; a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would

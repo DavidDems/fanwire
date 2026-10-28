@@ -37,7 +37,7 @@ Engagement-weighted ranking (scoring by likes/reposts/recency decay) is **not bu
 **`PostView`** (Pydantic, `app.feed.views`):
 ```
 id, text, is_reply, parent_post_id, is_repost, original_post_id, created_at
-author: { id, username, profile_picture_media_id }
+author: { id, username, profile_picture_media_id, profile_avatar_key, profile_picture_key }
 like_count, liked_by_viewer   # liked_by_viewer is always false for a guest
 reply_count, repost_count, reposted_by_viewer   # reposted_by_viewer: a plain repost; false for a guest
 reposted_post: PostView | null   # one level deep: its own reposted_post is always null

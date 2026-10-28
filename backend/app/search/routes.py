@@ -37,7 +37,7 @@ from app.search.schemas import (
 )
 from app.users.dependencies import get_optional_current_user
 from app.users.models import User
-from app.users.service import search_users
+from app.users.service import get_public_profiles, search_users
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -59,7 +59,18 @@ def search_accounts(
     session: Session = Depends(get_session),
 ) -> AccountsPage:
     users = search_users(session, q.strip(), limit=limit, offset=offset)
-    items = [AccountResult.model_validate(user) for user in users]
+    profiles = get_public_profiles(session, [user.id for user in users])
+    items = [
+        AccountResult(
+            id=user.id,
+            username=user.username,
+            description=user.description,
+            profile_picture_media_id=user.profile_picture_media_id,
+            profile_avatar_key=user.profile_avatar_key,
+            profile_picture_key=profiles[user.id].profile_picture_key,
+        )
+        for user in users
+    ]
     return AccountsPage(items=items, next_offset=_next_offset(offset, limit, len(users)))
 
 
