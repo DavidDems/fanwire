@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 
 import type { components } from "../../../api/schema";
@@ -6,6 +7,9 @@ import { formatDate, gameLabel } from "./format";
 import styles from "./Previews.module.css";
 
 type GameFinalPreviewView = components["schemas"]["GameFinalPreviewView"];
+const PeriodScores = lazy(() =>
+  import("./PeriodScores").then((module) => ({ default: module.PeriodScores })),
+);
 
 /**
  * A `game_final` data link on a post card (`FRONTEND-014`): the two teams and
@@ -21,6 +25,14 @@ export function GamePreview({ preview }: { preview: GameFinalPreviewView }) {
     home_score: homeScore,
   } = preview;
   const label = gameLabel(preview.label, preview.sub_label);
+  const winner =
+    homeScore > awayScore
+      ? home.name
+      : awayScore > homeScore
+        ? away.name
+        : null;
+  const awayPeriods = preview.away_line_score;
+  const homePeriods = preview.home_line_score;
 
   return (
     <div className={styles.preview}>
@@ -32,8 +44,21 @@ export function GamePreview({ preview }: { preview: GameFinalPreviewView }) {
         </Link>
       </p>
       <p className={styles.meta}>
-        Final · <time dateTime={preview.date}>{formatDate(preview.date)}</time>
+        Final{winner === null ? "" : ` · ${winner} won`} ·{" "}
+        <time dateTime={preview.date}>{formatDate(preview.date)}</time>
       </p>
+      {awayPeriods === null || homePeriods === null ? null : (
+        <Suspense fallback={null}>
+          <PeriodScores
+            awayTeam={away}
+            homeTeam={home}
+            awayPeriods={awayPeriods}
+            homePeriods={homePeriods}
+            awayScore={awayScore}
+            homeScore={homeScore}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

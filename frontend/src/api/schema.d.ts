@@ -1074,6 +1074,8 @@ export interface components {
          *     app.events.service.GameFinalPreview.
          */
         GameFinalPreviewView: {
+            /** Away Line Score */
+            away_line_score: number[] | null;
             /** Away Score */
             away_score: number;
             away_team: components["schemas"]["TeamRefView"];
@@ -1086,6 +1088,8 @@ export interface components {
             game_id: number;
             /** Game Type */
             game_type: string | null;
+            /** Home Line Score */
+            home_line_score: number[] | null;
             /** Home Score */
             home_score: number;
             home_team: components["schemas"]["TeamRefView"];

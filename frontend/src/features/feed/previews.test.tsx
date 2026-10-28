@@ -126,6 +126,85 @@ describe("a game_final preview", () => {
 
     expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
   });
+
+  it("names the winner from the canonical final scores", () => {
+    renderCard(postWithPreview(gameFinalPreview()));
+
+    expect(screen.getByText(/Final.*Toronto Raptors won/i)).toBeInTheDocument();
+  });
+
+  it("shows period values in a semantic table and names both teams and score in its link", async () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [25, 30, 30, 32],
+      away_line_score: [20, 25, 32, 32],
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAccessibleName(
+      /Phoenix Suns.*109.*Toronto Raptors.*117/,
+    );
+    const table = await screen.findByRole("table", { name: /period score/i });
+    expect(table).toHaveTextContent(/Q1.*20.*25/);
+    expect(table).toHaveTextContent(/Q4.*32.*32/);
+  });
+
+  it("omits only the period breakdown when line scores are unavailable", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: null,
+      away_line_score: null,
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
+    expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
+  });
+
+  it("omits period values that do not reconcile with the final score", () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [25, 30, 30, 31],
+      away_line_score: [20, 25, 32, 32],
+    };
+    renderCard(postWithPreview(preview));
+
+    expect(onlyDetailLink(card())).toHaveAttribute("href", GAME_HREF);
+    expect(screen.queryByRole("table", { name: /period score/i })).toBeNull();
+  });
+
+  it("labels overtime periods and keeps the displayed final totals canonical", async () => {
+    const preview = {
+      ...gameFinalPreview(),
+      home_line_score: [20, 20, 25, 30, 12, 10],
+      away_line_score: [20, 20, 24, 25, 10, 10],
+    };
+    renderCard(postWithPreview(preview));
+
+    await screen.findByRole("table", { name: /period score/i });
+    expect(
+      await screen.findByRole("columnheader", { name: "Q4" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("columnheader", { name: "OT" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("columnheader", { name: "2OT" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("row", {
+        name: /Phoenix Suns 20 20 24 25 10 10/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("row", {
+        name: /Toronto Raptors 20 20 25 30 12 10/,
+      }),
+    ).toBeInTheDocument();
+    expect(onlyDetailLink(card())).toHaveAccessibleName(
+      /Phoenix Suns.*109.*Toronto Raptors.*117/,
+    );
+  });
 });
 
 describe("a player_game preview", () => {

@@ -958,6 +958,19 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   is "Did not play" plus its reason, with no figures; a null figure is an em
   dash (U+2014). The stats pages' own `formatAverage` uses an en dash, which
   is a known difference.
+- **Game result story (`FRONTEND-022`)**: `GamePreview` shows a semantic period
+  score table only when both arrays are present, have the same length, and
+  each sum matches its canonical final score. Periods are Q1–Q4 followed by
+  OT, 2OT, and so on. Missing or inconsistent arrays omit the table. The
+  card remains one detail link named from both teams and their final scores;
+  its result line names the team with the higher final score as the winner,
+  and period values have visible team/period text labels.
+- **The game detail (`FRONTEND-022`)** keeps the API's team names, date, score,
+  result and period line score as text. `MatchupArtwork` is original inline
+  SVG court geometry and does not supply data or team identity graphics.
+  Box-score tables retain every statistic inside a labelled, keyboard-focusable
+  horizontal scroll region, with a visible cue when the table is wider than
+  its viewport.
 - **One detail link each, outside the thread controls**: `/games/<id>`,
   `/games/<id>?line=<line_id>` (the player is not linked separately) and
   `/players/<id>`, each with `useDetailLinkState`. The card's click-to-open

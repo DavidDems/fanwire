@@ -83,6 +83,8 @@ GAME_FINAL_FIELDS = {
     "away_team",
     "home_score",
     "away_score",
+    "home_line_score",
+    "away_line_score",
 }
 
 
@@ -101,6 +103,8 @@ def _finals_game(session, teams):
     )
     game.sub_label = "Game 5"
     game.series_game_number = 5
+    game.home_line_score = [28, 30, 25, 23]
+    game.away_line_score = [20, 22, 24, 22]
     session.flush()
     return game
 
@@ -127,6 +131,21 @@ def test_game_final_preview_carries_the_game_and_both_teams(session, teams):
     assert preview.away_team == _ref(away)
     assert preview.home_score == 106
     assert preview.away_score == 88
+    assert preview.home_line_score == [28, 30, 25, 23]
+    assert preview.away_line_score == [20, 22, 24, 22]
+
+
+def test_game_final_preview_line_scores_are_null_when_not_stored(session, teams):
+    from app.events.service import game_final_previews
+
+    game = _finals_game(session, teams)
+    game.home_line_score = None
+    game.away_line_score = None
+
+    preview = game_final_previews(session, [game.id])[game.id]
+
+    assert preview.home_line_score is None
+    assert preview.away_line_score is None
 
 
 def test_game_final_preview_is_frozen(session, teams):

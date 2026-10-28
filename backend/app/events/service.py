@@ -1207,6 +1207,8 @@ class GameFinalPreview:
     away_team: TeamRef
     home_score: int
     away_score: int
+    home_line_score: list[int] | None
+    away_line_score: list[int] | None
 
 
 @dataclass(frozen=True)
@@ -1358,6 +1360,8 @@ def game_final_previews(session: Session, game_ids: Collection[int]) -> dict[int
             away_team=_team_ref(away_team),
             home_score=game.home_score,
             away_score=game.away_score,
+            home_line_score=game.home_line_score,
+            away_line_score=game.away_line_score,
         )
         for game, home_team, away_team in rows
     }

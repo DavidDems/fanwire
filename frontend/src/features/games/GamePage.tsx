@@ -12,6 +12,7 @@ import { BoxScore } from "./BoxScore";
 import { formatGameDate } from "./format";
 import styles from "./Games.module.css";
 import { LineScore } from "./LineScore";
+import { MatchupArtwork } from "./MatchupArtwork";
 import { postAboutGameHref } from "./postLinks";
 
 /**
@@ -142,6 +143,14 @@ function Game({ game }: { game: GameDetailOut }) {
           )}
         </p>
       </header>
+
+      <MatchupArtwork
+        awayName={away.name}
+        homeName={home.name}
+        awayScore={awayScore}
+        homeScore={homeScore}
+        date={formatGameDate(game.date)}
+      />
 
       {!hasLineScore ? null : (
         <LineScore
