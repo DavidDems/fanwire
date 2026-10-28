@@ -38,6 +38,9 @@ task may be merged before its parent reaches `main`.
 The allowed paths include `frontend/src/components/stats-nav/RecordsLevel.tsx`
 and `frontend/src/components/stats-nav/StatsNav.module.css` because that
 component owns the record cards and their empty-holder rows.
+They also include `frontend/src/test/bundle-budgets/FRONTEND-024.ts` so the
+unit can declare its measured entry and lazy-output bundle changes in the
+repository's required per-unit budget file.
 
 Commit tests alone first, then implementation. Test each of the four states,
 its text/role, decorative SVG semantics, token-only styles and zero external
