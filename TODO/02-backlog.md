@@ -91,18 +91,18 @@ The human's request of 2026-10-23: the stats screens and the inputs are rebuilt,
 
 From the human's 2026-10-27 request and the browser audit in
 `Prompts/21-visual-refresh-specs.md`. These are `hand` units because each
-needs visual judgement and a real browser pass. **The Director spec PR must
-merge before any `agent/<ID>` branch is created.** Every task below is
-independent and must be cut directly from `main`; none may use another task
-branch as its base. Suggested review order is the order shown, not a dependency
-order.
+needs visual judgement and a real browser pass. FRONTEND-022 is complete
+(#255). For the remaining work, the human requested a stacked review sequence:
+the Director baseline/spec PR #257 is first, then FRONTEND-023, FRONTEND-024,
+and USERS-004. Each base must have a green full CI gate before its dependent
+branch is created. This review stack does not mean the feature implementations
+depend on one another.
 
 | Order | Task | Mode | Shippable outcome | Source | Dependencies / branch base |
 |---:|---|---|---|---|---|
-| 1 | `FRONTEND-022` | `hand` | Game cards and game detail share a league-neutral scoreboard story with period scores, final context, and an original code-native matchup motif. | Human request; `Prompts/21` game and game-detail audit | None. Create from `main` after this Director PR merges. |
-| 2 | `FRONTEND-023` | `hand` | Player game-log points and team-season margins become labelled, accessible charts with full text data equivalents. | Human request; `Prompts/21` player and Stats audit | None. Create from `main` after this Director PR merges. |
-| 3 | `FRONTEND-024` | `hand` | Empty feed/profile, unmatched player search, and non-qualifying record states share an original Fanwire sports-geometry motif. | Human request; `Prompts/21` quiet-state audit | None. Create from `main` after this Director PR merges. |
-| 4 | `USERS-004` | `hand` | Members can persist one of eight original geometric avatars; a saved preset replaces a profile photo, while the existing username initial remains the default/reset. | Human request; `Prompts/21` avatar/API-boundary audit; avatar replacement decision in this Director PR | None. Create from `main` after this Director PR merges. |
+| 1 | `FRONTEND-023` | `hand` | Player game-log points and team-season margins become labelled, accessible charts with full text data equivalents. | Human request; `Prompts/21` player and Stats audit | Director baseline/spec PR #257. Branch from its green head. |
+| 2 | `FRONTEND-024` | `hand` | Empty feed/profile, unmatched player search, and non-qualifying record states share an original Fanwire sports-geometry motif. | Human request; `Prompts/21` quiet-state audit | `FRONTEND-023`. Branch from its PR head after all CI checks pass. |
+| 3 | `USERS-004` | `hand` | Members can persist one of eight original geometric avatars; a saved preset replaces a profile photo, while the existing username initial remains the default/reset. | Human request; `Prompts/21` avatar/API-boundary audit | `FRONTEND-024`. Branch from its PR head after all CI checks pass. |
 
 ## Workflow ideas, not yet designed
 

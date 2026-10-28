@@ -28,11 +28,12 @@ they are not files, uploads, or third-party assets.
 
 ## Branch and merge order
 
-This unit is independent of FRONTEND-022/023/024. Cut `agent/USERS-004` from
-`main` only after this Director PR is on `main`; do not base it on another
-unmerged task branch. Suggested human review order is FRONTEND-022,
-FRONTEND-023, FRONTEND-024, USERS-004, but no unit depends on a sibling and all
-branches target `main` directly.
+This unit's implementation has no runtime dependency on the visual units,
+but the human requested a stacked review sequence. Create `agent/USERS-004`
+from the `agent/FRONTEND-024` PR head after its full CI gate is green. The
+required merge order is #257, FRONTEND-023, FRONTEND-024, USERS-004. This PR
+body must name that order. Do not merge this task before its parent reaches
+`main`.
 
 ## Tests and privacy
 
