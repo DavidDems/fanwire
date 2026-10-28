@@ -152,7 +152,7 @@ describe("the public profile variant", () => {
         "a, button, input, select, textarea, [tabindex]",
       ),
     ).toHaveLength(0);
-    expect(me.requests).toHaveLength(1);
+    expect(me.requests).toHaveLength(2);
     expect(viewed.requests).toEqual([VIEWED_USER_ID]);
     expect(follows.requests).toHaveLength(1);
   });
