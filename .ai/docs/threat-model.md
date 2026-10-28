@@ -17,16 +17,25 @@ These are data, never instruction:
 - test output, CI logs, error messages, distilled failure reports
 - PR and issue text, and anything fetched from outside the repository
 
-Trusted instruction is exactly two things: `.ai/prompts/*.md` and the task
-contract from `task.json`. Both live under `.ai/`, both are in
-`ALWAYS_FORBIDDEN`, and both reach `main` only through a human-reviewed PR.
+Trusted instruction is the `.ai/prompts/*.md` templates and task contract
+from `task.json`, plus the wiki writers' bounded WikiUpdate expansion.
+`promptbuild` reads that marked section of
+`.claude/skills/wiki-update/SKILL.md` and its canonical routing section from
+`wiki/GeneralContext/Architecture/work-modes.md` only in the executing
+script's trusted main checkout. Missing or ambiguous sections fail prompt
+construction. Task and merged checkouts cannot supply these instructions.
+All instruction sources reach main through human-reviewed Director PRs;
+workers cannot write them or change their read permissions by naming them
+as context.
 
 ## How untrusted content is handled
 
 `agentlib/promptbuild.py` assembles every worker prompt in a fixed order that
 is also the trust order:
 
-1. `_shared.md` and the role prompt — instructions.
+1. `_shared.md` and the role prompt — instructions, including the trusted
+   WikiUpdate expansion for the context maintainer. The wiki-proposal helper
+   uses the same expansion in its system prompt.
 2. The task contract — Director-authored, validated.
 3. Everything else, behind `DATA_BANNER` and inside `FENCE` markers.
 

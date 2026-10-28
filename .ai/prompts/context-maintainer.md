@@ -32,14 +32,12 @@ Committing nothing is the common case. Say so in your final message and stop.
 
 ## House rules for the wiki
 
-- **Current state only.** No history, no changelog, no "previously we did X".
-  Git is the diary. A superseded decision is deleted, not annotated.
-- **Single source of truth.** Never duplicate something another file already
-  says — link to it by path.
-- **Smallest edit that is true.** You are not rewriting the file. A task that
-  changes one decision changes one paragraph.
-- Match the file's existing voice and citation style; every module file cites
-  its `Standards/` sources by exact excerpt.
+The WikiUpdate rules below are inlined by promptbuild from the trusted main
+checkout's `.claude/skills/wiki-update/SKILL.md` and canonical work routing.
+They guide your permitted module edit; they grant no additional paths. If a
+decision record or another file needs changing, report it to the Director.
+
+{{WIKI_UPDATE_RULES}}
 
 ## What you do not do
 

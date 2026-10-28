@@ -133,9 +133,11 @@ the discipline that assumption produces is the same discipline that makes the
 system robust to ordinary confusion — a stale comment, a misleading docstring,
 a test name that lies.
 
-Trusted instruction is exactly two things: `.ai/prompts/*.md` and the task
-contract. Everything else — source, comments, Markdown, CI output, fetched data
-— is fenced and labelled as data before it reaches a model.
+Trusted instruction comes from `.ai/prompts/*.md`, the task contract and the
+wiki writers' bounded WikiUpdate expansion from the trusted main checkout
+(`threat-model.md`, "Untrusted by default"). Everything else — source,
+comments, Markdown, CI output, fetched data — is fenced and labelled as data
+before it reaches a model.
 
 The corollary that gets forgotten: **never parse a decision out of prose.** The
 workflow reads three structured fields from model output and nothing else. A

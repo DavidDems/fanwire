@@ -56,7 +56,7 @@ from typing import Any
 AI_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AI_ROOT))
 
-from agentlib import automation, wikiprop
+from agentlib import automation, promptbuild, wikiprop
 from agentlib.guard import TASK_ID_SAFE
 
 OK, FAILED, USAGE = 0, 1, 2
@@ -145,8 +145,8 @@ def main(argv: list[str] | None = None) -> int:
     diff_text, omitted = wikiprop.trim_diff(raw_diff, max_chars, first=wikiprop.module_files(spec))
 
     try:
-        system = (AI_ROOT / "prompts" / "wiki-proposal.md").read_text(encoding="utf-8").strip()
-    except OSError as exc:
+        system = promptbuild.writer_prompt(AI_ROOT, "wiki-proposal.md")
+    except promptbuild.PromptError as exc:
         return _give_up(summary, f"cannot read the system prompt: {exc}", USAGE)
 
     api_key = os.environ.get(key_var, "").strip()
