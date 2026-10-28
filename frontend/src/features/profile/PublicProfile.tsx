@@ -1,4 +1,5 @@
 import type { components } from "../../api/schema";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { FollowButton } from "./FollowButton";
 import styles from "./Profile.module.css";
 import { ProfileSummary } from "./ProfileSummary";
@@ -33,6 +34,8 @@ export function PublicProfile({ profile, isFollowing }: PublicProfileProps) {
       />
 
       {profile.description === null ? null : <p>{profile.description}</p>}
+
+      <EmptyState>No posts yet.</EmptyState>
     </section>
   );
 }

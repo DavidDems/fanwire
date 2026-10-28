@@ -153,11 +153,21 @@ describe("a search from the URL", () => {
   });
 
   it("names the search in an explicit no-results state", async () => {
-    openPlayers("/stats/players?q=zzz");
+    const { players } = openPlayers("/stats/players?q=zzz");
 
     const empty = await screen.findByText(/no players/i);
     expect(empty.textContent).toContain("zzz");
     expect(playerLinks()).toEqual([]);
+    const artwork = empty.parentElement?.querySelector(
+      "svg[aria-hidden='true']",
+    );
+    expect(artwork).not.toBeNull();
+    expect(
+      artwork?.querySelectorAll(
+        "a, button, input, select, textarea, [tabindex]",
+      ),
+    ).toHaveLength(0);
+    expect(players.requests).toHaveLength(1);
   });
 
   it("shows an alert when the search fails", async () => {

@@ -130,6 +130,32 @@ describe("the public profile variant", () => {
     expect(await screen.findByText("3 followers")).toBeInTheDocument();
     expect(screen.getByText("5 following")).toBeInTheDocument();
   });
+
+  it("gives a public profile with no posts a message and decorative artwork", async () => {
+    const me = meStub();
+    const viewed = publicProfileStub();
+    const follows = followingStub();
+    server.use(me.handler, viewed.handler, follows.handler);
+
+    renderProfile(VIEWED_USER_ID, signedIn());
+
+    await screen.findByRole("heading", {
+      name: new RegExp(`^${VIEWED_USERNAME}$`, "i"),
+    });
+    expect(screen.getByText("No posts yet.")).toBeInTheDocument();
+    const artwork = screen
+      .getByText("No posts yet.")
+      .parentElement?.querySelector("svg[aria-hidden='true']");
+    expect(artwork).not.toBeNull();
+    expect(
+      artwork?.querySelectorAll(
+        "a, button, input, select, textarea, [tabindex]",
+      ),
+    ).toHaveLength(0);
+    expect(me.requests).toHaveLength(2);
+    expect(viewed.requests).toEqual([VIEWED_USER_ID]);
+    expect(follows.requests).toHaveLength(1);
+  });
 });
 
 describe("the own profile variant", () => {

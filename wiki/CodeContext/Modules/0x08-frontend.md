@@ -13,6 +13,12 @@ view is left.
 
 What is real:
 
+Since `FRONTEND-024`, `components/ui/EmptyState` places the decorative
+`CourtScoreboard` SVG before its unchanged message. The empty feed and player
+search use it; public profiles show "No posts yet." and record cards without a
+qualifying holder retain their copy alongside the same motif. The SVG is
+hidden from assistive technology and uses the semantic theme tokens.
+
 | | |
 |---|---|
 | `backend/scripts/export_openapi.py` → `backend/openapi.json` | The committed contract. Sorted keys, two-space indent, explicit `newline="\n"`. Deterministic across runs with different `PYTHONHASHSEED` |
@@ -1012,7 +1018,7 @@ is recorded so the second copy is a known state rather than a discovery.
   variant (aria-hidden, `media` reserving the picture frame) until then, and
   the whole `PostNode` in one render after. The feed, search results and the
   thread modal (root and replies) render posts only through it; a profile
-  shows no posts yet.
+  shows the shared `EmptyState` with "No posts yet." and decorative court / scoreboard linework.
 - **Ready** = every picture the card shows (its own; a plain repost's
   original's; `isPlainRepost` moved to `api.ts` for this) has been preloaded
   with `new Image()` and its `decode()` has settled. A rejected decode of a
@@ -1306,8 +1312,9 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     ("Since 2003-04, through 2026-27") and the cards. A card's one control is
     "View all" (named "View all: <title>", a real `?record=` link), its
     `::after` stretched over the card so the whole card is the hit area; the
-    holder is plain text. While the summary loads, skeleton cards hold the
-    place.
+    holder is plain text. A card with no qualifying holder keeps "Nothing
+    qualifies yet." and adds the shared decorative court / scoreboard art.
+    While the summary loads, skeleton cards hold the place.
   - `RecordLevel`: the rule, "Since <season>" and the whole list (up to 100)
     in one `ScrollTable`, with the API's ranks as given; a column the record
     has no value for is left out. A season record notes that it ranks the
