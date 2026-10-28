@@ -9,7 +9,6 @@ from sqlalchemy import select
 
 from app.db import Base, make_engine, make_session_factory
 from app.dependencies import get_session
-from app.events.models import Team
 from app.media.models import Media, MediaStatus
 from app.users.auth import VerifiedIdentity
 from app.users.dependencies import get_current_identity, get_current_user
@@ -113,7 +112,6 @@ def test_avatar_patch_null_resets_and_omission_preserves_choice(client, session_
     http, app = client
     with session_factory() as session:
         user = _create(session, "reset-avatar", profile_avatar_key="net-grid")
-        user_id = user.id
     app.dependency_overrides[get_current_user] = lambda: user
 
     unchanged = http.patch("/users/me", json={})
@@ -162,7 +160,11 @@ def test_attaching_processed_picture_clears_preset(client, session_factory):
         session.commit()
         user_id = user.id
         media_id = media.id
-    app.dependency_overrides[get_current_user] = lambda: session_factory().get(User, user_id)
+    def get_current_user_override():
+        with session_factory() as session:
+            yield session.get(User, user_id)
+
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     response = http.patch("/users/me", json={"profile_picture_media_id": media_id})
 
