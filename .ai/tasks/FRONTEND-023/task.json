@@ -18,6 +18,7 @@
   "allowed_paths": [
     "frontend/src/features/players/**",
     "frontend/src/features/stats/**",
+    "frontend/src/components/stats-nav/**",
     "frontend/src/api/stats.ts",
     "frontend/src/api/stats.test.ts",
     "frontend/src/test/bundle-budgets/FRONTEND-023.ts",
