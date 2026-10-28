@@ -77,6 +77,8 @@ class PublicUserOut(BaseModel):
     description: str | None
     preferred_team_id: int | None
     profile_picture_media_id: int | None
+    profile_avatar_key: str | None = None
+    profile_picture_key: str | None = None
     created_at: datetime
     follower_count: int
     following_count: int
@@ -102,3 +104,4 @@ class UpdateMeRequest(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     preferred_team_id: int | None = None
     profile_picture_media_id: int | None = None
+    profile_avatar_key: str | None = None

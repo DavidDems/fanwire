@@ -25,6 +25,8 @@ import styles from "./Profile.module.css";
 
 export interface ProfileSummaryProps {
   username: string;
+  avatarKey?: string | null;
+  pictureKey?: string | null;
   followerCount: number;
   followingCount: number;
   /** A control for the header card's right edge: Follow/Unfollow. Never user data. */
@@ -33,6 +35,8 @@ export interface ProfileSummaryProps {
 
 export function ProfileSummary({
   username,
+  avatarKey = null,
+  pictureKey = null,
   followerCount,
   followingCount,
   action,
@@ -40,7 +44,7 @@ export function ProfileSummary({
   return (
     <Card>
       <header className={styles.header}>
-        <Avatar username={username} size="lg" />
+        <Avatar username={username} size="lg" avatarKey={avatarKey} pictureKey={pictureKey} />
         <div className={styles.identity}>
           <h1>{username}</h1>
           <ul className={styles.counts}>

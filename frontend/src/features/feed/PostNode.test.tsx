@@ -47,6 +47,14 @@ function renderNode(post: PostView) {
 }
 
 describe("one PostNode renders a standalone post", () => {
+  it("renders the author's saved preset avatar", async () => {
+    const author = { ...ROOT.author, profile_avatar_key: "baseline" };
+    renderNode(testPostView({ id: 404, author }));
+
+    expect(await screen.findByText(ROOT_TEXT)).toBeInTheDocument();
+    expect(document.querySelector("[data-avatar-key='baseline']")).toBeInTheDocument();
+  });
+
   it("renders the post without asking for anything at all", async () => {
     renderNode(ROOT);
 

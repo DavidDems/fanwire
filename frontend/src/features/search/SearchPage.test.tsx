@@ -167,6 +167,16 @@ describe("the search view", () => {
 });
 
 describe("free-text results (criterion 1)", () => {
+  it("renders a saved preset on an account search result", async () => {
+    const account = { ...ALICE, profile_avatar_key: "ball-seams" };
+    renderSearch("/search?q=raptors", {
+      accounts: { 0: accountsPage([account], null) },
+    });
+
+    expect(await screen.findByRole("link", { name: ALICE.username })).toBeInTheDocument();
+    expect(document.querySelector("[data-avatar-key='ball-seams']")).toBeInTheDocument();
+  });
+
   it("calls GET /search/accounts and GET /search/posts once each, with the same q, from offset 0", async () => {
     const { accounts, posts } = renderSearch(`/search?q=${Q}`);
 

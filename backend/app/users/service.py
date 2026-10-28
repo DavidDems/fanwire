@@ -30,6 +30,18 @@ from app.media.models import Media, MediaStatus
 from app.users.models import Follow, User
 
 USER_FOLLOWED = "UserFollowed"
+PROFILE_AVATAR_KEYS = frozenset(
+    {
+        "court-lines",
+        "ball-seams",
+        "shot-clock",
+        "scoreboard",
+        "arc",
+        "net-grid",
+        "baseline",
+        "play-pattern",
+    }
+)
 
 
 class UserNotFoundError(ValueError):
@@ -73,6 +85,10 @@ class InvalidProfilePictureError(ValueError):
     MediaStatus.PROCESSED."""
 
 
+class InvalidProfileAvatarError(ValueError):
+    """Raised when a profile avatar key is outside the stable preset set."""
+
+
 def create_user(
     session: Session,
     *,
@@ -81,18 +97,22 @@ def create_user(
     date_of_birth: date,
     description: str | None = None,
     preferred_team_id: int | None = None,
+    profile_avatar_key: str | None = None,
 ) -> User:
     """Persist and return a new User row. A duplicate cognito_sub/username
     is left to surface as IntegrityError — the DB unique constraint is the
     source of truth, and a pre-check-then-insert here would just be a TOCTOU
     race (wiki/CodeContext/Standards/design-principles.md "Single source of
     truth")."""
+    if profile_avatar_key is not None and profile_avatar_key not in PROFILE_AVATAR_KEYS:
+        raise InvalidProfileAvatarError(f"Unknown profile avatar key: {profile_avatar_key!r}")
     user = User(
         cognito_sub=cognito_sub,
         username=username,
         date_of_birth=date_of_birth,
         description=description,
         preferred_team_id=preferred_team_id,
+        profile_avatar_key=profile_avatar_key,
     )
     session.add(user)
     session.commit()
@@ -192,6 +212,7 @@ def update_profile(
     description: str | None = None,
     preferred_team_id: int | None = None,
     profile_picture_media_id: int | None = None,
+    profile_avatar_key: str | None = None,
 ) -> User:
     """Apply only the fields present in `fields_set` (pass
     `UpdateMeRequest.model_fields_set`) to the User with `user_id` --
@@ -235,12 +256,24 @@ def update_profile(
                 "owned by this user"
             )
 
+    if (
+        "profile_avatar_key" in fields_set
+        and profile_avatar_key is not None
+        and profile_avatar_key not in PROFILE_AVATAR_KEYS
+    ):
+        raise InvalidProfileAvatarError(f"Unknown profile avatar key: {profile_avatar_key!r}")
+
     if "description" in fields_set:
         user.description = description
     if "preferred_team_id" in fields_set:
         user.preferred_team_id = preferred_team_id
     if "profile_picture_media_id" in fields_set:
         user.profile_picture_media_id = profile_picture_media_id
+        if profile_picture_media_id is not None:
+            user.profile_avatar_key = None
+    if "profile_avatar_key" in fields_set:
+        user.profile_avatar_key = profile_avatar_key
+        user.profile_picture_media_id = None
 
     session.commit()
     return user
@@ -267,6 +300,8 @@ class PublicProfile:
     id: int
     username: str
     profile_picture_media_id: int | None
+    profile_avatar_key: str | None = None
+    profile_picture_key: str | None = None
 
 
 def get_public_profiles(session: Session, user_ids: Collection[int]) -> dict[int, PublicProfile]:
@@ -277,17 +312,37 @@ def get_public_profiles(session: Session, user_ids: Collection[int]) -> dict[int
     if not user_ids:
         return {}
 
-    rows = session.scalars(
-        select(User).where(User.id.in_(user_ids), User.deleted_at.is_(None))
+    rows = session.execute(
+        select(User, Media.s3_key_public)
+        .outerjoin(
+            Media,
+            (Media.id == User.profile_picture_media_id)
+            & (Media.status == MediaStatus.PROCESSED),
+        )
+        .where(User.id.in_(user_ids), User.deleted_at.is_(None))
     ).all()
     return {
-        row.id: PublicProfile(
-            id=row.id,
-            username=row.username,
-            profile_picture_media_id=row.profile_picture_media_id,
+        user.id: PublicProfile(
+            id=user.id,
+            username=user.username,
+            profile_picture_media_id=user.profile_picture_media_id,
+            profile_avatar_key=user.profile_avatar_key,
+            profile_picture_key=picture_key,
         )
-        for row in rows
+        for user, picture_key in rows
     }
+
+
+def public_profile_picture_key(session: Session, user: User) -> str | None:
+    """The public object key for a user's processed profile picture, if any."""
+    if user.profile_picture_media_id is None:
+        return None
+    return session.scalar(
+        select(Media.s3_key_public).where(
+            Media.id == user.profile_picture_media_id,
+            Media.status == MediaStatus.PROCESSED,
+        )
+    )
 
 
 def account_created_at(session: Session, user_id: int) -> datetime | None:

@@ -28,6 +28,8 @@ export function PublicProfile({ profile, isFollowing }: PublicProfileProps) {
     <section className={styles.page}>
       <ProfileSummary
         username={profile.username}
+        avatarKey={profile.profile_avatar_key}
+        pictureKey={profile.profile_picture_key}
         followerCount={profile.follower_count}
         followingCount={profile.following_count}
         action={<FollowButton userId={profile.id} isFollowing={isFollowing} />}

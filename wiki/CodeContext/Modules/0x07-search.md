@@ -63,7 +63,7 @@ No GoF pattern in [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example
 This is the concrete shape of "each owning module exposes a tested public search/filter function" from the top of this file — `search/`'s own module (`app/search/routes.py`) is thin orchestration + response-schema mapping only, per [[0x00-architecture]]'s Connection rule.
 
 ### Routes (`app.search.routes`, `APIRouter(prefix="/search")`)
-- `GET /search/accounts?q=&limit=&offset=` → `{items: AccountResult[], next_offset: int | None}`. `AccountResult` = `{id, username, description, profile_picture_media_id}` — never `date_of_birth` (see [[0x01-users]]'s DOB-privacy rule).
+- `GET /search/accounts?q=&limit=&offset=` → `{items: AccountResult[], next_offset: int | None}`. `AccountResult` = `{id, username, description, profile_picture_media_id, profile_avatar_key, profile_picture_key}` — never `date_of_birth` (see [[0x01-users]]'s DOB-privacy rule).
 - `GET /search/posts?q=&limit=&offset=` → `{items: PostView[], next_offset}`, built with `app.feed.views.assemble_post_views` (viewer via `get_optional_current_user`, live scores via `get_live_score_proxy`) — the same cross-module view-assembly `feed/`'s own routes use, per this file's original design ("`search/` is plumbing, not a pattern participant" beyond Proxy).
 - `GET /search/games?season=&team_id=&position=&limit=&offset=` → `{items: GameOut[], next_offset}`, reusing `events/`'s own `GameOut` schema.
 - `GET /search/games/filters` → `{seasons: [str], positions: [str]}`. Teams are **not** duplicated here — the frontend calls the existing `GET /events/teams`.

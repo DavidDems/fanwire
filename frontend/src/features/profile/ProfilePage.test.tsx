@@ -86,6 +86,22 @@ beforeEach(() => {
 });
 
 describe("the public profile variant", () => {
+  it("renders the saved preset on a public profile", async () => {
+    const me = meStub();
+    const viewed = publicProfileStub({
+      ...testProfile(),
+      profile_avatar_key: "net-grid",
+    });
+    server.use(me.handler, viewed.handler, followingStub().handler);
+
+    renderProfile(VIEWED_USER_ID, signedIn());
+
+    await screen.findByRole("heading", {
+      name: new RegExp(`^${VIEWED_USERNAME}$`, "i"),
+    });
+    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
+  });
+
   it("is headed by the viewed user's username", async () => {
     signedInReads();
 
@@ -159,6 +175,16 @@ describe("the public profile variant", () => {
 });
 
 describe("the own profile variant", () => {
+  it("renders the saved preset on the owner's profile", async () => {
+    const own = meStub({ ...testProfile(), profile_avatar_key: "arc" });
+    server.use(own.handler);
+
+    renderProfile(OWN_USER_ID, signedIn());
+
+    await screen.findByRole("heading", { name: /^raptorsfan$/i });
+    expect(document.querySelector("[data-avatar-key='arc']")).toBeInTheDocument();
+  });
+
   it("renders the caller's own date of birth", async () => {
     signedInReads();
 

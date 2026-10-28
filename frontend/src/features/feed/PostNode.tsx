@@ -233,7 +233,12 @@ function PostContent({ post }: { post: PostView }) {
   return (
     <>
       <header className={styles.header}>
-        <Avatar username={post.author.username} size="sm" />
+        <Avatar
+          username={post.author.username}
+          size="sm"
+          avatarKey={post.author.profile_avatar_key}
+          pictureKey={post.author.profile_picture_key}
+        />
         <Link className={styles.author} to={`/profile/${post.author.id}`}>
           {post.author.username}
         </Link>

@@ -78,7 +78,12 @@ function AccountResults({ q }: { q: string }) {
           <ul className={styles.list}>
             {items.map((account) => (
               <li key={account.id} className={styles.row}>
-                <Avatar username={account.username} size="sm" />
+                <Avatar
+                  username={account.username}
+                  size="sm"
+                  avatarKey={account.profile_avatar_key}
+                  pictureKey={account.profile_picture_key}
+                />
                 <div className={styles.body}>
                   <Link
                     to={`/profile/${account.id}`}
