@@ -6,6 +6,7 @@ import {
   type RecordSummaryOut,
 } from "../../api/records";
 import { formatGameDate } from "../../features/games/format";
+import { CourtScoreboard } from "../visuals/CourtScoreboard";
 import { InlineAlert } from "../ui/InlineAlert";
 import { SegmentedTabs } from "../ui/SegmentedTabs";
 import { Skeleton } from "../ui/Skeleton";
@@ -138,7 +139,10 @@ function RecordCard({
         </LevelLink>
       </div>
       {holder === null ? (
-        <p className={styles.muted}>Nothing qualifies yet.</p>
+        <div className={styles.recordEmpty}>
+          <CourtScoreboard />
+          <p className={styles.muted}>Nothing qualifies yet.</p>
+        </div>
       ) : (
         <>
           <p>

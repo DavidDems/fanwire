@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { CourtScoreboard } from "../visuals/CourtScoreboard";
 import styles from "./EmptyState.module.css";
 
 export interface EmptyStateProps {
@@ -12,6 +13,7 @@ export interface EmptyStateProps {
 export function EmptyState({ children, action }: EmptyStateProps) {
   return (
     <div className={styles.empty}>
+      <CourtScoreboard />
       <p className={styles.message}>{children}</p>
       {action}
     </div>

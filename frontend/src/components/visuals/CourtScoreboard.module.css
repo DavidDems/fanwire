@@ -1,0 +1,26 @@
+.art {
+  display: block;
+  width: min(10rem, 100%);
+  height: auto;
+  color: var(--color-border-strong);
+}
+
+.board,
+.court {
+  fill: var(--color-surface);
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
+
+.lines {
+  fill: none;
+  stroke: var(--color-border-strong);
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+.center {
+  fill: var(--color-surface-muted);
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
