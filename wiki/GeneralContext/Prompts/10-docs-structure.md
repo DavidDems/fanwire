@@ -1,4 +1,25 @@
+---
+type: prompt
+---
+
 # 10 — Docs structure: typed documents, a doc linter, and wiki skills
+
+**Update, 2026-10-28 — deliverable 1 implemented for review.** The Director
+PR adds WikiUpdate in `.claude/skills/wiki-update/SKILL.md`, a thin Codex
+entrypoint, measured type budgets and a shared pre-commit checklist. Both
+wiki writers inline the marked rules and canonical routing through
+`promptbuild` from the executing script's trusted main checkout. Routing for
+new numbered ADRs is in `work-modes.md`; legacy records have not moved.
+
+Continue with **deliverable 2 in its own Director PR after this PR merges**:
+the deterministic linter and shrinking baseline. Use the skill's body-word
+count definition, budgets and measurement classification; there are no
+standalone ADR/changelog samples yet. Then deliverable 3 migrates mixed files
+and citations; deliverable 4 adds WikiMaintenance and wiki-health. No linter,
+corpus migration or maintenance automation is part of deliverable 1. Visual
+refresh is complete through USERS-004 (#266) and its backend test cleanup
+(#267); stale visual-stack entries in the index/backlog are not pending units.
+Keep jev disabled.
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System

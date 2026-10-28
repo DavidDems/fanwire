@@ -3,7 +3,8 @@
 No agent ever writes another agent's prompt. This module composes three things,
 in a fixed order, and the order is the trust order:
 
-1. `.ai/prompts/_shared.md` and `.ai/prompts/<role>.md` - the only instructions.
+1. `.ai/prompts/_shared.md` and `.ai/prompts/<role>.md`, with the wiki
+   writer's shared rules expanded from the trusted tools checkout.
 2. The task contract from `task.json` - Director-authored, guard-validated.
 3. Everything else, fenced and banner-labelled as data.
 
@@ -15,6 +16,7 @@ as instruction. See `.ai/docs/threat-model.md`.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +57,7 @@ def build(ctx: dict[str, Any], ai_root: str | Path) -> str:
 
     parts = [
         _read(root / "prompts" / "_shared.md"),
-        _read(root / "prompts" / filename),
+        writer_prompt(root, filename),
         _contract(ctx),
     ]
 
@@ -64,6 +66,43 @@ def build(ctx: dict[str, Any], ai_root: str | Path) -> str:
         parts.append(DATA_BANNER + "\n" + data)
 
     return "\n\n---\n\n".join(p for p in parts if p)
+
+
+def writer_prompt(ai_root: str | Path, filename: str) -> str:
+    """Expand wiki instructions only from main's trusted tools checkout.
+
+    Callers supply their script's AI_ROOT, never a task/merge root or cwd.
+    Workers still cannot load .claude/: only this bounded section reaches
+    the context maintainer. Other roles retain their existing prompts.
+    """
+    root = Path(ai_root).resolve()
+    prompt = _read(root / "prompts" / filename)
+    if filename not in {"context-maintainer.md", "wiki-proposal.md"}:
+        return prompt
+    slot = "{{WIKI_UPDATE_RULES}}"
+    if prompt.count(slot) != 1:
+        raise PromptError(f"{filename} must include exactly one {slot}")
+    skill = _read(root.parent / ".claude/skills/wiki-update/SKILL.md")
+    start, end = "<!-- wiki-update:rules:start -->", "<!-- wiki-update:rules:end -->"
+    if skill.count(start) != 1 or skill.count(end) != 1:
+        raise PromptError("WikiUpdate rules must have exactly one start/end pair")
+    before, _, tail = skill.partition(start)
+    rules, _, _ = tail.partition(end)
+    if end in before or not rules.strip():
+        raise PromptError("WikiUpdate rules are empty or out of order")
+    routing = _read(root.parent / "wiki/GeneralContext/Architecture/work-modes.md")
+    heading = "## How work is handed on and planned"
+    sections = list(re.finditer(r"^## .+$", routing, re.MULTILINE))
+    matches = [i for i, m in enumerate(sections) if m.group().rstrip() == heading]
+    if len(matches) != 1:
+        raise PromptError("work-modes.md must have one canonical routing section")
+    i = matches[0]
+    stop = sections[i + 1].start() if i + 1 < len(sections) else len(routing)
+    route = routing[sections[i].start() : stop].strip()
+    route_slot = "{{WIKI_UPDATE_ROUTING}}"
+    if rules.count(route_slot) != 1 or not route.removeprefix(heading).strip():
+        raise PromptError("WikiUpdate needs one routing slot and non-empty routing")
+    return prompt.replace(slot, rules.strip().replace(route_slot, route))
 
 
 def _contract(ctx: dict[str, Any]) -> str:

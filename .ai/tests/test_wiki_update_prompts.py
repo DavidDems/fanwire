@@ -40,10 +40,14 @@ def trusted(tmp_path):
 
 
 def context(path):
-    return dict(
-        role="context_maintainer", task_id="DEMO-001", branch="agent/DEMO-001",
-        attempt=1, max_attempts=3, context_files=[str(path)],
-    )
+    return {
+        "role": "context_maintainer",
+        "task_id": "DEMO-001",
+        "branch": "agent/DEMO-001",
+        "attempt": 1,
+        "max_attempts": 3,
+        "context_files": [str(path)],
+    }
 
 
 def test_both_writers_inline_identical_rules_from_tools_before_data(trusted, tmp_path, monkeypatch):
@@ -76,7 +80,9 @@ def test_unavailable_or_ambiguous_rules_stop_both_writers(trusted, damage, write
     elif damage == "duplicate":
         skill.write_text(skill.read_text(encoding="utf-8") * 2, encoding="utf-8")
     elif damage == "empty":
-        skill.write_text("<!-- wiki-update:rules:start --><!-- wiki-update:rules:end -->", encoding="utf-8")
+        skill.write_text(
+            "<!-- wiki-update:rules:start --><!-- wiki-update:rules:end -->", encoding="utf-8"
+        )
     else:
         routing.write_text("# Heading renamed", encoding="utf-8")
     with pytest.raises(pb.PromptError):

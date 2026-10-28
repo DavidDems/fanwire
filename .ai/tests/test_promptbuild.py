@@ -2,8 +2,9 @@
 
 The prompt is built from durable state by a script, not by an agent handing
 another agent a summary. Two properties matter enough to test: a worker's
-instructions come only from `.ai/prompts/`, and everything else is fenced and
-labelled as data.
+instructions come from trusted prompt templates (including the bounded
+WikiUpdate expansion tested in test_wiki_update_prompts.py), and everything
+else is fenced and labelled as data.
 """
 
 import pytest

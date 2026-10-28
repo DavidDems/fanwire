@@ -46,3 +46,13 @@ Skills are Director-owned: they live under `.ai/`, which is in
 land through an ordinary human-reviewed PR.
 
 Keep them short. Three skills that are read beat nine that are skimmed.
+
+## Director wiki skill
+
+WikiUpdate lives in `.claude/skills/wiki-update/SKILL.md`, with a thin Codex
+entrypoint under `.agents/skills/wiki-update/`. It is not a `required_skills`
+entry and workers do not load `.claude/`. Instead, `promptbuild.writer_prompt`
+inlines its marked rules and the canonical work-modes routing from the
+executing script's trusted main checkout for the context maintainer and the
+wiki-proposal system prompt. Task context remains fenced data. Missing rules
+stop construction; no worker permissions change.

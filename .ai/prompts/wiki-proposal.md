@@ -45,10 +45,18 @@ passage the file already has in other words.
 - `replace` is what the passage should say now.
 - Keep each edit minimal: change the sentence or list item that is wrong, not
   the section around it.
-- Write as the module files do: the current state, stated as fact. No history,
-  no "now", no "was changed to", no task ids unless the file already uses them.
 - Several edits to one file are applied in order, each to the text the earlier
   ones left.
+
+## Shared wiki rules
+
+The WikiUpdate rules below are inlined by promptbuild from the trusted main
+checkout. Apply the checklist to your proposed replacements. Your output is
+still only the JSON below, and edits still name only the module files shown.
+Report any need for a decision record or other file in the reason for the
+Director; do not propose edits to paths you were not shown.
+
+{{WIKI_UPDATE_RULES}}
 
 ## Output
 
