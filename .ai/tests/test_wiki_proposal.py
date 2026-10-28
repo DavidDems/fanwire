@@ -460,6 +460,31 @@ class TestTheOneCall:
 
 
 class TestBoundedSpendAndFailingQuiet:
+    def test_the_api_receives_the_shared_trusted_wiki_rules(
+        self, proposal_script, paths, monkeypatch
+    ):
+        wire = Wire(answered())
+        assert run(proposal_script, paths, monkeypatch, wire) == proposal_script.OK
+        system = json.loads(wire.requests[0][0].data.decode("utf-8"))["system"]
+        assert "{{WIKI_UPDATE" not in system
+        assert "## Document types" in system
+        assert "## Before committing" in system
+        assert "## How work is handed on and planned" in system
+
+    def test_missing_trusted_rules_make_no_call_or_comment(
+        self, proposal_script, paths, monkeypatch, tmp_path
+    ):
+        trusted = tmp_path / "isolated-tools/.ai"
+        (trusted / "prompts").mkdir(parents=True)
+        for name in ("config.json", "prompts/wiki-proposal.md"):
+            (trusted / name).write_text(
+                (proposal_script.AI_ROOT / name).read_text(encoding="utf-8"), encoding="utf-8"
+            )
+        monkeypatch.setattr(proposal_script, "AI_ROOT", trusted)
+        wire = Wire(answered())
+        assert run(proposal_script, paths, monkeypatch, wire) == proposal_script.USAGE
+        assert wire.requests == [] and not paths["comment"].exists()
+
     @pytest.mark.parametrize("code", [429, 500, 529])
     def test_an_error_is_not_retried_and_leaves_no_comment(
         self, proposal_script, paths, monkeypatch, code
