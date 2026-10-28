@@ -10,5 +10,7 @@ export default {
     "css:PlayerPage.css": 1_004,
     StatsNavigator: 8_196,
     "css:StatsNavigator.css": 564,
+    "StatsNav.module": 425,
+    "css:StatsNav.css": 1_252,
   },
 } satisfies UnitBudget;
