@@ -25,6 +25,8 @@ class AccountResult(BaseModel):
     username: str
     description: str | None
     profile_picture_media_id: int | None
+    profile_avatar_key: str | None = None
+    profile_picture_key: str | None = None
 
 
 class AccountsPage(BaseModel):

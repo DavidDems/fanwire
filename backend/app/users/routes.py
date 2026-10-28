@@ -65,6 +65,7 @@ from app.users.schemas import CreateUserRequest, MeOut, PublicUserOut, UpdateMeR
 from app.users.service import (
     AlreadyFollowingError,
     InvalidPreferredTeamError,
+    InvalidProfileAvatarError,
     InvalidProfilePictureError,
     NotFollowingError,
     SelfFollowError,
@@ -73,6 +74,7 @@ from app.users.service import (
     followed_user_ids,
     follower_count,
     following_count,
+    public_profile_picture_key,
     recover_user,
     soft_delete_user,
     unfollow,
@@ -89,6 +91,8 @@ def _public_out(session: Session, user: User) -> PublicUserOut:
         description=user.description,
         preferred_team_id=user.preferred_team_id,
         profile_picture_media_id=user.profile_picture_media_id,
+        profile_avatar_key=user.profile_avatar_key,
+        profile_picture_key=public_profile_picture_key(session, user),
         created_at=user.created_at,
         follower_count=follower_count(session, user.id),
         following_count=following_count(session, user.id),
@@ -157,12 +161,17 @@ def patch_me(
             description=body.description,
             preferred_team_id=body.preferred_team_id,
             profile_picture_media_id=body.profile_picture_media_id,
+            profile_avatar_key=body.profile_avatar_key,
         )
     except InvalidPreferredTeamError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
     except InvalidProfilePictureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except InvalidProfileAvatarError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
