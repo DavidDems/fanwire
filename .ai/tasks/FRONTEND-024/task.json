@@ -23,6 +23,8 @@
     "frontend/src/features/players/**",
     "frontend/src/features/stats/**",
     "frontend/src/components/visuals/**",
+    "frontend/src/components/stats-nav/RecordsLevel.tsx",
+    "frontend/src/components/stats-nav/StatsNav.module.css",
     "wiki/CodeContext/Modules/0x08-frontend.md"
   ],
   "forbidden_paths": [

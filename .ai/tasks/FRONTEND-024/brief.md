@@ -32,6 +32,10 @@ depends on the others.
 
 ## Test, browser, and asset contract
 
+The allowed paths include `frontend/src/components/stats-nav/RecordsLevel.tsx`
+and `frontend/src/components/stats-nav/StatsNav.module.css` because that
+component owns the record cards and their empty-holder rows.
+
 Commit tests alone first, then implementation. Test each of the four states,
 its text/role, decorative SVG semantics, token-only styles and zero external
 requests. Browser-check each state at 360/1280 in both themes and inspect the
