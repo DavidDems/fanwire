@@ -49,3 +49,7 @@ No new Python or frontend dependency, external asset request, or permanent
 palette change. Include bundle measurements and browser rows in light/dark at
 360/1280. Update users and frontend module contracts; update feed/search module
 pages only if the user-profile response exposed there changes.
+
+The allowed paths include `frontend/src/test/bundle-budgets/USERS-004.ts` so
+the unit can declare its measured entry and lazy-output changes in the
+repository's per-unit bundle budget file.

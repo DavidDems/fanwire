@@ -30,6 +30,7 @@
     "frontend/src/features/profile/**",
     "frontend/src/features/feed/**",
     "frontend/src/features/search/**",
+    "frontend/src/test/bundle-budgets/USERS-004.ts",
     "wiki/CodeContext/Modules/0x01-users.md",
     "wiki/CodeContext/Modules/0x06-feed.md",
     "wiki/CodeContext/Modules/0x07-search.md",
