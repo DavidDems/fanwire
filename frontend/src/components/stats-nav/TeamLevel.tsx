@@ -1,4 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
 
 import {
   TEAMS_KEY,
@@ -55,7 +60,10 @@ export function TeamLevel({
   onTeam: (teamId: number) => void;
   onGame?: (gameId: number) => void;
 }) {
-  const teamSeason = useQuery(teamSeasonQuery(level.teamId, level.season));
+  const teamSeason = useQuery({
+    ...teamSeasonQuery(level.teamId, level.season),
+    placeholderData: keepPreviousData,
+  });
 
   if (teamSeason.isPending)
     return (
@@ -76,12 +84,17 @@ export function TeamLevel({
     );
 
   return (
-    <TeamSeason
-      data={teamSeason.data}
-      adapter={adapter}
-      onTeam={onTeam}
-      onGame={onGame}
-    />
+    <>
+      {teamSeason.isPlaceholderData ? (
+        <StatusLine>Updating the team season...</StatusLine>
+      ) : null}
+      <TeamSeason
+        data={teamSeason.data}
+        adapter={adapter}
+        onTeam={onTeam}
+        onGame={onGame}
+      />
+    </>
   );
 }
 
@@ -115,6 +128,8 @@ function TeamSeason({
         </div>
       </dl>
 
+      <TeamMarginChart games={games} teamName={team.name} season={season} />
+
       {games.length === 0 ? (
         <EmptyState>
           {team.name} played no games in {season}.
@@ -144,6 +159,101 @@ function TeamSeason({
         </ScrollTable>
       )}
     </>
+  );
+}
+
+function TeamMarginChart({
+  games,
+  teamName,
+  season,
+}: {
+  games: TeamSeasonGameOut[];
+  teamName: string;
+  season: string;
+}) {
+  const plotted = [...games].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.game_id - b.game_id,
+  );
+  const margins = plotted.map((game) => game.team_score - game.opponent_score);
+  const bound = Math.max(5, Math.ceil(Math.max(0, ...margins.map(Math.abs)) / 5) * 5);
+  const ticks = Array.from({ length: (bound * 2) / 5 + 1 }, (_, index) => -bound + index * 5);
+  const left = 48;
+  const right = 584;
+  const top = 12;
+  const bottom = 142;
+  const points = plotted.map((game, index) => ({
+    game,
+    margin: margins[index],
+    x: plotted.length < 2 ? (left + right) / 2 : left + ((right - left) * index) / (plotted.length - 1),
+    y: top + ((bound - margins[index]!) / (2 * bound)) * (bottom - top),
+  }));
+  const labelEvery = Math.max(1, Math.ceil((points.length - 1) / 6));
+  const dateLabels = points.filter(
+    (_, index) =>
+      index === 0 || index === points.length - 1 || index % labelEvery === 0,
+  );
+
+  return (
+    <div className={styles.chart}>
+      {points.length >= 2 ? (
+        <svg
+          className={styles.chartSvg}
+          viewBox="0 0 600 184"
+          role="img"
+          aria-label={`Point margin for ${teamName}, ${season}`}
+        >
+          {ticks.map((tick) => {
+            const y = top + ((bound - tick) / (2 * bound)) * (bottom - top);
+            return (
+              <g key={tick}>
+                <line className={tick === 0 ? styles.chartZero : styles.chartGrid} x1={left} x2={right} y1={y} y2={y} />
+                <text className={styles.chartAxis} x={left - 8} y={y + 4} textAnchor="end"> {tick} </text>
+              </g>
+            );
+          })}
+          <polyline
+            className={styles.chartLine}
+            points={points.map(({ x, y }) => `${x},${y}`).join(" ")}
+          />
+          {points.map(({ x, y }, index) => (
+            <circle key={index} className={styles.chartPoint} cx={0} cy={0} r={4} transform={`translate(${x} ${y})`} />
+          ))}
+          {dateLabels.map(({ game, x }) => (
+            <text key={game.game_id} className={styles.chartAxis} x={x} y={166} textAnchor="middle">{format(parseISO(game.date), "MMM d")}</text>
+          ))}
+        </svg>
+      ) : (
+        <p className={styles.chartNote}>
+          {points.length === 0
+            ? `There are no games for ${teamName} in ${season}.`
+            : "At least two games are needed to draw a line."}
+        </p>
+      )}
+      <ScrollTable caption={`Point margin for ${teamName}, ${season} (all ${plotted.length} games)`}>
+        <thead>
+          <tr>
+            <ColumnHeader label="Date" name />
+            <ColumnHeader label="Opponent" name />
+            <ColumnHeader label="Result" name />
+            <ColumnHeader label="Margin" />
+          </tr>
+        </thead>
+        <tbody>
+          {points.map(({ game, margin }) => (
+            <tr key={game.game_id}>
+              <th scope="row" className={styles.name}>{formatGameDate(game.date)}</th>
+              <td className={styles.name}>{game.opponent.name}</td>
+              <td className={styles.name}>
+                <abbr title={game.won ? "Won" : "Lost"}>
+                  {game.won ? "W" : "L"}
+                </abbr>
+              </td>
+              <td>{margin > 0 ? `+${margin}` : String(margin)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </ScrollTable>
+    </div>
   );
 }
 

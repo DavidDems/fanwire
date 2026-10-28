@@ -14,6 +14,23 @@ use motion only where it helps explain an interaction. This closes the
 human's 2026-10-27 request. Stats remain part of the product. Do not revisit
 the legal status of stats or propose removing them.
 
+## Continuation update (2026-10-28)
+
+The discovery and spec-writing phase is complete. Implementation is now
+authorized. #254 (`FRONTEND-021`) and #255 (`FRONTEND-022`) have reached
+`main`; #256 amended the `FRONTEND-023` allowed paths and is also merged.
+Current `origin/main` is `e700415`. The human requested a stacked review
+sequence for the remaining units: this Director baseline/spec PR, then
+`FRONTEND-023`, `FRONTEND-024`, and `USERS-004`. Wait for each base's full CI
+gate to pass before creating its dependent branch; do not wait for a merge.
+Each task PR must name the merge order. The units' code remains functionally
+independent. Do not merge or deploy.
+
+The current Director PR folds the already-merged `FRONTEND-021` and
+`FRONTEND-022` bundle budgets into the measured base. This is required because
+the shared bundle test rejects two units declaring the same lazy output.
+Once its checks are green, branch `FRONTEND-023` from its PR head.
+
 ## Read first, in this order
 
 1. `AGENTS.md`: Director authority, worktree safety, UI/browser rules, and
@@ -52,12 +69,12 @@ Seasons, Records, Players, game and player detail pages, a compose stats
 picker, and user image uploads. The visual direction is “scoreboard-crisp,
 calm, dense”; the UI reference pages above override generic design advice.
 
-The requested outcome is a plan and task specs only. Do not change application
-code, tests, dependencies, assets, backend, infrastructure, or deploy anything.
-This Director session may write task specs, the backlog, this prompt, and the
-GeneralContext prompt index. Do not change `FrontendUI/decisions.md` or treat a
-proposal as a settled design decision. Any edits under `.ai/` or
-`wiki/GeneralContext/` must be named plainly in the Director PR.
+The original requested outcome was a plan and task specs only; that planning
+phase is complete. This continuation implements the validated units using the
+task briefs and the updated stack order above. Do not change
+`FrontendUI/decisions.md` or treat a proposal as a settled design decision.
+Any edits under `.ai/` or `wiki/GeneralContext/` must be named plainly in the
+Director PR.
 
 ## Progress update (2026-10-27)
 

@@ -399,7 +399,9 @@ describe("Season → Team season → Back, through a state adapter", () => {
     expect(hrefs).toEqual(
       testTeamSeason().games.map((g) => `#game-${g.game_id}`),
     );
-    const table = within(main).getByRole("table");
+    const table = within(main).getByRole("table", {
+      name: /Boston Celtics games, 2023-24, newest first/i,
+    });
     expect(bodyRows(table as HTMLTableElement)).toHaveLength(3);
     expect(tableProblems(main)).toEqual([]);
   });

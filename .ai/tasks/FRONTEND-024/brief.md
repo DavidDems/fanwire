@@ -25,10 +25,13 @@ an action or accessible text equivalent.
 
 ## Scope and merge order
 
-This task is independent and can be cut from `main` after the Director PR
-lands. Do not base `agent/FRONTEND-024` on another task branch. Suggested
-review sequence is FRONTEND-022, FRONTEND-023, FRONTEND-024, USERS-004; none
-depends on the others.
+This task's implementation has no runtime dependency on the other visual
+units, but the human requested a stacked review sequence. Create
+`agent/FRONTEND-024` from the `agent/FRONTEND-023` PR head after its full CI
+gate is green. `USERS-004` must then branch from the `agent/FRONTEND-024` PR
+head after its full CI gate is green. The required merge order is #257,
+FRONTEND-023, FRONTEND-024, USERS-004. Each PR body must name this order. No
+task may be merged before its parent reaches `main`.
 
 ## Test, browser, and asset contract
 

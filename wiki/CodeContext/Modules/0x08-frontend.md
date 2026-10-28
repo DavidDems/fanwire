@@ -1187,8 +1187,15 @@ the generated schema. The players feature has its own `api.ts`; since
   ones left out, height from inches as `6'9"` (`formatHeight`), averages to
   one place (`formatAverage`, null is an en dash); the career table (Regular
   season, Playoffs), the season-by-season table and the game log, with
-  did-not-play rows giving the reason or "Did not play". A 404 or a
-  non-numeric id is "Player not found"; any other failure is `InlineAlert`.
+  did-not-play rows giving the reason or "Did not play". Since
+  `FRONTEND-023`, the game log also charts points for the ten most recent
+  completed games, with a captioned Points table as its text equivalent. A
+  404 or a non-numeric id is "Player not found"; any other failure is
+  `InlineAlert`.
+- **The team level** (`FRONTEND-023`) plots point margin chronologically on a
+  zero-centred scale and provides every game's date, opponent, W/L result and
+  signed margin in a captioned table. While a new team-season read is pending,
+  the previous result stays visible with an updating status.
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not

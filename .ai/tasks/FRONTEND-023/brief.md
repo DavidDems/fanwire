@@ -29,10 +29,15 @@ search-first screen; it should remain so.
 
 ## Scope, branch, and merge order
 
-This is frontend-only and independent of the other visual units. Create
-`agent/FRONTEND-023` from `main` after the Director PR lands. Do not base it on
-FRONTEND-022 or any other unmerged branch. Suggested review order is 022, 023,
-024, USERS-004; there are no merge dependencies.
+This is frontend-only. Its implementation has no runtime dependency on the
+other visual units, but the human requested a stacked review sequence. Create
+`agent/FRONTEND-023` from the green head of the Director PR
+`director/frontend-023-budget-fold` (PR #257). `FRONTEND-024` must then branch
+from the `agent/FRONTEND-023` PR head after its full CI gate is green, and
+`USERS-004` must branch from the `agent/FRONTEND-024` PR head after its full
+CI gate is green. The required merge order is #257, FRONTEND-023,
+FRONTEND-024, USERS-004. Each PR body must name this order. No task may be
+merged before its parent reaches `main`.
 
 ## Test and performance contract
 
