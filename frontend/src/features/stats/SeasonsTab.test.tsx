@@ -36,6 +36,7 @@
  */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { teamsAre } from "../../test/auth";
@@ -59,11 +60,13 @@ import {
   statsTeams,
   teamSeasonStub,
   testChampion,
+  testTeamSeason,
   type GameOut,
   type Stub,
 } from "../../test/stats";
 import {
   bodyRows,
+  columnHeaders,
   figure,
   rowText,
   tableCaptioned,
@@ -333,6 +336,164 @@ describe("the standings (criterion 4)", () => {
         season: "2023-24",
       }),
     );
+  });
+
+  it("plots every team-season margin chronologically with symmetric five-point ticks", async () => {
+    const { stubs } = openSeasons(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+    );
+
+    const chart = await screen.findByRole("img", {
+      name: /margin.*boston celtics.*2023-24/i,
+    });
+    const table = tableCaptioned(screen.getByRole("main"), /margin/i);
+    const headers = columnHeaders(table);
+    const marginIndex = headers.findIndex((header) => /margin/i.test(header));
+    const resultIndex = headers.findIndex((header) => /result/i.test(header));
+    if (marginIndex < 0 || resultIndex < 0)
+      throw new Error("chart table must name its margin and result columns");
+    const rows = bodyRows(table);
+
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => Number(row.cells[marginIndex].textContent))).toEqual([
+      22, -6, 18,
+    ]);
+    expect(rows.map((row) => row.cells[resultIndex].textContent?.trim())).toEqual([
+      "W",
+      "L",
+      "W",
+    ]);
+    const dates = rows.map((row) => Date.parse(row.cells[0].textContent ?? ""));
+    expect(dates).toEqual([...dates].sort((a, b) => a - b));
+    expect(table.querySelector("caption")?.textContent).toMatch(/boston celtics/i);
+    expect(table.querySelector("caption")?.textContent).toContain("2023-24");
+    for (const tick of ["-25", "-20", "-15", "-10", "-5", "0", "5", "10", "15", "20", "25"])
+      expect(chart.textContent).toContain(tick);
+    expect(stubs.teamSeason.requests).toHaveLength(1);
+
+    // Keep the existing full game table alongside the plotted subset/view.
+    expect(
+      bodyRows(
+        tableCaptioned(screen.getByRole("main"), /games, 2023-24, newest first/i),
+      ),
+    ).toHaveLength(3);
+  });
+
+  it("updates the chart from the selected team-season response without duplicate reads", async () => {
+    const { stubs, router } = openSeasons(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+      {
+        tweak: (current) => {
+          current.teamSeason = teamSeasonStub((_teamId, season) => {
+            const data = testTeamSeason(CELTICS, season);
+            return season === "2022-23"
+              ? {
+                  ...data,
+                  games: data.games.map((game) => ({
+                    ...game,
+                    team_score: 104,
+                    opponent_score: 100,
+                    won: true,
+                  })),
+                }
+              : data;
+          });
+        },
+      },
+    );
+    const user = userEvent.setup();
+
+    await waitFor(() => expect(stubs.teamSeason.requests).toHaveLength(1));
+    await user.selectOptions(seasonSelect(), "2022-23");
+    await waitFor(() =>
+      expect(router.state.location.search).toContain("season=2022-23"),
+    );
+    await waitFor(() => expect(stubs.teamSeason.requests).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(stubs.teamSeason.requests.map((request) => request.path)).toEqual([
+      { team_id: String(CELTICS.id), season: "2023-24" },
+      { team_id: String(CELTICS.id), season: "2022-23" },
+    ]);
+
+    await screen.findByRole("img", {
+      name: /margin.*boston celtics.*2022-23/i,
+    });
+
+    const table = tableCaptioned(screen.getByRole("main"), /margin.*2022-23/i);
+    const marginIndex = columnHeaders(table).findIndex((header) =>
+      /margin/i.test(header),
+    );
+    expect(bodyRows(table).map((row) => Number(row.cells[marginIndex].textContent))).toEqual([
+      4, 4, 4,
+    ]);
+  });
+
+  it.each(["one game", "no games"] as const)(
+    "keeps the exact %s values and explains why no line is drawn",
+    async (label) => {
+      const base = testTeamSeason(CELTICS, "2023-24");
+      const games = label === "one game" ? base.games.slice(0, 1) : [];
+      const { stubs } = openSeasons(
+        `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+        {
+          tweak: (current) => {
+            current.teamSeason = teamSeasonStub((_teamId, season) => ({
+              ...testTeamSeason(CELTICS, season),
+              games,
+            }));
+          },
+        },
+      );
+
+      const table = (await screen.findByRole("table", {
+        name: /margin/i,
+      })) as HTMLTableElement;
+      const expectedRows = label === "one game" ? 1 : 0;
+      await waitFor(() => expect(bodyRows(table)).toHaveLength(expectedRows));
+      expect(screen.queryByRole("img", { name: /margin/i })).toBeNull();
+      if (expectedRows === 1)
+        expect(rowText(bodyRows(table)[0])).toContain("18");
+      expect(screen.getByRole("main").textContent).toMatch(
+        /not enough|fewer than two|at least two|no games/i,
+      );
+      expect(stubs.teamSeason.requests).toHaveLength(1);
+    },
+  );
+
+  it("keeps a team-season request failure distinct from an empty chart", async () => {
+    const { stubs } = openSeasons(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+    );
+    stubs.teamSeason.fail();
+
+    const main = screen.getByRole("main");
+    expect(await within(main).findByRole("alert")).toBeVisible();
+    expect(within(main).queryByRole("img", { name: /margin/i })).toBeNull();
+    expect(within(main).queryByRole("table", { name: /margin/i })).toBeNull();
+  });
+
+  it("keeps the pending team-season status until its response arrives", async () => {
+    const handler = http.get(
+      "*/events/teams/:team_id/seasons/:season",
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return HttpResponse.json(testTeamSeason(CELTICS, "2023-24"));
+      },
+    );
+    renderAppAt(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+      "anonymous",
+      [teamsAre(statsTeams()), handler],
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /loading the team.s season/i,
+    );
+    expect(
+      await screen.findByRole("img", {
+        name: /margin.*boston celtics.*2023-24/i,
+      }),
+    ).toBeVisible();
   });
 });
 

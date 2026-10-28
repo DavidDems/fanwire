@@ -239,7 +239,7 @@ function Player({ player }: { player: PlayerDetailOut }) {
         )}
       </section>
 
-      <GameLog playerId={player.id} />
+      <GameLog playerId={player.id} playerName={name} />
     </section>
   );
 }
@@ -340,7 +340,13 @@ const LOG_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ["+/-", "Plus-minus"],
 ];
 
-function GameLog({ playerId }: { playerId: number }) {
+function GameLog({
+  playerId,
+  playerName,
+}: {
+  playerId: number;
+  playerName: string;
+}) {
   const games = useInfiniteQuery({
     queryKey: playerGamesKey(playerId),
     queryFn: ({ pageParam }) => fetchPlayerGamesPage(playerId, pageParam),
@@ -364,6 +370,9 @@ function GameLog({ playerId }: { playerId: number }) {
       ) : null}
       {games.isSuccess && items.length === 0 ? (
         <EmptyState>There are no games on record for this player.</EmptyState>
+      ) : null}
+      {games.isSuccess && items.length > 0 ? (
+        <PlayerPointsChart games={items} name={playerName} />
       ) : null}
       {items.length === 0 ? null : (
         <ScrollTable caption="Games played, newest first">
@@ -397,6 +406,109 @@ function GameLog({ playerId }: { playerId: number }) {
         </Button>
       )}
     </section>
+  );
+}
+
+function PlayerPointsChart({
+  games,
+  name,
+}: {
+  games: PlayerGameOut[];
+  name: string;
+}) {
+  const plotted = games
+    .filter((game) => game.seconds_played !== null)
+    .slice(0, 10)
+    .reverse();
+  const maximum = Math.max(0, ...plotted.map((game) => game.points));
+  const top = (Math.floor(maximum / 5) + 1) * 5;
+  const ticks = Array.from({ length: top / 5 + 1 }, (_, index) => index * 5);
+  const left = 42;
+  const right = 584;
+  const topY = 12;
+  const bottom = 142;
+  const points = plotted.map((game, index) => ({
+    game,
+    x: plotted.length < 2 ? (left + right) / 2 : left + ((right - left) * index) / (plotted.length - 1),
+    y: bottom - (game.points / top) * (bottom - topY),
+  }));
+
+  return (
+    <div className={styles.chart}>
+      {plotted.length >= 2 ? (
+        <svg
+          className={styles.chartSvg}
+          viewBox="0 0 600 184"
+          role="img"
+          aria-label={`Points for ${name}, last ${plotted.length} completed games`}
+        >
+          {ticks.map((tick) => {
+            const y = bottom - (tick / top) * (bottom - topY);
+            return (
+              <g key={tick}>
+                <line className={styles.chartGrid} x1={left} x2={right} y1={y} y2={y} />
+                <text className={styles.chartAxis} x={left - 8} y={y + 4} textAnchor="end"> {tick} </text>
+              </g>
+            );
+          })}
+          {points.slice(1).map((point, index) => {
+            const previous = points[index];
+            const dx = point.x - previous.x;
+            const dy = point.y - previous.y;
+            const length = Math.hypot(dx, dy);
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            return (
+              <line
+                key={index}
+                className={styles.chartLine}
+                x1={0}
+                x2={1}
+                y1={0}
+                y2={0}
+                transform={`translate(${previous.x} ${previous.y}) rotate(${angle}) scale(${length} 1)`}
+              />
+            );
+          })}
+          {points.map(({ x, y }, index) => (
+            <circle
+              key={index}
+              className={styles.chartPoint}
+              cx={0}
+              cy={0}
+              r={4}
+              transform={`translate(${x} ${y})`}
+            />
+          ))}
+          {points.map(({ game, x }, index) => (
+            <text key={index} className={styles.chartAxis} x={x} y={166} textAnchor="middle">
+              {format(parseISO(game.date), "MMM d")}
+            </text>
+          ))}
+        </svg>
+      ) : (
+        <p className={styles.chartNote}>
+          {plotted.length === 0
+            ? "There are no completed games to chart."
+            : "At least two completed games are needed to draw a line."}
+        </p>
+      )}
+      <ScrollTable caption={`Points for ${name}, last ${plotted.length} completed games`}>
+        <thead>
+          <tr>
+            <ColumnHeader label="Date" name />
+            <ColumnHeader label="Points" />
+          </tr>
+        </thead>
+        <tbody>
+          {plotted.map((game) => (
+            <tr key={game.game_id}>
+              <th scope="row" className={styles.name}>{formatGameDate(game.date)}</th>
+              <td>{game.points}</td>
+            </tr>
+          ))}
+        </tbody>
+      </ScrollTable>
+    </div>
   );
 }
 
