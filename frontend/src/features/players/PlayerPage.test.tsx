@@ -29,6 +29,9 @@
  *   level-one "Player not found" heading.
  * - Every table has a caption, scoped headers and its own scroll region.
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -353,6 +356,78 @@ describe("the game log", () => {
     await waitFor(() => expect(gameHrefs(gameLog())).toHaveLength(3));
 
     expect(within(gameLog()).queryByRole("button", { name: /load more/i })).toBeNull();
+  });
+
+  it("plots the ten most recent played games oldest to newest with exact values and ticks", async () => {
+    const log = Array.from({ length: 12 }, (_, index) =>
+      playerGame(index, { points: 10 + index }),
+    );
+    log[2] = dnpGame(2, "Rest");
+    openPlayer(LEBRON.id, { [LEBRON.id]: log });
+    await heading("LeBron James");
+
+    const chart = await screen.findByRole("img", {
+      name: /points.*lebron james/i,
+    });
+    const table = tableCaptioned(gameLog(), /points/i);
+    const headers = columnHeaders(table);
+    const pointsIndex = headers.findIndex((header) => /points/i.test(header));
+    if (pointsIndex < 0) throw new Error("chart table has no Points column");
+    const rows = bodyRows(table);
+
+    expect(rows).toHaveLength(10);
+    expect(rows.map((row) => Number(row.cells[pointsIndex].textContent))).toEqual([
+      20, 19, 18, 17, 16, 15, 14, 13, 11, 10,
+    ]);
+    const dates = rows.map((row) => Date.parse(row.cells[0].textContent ?? ""));
+    expect(dates.every(Number.isFinite)).toBe(true);
+    expect(dates).toEqual([...dates].sort((a, b) => a - b));
+    expect(table.querySelector("caption")?.textContent).toMatch(/lebron james/i);
+    expect(table.querySelector("caption")?.textContent).toMatch(/last 10/i);
+    expect(chart.textContent).toMatch(/(^|\D)0(\D|$)/);
+    for (const tick of [5, 10, 15, 20, 25])
+      expect(chart.textContent).toContain(String(tick));
+
+    // The chart is an overview; every source row, including the DNP, stays in
+    // the existing complete game log.
+    expect(bodyRows(tableCaptioned(gameLog(), /games played, newest first/i))).toHaveLength(
+      12,
+    );
+  });
+
+  it("keeps a one-game data table and explains why no line is drawn", async () => {
+    openPlayer(LEBRON.id, { [LEBRON.id]: [playerGame(0, { points: 24 })] });
+    await heading("LeBron James");
+
+    const table = (await screen.findByRole("table", {
+      name: /points/i,
+    })) as HTMLTableElement;
+    expect(bodyRows(table)).toHaveLength(1);
+    expect(rowText(bodyRows(table)[0])).toContain("24");
+    expect(gameLog().textContent).toMatch(/not enough|fewer than two|at least two/i);
+    expect(screen.queryByRole("img", { name: /points.*lebron james/i })).toBeNull();
+  });
+
+  it("keeps the game-log request error as an alert instead of drawing an empty chart", async () => {
+    const detail = playerDetailStub([LEBRON]);
+    const games = playerGamesStub({ [LEBRON.id]: [] });
+    games.fail();
+    renderAppAt(`/players/${LEBRON.id}`, "anonymous", [detail.handler, games.handler]);
+
+    const region = await screen.findByRole("region", { name: "Game log" });
+    expect(await within(region).findByRole("alert")).toBeVisible();
+    expect(within(region).queryByRole("img", { name: /points/i })).toBeNull();
+  });
+
+  it("uses the duration token that the global reduced-motion rule zeros", () => {
+    const files = [
+      "src/features/players/Players.module.css",
+      "src/components/stats-nav/StatsNav.module.css",
+    ];
+    for (const file of files) {
+      const css = readFileSync(resolve(process.cwd(), file), "utf8");
+      expect(css, file).toMatch(/var\(--duration-fast\)/);
+    }
   });
 });
 
