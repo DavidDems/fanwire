@@ -13,6 +13,12 @@ view is left.
 
 What is real:
 
+Since `FRONTEND-024`, `components/ui/EmptyState` places the decorative
+`CourtScoreboard` SVG before its unchanged message. The empty feed and player
+search use it; public profiles show "No posts yet." and record cards without a
+qualifying holder retain their copy alongside the same motif. The SVG is
+hidden from assistive technology and uses the semantic theme tokens.
+
 | | |
 |---|---|
 | `backend/scripts/export_openapi.py` → `backend/openapi.json` | The committed contract. Sorted keys, two-space indent, explicit `newline="\n"`. Deterministic across runs with different `PYTHONHASHSEED` |
