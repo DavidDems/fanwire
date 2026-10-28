@@ -16,6 +16,8 @@ search-first screen; it should remain so.
 - Team chart: point differential (team score minus opponent score) for every
   loaded game in the selected season, oldest to newest; x is game date, y is a
   symmetric range around zero with 5-point ticks. Label each win/loss in text.
+- The team-season data is rendered by the existing `components/stats-nav/TeamLevel.tsx`;
+  that component and its module stylesheet are in scope for this unit.
 - Both charts retain a semantic table with exactly the plotted points, a
   caption that names metric and scope, and no information conveyed only by
   color or hover. Existing game-log and season tables remain complete.
