@@ -261,3 +261,11 @@ def test_unicode_decisions_and_untracked_link_targets(repo):
     put(repo, "wiki/link.md", "[local](untracked.md)")
     (repo / "wiki/untracked.md").write_text("Only on this machine")
     assert any(v.rule == "link" and v.detail == "untracked.md" for v in doclint.scan(repo))
+
+
+def test_bare_sections_shorthand_and_alphanumeric_sections(repo):
+    put(repo, "wiki/target.md", "## 2a. Choice\n")
+    put(repo, "wiki/source.md", "## 1. Local\nSee §1 and target §2a.\n")
+    assert not codes(repo)
+    put(repo, "wiki/source.md", "## 1. Local\nSee §9 and target §3.\n")
+    assert sum(v.rule == "citation" for v in doclint.scan(repo)) == 2
