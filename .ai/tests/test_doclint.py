@@ -3,6 +3,7 @@
 Do not weaken the workflow's pinned non-test-job rationale: docs failures
 must route a worker baseline to manager review, never authorize coding.
 """
+
 import json
 import os
 import subprocess
@@ -18,7 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def git(root, *args):
     return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True,
+        ["git", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
         env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
     ).stdout.strip()
 
@@ -30,7 +35,9 @@ def repo(tmp_path):
     git(tmp_path, "config", "user.name", "Fixture")
     skill = tmp_path / ".claude/skills/wiki-update/SKILL.md"
     skill.parent.mkdir(parents=True)
-    skill.write_text((ROOT / skill.relative_to(tmp_path)).read_text(encoding="utf-8"), encoding="utf-8")
+    skill.write_text(
+        (ROOT / skill.relative_to(tmp_path)).read_text(encoding="utf-8"), encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -54,7 +61,13 @@ def commit(repo):
 
 def test_types_budgets_and_body_count_use_shared_skill(repo):
     budgets = doclint.load_budgets(repo)
-    assert budgets == dict(reference=2500, decision=1800, runbook=1500, prompt=1500, changelog=1000)
+    assert budgets == {
+        "reference": 2500,
+        "decision": 1800,
+        "runbook": 1500,
+        "prompt": 1500,
+        "changelog": 1000,
+    }
     put(repo, "wiki/good.md", "word " * 2500)
     assert not codes(repo)
     put(repo, "wiki/good.md", "word " * 2501)
@@ -71,14 +84,22 @@ def test_malformed_and_duplicate_type_are_rejected(repo):
 
 def test_links_anchors_wikilinks_references_and_citations(repo):
     put(repo, "wiki/target.md", "# Hello world\n## 2. Choice\n## Hello world\n")
-    put(repo, "wiki/source.md", "[ok](target.md#hello-world-1)\n[ref][x]\n[x]: target.md#hello-world\n"
+    put(
+        repo,
+        "wiki/source.md",
+        "[ok](target.md#hello-world-1)\n[ref][x]\n[x]: target.md#hello-world\n"
         "[[wiki/target#hello-world|target]]\n`wiki/target.md:2` and `wiki/target.md` §2\n"
-        "[web](https://example.invalid)\n[mail](mailto:a@example.invalid)\n")
+        "[web](https://example.invalid)\n[mail](mailto:a@example.invalid)\n",
+    )
     assert not codes(repo)
-    put(repo, "wiki/source.md", "[bad](target.md#absent)\n[missing](no.md)\n[bad][absent]\n"
-        "`wiki/target.md:999`\n`wiki/target.md` §9\n[[wiki/missing|missing]]\n")
+    put(
+        repo,
+        "wiki/source.md",
+        "[bad](target.md#absent)\n[missing](no.md)\n[bad][absent]\n"
+        "`wiki/target.md:999`\n`wiki/target.md` §9\n[[wiki/missing|missing]]\n",
+    )
     assert {"link", "citation"} <= codes(repo)
-    put(repo, "app.py", '# See wiki/target.md §99\n', None)
+    put(repo, "app.py", "# See wiki/target.md §99\n", None)
     assert any(v.path == "app.py" and v.rule == "citation" for v in doclint.scan(repo))
 
 
@@ -88,7 +109,16 @@ def test_fences_are_examples_but_real_links_cannot_escape_repo(repo):
     assert len(violations) == 1 and violations[0].rule == "link"
 
 
-@pytest.mark.parametrize("text", ["> **Status, 2026-10-12**", "**Update, 2026**", "As of 2026-10-12", "## Current status\nold"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "> **Status, 2026-10-12**",
+        "**Update, 2026**",
+        "As of 2026-10-12",
+        "## Current status\nold",
+        "> **Status:** pending",
+    ],
+)
 def test_reference_status_debt(repo, text):
     put(repo, "wiki/a.md", text)
     assert "reference-history" in codes(repo)
@@ -111,7 +141,9 @@ def test_forty_word_runs_are_case_insensitive_and_stable_under_line_moves(repo):
 def test_merged_decision_only_allows_supersession(repo):
     p = put(repo, "wiki/001-choice.md", "# Choice\nOriginal\n", "decision")
     base = commit(repo)
-    p.write_text(p.read_text().replace("type: decision", "type: decision\nsuperseded_by: 002-next.md"))
+    p.write_text(
+        p.read_text().replace("type: decision", "type: decision\nsuperseded_by: 002-next.md")
+    )
     put(repo, "wiki/002-next.md", "# Next\nReplacement", "decision")
     assert "decision-changed" not in codes(repo, base=base)
     p.write_text(p.read_text().replace("Original", "Rewritten"))
@@ -138,8 +170,24 @@ def test_cli_and_ci_require_base_ratchet(repo):
     base = commit(repo)
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env["AGENTCTL_DATA_ROOT"] = str(repo)
+
     def run():
-        return subprocess.run([sys.executable, str(ROOT / ".ai/bin/agentctl.py"), "docs", "lint", "--base", base, "--json"], env=env, capture_output=True, text=True)
+        return subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / ".ai/bin/agentctl.py"),
+                "docs",
+                "lint",
+                "--base",
+                base,
+                "--json",
+            ],
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
     assert run().returncode == 0
     put(repo, "wiki/b.md", "new debt", None)
     baseline.write_text(json.dumps(sorted(v.key for v in doclint.scan(repo))))
@@ -156,7 +204,7 @@ def test_cli_and_ci_require_base_ratchet(repo):
 
 
 def test_shortcut_links_setext_headings_and_exact_sections(repo):
-    put(repo, "wiki/a.md", "A heading\n=========\n## 2.1 Child\n<a name=\"legacy\"></a>\n")
+    put(repo, "wiki/a.md", 'A heading\n=========\n## 2.1 Child\n<a name="legacy"></a>\n')
     put(repo, "wiki/b.md", "[shortcut]\n[shortcut]: a.md#a-heading\n[html](a.md#legacy)\n")
     assert not codes(repo)
     put(repo, "wiki/b.md", "[broken]\n[broken]: missing.md\n`wiki/a.md` §2\n`wiki/a.md:1-999`\n")
@@ -180,6 +228,36 @@ def test_missing_base_baseline_cannot_reset_existing_linter(repo):
 
 
 def test_baseline_parser_rejects_duplicates_and_unordered_entries():
-    for bad in ['{}', '["b", "a"]', '["a", "a"]', '[1]']:
+    for bad in ["{}", '["b", "a"]', '["a", "a"]', "[1]"]:
         with pytest.raises(ValueError):
             doclint.read_baseline(bad)
+
+
+def test_corpus_link_and_section_forms(repo):
+    put(repo, "wiki/a.md", "## §7. Choice\n")
+    put(
+        repo,
+        "wiki/b.md",
+        "([choice](a.md)).\n`wiki/a.md` §7\n`[regex][0-9]`\nregex: #[cdef][cdef]\n",
+    )
+    assert not codes(repo)
+    put(repo, "tests/test_example.py", '"""See wiki/a.md §7."""\nfixture = "wiki/no.md:99"\n', None)
+    assert not codes(repo)
+
+
+def test_scan_git_ignores_hook_environment(repo, monkeypatch):
+    put(repo, "wiki/a.md", "# A")
+    monkeypatch.setenv("GIT_DIR", str(repo / "nonexistent"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(repo / "wrong"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(repo / "wrong-index"))
+    assert not codes(repo)
+
+
+def test_unicode_decisions_and_untracked_link_targets(repo):
+    p = put(repo, "wiki/001-café.md", "# Original", "decision")
+    base = commit(repo)
+    p.write_text(p.read_text().replace("Original", "Rewritten"))
+    assert "decision-changed" in codes(repo, base=base)
+    put(repo, "wiki/link.md", "[local](untracked.md)")
+    (repo / "wiki/untracked.md").write_text("Only on this machine")
+    assert any(v.rule == "link" and v.detail == "untracked.md" for v in doclint.scan(repo))
