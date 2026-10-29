@@ -59,6 +59,7 @@ from agentlib import (
 )
 from agentlib import (
     ciresult,
+    doclint,
     guard,
     orchestrator,
     promptbuild,
@@ -1050,11 +1051,38 @@ def build_parser() -> argparse.ArgumentParser:
     sh_rep.add_argument("--json", action="store_true")
     sh_rep.set_defaults(func=cmd_shadow_report)
 
+    docs = sub.add_parser("docs", help="deterministic documentation checks").add_subparsers(
+        dest="sub", required=True
+    )
+    docs_lint = docs.add_parser("lint", help="check documentation and its shrinking baseline")
+    docs_lint.add_argument(
+        "--base", default="origin/main", help="merged base commit (default: origin/main)"
+    )
+    docs_lint.add_argument("--json", action="store_true")
+    docs_lint.set_defaults(func=cmd_docs_lint)
+
     sub.add_parser("status", help="board of every task").set_defaults(func=cmd_status)
     sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent").set_defaults(
         func=cmd_selfcheck
     )
     return p
+
+
+def cmd_docs_lint(args) -> int:
+    try:
+        result = doclint.lint(REPO_ROOT, base=args.base, rules_root=AI_ROOT.parent)
+    except (OSError, ValueError) as exc:
+        print(f"docs lint: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(result, ensure_ascii=True, indent=2))
+    else:
+        for error in result["errors"]:
+            print(error)
+        print(
+            f"docs lint: {len(result['violations'])} baselined violations, {len(result['errors'])} errors"
+        )
+    return FAILED if result["errors"] else OK
 
 
 def main(argv: list[str] | None = None) -> int:

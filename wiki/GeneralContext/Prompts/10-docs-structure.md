@@ -4,22 +4,21 @@ type: prompt
 
 # 10 — Docs structure: typed documents, a doc linter, and wiki skills
 
-**Update, 2026-10-28 — deliverable 1 implemented for review.** The Director
-PR adds WikiUpdate in `.claude/skills/wiki-update/SKILL.md`, a thin Codex
-entrypoint, measured type budgets and a shared pre-commit checklist. Both
-wiki writers inline the marked rules and canonical routing through
-`promptbuild` from the executing script's trusted main checkout. Routing for
-new numbered ADRs is in `work-modes.md`; legacy records have not moved.
+**Update, 2026-10-29 — deliverable 2 implemented for review.** Deliverable 1
+merged in #268: WikiUpdate, shared types/budgets and trusted writer expansion.
+The `director/docs-lint` PR adds the deterministic linter, `agentctl docs lint`,
+an always-on CI job under `gate`, fixture tests and `.ai/docs-baseline.json`.
+The baseline must match actual debt exactly and may only shrink against the
+CI base commit. Check semantics and maintenance instructions are in
+[the linter reference](../../../.ai/docs/doclint.md). No corpus files moved.
 
-Continue with **deliverable 2 in its own Director PR after this PR merges**:
-the deterministic linter and shrinking baseline. Use the skill's body-word
-count definition, budgets and measurement classification; there are no
-standalone ADR/changelog samples yet. Then deliverable 3 migrates mixed files
-and citations; deliverable 4 adds WikiMaintenance and wiki-health. No linter,
-corpus migration or maintenance automation is part of deliverable 1. Visual
-refresh is complete through USERS-004 (#266) and its backend test cleanup
-(#267); stale visual-stack entries in the index/backlog are not pending units.
-Keep jev disabled.
+After this PR merges, continue with **deliverable 3**, a few files per
+Director PR, fixing inbound citations and deleting resolved baseline entries
+together. Untyped legacy files still need classification; budgets/history
+checks activate on their declared type. Deliverable 4 remains WikiMaintenance
+and wiki-health; neither is implemented here. Keep jev disabled. Visual refresh
+is complete through #266 and cleanup #267; stale visual-stack entries in the
+index/backlog are not pending units.
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System

@@ -456,6 +456,22 @@ jobs:
       - name: Run the k6 smoke profile against the local perf stack (advisory)
         run: pwsh -File perf/run.ps1 -Profile smoke
 
+  # Always scan: a code-only change can break a document's path:line citation.
+  docs-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Check documentation and shrinking baseline
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-${PUSH_BASE:-origin/main}}"
+          python .ai/bin/agentctl.py docs lint --base "$base"
+
   # One check that always reports, whatever the filter decided.
   #
   # Required status checks name a JOB, and a job the filter skipped never
@@ -477,6 +493,7 @@ jobs:
       - frontend-typecheck
       - frontend-lint
       - agent-infra-test
+      - docs-lint
       - pip-audit
       - openapi-drift
       - npm-audit

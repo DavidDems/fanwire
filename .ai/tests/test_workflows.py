@@ -2361,6 +2361,7 @@ class TestTheTestJobsAreTestAgentsOwn:
 # Every other job test-agent.yml has: neither a test suite nor a static check,
 # so a baseline it fails is never the new tests' doing.
 NOT_A_CHECK = {
+    "docs-lint",
     "changes",
     "agent-infra-test",
     "pip-audit",
