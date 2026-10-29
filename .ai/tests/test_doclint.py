@@ -153,3 +153,33 @@ def test_cli_and_ci_require_base_ratchet(repo):
     assert "github.event.pull_request.base.sha" in block
     assert "github.event.before" in block
     assert "      - docs-lint\n" in wf.split("\n  gate:\n")[1]
+
+
+def test_shortcut_links_setext_headings_and_exact_sections(repo):
+    put(repo, "wiki/a.md", "A heading\n=========\n## 2.1 Child\n<a name=\"legacy\"></a>\n")
+    put(repo, "wiki/b.md", "[shortcut]\n[shortcut]: a.md#a-heading\n[html](a.md#legacy)\n")
+    assert not codes(repo)
+    put(repo, "wiki/b.md", "[broken]\n[broken]: missing.md\n`wiki/a.md` §2\n`wiki/a.md:1-999`\n")
+    assert sum(v.rule == "citation" for v in doclint.scan(repo)) == 2
+
+
+def test_merged_decision_frontmatter_cannot_be_rewritten(repo):
+    p = put(repo, "wiki/001-choice.md", "# Choice", "decision")
+    base = commit(repo)
+    p.write_text(p.read_text().replace("type: decision", 'type: "decision"'))
+    assert "decision-changed" in codes(repo, base=base)
+
+
+def test_missing_base_baseline_cannot_reset_existing_linter(repo):
+    put(repo, "wiki/a.md", "# A")
+    put(repo, ".ai/agentlib/doclint.py", "# existing linter", None)
+    base = commit(repo)
+    (repo / ".ai/docs-baseline.json").write_text("[]")
+    with pytest.raises(ValueError, match="no documentation baseline"):
+        doclint.lint(repo, base=base)
+
+
+def test_baseline_parser_rejects_duplicates_and_unordered_entries():
+    for bad in ['{}', '["b", "a"]', '["a", "a"]', '[1]']:
+        with pytest.raises(ValueError):
+            doclint.read_baseline(bad)
