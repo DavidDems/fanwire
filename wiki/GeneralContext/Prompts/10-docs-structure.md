@@ -11,6 +11,9 @@ an always-on CI job under `gate`, fixture tests and `.ai/docs-baseline.json`.
 The baseline must match actual debt exactly and may only shrink against the
 CI base commit. Check semantics and maintenance instructions are in
 [the linter reference](../../../.ai/docs/doclint.md). No corpus files moved.
+Review: [PR #269](https://github.com/DavidDems/fanwire/pull/269). Docs and `.ai`
+CI pass; the aggregate has the same two avatar-rendering assertion failures
+as base `8f85c15` in PostNode/ProfilePage tests. See the PR's validation notes.
 
 After this PR merges, continue with **deliverable 3**, a few files per
 Director PR, fixing inbound citations and deleting resolved baseline entries
