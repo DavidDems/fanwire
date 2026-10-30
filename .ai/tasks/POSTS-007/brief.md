@@ -12,30 +12,35 @@ It is named `POSTS-` for the decision's home; the code is in `notifications/`.
 
 ## The change
 
+Two parts. The list hides an undone repost's notification (see "The decision").
 In `_resolve_post_created`, a missing **new post** returns the same shape as a
-plain post (`recipient_id` None). Nothing else changes. The parent and original
+plain post (`recipient_id` None). The parent and original
 lookups keep `_require`: the FK on `parent_post_id` and `original_post_id` means
 a row that exists always has them, and `unrepost_post` answers 409 instead of
 deleting a repost that has a reply or is itself reposted.
 
-## The open decision: not settled, the Director decides
+## The decision: settled
 
-Should a REPOST notification survive the undo? `human-decisions.md` says nothing
-about it, and `business-rules.md` only says a repost creates one. `POSTS-004`
-("nothing cascades") covers soft deletes, not this hard delete.
+The human decided on 2026-10-30: when a repost is undone, the original author's
+REPOST notification is hidden. The row stays and `GET /notifications` leaves it
+out, the same way `POSTS-004` handles deleted posts. `human-decisions.md` does
+not record this yet; that file is the Director's.
 
-**Recommendation: keep the row, hide it from `GET /notifications`.** `POSTS-004`
-already treats a deleted post's notification that way, and today an undone
-repost's entry links to `/posts/<id>`, whose id is gone (a 404, from reading the
-code, not a browser check).
-
-**This spec as written does not decide it.** It pins today's behaviour (the row
-stays and is listed) and fixes only the DLQ. If the Director adopts the
-recommendation, amend this spec before the unit starts: add an acceptance
-criterion for the hidden entry, and add `backend/app/notifications/routes.py`,
-`backend/app/posts/service.py` and `backend/tests/posts/**` to `allowed_paths`.
 `deleted_post_ids` cannot serve as it stands: it finds soft-deleted rows, and a
-hard-deleted row is simply absent.
+hard-deleted row is simply absent. So `posts/` gains
+`existing_post_ids(session, post_ids) -> set[int]` beside it, and
+`list_notifications` drops a REPOST whose `reference_id` is not in the result.
+It is one more query per list. `reference_id` on a REPOST is the repost's own
+id, so an undo removes exactly that row, and a repeat repost gets a new id and a
+new notification. Identity ids are not reused, so an old row cannot reappear.
+
+The filter is REPOST only. Only a plain repost is hard-deleted, and
+`test_list_notifications_returns_only_own_active_notifications_most_recent_first`
+lists a REPLY whose `reference_id` 999 has no row; it must keep passing unchanged.
+Its REPOST row is already cleared, so the new filter does not affect it.
+
+An email already sent for the repost cannot be recalled. This decision covers
+only the list.
 
 ## Traps
 
@@ -56,4 +61,5 @@ hard-deleted row is simply absent.
 
 ## Not in this task
 
-The `TODO/02-backlog.md` row (Director); removing or hiding the notification.
+The `TODO/02-backlog.md` row and the `human-decisions.md` entry (Director);
+deleting the notification row; recalling a sent email.
