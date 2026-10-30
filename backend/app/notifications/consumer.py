@@ -35,13 +35,22 @@ mirrors app.users.service's existing no-self-follow rule. UserFollowed
 never hits this branch since users/ already disallows self-follow at the
 source.
 
-A row an event names that does not exist (the post, its parent or original,
-the recipient) raises MissingReferenceError, before anything is committed.
-A post its owner deletes keeps its row and users are only soft-deleted, so
-that is a malformed event, not a race a retry would win: it fails the record, and SQS dead-letters
-it for a human. The recipient is looked up before the commit for the same
-reason -- after it, failing the record would commit a duplicate row on
-redelivery (see "Email is best-effort" in the module wiki).
+A PostCreated whose new post has no row is a successful no-op (POSTS-007):
+undoing a plain repost hard-deletes its row, so the undo can beat this
+consumer, no retry would ever win, and there is nothing for a human in the
+DLQ. The facade commits before it publishes, so a missing row means a later
+delete in practice; it can't be told apart from a wrong id, a silent no-op
+being the accepted cost. A record with no post_id key still fails.
+
+Every other row an event names that does not exist raises
+MissingReferenceError, before anything is committed. The FK on parent_post_id
+and original_post_id means a post that exists always has them, and
+unrepost_post answers 409 rather than delete a repost that has a reply or is
+itself reposted. Users are only soft-deleted. So that is a malformed event,
+not a race a retry would win: it fails the record, and SQS dead-letters it for
+a human. The recipient is looked up before the commit for the same reason --
+after it, failing the record would commit a duplicate row on redelivery (see
+"Email is best-effort" in the module wiki).
 """
 
 from __future__ import annotations
@@ -97,13 +106,13 @@ def handle_domain_event(
     the durable outcome, so any exception from email delivery (e.g. SES
     MessageRejected) is logged -- notification type and id only, no PII --
     and swallowed, and the notification is still returned. Failures before
-    the commit still propagate, MissingReferenceError among them (see the
-    module docstring).
+    the commit still propagate, MissingReferenceError among them; a PostCreated
+    whose new post has no row is not one of them (see the module docstring).
     """
     if event_name == POST_CREATED:
         recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(session, detail)
         if recipient_id is None:
-            return None  # plain post -- not a notification trigger
+            return None  # plain post or undone repost -- nothing to notify
     elif event_name == USER_FOLLOWED:
         recipient_id = detail["followed_user_id"]
         actor_id = detail["follower_user_id"]
@@ -156,10 +165,14 @@ def _resolve_post_created(
 ) -> tuple[int | None, int, NotificationType | None, int | None]:
     """Returns (recipient_id, actor_id, type, reference_id) for a
     PostCreated event, or (None, actor_id, None, None) if the new post is
-    neither a reply nor a repost (a plain post -- no notification)."""
-    post = _require(session, Post, detail["post_id"])
+    neither a reply nor a repost (a plain post -- no notification) or has no
+    row (see the module docstring)."""
+    post = session.get(Post, detail["post_id"])
     actor_id = detail["author_id"]
 
+    if post is None:
+        logger.info("post created event names a post that no longer exists")
+        return None, actor_id, None, None
     if post.is_reply:
         parent = _require(session, Post, post.parent_post_id)
         return parent.author_id, actor_id, NotificationType.REPLY, post.id

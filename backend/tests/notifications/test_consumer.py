@@ -17,6 +17,7 @@ consumer implements:
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 import pytest
@@ -339,18 +340,20 @@ def test_email_send_failure_does_not_propagate_and_leaves_one_notification(sessi
 
 # --- An event naming a row that does not exist ----------------------------------
 #
-# Posts are never deleted and users are only soft-deleted, so an event that
-# names a missing row is malformed, not a race a retry would win. It still
-# fails the record (wiki/CodeContext/Modules/0x05-notifications.md: SQS
-# redelivers it, then dead-letters it), but by name and before anything is
+# The new post of a PostCreated is the one row that can go missing in practice:
+# the facade commits before it publishes, and undoing a plain repost hard-deletes
+# it (POSTS-007), so a retry could never win. That is a successful no-op, not a
+# failure for a human in the DLQ. Any other missing row (a recipient) is still
+# malformed: it fails the record (wiki/CodeContext/Modules/0x05-notifications.md:
+# SQS redelivers it, then dead-letters it), by name and before anything is
 # committed -- it used to be an AttributeError on None, which mypy (strict)
-# rightly refused (handoff.md §10, D5). For UserFollowed the recipient is now
+# rightly refused (handoff.md §10, D5). For UserFollowed the recipient is
 # looked up before the commit, so a missing one can never surface after the
 # row exists, where failing the record would commit a duplicate on redelivery.
 
 
-def test_post_created_for_a_nonexistent_post_fails_before_any_row(session_factory):
-    from app.notifications.consumer import MissingReferenceError, handle_domain_event
+def test_post_created_for_a_post_that_no_longer_exists_is_a_no_op(session_factory):
+    from app.notifications.consumer import handle_domain_event
     from app.notifications.email import RecordingEmailSender
     from app.notifications.models import Notification
 
@@ -358,17 +361,63 @@ def test_post_created_for_a_nonexistent_post_fails_before_any_row(session_factor
         author = _make_user(session, username="missing_post_author")
         sender = RecordingEmailSender()
 
-        with pytest.raises(MissingReferenceError):
-            handle_domain_event(
-                session,
-                event_name="PostCreated",
-                detail={"post_id": 999_999_999, "author_id": author.id},
-                email_sender=sender,
-            )
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": 999_999_999, "author_id": author.id},
+            email_sender=sender,
+        )
 
-        session.rollback()
+        assert result is None
         assert session.scalars(select(Notification)).first() is None
         assert sender.sent == []
+
+
+def test_the_no_op_logs_at_most_info_and_no_ids(session_factory):
+    from app.notifications import consumer
+    from app.notifications.email import RecordingEmailSender
+
+    post_id, author_id = 987_654_321, 123_456_789
+    records: list[logging.LogRecord] = []
+
+    class _Recording(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Recording()
+    consumer.logger.addHandler(handler)
+    try:
+        with session_factory() as session:
+            result = consumer.handle_domain_event(
+                session,
+                event_name="PostCreated",
+                detail={"post_id": post_id, "author_id": author_id},
+                email_sender=RecordingEmailSender(),
+            )
+    finally:
+        consumer.logger.removeHandler(handler)
+
+    assert result is None
+    standard_attributes = logging.makeLogRecord({}).__dict__
+    for record in records:
+        assert record.levelno <= logging.INFO
+        extras = {k: v for k, v in record.__dict__.items() if k not in standard_attributes}
+        line = f"{record.getMessage()} {extras}"
+        assert str(post_id) not in line
+        assert str(author_id) not in line
+
+
+def test_post_created_with_no_post_id_key_still_fails(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+
+    with session_factory() as session, pytest.raises(KeyError):
+        handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"author_id": 1},
+            email_sender=RecordingEmailSender(),
+        )
 
 
 def test_user_followed_for_a_nonexistent_user_fails_before_any_row(session_factory):

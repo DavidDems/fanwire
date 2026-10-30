@@ -167,21 +167,89 @@ def test_post_created_plain_post_is_a_no_op(session_factory):
 
 
 def test_a_record_that_raises_is_reported_as_a_batch_item_failure(session_factory):
-    # post_id referencing a nonexistent Post -- consumer._resolve_post_created
-    # raises MissingReferenceError for it, before any row is committed -- must
-    # be caught and reported per-record, not propagated and not silently
-    # swallowed for the rest of the batch.
+    # A PostCreated with no post_id key -- consumer._resolve_post_created
+    # raises KeyError for it, before any row is committed -- must be caught
+    # and reported per-record, not propagated and not silently swallowed for
+    # the rest of the batch. (A post_id with no row is a no-op since POSTS-007,
+    # see the tests below.)
     from app.notifications.lambda_handler import handler
 
     event = _load_fixture("notification_post_created_sqs_event.json")
     body = json.loads(event["Records"][0]["body"])
-    body["detail"]["post_id"] = 999999999
+    del body["detail"]["post_id"]
     body["detail"]["author_id"] = 1
     event["Records"][0]["body"] = json.dumps(body)
 
     result = handler(event, None)
 
     assert result == {"batchItemFailures": [{"itemIdentifier": event["Records"][0]["messageId"]}]}
+
+
+def _post_created_record(message_id: str, *, post_id: int, author_id: int) -> dict:
+    record = _load_fixture("notification_post_created_sqs_event.json")["Records"][0]
+    body = json.loads(record["body"])
+    body["detail"]["post_id"] = post_id
+    body["detail"]["author_id"] = author_id
+    record["body"] = json.dumps(body)
+    record["messageId"] = message_id
+    return record
+
+
+def _undone_and_valid_reposts(session_factory) -> dict:
+    """A repost already undone (its row gone, the event still on its way) and
+    another user's repost of the same post, still there."""
+    from app.posts.models import Post
+    from app.posts.service import unrepost_post
+
+    with session_factory() as session:
+        author = _make_user(session, username="undone_author")
+        undoer = _make_user(session, username="undone_undoer")
+        keeper = _make_user(session, username="undone_keeper")
+        original = Post(author_id=author.id, text="worth sharing")
+        session.add(original)
+        session.commit()
+        undone = Post(author_id=undoer.id, is_repost=True, original_post_id=original.id)
+        kept = Post(author_id=keeper.id, is_repost=True, original_post_id=original.id)
+        session.add_all([undone, kept])
+        session.commit()
+        undone_id = undone.id
+        unrepost_post(session, user_id=undoer.id, post_id=original.id)
+        assert session.get(Post, undone_id) is None
+    return {
+        "author_id": author.id,
+        "undone": _post_created_record("undone", post_id=undone_id, author_id=undoer.id),
+        "valid": _post_created_record("valid", post_id=kept.id, author_id=keeper.id),
+        "kept_id": kept.id,
+    }
+
+
+def test_a_record_for_an_undone_repost_is_not_a_batch_item_failure(session_factory):
+    from app.notifications.lambda_handler import handler
+
+    world = _undone_and_valid_reposts(session_factory)
+
+    result = handler({"Records": [world["undone"]]}, None)
+
+    assert result == {"batchItemFailures": []}
+    with session_factory() as session:
+        assert session.query(Notification).count() == 0
+
+
+@pytest.mark.parametrize("order", [("undone", "valid"), ("valid", "undone")])
+def test_a_valid_record_beside_an_undone_repost_still_creates_its_notification(
+    session_factory, order
+):
+    from app.notifications.lambda_handler import handler
+
+    world = _undone_and_valid_reposts(session_factory)
+
+    result = handler({"Records": [world[name] for name in order]}, None)
+
+    assert result == {"batchItemFailures": []}
+    with session_factory() as session:
+        notification = session.query(Notification).one()
+        assert notification.recipient_user_id == world["author_id"]
+        assert notification.reference_id == world["kept_id"]
 
 
 @mock_aws

@@ -311,6 +311,17 @@ def deleted_post_ids(session: Session, post_ids: Collection[int]) -> set[int]:
     )
 
 
+def existing_post_ids(session: Session, post_ids: Collection[int]) -> set[int]:
+    """Which of `post_ids` still have a row, soft-deleted ones included, one
+    query -- for notifications/' list, to tell an undone repost (unrepost_post
+    hard-deletes the row, so deleted_post_ids can't see it). An unknown id is
+    simply absent."""
+    if not post_ids:
+        return set()
+
+    return set(session.scalars(select(Post.id).where(Post.id.in_(post_ids))).all())
+
+
 def _has_no_text() -> ColumnElement[bool]:
     return or_(Post.text.is_(None), Post.text == "")
 

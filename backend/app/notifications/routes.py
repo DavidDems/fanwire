@@ -11,7 +11,12 @@ later if needed). It leaves out reply and repost notifications whose post
 its owner has since deleted (POSTS-004), learned through posts/' read
 interface (app.posts.service.deleted_post_ids, one query per list), never
 by reading posts/' table: a follow's reference_id is a user id, so only
-reply/repost rows are checked.
+reply/repost rows are checked. It also leaves out a repost notification whose
+repost was undone (POSTS-007, the human's decision of 2026-10-30): the undo
+hard-deletes the row, which deleted_post_ids cannot see, so
+app.posts.service.existing_post_ids answers that, one more query per list.
+That check is repost only: only a plain repost is ever hard-deleted. The
+notification's own row stays in both cases.
 
 POST /notifications/{notification_id}/clear never leaks whether an id
 exists for another user -- 404 both when the id doesn't exist at all and
@@ -39,7 +44,7 @@ from app.notifications.schemas import (
     NotificationPreferenceOut,
     UpdateNotificationPreferenceRequest,
 )
-from app.posts.service import deleted_post_ids
+from app.posts.service import deleted_post_ids, existing_post_ids
 from app.users.dependencies import get_current_user
 from app.users.models import User
 
@@ -69,8 +74,19 @@ def list_notifications(
         if n.type in _POST_REFERENCES and n.reference_id is not None
     }
     deleted = deleted_post_ids(session, post_ids)
+    existing = existing_post_ids(
+        session,
+        {
+            n.reference_id
+            for n in notifications
+            if n.type is NotificationType.REPOST and n.reference_id is not None
+        },
+    )
     return [
-        n for n in notifications if not (n.type in _POST_REFERENCES and n.reference_id in deleted)
+        n
+        for n in notifications
+        if not (n.type in _POST_REFERENCES and n.reference_id in deleted)
+        and not (n.type is NotificationType.REPOST and n.reference_id not in existing)
     ]
 
 
