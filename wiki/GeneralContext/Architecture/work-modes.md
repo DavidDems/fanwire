@@ -120,7 +120,9 @@ One structure for every mode, so any session can start cold:
   limits. A session that ends mid-thread updates its prompt; a finished
   thread's prompt is deleted and the index says so.
 - **Decisions: `Architecture/human-decisions.md`** (product and process) and
-  **`.ai/docs/handoff.md` §10.3** (the agent system) hold the legacy records.
+  **`.ai/docs/handoff.md` §10.3** (the agent system) hold the legacy records,
+  except the extracted D3 orchestration and human-escalation choice in
+  [ADR 0001](../Decisions/0001-bounded-orchestration.md).
   New typed decisions, including agent-system decisions, use one numbered ADR
   per file in **`wiki/GeneralContext/Decisions/NNNN-short-title.md`**. Choose
   the next unused number on current main. Legacy records remain at their

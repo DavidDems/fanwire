@@ -10,6 +10,8 @@
  * saying "always dynamic-import the subject under test" is a rule every future
  * unit has to remember. A red test is not.
  */
+import { File as NodeFile } from "node:buffer";
+
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -55,7 +57,9 @@ describe("a request body carrying a file can be sent and read back", () => {
    * that.
    */
   it("exposes the Blob readers jsdom leaves out", () => {
-    const file = new File([new Uint8Array([1, 2, 3])], "photo.jpg", { type: "image/jpeg" });
+    const file = new File([new Uint8Array([1, 2, 3])], "photo.jpg", {
+      type: "image/jpeg",
+    });
 
     expect(typeof file.arrayBuffer, "Blob.arrayBuffer()").toBe("function");
     expect(typeof file.text, "Blob.text()").toBe("function");
@@ -65,10 +69,16 @@ describe("a request body carrying a file can be sent and read back", () => {
   it("reads the bytes back out of a Blob", async () => {
     // A reader that resolves to the wrong thing is worse than an absent one:
     // the body would serialize and silently carry nothing.
-    const file = new File([new Uint8Array([7, 8, 9])], "photo.jpg", { type: "image/jpeg" });
+    const file = new File([new Uint8Array([7, 8, 9])], "photo.jpg", {
+      type: "image/jpeg",
+    });
 
-    expect(new Uint8Array(await file.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]));
-    expect(await new Blob(["hello"], { type: "text/plain" }).text()).toBe("hello");
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(
+      new Uint8Array([7, 8, 9]),
+    );
+    expect(await new Blob(["hello"], { type: "text/plain" }).text()).toBe(
+      "hello",
+    );
   });
 
   it("round-trips a FormData carrying a file through msw", async () => {
@@ -85,18 +95,79 @@ describe("a request body carrying a file can be sent and read back", () => {
 
     const body = new FormData();
     body.append("key", "uploads/1.jpg");
-    body.append("file", new File([new Uint8Array(16)], "photo.jpg", { type: "image/jpeg" }));
+    const bytes = Uint8Array.from({ length: 16 }, (_, index) => index + 1);
+    body.append("file", new File([bytes], "photo.jpg", { type: "image/jpeg" }));
 
-    const response = await fetch("https://upload.test.invalid/", { method: "POST", body });
+    const response = await fetch("https://upload.test.invalid/", {
+      method: "POST",
+      body,
+    });
 
     expect(response.status).toBe(204);
     const form = received as FormData | null;
-    if (form === null) throw new Error("the handler never received the request");
+    if (form === null)
+      throw new Error("the handler never received the request");
     expect([...form.keys()]).toEqual(["key", "file"]);
     expect(form.get("key")).toBe("uploads/1.jpg");
     const file = form.get("file") as File;
     expect(file.name).toBe("photo.jpg");
     expect(file.size).toBe(16);
+    // The bytes as well as the size. On Node 24 on, a part rewrapped through
+    // jsdom's `File` becomes the 13 bytes of "[object File]": the name survives
+    // and only the contents give it away.
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("names a bare Blob in a FormData 'blob' and keeps its bytes", async () => {
+    let received: FormData | null = null;
+    server.use(
+      http.post("https://upload.test.invalid/", async ({ request }) => {
+        received = await request.formData();
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const bytes = new Uint8Array([4, 5, 6, 7]);
+    const body = new FormData();
+    body.append("file", new Blob([bytes], { type: "image/jpeg" }));
+
+    const response = await fetch("https://upload.test.invalid/", {
+      method: "POST",
+      body,
+    });
+
+    expect(response.status).toBe(204);
+    const form = received as FormData | null;
+    if (form === null)
+      throw new Error("the handler never received the request");
+    const file = form.get("file") as File;
+    expect(file.name).toBe("blob");
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("makes a jsdom File an instance of Node's File", () => {
+    // From undici 7 (Node 24 on), `Request.formData()` builds each part with the
+    // global `File`, jsdom's, then asserts it is an `instanceof` the `File` undici
+    // loaded with, Node's. Only the prototype chain can answer that. This line is
+    // red on every Node until `setupTests.ts` links the two.
+    expect(new File([], "a.txt")).toBeInstanceOf(NodeFile);
+  });
+});
+
+describe("the web storage globals are jsdom's", () => {
+  // Node 26 defines its own global `localStorage`, `undefined` without
+  // `--localstorage-file`, and Vitest copies a jsdom key only when the global is
+  // not already there. So this can only be red on Node 26: on Node 20 and 22
+  // jsdom's storage is installed anyway.
+  it.each([
+    ["localStorage", () => localStorage],
+    ["sessionStorage", () => sessionStorage],
+  ])("round-trips an item through %s", (_name, storage) => {
+    storage().setItem("harness-key", "harness-value");
+
+    expect(storage().getItem("harness-key")).toBe("harness-value");
+
+    storage().removeItem("harness-key");
   });
 });
 
