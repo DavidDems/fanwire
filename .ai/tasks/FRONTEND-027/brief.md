@@ -84,7 +84,7 @@ test accounts, on localhost only, on a Track B port 5210-5219 with `--strictPort
 ## Later Director PR, not this spec (none of these are unit-writable)
 
 - `FrontendUI/layout.md` §2: "A signed-in visitor has nothing here on phones" and the
-  wordmark rule if changed; §5 if the padding's basis changes.
+  wordmark rule if changed; `FrontendUI/layout.md` §5 if the padding's basis changes.
 - `FrontendUI/verification.md` §3a: "there is no sign-out button yet".
 - `FrontendUI/components.md`: the shell's Sign out.
 - `FrontendUI/implementation-plan.md` "After the units", and
