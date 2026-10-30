@@ -1,4 +1,4 @@
-"""Prompt 10: fixture documents, exact debt and a base-relative ratchet.
+"""Prompt 10: fixture documents, a debt ceiling and a base-relative ratchet.
 
 Do not weaken the workflow's pinned non-test-job rationale: docs failures
 must route a worker baseline to manager review, never authorize coding.

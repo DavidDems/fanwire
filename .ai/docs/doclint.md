@@ -60,9 +60,12 @@ remain migration debt; they are not silently relabelled.
 
 `.ai/docs-baseline.json` is a sorted, unique JSON array of violation keys.
 Each key identifies the source path, rule and detail, without source line
-positions. The scan must match this array exactly: new debt fails, and fixed
-debt requires deleting its entry. The current array must also be a subset of
-the base commit's array. Changing an exception's identity counts as adding
+positions. The scan must be a subset of this array: new debt fails, while fixed
+debt may leave an unused entry. Unit PRs can therefore clear debt without
+editing the baseline under `.ai/`, which remains forbidden to every worker.
+Directors can prune unused entries in a separate maintenance PR; until pruned,
+an entry still permits that exact violation to recur. The current array must
+also be a subset of the base commit's array. Changing an exception's identity counts as adding
 one. CI supplies the PR base SHA, push-before SHA, or `origin/main` for manual
 runs. Missing history, malformed baselines and missing rule sources fail
 closed. Only initial introduction against a base containing neither linter
@@ -83,7 +86,8 @@ changes to the checker itself, as it controls the rest of `.ai/`.
    ```
 
 3. For a migration, fix documents and their inbound citations, stage any new
-   files, delete only the fixed entries from the baseline, then rerun step 1.
+   files, then rerun step 1. No baseline edit is needed in a unit PR. A Director
+   maintenance PR may also delete fixed entries to retire those exceptions.
 
 A pass reports baselined debt and zero errors; it does not claim zero debt.
 Exit codes are 0 for a satisfied ratchet, 1 for violations of the ratchet,

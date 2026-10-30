@@ -1,4 +1,4 @@
-"""Deterministic documentation checks and an exact, base-relative debt ratchet.
+"""Deterministic documentation checks and a base-relative debt ceiling.
 
 No network, Markdown/YAML dependencies or corpus rewrites. Supported Markdown
 syntax and baseline maintenance are documented in docs/doclint.md.
@@ -422,11 +422,11 @@ def read_baseline(text: str) -> set[str]:
 
 
 def ratchet(actual: set[str], baseline: set[str], previous: set[str]) -> list[str]:
-    return (
-        [f"new violation: {v}" for v in sorted(actual - baseline)]
-        + [f"remove fixed baseline entry: {v}" for v in sorted(baseline - actual)]
-        + [f"baseline may only shrink: {v}" for v in sorted(baseline - previous)]
-    )
+    # Workers cannot edit .ai/: clearing debt must not require a baseline edit.
+    # Directors may prune fixed entries, but cannot add exceptions against base.
+    return [f"new violation: {v}" for v in sorted(actual - baseline)] + [
+        f"baseline may only shrink: {v}" for v in sorted(baseline - previous)
+    ]
 
 
 def lint(root: Path, *, base: str, rules_root: Path | None = None) -> dict:
