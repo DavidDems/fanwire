@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "task_id": "NOTIFICATIONS-001",
+  "objective": "With ENVIRONMENT=development and no POST_EVENT_BUS_NAME, the local stack delivers domain events in process to the existing notifications consumer, so a local signed-in session sees real notifications, while every deployed behaviour stays exactly as it is.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation.",
+    "With ENVIRONMENT exactly 'development' and POST_EVENT_BUS_NAME empty, app.dependencies.get_event_bus wires a new EventPublisher implementation that passes each event to app.notifications.consumer.handle_domain_event in process.",
+    "With POST_EVENT_BUS_NAME empty and ENVIRONMENT unset, empty, 'perf', 'production', 'Development' or ' development', get_event_bus wires InMemoryEventPublisher, as today. test_get_event_bus_defaults_to_in_memory_publisher_when_no_bus_name_configured passes unchanged.",
+    "With POST_EVENT_BUS_NAME set and ENVIRONMENT unset, get_event_bus wires EventBridgePublisher with that bus name, as today. test_get_event_bus_wires_real_event_bridge_publisher_when_bus_name_configured passes unchanged.",
+    "Fail closed: Settings() raises when ENVIRONMENT is 'development' and POST_EVENT_BUS_NAME is non-empty, and when ENVIRONMENT is 'development' and AWS_LAMBDA_FUNCTION_NAME (set by the Lambda runtime) is non-empty. So a deployed function missing its bus name either behaves as it does today or refuses to start, and can never dispatch locally.",
+    "An infra test over the same synth cases as infra/test/perf-env.test.ts proves no Lambda function sets ENVIRONMENT to anything containing 'development'. The existing assertion that the API function sets POST_EVENT_BUS_NAME passes unchanged.",
+    "With the in-process publisher wired against Postgres, through the real routes: a follow creates a FOLLOW notification for the followed user, a reply a REPLY for the parent's author and a repost a REPOST for the original's author, and each recipient's GET /notifications returns it.",
+    "A plain post, a self-reply and PostReported create no notification.",
+    "The publisher opens its own session for each event and closes it, and never uses the request's session.",
+    "A consumer exception does not reach the caller: the request still answers its usual success status, the exception is logged with no user or post id, and the session is closed.",
+    "No AWS call in development: with NOTIFICATION_FROM_ADDRESS set, the local path creates no events, cognito-idp or ses client and sends no email, while the notification row is still created.",
+    "app/eventbus.py, app/posts/** and app/users/** are unchanged and gain no import of app.notifications: publishers keep no knowledge of subscribers.",
+    "No migration and no change to backend/openapi.json, the frontend, infra/lib or any dependency manifest.",
+    "Browser check, localhost only, two test accounts, with ENVIRONMENT=development in the local untracked backend/.env: account A follows account B, and account B's notifications page shows it. The PR says this was the temporary local setting, since the committed compose line is a later Director PR.",
+    "wiki/CodeContext/Modules/0x05-notifications.md and 0x00-architecture.md 'PostEventBus implementation' describe the third publisher, its switch and its fail-closed rule."
+  ],
+  "allowed_paths": [
+    "backend/app/notifications/local_dispatch.py",
+    "backend/app/dependencies.py",
+    "backend/app/settings.py",
+    "backend/tests/notifications/test_local_dispatch.py",
+    "backend/tests/test_dependencies.py",
+    "backend/tests/test_settings.py",
+    "infra/test/local-dispatch-env.test.ts",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/app/eventbus.py",
+    "backend/app/posts/**",
+    "backend/app/users/**",
+    "backend/app/notifications/consumer.py",
+    "backend/alembic/**",
+    "backend/openapi.json",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/lib/**",
+    "infra/bin/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/gof-patterns.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "fastapi-module", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
