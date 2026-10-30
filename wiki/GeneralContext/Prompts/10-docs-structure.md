@@ -4,19 +4,19 @@ type: prompt
 
 # 10 — Docs structure: typed documents, a doc linter, and wiki skills
 
-**Update, 2026-10-29 — deliverable 2 implemented for review.** Deliverable 1
-merged in #268: WikiUpdate, shared types/budgets and trusted writer expansion.
-The `director/docs-lint` PR adds the deterministic linter, `agentctl docs lint`,
+**Update, 2026-10-30 — deliverables 1 and 2 merged.** Deliverable 1 merged
+in #268: WikiUpdate, shared types/budgets and trusted writer expansion.
+Deliverable 2 merged in #269: the deterministic linter, `agentctl docs lint`,
 an always-on CI job under `gate`, fixture tests and `.ai/docs-baseline.json`.
 The baseline is a ceiling for actual debt and may only shrink against the
 CI base commit. Units may clear debt without editing the forbidden baseline;
 Directors prune unused entries. Check semantics and maintenance instructions are in
-[the linter reference](../../../.ai/docs/doclint.md). No corpus files moved.
-Review: [PR #269](https://github.com/DavidDems/fanwire/pull/269). Docs and `.ai`
-CI pass; the aggregate has the same two avatar-rendering assertion failures
-as base `8f85c15` in PostNode/ProfilePage tests. See the PR's validation notes.
+[the linter reference](../../../.ai/docs/doclint.md). #271 corrected the
+ratchet so units can clear debt without editing the Director-owned baseline.
+The avatar-rendering fixture failures on #269's base were fixed in #270.
+No corpus files moved in those linter PRs.
 
-After this PR merges, continue with **deliverable 3**, a few files per
+Continue with **deliverable 3**, a few files per
 Director PR, fixing inbound citations and deleting resolved baseline entries
 together. Untyped legacy files still need classification; budgets/history
 checks activate on their declared type. Deliverable 4 remains WikiMaintenance
