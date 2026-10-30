@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-026",
+  "objective": "When POST /posts or POST /posts/{post_id}/repost answers 429, the reader sees a 'slow down' message where that action's failures already appear, instead of the generic failure, and nothing else about failure handling changes.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation.",
+    "ComposePage (a new post and a quote repost): a 429 from POST /posts shows the rate-limit message in the existing InlineAlert in the composer footer. The draft text and attachment stay, and submitting again sends the same body.",
+    "InlineComposer (a reply): a 429 from POST /posts shows the reply's rate-limit message in its existing InlineAlert, and the reply text stays.",
+    "Repost: a 429 from POST /posts/{post_id}/repost shows the repost rate-limit message in TogglePostAction's existing InlineAlert, and the toggle's pressed state and count roll back, as for any failure.",
+    "Other statuses are unchanged: on ComposePage a 400, 409 or 500 shows GENERIC_FAILURE and a 422 still goes through refusalMessage; on InlineComposer any other failure shows its existing message; a repost POST answering 409 or 500 shows the existing 'We could not save that just now. Please try again.'",
+    "A like answering 429 and a repost DELETE answering 429 keep the generic message: neither is posting.",
+    "A 429 with an empty body and a 429 with a JSON body both produce the rate-limit message, which never contains the server's detail text ('rate limit exceeded') or a status code.",
+    "No message states a duration: POST_RATE_LIMIT_PER_MINUTE and POST_RATE_LIMIT_PER_HOUR are two windows, and the API sends no Retry-After.",
+    "features/feed does not import from features/compose or the reverse, and the existing isolation tests pass unchanged. setReposted's error for a POST 429 is a class exported from features/feed/api.ts, which TogglePostAction recognises; setLiked is unchanged.",
+    "No backend, openapi or schema change; no new dependency. If ComposePage grows past the 100-byte gzip tolerance, or the entry does, frontend/src/test/bundle-budgets/FRONTEND-026.ts declares it in the test commit.",
+    "Browser rows, at 360 and 1280 wide, light and dark, per wiki/CodeContext/FrontendUI/verification.md, with the 429 produced by page.route and labelled synthetic in the PR: (1) the compose modal's footer shows the message and keeps the draft; (2) a card's repost shows the message on its own line under the action row, with no horizontal overflow. Each row is reported as really checked or NOT DONE.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records in one short passage which failures get the rate-limit message and why the like and undo paths do not."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/compose/ComposePage.tsx",
+    "frontend/src/features/compose/InlineComposer.tsx",
+    "frontend/src/features/compose/rate-limit.test.tsx",
+    "frontend/src/features/feed/api.ts",
+    "frontend/src/features/feed/api.test.ts",
+    "frontend/src/features/feed/PostAction.tsx",
+    "frontend/src/features/feed/repost-rate-limit.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-026.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/api/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**",
+    "frontend/src/styles/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

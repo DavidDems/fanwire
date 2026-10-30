@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-027",
+  "objective": "Signed-in visitors can sign out from the shell header without leaving the previous account's data in the query cache, 'Your profile' is fully readable in the bottom bar at 360 px wide with a classic scrollbar, and a control focused near the bottom bar is not overlapped by it.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation. Before writing the static CSS tests, measure rows 1 and 3 in a browser and record the numbers in the PR, so the fix addresses the measured cause.",
+    "The shell header shows a 'Sign out' button when useAuth().status is 'authenticated', for a member and for a signed-in visitor with no profile yet or an unavailable profile. It comes after the primary nav in the DOM, so the nav's order and the skip link's first place in the tab order are unchanged. The nav's link list is unchanged.",
+    "No header 'Sign out' for an anonymous visitor, while the session is loading, or for a deactivated account, whose banner and recovery screen already offer one. Exactly one 'Sign out' button is on the page in each signed-in state.",
+    "Clicking it calls AuthService.signOut once through useSignOut. On a public route the visitor stays on the route and the header offers 'Sign in'; on a RequireAuth route the existing guard sends them to /sign-in. Focus moves to main, not to the document body.",
+    "useSignOut leaves no previous-account data: after it runs, the query cache holds no data for the notifications list, the notification preference or the feed pages, and a mounted feed page refetches as a guest with no Authorization header, showing no pressed Like or Repost from the previous account. The banner's Sign out gets the same behaviour, and deactivated.test.tsx passes unchanged.",
+    "'Your profile' fully fits its cell at content widths 345 and 360 px: the label is not clipped, the link's rect is inside the viewport, and its scrollWidth is at most its clientWidth. The five cells stay in the existing order, each at least --target-min tall, and every label stays visible under its icon.",
+    "html's computed scroll-padding-bottom at phone widths is at least the bottom bar's measured height, in the signed-in five-item state. A control focused just above the bar has its bottom edge at or above the bar's top edge. From 40em it stays 0.",
+    "shell-css.test.ts pins what the fix chose, as a regression guard; the browser rows, not that pin, are the proof. It still finds the fixed bar outside any media query, no max-width query, and no raw values under moduleCssViolations. The comment at the top of AppLayout.module.css matches the bar's real height.",
+    "From 40em the header does not overflow horizontally with the Sign out button, at 640, 720 and 1280 wide, and it stays one row, or scroll-padding-top is corrected to the taller header.",
+    "Browser rows on a signed-in member, at 360 and 1280 wide, light and dark, per wiki/CodeContext/FrontendUI/verification.md, each reported as really checked with its measurement or as NOT DONE. Row 1: 360 wide, and 345 wide or scrollbars shown, on /: 'Your profile' fully visible. Row 2: 360 wide on /, /notifications and the own profile: scrollWidth == clientWidth. Row 3: 360 wide: Tab to a control near the bar; its bottom is at or above the bar's top. Row 4: 360 wide: Sign out visible in the header, at least 44 px tall, not overlapping the brand. Row 5: 1280 wide: nav in the header, Sign out at its right edge, 640 px column. Row 6: 640 wide, light only: no header overflow. Row 7: sign out on / stays on / as a guest with no pressed controls; sign out on /notifications lands on /sign-in; and an anonymous visitor shows no Sign out.",
+    "The PR body carries verification.md's whole per-unit checklist table for the shell, with each unfilled row marked NOT DONE.",
+    "Entry growth is declared in frontend/src/test/bundle-budgets/FRONTEND-027.ts in the test commit, at most 512 bytes gzip for JS. No new dependency, no new icon and no change to tokens.css.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the header control, who sees it, what useSignOut now clears, and the bottom-bar fix."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/auth/account.ts",
+    "frontend/src/auth/account.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-027.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/api/**",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/routes/Deactivated.tsx",
+    "frontend/src/routes/deactivated.test.tsx",
+    "frontend/src/routes/guards.tsx"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
