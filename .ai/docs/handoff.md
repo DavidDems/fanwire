@@ -572,15 +572,17 @@ Give it this, and nothing more:
 Ordered by what each costs while it stays open. Each says what *done* means,
 because none is done when the code merely changes.
 
-1. **The CI half of bug 17.** The `pre-push` hook refuses a non-`agent/*`
-   branch carrying `[agent-state]` commits, but a hook is a convenience and
-   `--no-verify` skips it. The control is a required check that a
-   non-`agent/*` PR's diff touches no `.ai/tasks/*/state.json`.
+1. **The CI half of bug 17 — implemented 2026-10-30; live rejection pending.**
+   The required `guard-gate` now checks every non-`agent/*` PR's diff for
+   `.ai/tasks/<ID>/state.json`. It reads only paths with NUL delimiters and
+   rename detection disabled, so additions, edits, deletions and both ends of
+   renames are checked; a missing base or failed diff fails closed. Forks and
+   bot branches receive the same check, with no PR code executed or checkout
+   credential persisted. `TestNonAgentBranchesCannotCarryTaskState` in
+   `test_workflows.py` executes the step against temporary repositories. The
+   pre-push hook remains a convenience; bypassing it cannot bypass this gate.
    *Done when:* a PR shaped like #35 fails a required check, and the rule lives
    in `test_workflows.py` so removing it fails the build.
-   ⚠️ **Coordinate first.** CI was being reworked on another branch as of
-   2026-09-23 — a new model (`jev`) and test-speed work. Rebase onto that or
-   you will collide in the same files.
 
 2. **Unhandled `workflow_run` conclusions.** The orchestrator's `case` maps
    `success` and `failure|timed_out`; everything else exits 0 having applied

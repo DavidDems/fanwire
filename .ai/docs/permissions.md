@@ -39,7 +39,7 @@ test suite.
 
 | Role | READ | WRITE | EXECUTE | FORBIDDEN |
 |---|---|---|---|---|
-| **Director** | everything | `.ai/`, `wiki/`, workflows — via human-reviewed PR from a non-agent branch | interactive session | merging its own PR |
+| **Director** | everything | `.ai/`, `wiki/`, workflows — via human-reviewed PR from a non-agent branch | interactive session | merging its own PR; task-state changes on a non-agent branch |
 | **Manager** | task spec, branch diff, distilled results, state history | nothing | none | code, tests, wiki, state (it emits a decision; `agentctl` applies it) |
 | **Test Agent** | handed context files + skills, existing tests, production code (read-only) | test paths within `allowed_paths` | test runners locally | production code, wiki, dependency manifests, workflow state |
 | **Code Agent** | handed context files + skills, committed tests, distilled failure | production paths within `allowed_paths` | test runners locally | test files (unless `allow_test_edits_during_impl`), dependency manifests, `docker/`, wiki, workflow state |
@@ -115,20 +115,24 @@ were judged not good enough:
   checkout. Write is what is enforced, and write is what determines blast
   radius.
 - **The Director** is not sandboxed, deliberately. It is a human-supervised
-  interactive session whose output goes through ordinary review, and it has no
-  path restrictions at all — including `.ai/`, `.github/`, `wiki/GeneralContext/`
-  and `AGENTS.md`. That is a decision, not an oversight (human, 2026-09-28):
+  interactive session whose output goes through ordinary review, and it is not
+  bound by worker path permissions — including for `.ai/`, `.github/`,
+  `wiki/GeneralContext/` and `AGENTS.md`. That is a decision, not an oversight
+  (human, 2026-09-28):
   keeping the agent system in repair means editing the agent system, and a tier
   that cannot do so has to hand every workflow bug back to a person who then has
   to write the patch anyway. Three of the first four defects in the frontend
   pass were in exactly those trees.
 
   What bounds it is the branch, not a path list. A Director works on an
-  ordinary human-named branch, where `agent-guard` does not apply and the
-  `main` ruleset does: a pull request, required checks, no force-push,
-  branches must be up to date. **The review is the only control**, so the
-  Director is expected to name a restricted-tree edit in the PR body rather
-  than leave a reviewer to notice it.
+  ordinary human-named branch, where the worker's role guard does not apply
+  and the `main` ruleset does: a pull request, required checks, no force-push,
+  branches must be up to date. The required `guard-gate` separately rejects
+  any non-`agent/*` PR whose diff changes `.ai/tasks/<ID>/state.json`, including
+  additions, deletions and either end of a rename. Task state must arrive on
+  its task branch; a Director may still change task specs and briefs.
+  **Review controls restricted-tree edits**, so the Director is expected to
+  name those in the PR body rather than leave a reviewer to notice them.
 
   That review is thinner than the ruleset reads. A Director PR is reviewed by
   one human, the same one who directed the session that wrote it, and that

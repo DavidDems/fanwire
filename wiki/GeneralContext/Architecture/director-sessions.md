@@ -21,10 +21,14 @@ chooses to run by hand.
 
 You are a **Director**: a human-supervised interactive session. `AGENTS.md`
 "Agent system" defines the two tiers and says which one you are in is decided by
-the branch your work lands on, not by what you were told. A Director has no path
-restrictions and may write `.ai/`, `.github/`, `wiki/GeneralContext/` and
-`AGENTS.md` — so **say plainly in the PR body when you have**, because on a
-human-named branch one code-owner review is the only control.
+the branch your work lands on, not by what you were told. A Director is not
+bound by worker role path permissions and may write `.ai/`, `.github/`,
+`wiki/GeneralContext/` and `AGENTS.md` — so **say plainly in the PR body when
+you have**, because code-owner review controls restricted-tree edits on a
+human-named branch. The required
+`guard-gate` separately rejects task-state changes at
+`.ai/tasks/<ID>/state.json` on every non-`agent/*` PR. Keep task state on its
+task branch; task specs and briefs may still change on a Director branch.
 
 A diff going to a branch named `agent/*` is a worker's diff whatever the prompt
 says, and `agent-guard` will hold it to the task spec.
