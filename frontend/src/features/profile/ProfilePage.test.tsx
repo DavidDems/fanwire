@@ -33,6 +33,7 @@ import {
   VIEWED_USER_ID,
   followingStub,
   meStub,
+  publicProfile,
   publicProfileStub,
   publicProfilesById,
   type MeStub,
@@ -88,10 +89,7 @@ beforeEach(() => {
 describe("the public profile variant", () => {
   it("renders the saved preset on a public profile", async () => {
     const me = meStub();
-    const viewed = publicProfileStub({
-      ...testProfile(),
-      profile_avatar_key: "net-grid",
-    });
+    const viewed = publicProfileStub(publicProfile({ profile_avatar_key: "net-grid" }));
     server.use(me.handler, viewed.handler, followingStub().handler);
 
     renderProfile(VIEWED_USER_ID, signedIn());
