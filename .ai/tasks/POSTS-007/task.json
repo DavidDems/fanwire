@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-007",
+  "objective": "A PostCreated event whose post no longer exists, as when a repost is undone before the consumer runs, is a successful no-op for the notifications consumer instead of a failure that retries and dead-letters.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the consumer changes. The test commit's message names each existing test it rewrites to the new rule.",
+    "handle_domain_event for PostCreated with a post_id that has no row returns None without raising, commits no Notification row and sends no email.",
+    "The real race, through the routes: POST /posts/{id}/repost then DELETE /posts/{id}/repost, then handle_domain_event with the detail of the PostCreated event the POST published, returns None and creates no Notification row.",
+    "app.notifications.lambda_handler.handler given that record returns batchItemFailures [], and in a batch with a valid record alongside it the valid record still creates its notification.",
+    "Failures a retry or a human must still see keep failing: UserFollowed naming a nonexistent user raises MissingReferenceError before any commit, and a PostCreated record whose detail has no post_id key is reported in batchItemFailures. test_a_record_that_raises_is_reported_as_a_batch_item_failure keeps testing a failing record, using one of these.",
+    "PostCreated for a post that exists behaves as before: reply and repost notifications, self-reply and self-repost skipped, a plain post creating nothing.",
+    "A REPOST notification committed before the undo is left exactly as it is today: the row stays and GET /notifications still returns it. See 'The open decision' in brief.md.",
+    "The no-op may log only at info level and with no user or post id in the log line.",
+    "No migration, no change to backend/openapi.json, no change to infra or to the queue's retry or DLQ settings.",
+    "The app.notifications.consumer docstring and wiki/CodeContext/Modules/0x05-notifications.md no longer say posts are never deleted, and state the new rule; the 'repost notification after an un-repost' open decision in wiki/CodeContext/Modules/0x03-posts.md is updated to what remains open."
+  ],
+  "allowed_paths": [
+    "backend/app/notifications/consumer.py",
+    "backend/tests/notifications/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/app/posts/**",
+    "backend/app/users/**",
+    "backend/app/notifications/routes.py",
+    "backend/alembic/**",
+    "backend/openapi.json",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

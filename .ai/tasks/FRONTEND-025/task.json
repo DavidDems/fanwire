@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-025",
+  "objective": "Make the frontend test harness work on Node 26, with no application or dependency change, so Renovate PR #202 can land: jsdom's File passes undici's brand check, multipart bodies keep their bytes, and jsdom's localStorage is available.",
+  "acceptance_criteria": [
+    "Test-first: the test commit adds a test to frontend/src/test/harness.test.ts asserting that, under jsdom, new File([], 'a.txt') is an instanceof File from node:buffer. It is red on main under Node 20, 22 and 26, because setupTests.ts has not changed the prototype chain yet.",
+    "harness.test.ts asserts that localStorage and sessionStorage each round-trip a setItem/getItem under jsdom. This cannot be red on Node 20 or 22, where jsdom's storage is already installed, so it is green in the test commit and the commit message says so; its proof is the Node 26 run in the last two criteria.",
+    "The existing multipart round-trip test also asserts the received file's exact bytes, not only its size, and a new case asserts that a bare jsdom Blob in a FormData arrives named 'blob' with its bytes intact. On Node 26 without the fix a rewrapped part is the 13 bytes of '[object File]'.",
+    "frontend/src/setupTests.ts sets jsdom's Blob.prototype to inherit from Node's File.prototype, after the Blob reader shims and only when globalThis.jsdom is defined, and copies jsdom's localStorage and sessionStorage onto the global only when that global is undefined.",
+    "frontend/src/test/form-data-file-names.ts always builds a named Node File and appends it with no third argument to FormData.append; the NodeBlob import is gone.",
+    "A file marked @vitest-environment node (frontend/src/test/bundle-budget.test.ts) still passes unchanged: under that environment the setup makes no prototype change, which would otherwise be a cycle and throw.",
+    "On Node 20 the whole frontend-test container, typecheck and lint pass. No file outside allowed_paths changes: no package.json, lockfile, Dockerfile, workflow or application code.",
+    "Before the PR opens, the whole frontend-test suite passes on a local preview of this branch merged with #202's head (Node 26). The fix has only been verified on targeted files so far; the preview is never pushed.",
+    "After merge, #202's frontend-test goes green once it is rebased on main. This is checked by the Director and is not part of this unit's PR gate, because that PR's CI cannot run before this one is on main.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records in one short passage what the harness does for Node 24 and later, and why."
+  ],
+  "allowed_paths": [
+    "frontend/src/test/harness.test.ts",
+    "frontend/src/test/form-data-file-names.ts",
+    "frontend/src/setupTests.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "frontend/src/api/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
