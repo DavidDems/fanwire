@@ -27,10 +27,6 @@ Claude Console accounts each hold about CAD $10–11 of credit.
       ```powershell
       gh secret delete AI_GATEWAY_API_KEY --repo DavidDems/fanwire
       ```
-- [ ] **Require approval for every fork PR** (handoff §10, D1):
-      ```powershell
-      gh api -X PUT repos/DavidDems/fanwire/actions/permissions/fork-pr-contributor-approval -f approval_policy=all_external_contributors
-      ```
 - [ ] **Set a monthly spend limit** in the Claude Console, so a loop cannot
       drain the credit.
 - [ ] **Record both balances right before and right after the first

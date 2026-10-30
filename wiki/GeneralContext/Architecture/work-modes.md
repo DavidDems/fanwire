@@ -40,6 +40,11 @@ helpers around the three modes (below).
   as an automated one; only who types differs.
 - **Test-first** (`AGENTS.md` "Workflow"): the failing test is committed alone,
   then the implementation.
+- **The no-test-edits rule applies only to dispatched code agents** (D5 in
+  `.ai/docs/state-machine.md`). A hand-run session fixes its own broken test
+  in a separate test-only commit, discloses that correction in the PR, and
+  mutation-tests the affected assertions (`director-sessions.md`, "Take
+  objections seriously, and confirm them").
 - **The human reviews and merges every PR.** No mode merges anything.
 - **The deterministic machinery is free and always on:** CI (`test-agent.yml`),
   `agent-guard`, `agentctl task validate`, the red-baseline check (D4), the
