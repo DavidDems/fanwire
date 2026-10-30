@@ -16,15 +16,15 @@ ratchet so units can clear debt without editing the Director-owned baseline.
 The avatar-rendering fixture failures on #269's base were fixed in #270.
 No corpus files moved in those linter PRs.
 
-**Update, 2026-10-30:** D3's orchestration and
-human-escalation choice moves to
-[ADR 0001](../Decisions/0001-bounded-orchestration.md). Handoff's D3 row/item 3
-route there; retained headings preserve citations. Protocol:
-state-machine/operations. Proof gaps/residue: handoff. D3's obsolete citation
-exception is removed. Closed probe #276 proves bug 17's CI half.
+**Update, 2026-10-30:** #278 moved D3's choice to
+[ADR 0001](../Decisions/0001-bounded-orchestration.md). This slice moves D2b's
+worker-isolation choice and item 7 to
+[ADR 0002](../Decisions/0002-worker-credential-isolation.md). Handoff headings
+and proof/residue remain; protocol stays in existing references. One obsolete
+deployment citation now links its historical source; its exception is removed.
 
-After merge, next: D2b's worker-isolation choice and item 7, retaining proof
-gaps and fixing citations. Then: remaining agreements, changelog, short handoff
+After merge, next: D4's red-baseline choice, retaining proof gaps and fixing
+citations. Then: remaining agreements, changelog, short handoff
 reference, canonical index status and unused Reports removal. Continue a few
 files per PR; delete resolved baseline entries. Untyped files still need
 classification. Deliverable 3 remains incomplete. Deliverable 4 remains WikiMaintenance
