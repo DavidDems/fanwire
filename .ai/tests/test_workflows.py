@@ -1001,7 +1001,9 @@ class TestNonAgentBranchesCannotCarryTaskState:
 
     @pytest.fixture
     def state_check(self, aggregate):
-        return step(aggregate, self.CHECK)
+        matches = [chunk for chunk in steps_in(aggregate) if step_title(chunk) == self.CHECK]
+        assert len(matches) == 1, f"Expected one step named {self.CHECK!r}"
+        return matches[0]
 
     @pytest.fixture
     def state_body(self, state_check):
