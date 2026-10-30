@@ -195,6 +195,8 @@ jobs:
   #
   # So: require THIS job on `main`. It passes when the guard passed and when
   # the guard correctly did not apply, and fails when the guard failed.
+  # Non-agent branches must also carry no task-state changes (bug 17): an
+  # inherited state file would otherwise change what the next task run reads.
   #
   # `success()` is deliberately not used — it treats a skipped dependency as
   # not-success, which is the case this job exists to distinguish.
@@ -225,3 +227,39 @@ jobs:
               echo "::error::the agent guard reported '$RESULT' on $HEAD_REF"
               exit 1 ;;
           esac
+
+      - name: Check out non-agent PR data
+        if: ${{ !startsWith(github.head_ref, 'agent/') }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Non-agent branches must not change task state
+        if: ${{ !startsWith(github.head_ref, 'agent/') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          changed_paths="$(mktemp)"
+          trap 'rm -f "$changed_paths"' EXIT
+          # Read only paths, never code from the PR. NUL delimiters preserve
+          # quoted names; --no-renames exposes both ends of a moved state file.
+          # Write first so a failed diff cannot hide in a process substitution.
+          git -C pr diff --no-ext-diff --no-textconv --no-renames --name-only -z "$BASE_SHA...$HEAD_SHA" -- > "$changed_paths"
+          bad=0
+          while IFS= read -r -d '' path; do
+            if [[ "$path" =~ ^\.ai/tasks/[^/]+/state\.json$ ]]; then
+              printf '::error::Non-agent PR changes task state: %q\n' "$path"
+              bad=1
+            fi
+          done < "$changed_paths"
+          if [ "$bad" -ne 0 ]; then
+            echo "Task state belongs on its agent/ branch; rebuild this branch from main without task state."
+            exit 1
+          fi
+          echo "This non-agent PR carries no task-state changes."
