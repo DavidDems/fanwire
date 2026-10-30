@@ -49,6 +49,7 @@ def commit(root, message, at):
 
 @pytest.fixture
 def history(tmp_path, request):
+    distinct_authors = getattr(request, "param", None) == "distinct_authors"
     root = tmp_path / "data"
     root.mkdir()
     git(root, "init", "-q")
@@ -65,6 +66,9 @@ def history(tmp_path, request):
     tests = commit(root, "regression for the interface", "2026-10-01T10:00:00Z")
     (root / "app.py").write_text("result = 1\n")
     implementation = commit(root, "test: misleading implementation label", "2026-10-01T10:10:00Z")
+    if distinct_authors:
+        git(root, "config", "user.email", "reviewer@example.test")
+        git(root, "config", "user.name", "Human reviewer")
     (root / "app.py").write_text("result = 2\n")
     review_fix = commit(root, "review correction", "2026-10-01T10:30:00Z")
     state = {
@@ -89,13 +93,21 @@ def history(tmp_path, request):
     commits = [
         {
             "sha": sha,
-            "author": {"login": "owner", "type": "User"},
+            "author": {
+                "login": ("reviewer" if index == 2 else "agent") if distinct_authors else "owner",
+                "type": "Bot" if distinct_authors and index < 2 else "User",
+            },
             "commit": {
-                "author": {"date": f"2026-10-01T{at}Z", "email": "session@example.test"},
+                "author": {
+                    "date": f"2026-10-01T{at}Z",
+                    "email": "reviewer@example.test"
+                    if distinct_authors and index == 2
+                    else "session@example.test",
+                },
                 "committer": {"date": f"2026-10-01T{at}Z"},
             },
         }
-        for sha, at in zip(shas, dates, strict=True)
+        for index, (sha, at) in enumerate(zip(shas, dates, strict=True))
     ]
     responses = {
         f"repos/{REPO}/pulls/17": {
@@ -215,6 +227,7 @@ def test_schema_pins_every_measurement_and_uses_git_not_commit_subjects(metrics,
     }
 
 
+@pytest.mark.parametrize("history", ["distinct_authors"], indirect=True)
 def test_auto_uses_dispatch_and_the_last_recorded_agent_commit(metrics, history):
     history.state["mode"] = "auto"
     save_state(history)
@@ -224,6 +237,49 @@ def test_auto_uses_dispatch_and_the_last_recorded_agent_commit(metrics, history)
     assert record["human_delta_lines"] == 2
     assert record["cost_usd"] == 1.25 and record["cost_source"] == "provider"
     assert record["backfilled"] is True
+
+
+def test_auto_delta_excludes_later_changes_by_the_same_agent_author(metrics, history):
+    history.state["mode"] = "auto"
+    save_state(history)
+    invocation(history, "provider.json")
+    assert collect(metrics, history)["human_delta_lines"] == 0
+
+
+@pytest.mark.parametrize("mode", ["hand", "director"])
+def test_updating_from_main_is_not_a_test_commit_or_human_delta(metrics, history, mode):
+    if mode == "director":
+        (history.task_dir / "state.json").unlink()
+        history.responses[f"repos/{REPO}/pulls/17"]["head"]["ref"] = "director/a-unit"
+    original_branch = git(history.root, "branch", "--show-current")
+    git(history.root, "checkout", "-q", "-b", "upstream-update", f"{history.tests}^")
+    other_test = history.root / "tests/test_from_main.py"
+    other_test.parent.mkdir(parents=True, exist_ok=True)
+    other_test.write_text("# unrelated main work\n" * 20)
+    git(history.root, "add", "tests/test_from_main.py")
+    git(history.root, "commit", "-q", "--date", "2026-10-01T10:25:00Z", "-m", "upstream")
+    upstream = git(history.root, "rev-parse", "HEAD")
+    git(history.root, "checkout", "-q", original_branch)
+    git(history.root, "merge", "--no-ff", "upstream-update", "-m", "Merge main")
+    merge = git(history.root, "rev-parse", "HEAD")
+    history.responses[f"repos/{REPO}/pulls/17/commits"].append(
+        {
+            "sha": merge,
+            "parents": [{"sha": history.review_fix}, {"sha": upstream}],
+            "author": {"login": "owner", "type": "User"},
+            "commit": {
+                "author": {"date": "2026-10-01T10:40:00Z", "email": "session@example.test"},
+                "committer": {"date": "2026-10-01T10:40:00Z"},
+            },
+        }
+    )
+    pr = history.responses[f"repos/{REPO}/pulls/17"]
+    pr["head"]["sha"] = merge
+    pr["base"]["sha"] = upstream
+    record = collect(metrics, history, **({"pr": 17} if mode == "director" else {}))
+    assert record["commits"] == 4
+    assert record["test_commits"] == 1
+    assert record["human_delta_lines"] == 2
 
 
 def test_legacy_state_defaults_to_auto_but_missing_attribution_is_not_zero(metrics, history):
