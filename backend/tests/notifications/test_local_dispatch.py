@@ -16,6 +16,7 @@ import ast
 import importlib
 import io
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -86,11 +87,14 @@ def _spy_factory() -> tuple[list[SpySession], object]:
 
 
 @pytest.fixture()
-def dispatch_log():
+def dispatch_log(monkeypatch):
     """What the publisher's logger really emits. A powertools Logger binds its
-    stream when it is built and does not propagate, so neither capsys nor caplog
-    sees it (`tests/test_migrate.py` says the same of caplog)."""
-    handler = _local_dispatch().logger.registered_handler
+    stream when it is built, so capsys does not see it. alembic/env.py's
+    fileConfig disables every existing logger, and a migration test earlier in
+    the same process runs it, so this also switches the logger back on."""
+    logger = _local_dispatch().logger
+    monkeypatch.setattr(logging.getLogger(logger.name), "disabled", False)
+    handler = logger.registered_handler
     buffer = io.StringIO()
     previous = handler.setStream(buffer)
     yield buffer
