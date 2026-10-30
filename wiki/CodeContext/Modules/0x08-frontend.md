@@ -330,6 +330,20 @@ anybody has to remember:
   request body is built synchronously. `harness.test.ts` and
   `MediaWidget.test.tsx` are what caught it, and they pin it. Vitest 5 has the
   same bridge, so this stays until upstream keeps file names.
+- **The harness carries three things for Node 24 and later** (`FRONTEND-025`).
+  undici 7 builds each multipart part with the global `File`, jsdom's, then
+  asserts `instanceof` against the `File` it loaded with, Node's, so
+  `setupTests.ts` makes jsdom's `Blob.prototype` inherit from Node's
+  `File.prototype`. That is after the reader shims, or Node's readers look
+  present and the shims stand down, and only when `globalThis.jsdom` is defined,
+  because under `@vitest-environment node` the chain would be a cycle. undici
+  also rewraps a part given a filename or a bare `Blob` through that same global,
+  which turns the body into the 13 bytes of `[object File]`, so
+  `form-data-file-names.ts` always appends an already named Node `File` with no
+  third argument. Node 26 defines a global `localStorage` that is `undefined`
+  without `--localstorage-file`, and Vitest copies a jsdom key only when the
+  global lacks it, so `setupTests.ts` copies jsdom's storage over a global that is
+  `undefined`. Node 20 rejects that flag, so it cannot be the fix.
 - **`tsconfig.app.json` lists `vite/client` and `node` in `types` explicitly.**
   Vitest 3's `vitest/globals` pulled both in transitively and Vitest 4's does
   not, so the disk-reading tests (`node:fs`, `process.cwd()`) and CSS/SVG
