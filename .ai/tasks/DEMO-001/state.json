@@ -1,5 +1,5 @@
 {
-  "attempt": 1,
+  "attempt" : 1,
   "branch": "agent/DEMO-001",
   "consecutive_failures": 0,
   "control": "RUN",
