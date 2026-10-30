@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-007",
+  "objective": "A PostCreated event whose post no longer exists, as when a repost is undone before the consumer runs, is a successful no-op for the notifications consumer instead of a failure that retries and dead-letters, and GET /notifications leaves out a REPOST notification whose repost was undone (decided by the human, 2026-10-30), keeping the row.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the consumer changes. The test commit's message names each existing test it rewrites to the new rule.",
+    "handle_domain_event for PostCreated with a post_id that has no row returns None without raising, commits no Notification row and sends no email.",
+    "The real race, through the routes: POST /posts/{id}/repost then DELETE /posts/{id}/repost, then handle_domain_event with the detail of the PostCreated event the POST published, returns None and creates no Notification row.",
+    "app.notifications.lambda_handler.handler given that record returns batchItemFailures [], and in a batch with a valid record alongside it the valid record still creates its notification.",
+    "Failures a retry or a human must still see keep failing: UserFollowed naming a nonexistent user raises MissingReferenceError before any commit, and a PostCreated record whose detail has no post_id key is reported in batchItemFailures. test_a_record_that_raises_is_reported_as_a_batch_item_failure keeps testing a failing record, using one of these.",
+    "PostCreated for a post that exists behaves as before: reply and repost notifications, self-reply and self-repost skipped, a plain post creating nothing.",
+    "A REPOST notification committed before the undo is hidden, through the routes: after POST /posts/{id}/repost, handle_domain_event with that event's detail, and DELETE /posts/{id}/repost, GET /notifications for the original author leaves the notification out, and its row still exists with cleared_at null. If two users repost the same post and one undoes, the other's notification stays listed. Reposting again after an undo lists only the new repost's notification. An undo answered 409 changes nothing and the notification stays listed.",
+    "The hiding applies to type REPOST only: a REPLY notification whose reference_id names no row and every FOLLOW notification stay listed, so tests/notifications/test_routes.py's list test passes unchanged, and POSTS-004's filtering of soft-deleted posts is unchanged. notifications/ learns which rows exist through a new read function, app.posts.service.existing_post_ids(session, post_ids) -> set[int]: one query, no query for empty input, a soft-deleted row counts as existing, and deleted_post_ids is unchanged. routes.py never selects from the posts table, and the statement count of GET /notifications is the same for 2 and for 20 REPOST notifications.",
+    "The no-op may log only at info level and with no user or post id in the log line.",
+    "No migration, no change to backend/openapi.json, no change to infra or to the queue's retry or DLQ settings.",
+    "The app.notifications.consumer docstring and wiki/CodeContext/Modules/0x05-notifications.md no longer say posts are never deleted, and state the new rule, and 0x05-notifications.md records the hidden REPOST notification beside POSTS-004's deleted posts. The 'repost notification after an un-repost' entry in wiki/CodeContext/Modules/0x03-posts.md \"Open decisions\" is recorded as decided: struck through and marked resolved, naming the human, 2026-10-30, the row kept and left out of GET /notifications, with nothing about it left open."
+  ],
+  "allowed_paths": [
+    "backend/app/notifications/consumer.py",
+    "backend/app/notifications/routes.py",
+    "backend/app/posts/service.py",
+    "backend/tests/notifications/**",
+    "backend/tests/posts/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "backend/app/users/**",
+    "backend/alembic/**",
+    "backend/openapi.json",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "fastapi-module", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
