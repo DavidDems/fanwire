@@ -3,7 +3,7 @@
 # used here only to make the *build* reproducible across local/CI, matching
 # the exact Node version regardless of host machine.
 
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
