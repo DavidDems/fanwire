@@ -1,4 +1,4 @@
-"""Prompt 10: fixture documents, exact debt and a base-relative ratchet.
+"""Prompt 10: fixture documents, a debt ceiling and a base-relative ratchet.
 
 Do not weaken the workflow's pinned non-test-job rationale: docs failures
 must route a worker baseline to manager review, never authorize coding.
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from agentlib import doclint
+from agentlib import doclint, guard
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -152,14 +152,44 @@ def test_merged_decision_only_allows_supersession(repo):
     assert "decision-changed" in codes(repo, base=base)
 
 
-def test_exact_baseline_and_base_subset(repo):
+def test_baseline_allows_fixed_debt_and_requires_base_subset(repo):
     put(repo, "wiki/a.md", "legacy", None)
     keys = {v.key for v in doclint.scan(repo)}
     assert not doclint.ratchet(keys, keys, keys)
     assert doclint.ratchet(keys | {"new"}, keys, keys)
-    assert doclint.ratchet(set(), keys, keys)  # stale entry must be removed
+    assert not doclint.ratchet(set(), keys, keys)  # workers cannot prune .ai/
     assert doclint.ratchet(keys | {"new"}, keys | {"new"}, keys)
     assert not doclint.ratchet(set(), set(), keys)
+
+
+def test_unit_can_clear_debt_without_editing_forbidden_baseline(repo):
+    source = put(repo, "backend/app/example.py", "# See wiki/target.md:99\n", None)
+    put(repo, "wiki/target.md", "# Target\n")
+    baseline = repo / doclint.BASELINE
+    baseline.parent.mkdir(exist_ok=True)
+    baseline.write_text(json.dumps(sorted(v.key for v in doclint.scan(repo))))
+    original = baseline.read_bytes()
+    base = commit(repo)
+    policy = json.loads((ROOT / ".ai/policy.json").read_text())
+    spec = {"allowed_paths": ["backend/app/**", doclint.BASELINE]}
+
+    # A unit's permitted code edit clears an invalid citation. Updating its
+    # baseline is forbidden even if a task explicitly tries to allow that path.
+    source.write_text("# Citation fixed.\n")
+    changed = git(repo, "diff", "--name-only", base).splitlines()
+    assert changed == ["backend/app/example.py"]
+    assert guard.check_diff(changed, "code_agent", spec, policy).ok
+    assert not guard.check_diff([doclint.BASELINE], "code_agent", spec, policy).ok
+    result = doclint.lint(repo, base=base)
+    assert result["violations"] == []
+    assert result["errors"] == []
+    assert baseline.read_bytes() == original
+
+    # Clearing one exception cannot pay for a different violation.
+    source.write_text("# See wiki/target.md:100\n")
+    result = doclint.lint(repo, base=base)
+    assert any(error.startswith("new violation:") for error in result["errors"])
+    assert baseline.read_bytes() == original
 
 
 def test_cli_and_ci_require_base_ratchet(repo):

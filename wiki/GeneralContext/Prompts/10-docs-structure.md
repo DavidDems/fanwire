@@ -8,8 +8,9 @@ type: prompt
 merged in #268: WikiUpdate, shared types/budgets and trusted writer expansion.
 The `director/docs-lint` PR adds the deterministic linter, `agentctl docs lint`,
 an always-on CI job under `gate`, fixture tests and `.ai/docs-baseline.json`.
-The baseline must match actual debt exactly and may only shrink against the
-CI base commit. Check semantics and maintenance instructions are in
+The baseline is a ceiling for actual debt and may only shrink against the
+CI base commit. Units may clear debt without editing the forbidden baseline;
+Directors prune unused entries. Check semantics and maintenance instructions are in
 [the linter reference](../../../.ai/docs/doclint.md). No corpus files moved.
 Review: [PR #269](https://github.com/DavidDems/fanwire/pull/269). Docs and `.ai`
 CI pass; the aggregate has the same two avatar-rendering assertion failures
