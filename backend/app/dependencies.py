@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import make_engine, make_session_factory
 from app.eventbus import EventBridgePublisher, EventPublisher, InMemoryEventPublisher, PostEventBus
+from app.notifications.local_dispatch import LocalDispatchPublisher
 from app.settings import Settings
 
 
@@ -63,11 +64,13 @@ def get_event_bus() -> PostEventBus:
     wiki/CodeContext/Modules/0x00-architecture.md "PostEventBus
     implementation": once Settings.post_event_bus_name (POST_EVENT_BUS_NAME,
     infra/lib/app-stack.ts) is set, this wires the real EventBridgePublisher
-    adapter (app.eventbus.EventBridgePublisher, boto3 `events.put_events`);
-    otherwise it falls back to InMemoryEventPublisher, same as before, for
-    local dev/tests where no real bus exists. Route tests override this via
-    app.dependency_overrides[get_event_bus], same pattern as
-    get_session/get_token_verifier.
+    adapter (app.eventbus.EventBridgePublisher, boto3 `events.put_events`).
+    Without a bus name, ENVIRONMENT exactly "development" (the local stack,
+    which Settings refuses on any deployment) wires LocalDispatchPublisher,
+    so events reach the notifications consumer in process. Anything else falls
+    back to InMemoryEventPublisher, same as before, where no real bus exists.
+    Route tests override this via app.dependency_overrides[get_event_bus],
+    same pattern as get_session/get_token_verifier.
     """
     settings = get_settings()
     publisher: EventPublisher
@@ -75,6 +78,8 @@ def get_event_bus() -> PostEventBus:
         publisher = EventBridgePublisher(
             _events_client(), event_bus_name=settings.post_event_bus_name
         )
+    elif settings.environment == "development":
+        publisher = LocalDispatchPublisher(open_session)
     else:
         publisher = InMemoryEventPublisher()
     return PostEventBus(publisher)
