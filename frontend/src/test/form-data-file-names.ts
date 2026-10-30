@@ -1,4 +1,4 @@
-import { Blob as NodeBlob, File as NodeFile } from "node:buffer";
+import { File as NodeFile } from "node:buffer";
 
 /**
  * Keep a file's name when a jsdom `FormData` is turned into a request body.
@@ -55,14 +55,17 @@ function toNodeFormData(form: FormData): FormData {
     // The DOM lib types every non-string entry as `File`, but a bare jsdom
     // `Blob` can land here too, so widen before telling them apart.
     const blob: Blob = value;
-    const copy =
-      blob instanceof JsdomFile
-        ? new NodeFile([bytesOf(blob)], blob.name, { type: blob.type })
-        : new NodeBlob([bytesOf(blob)], { type: blob.type });
+    const name = blob instanceof JsdomFile ? blob.name : "blob";
+    // Already a named Node `File`, and no third argument to `append`, so undici
+    // keeps this object. Given a filename or a bare `Blob` it rewraps with
+    // `new File([value], ...)`, and on Node 24 on that reads the global, which
+    // is jsdom's: a Node `File` is no part jsdom knows, so the body it would
+    // send is the 13 bytes of "[object File]".
     converted.append(
       key,
-      copy as unknown as Blob,
-      blob instanceof JsdomFile ? blob.name : "blob",
+      new NodeFile([bytesOf(blob)], name, {
+        type: blob.type,
+      }) as unknown as File,
     );
   });
   return converted;

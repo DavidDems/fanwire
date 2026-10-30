@@ -1,3 +1,5 @@
+import { File as NodeFile } from "node:buffer";
+
 import "@testing-library/jest-dom/vitest";
 // First, before msw: see the file for why the order matters.
 import "./test/form-data-file-names";
@@ -77,6 +79,58 @@ if (
   Blob.prototype.stream = function stream(this: Blob) {
     return blobStream(this);
   };
+}
+
+/**
+ * Let Node's multipart parser accept the `File` it just built.
+ *
+ * From undici 7 (Node 24 on), `Request.formData()` builds each part with
+ * `new File(...)`, which reads the global at call time and so gets jsdom's, and
+ * then asserts `webidl.is.File(value)`, which is an `instanceof` against the
+ * `File` undici saw when it loaded. Vitest's jsdom environment loads undici
+ * before it installs jsdom's globals (`NodeFormData_ = globalThis.FormData`),
+ * so those are two classes and every multipart body read in a handler throws
+ * `ERR_ASSERTION` from inside msw's handler lookup. The check goes through
+ * `Function.prototype[Symbol.hasInstance]`, so a `Symbol.hasInstance` of our
+ * own cannot answer it; only the prototype chain can.
+ *
+ * jsdom's `Blob.prototype` therefore inherits from Node's `File.prototype`.
+ * jsdom's own members still win, as they are nearer on the chain. After the
+ * reader shims above on purpose: inherited first, Node's readers would look
+ * present, the shims would stand down, and Node's would throw on a jsdom `this`.
+ *
+ * Only under jsdom: a `@vitest-environment node` file also runs this setup, and
+ * there `Blob` is Node's own, so the chain would be a cycle.
+ *
+ * `src/test/harness.test.ts` pins it.
+ */
+const jsdomEnvironment = (
+  globalThis as unknown as { jsdom?: { window: Window } }
+).jsdom;
+
+if (jsdomEnvironment !== undefined) {
+  Object.setPrototypeOf(Blob.prototype, NodeFile.prototype);
+}
+
+/**
+ * Give the test `window` jsdom's `localStorage` when Node's has taken its place.
+ *
+ * Node 26 defines its own global `localStorage`, which is `undefined` without
+ * `--localstorage-file`. Vitest copies a jsdom key onto the global only when it
+ * is not already there, so jsdom's never arrives. A flag cannot turn Node's off
+ * here, because the Node 20 image rejects it. On a Node without the global this
+ * does nothing, and jsdom's is already in place.
+ */
+if (jsdomEnvironment !== undefined) {
+  for (const key of ["localStorage", "sessionStorage"] as const) {
+    if (globalThis[key] === undefined) {
+      Object.defineProperty(globalThis, key, {
+        value: jsdomEnvironment.window[key],
+        configurable: true,
+        writable: true,
+      });
+    }
+  }
 }
 
 /**
