@@ -982,6 +982,142 @@ class TestTheGuardCanBeARequiredCheck:
         assert "startsWith(github.head_ref, 'agent/')" in guard_wf
 
 
+class TestNonAgentBranchesCannotCarryTaskState:
+    """Bug 17 (handoff §9.2 item 1): a Director branch inherited another
+    task's mid-flight state and merged it onto main. The local pre-push hook
+    is bypassable; the existing required guard-gate must enforce the same
+    boundary. Agent branches retain their task-scoped bookkeeping exception.
+
+    Execute the workflow's actual script against isolated repositories: a
+    spelling check alone would miss deletion/rename and quoted-path bypasses.
+    """
+
+    CHECK = "Non-agent branches must not change task state"
+    NON_AGENT = "!startsWith(github.head_ref, 'agent/')"
+
+    @pytest.fixture
+    def aggregate(self):
+        return job_block(GUARD_WF.read_text(encoding="utf-8"), "guard-gate")
+
+    @pytest.fixture
+    def state_check(self, aggregate):
+        return step(aggregate, self.CHECK)
+
+    @pytest.fixture
+    def state_body(self, state_check):
+        (body,) = run_bodies(state_check)
+        return body
+
+    def test_the_existing_required_aggregate_enforces_the_check(self, aggregate, state_check):
+        assert "if: always()" in aggregate
+        assert "needs: guard" in aggregate
+        assert "continue-on-error" not in aggregate
+        condition = step_if(state_check).removeprefix("${{").removesuffix("}}").strip()
+        assert condition == self.NON_AGENT, "forks and bots must not bypass the state boundary"
+        assert "github.event.pull_request.base.sha" in state_check
+        assert "github.event.pull_request.head.sha" in state_check
+
+    def test_only_non_agent_pr_data_is_checked_out_without_credentials(self, aggregate):
+        checkouts = [s for s in steps_in(aggregate) if "actions/checkout@" in s]
+        assert len(checkouts) == 1
+        (checkout,) = checkouts
+        condition = step_if(checkout).removeprefix("${{").removesuffix("}}").strip()
+        assert condition == self.NON_AGENT
+        assert "fetch-depth: 0" in checkout
+        assert "persist-credentials: false" in checkout
+        assert "path: pr" in checkout
+        assert "secrets." not in aggregate
+        assert "contents: write" not in aggregate
+
+    def test_the_state_check_runs_no_pr_code_or_expression(self, state_check):
+        for body in run_bodies(state_check):
+            assert "${{" not in body
+        live = "\n".join(live_lines(state_check))
+        for runner in ("npm ", "npx ", "pip ", "pytest", "bash pr/", "sh pr/"):
+            assert runner not in live
+        # File names are sufficient; repo diff drivers/textconv must not run.
+        for flag in ("--no-ext-diff", "--no-textconv", "--no-renames"):
+            assert flag in live
+
+    @pytest.fixture
+    def state_branch(self, tmp_path):
+        repo = tmp_path / "pr"
+        repo.mkdir()
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "config", "user.email", "t@example.com")
+        _git(repo, "config", "user.name", "t")
+        for rel in (".ai/tasks/ABC-001/state.json", "ordinary.txt"):
+            target = repo / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("base\n", encoding="utf-8")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "base")
+        base = _git(repo, "rev-parse", "HEAD").strip()
+        _git(repo, "checkout", "-q", "-b", "director/example")
+        return repo, base
+
+    def run_state_check(self, body, state_branch, tmp_path):
+        repo, base = state_branch
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "work")
+        head = _git(repo, "rev-parse", "HEAD").strip()
+        return run_step_body(body, {"BASE_SHA": base, "HEAD_SHA": head}, tmp_path)[0]
+
+    @pytest.mark.parametrize("change", ["add", "modify", "delete", "rename-out", "rename-in"])
+    def test_every_kind_of_state_change_is_refused(
+        self, state_body, state_branch, tmp_path, change
+    ):
+        repo, _ = state_branch
+        state = repo / ".ai/tasks/ABC-001/state.json"
+        if change == "add":
+            other = repo / ".ai/tasks/OTHER-002/state.json"
+            other.parent.mkdir(parents=True)
+            other.write_text("new\n", encoding="utf-8")
+        elif change == "modify":
+            state.write_text("changed\n", encoding="utf-8")
+        elif change == "delete":
+            state.unlink()
+        elif change == "rename-out":
+            _git(repo, "mv", ".ai/tasks/ABC-001/state.json", "saved.json")
+        else:
+            target = repo / ".ai/tasks/OTHER-002/state.json"
+            target.parent.mkdir(parents=True)
+            _git(repo, "mv", "ordinary.txt", ".ai/tasks/OTHER-002/state.json")
+        assert self.run_state_check(state_body, state_branch, tmp_path) != 0
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ".ai/tasks/ABC-001/task.json",
+            ".ai/tasks/ABC-001/brief.md",
+            ".ai/tasks/ABC-001/state.json.bak",
+            ".ai/tasks/ABC-001/nested/state.json",
+            ".ai/tasks/ABC-001/not-state.json",
+            ".ai/agentlib/x.py",
+            "ordinary.txt",
+        ],
+    )
+    def test_ordinary_director_work_remains_allowed(self, state_body, state_branch, tmp_path, path):
+        repo, _ = state_branch
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("changed\n", encoding="utf-8")
+        assert self.run_state_check(state_body, state_branch, tmp_path) == 0
+
+    def test_git_quoted_state_names_are_still_seen(self, state_body, state_branch, tmp_path):
+        repo, _ = state_branch
+        target = repo / ".ai/tasks/QUOTED-É-002/state.json"
+        target.parent.mkdir(parents=True)
+        target.write_text("new\n", encoding="utf-8")
+        assert self.run_state_check(state_body, state_branch, tmp_path) != 0
+
+    def test_a_missing_base_fails_closed(self, state_body, state_branch, tmp_path):
+        repo, _ = state_branch
+        head = _git(repo, "rev-parse", "HEAD").strip()
+        code, _ = run_step_body(state_body, {"BASE_SHA": "0" * 40, "HEAD_SHA": head}, tmp_path)
+        assert code != 0
+
+
 class TestTheOpenApiContractCannotDrift:
     """`backend/openapi.json` is what the frontend's TypeScript types
     (`frontend/src/api/schema.d.ts`) are generated from. If either is stale,
