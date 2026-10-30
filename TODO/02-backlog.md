@@ -83,27 +83,6 @@ its answer.
 | System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
 | System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
 
-## Stats navigation and the compose modal
-
-The human's request of 2026-10-23: the stats screens and the inputs are rebuilt, and compose becomes a modal. Six `hand` units in four stages: UI-010, EVENTS-010 → FRONTEND-018, FRONTEND-020 → FRONTEND-019 → FRONTEND-021. A skeptic agent declares each unit's Baseline (latency, query counts, bundle size, freezing). Brief, design and order: `wiki/GeneralContext/Prompts/20-stats-navigation-and-compose-modal.md`.
-
-## Fanwire visual refresh
-
-From the human's 2026-10-27 request and the browser audit in
-`Prompts/21-visual-refresh-specs.md`. These are `hand` units because each
-needs visual judgement and a real browser pass. FRONTEND-022 is complete
-(#255). For the remaining work, the human requested a stacked review sequence:
-the Director baseline/spec PR #257 is first, then FRONTEND-023, FRONTEND-024,
-and USERS-004. Each base must have a green full CI gate before its dependent
-branch is created. This review stack does not mean the feature implementations
-depend on one another.
-
-| Order | Task | Mode | Shippable outcome | Source | Dependencies / branch base |
-|---:|---|---|---|---|---|
-| 1 | `FRONTEND-023` | `hand` | Player game-log points and team-season margins become labelled, accessible charts with full text data equivalents. | Human request; `Prompts/21` player and Stats audit | Director baseline/spec PR #257. Branch from its green head. |
-| 2 | `FRONTEND-024` | `hand` | Empty feed/profile, unmatched player search, and non-qualifying record states share an original Fanwire sports-geometry motif. | Human request; `Prompts/21` quiet-state audit | `FRONTEND-023`. Branch from its PR head after all CI checks pass. |
-| 3 | `USERS-004` | `hand` | Members can persist one of eight original geometric avatars; a saved preset replaces a profile photo, while the existing username initial remains the default/reset. | Human request; `Prompts/21` avatar/API-boundary audit | `FRONTEND-024`. Branch from its PR head after all CI checks pass. |
-
 ## Workflow ideas, not yet designed
 
 From the human's whiteboard (2026-10-17). Each needs a design discussion
@@ -143,9 +122,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore` and `ChevronDownIcon`; a scrim token for `Dialog`'s backdrop (it uses the `--neutral-950` primitive); stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the "for the Director" lists of `FRONTEND-008`/`009`/`010` and `UI-009` | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
 | **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
 | **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
-| **Compose: drop the separate *Attach* click.** Upload → wait for the scan → click *Attach* | `hand` | — | the human, 2026-09-30 ("a bit annoying") | The wait for `Processed` stays; only the click goes. `features/compose/` |
 | **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
-| **`Badge neutral` is invisible on the score band**: both use `--color-surface-muted`, so "Final" loses its pill | `hand` | — | `UI-005` browser pass | `components/ui` (Badge or `GameScore`), so its own unit. Browser check: no unit test pins it |
 | **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `hand` | — | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**`. Browser check at 360 px |
 | **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |
 | **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components.md` §5, `FRONTEND-007` | `src/components/` |
