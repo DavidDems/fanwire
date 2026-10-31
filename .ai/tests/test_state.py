@@ -4,6 +4,8 @@ Every transition an orchestrator performs goes through `state.advance`. No
 workflow YAML, prompt, or agent is allowed to invent a transition.
 """
 
+import json
+
 import pytest
 
 from agentlib import state as st
@@ -608,6 +610,69 @@ class TestAHandRunLeavesARecord:
         assert s["pr"] == 140
         assert s["history"][-1]["note"] == "hand run finished, PR #140"
         assert [h["event"] for h in s["history"]] == ["HAND_STARTED", "HAND_FINISHED"]
+
+    def test_finish_without_usage_records_unknown_explicitly(self):
+        running = st.advance(hand(), "HAND_STARTED")
+        assert st.advance(running, "HAND_FINISHED", pr=140)["hand_usage"] is None
+
+    def test_finish_records_sanitized_usage_for_non_cli_callers_too(self):
+        usage = {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_creation_input_tokens": 20,
+            "cache_read_input_tokens": 30,
+            "num_turns": 2,
+            "source": "claude_transcript",
+        }
+        running = st.advance(hand(), "HAND_STARTED")
+        finished = st.advance(running, "HAND_FINISHED", pr=140, hand_usage=usage)
+        assert finished["hand_usage"] == usage
+        assert "hand_usage" not in running
+
+    @pytest.mark.parametrize(
+        "invalid",
+        [
+            True,
+            "PRIVATE_TRANSCRIPT_CONTENT",
+            {"input_tokens": 3},
+            {"input_tokens": True},
+        ],
+    )
+    def test_finish_rejects_unvalidated_usage_without_mutating_running_state(self, invalid):
+        running = st.advance(hand(), "HAND_STARTED")
+        before = json.dumps(running, sort_keys=True)
+        with pytest.raises(st.StateError):
+            st.advance(running, "HAND_FINISHED", pr=140, hand_usage=invalid)
+        assert json.dumps(running, sort_keys=True) == before
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            {"input_tokens": True},
+            {"output_tokens": -1},
+            {"cache_creation_input_tokens": 1.5},
+            {"cache_read_input_tokens": None},
+            {"num_turns": "2"},
+            {"num_turns": 0},
+            {"num_turns": True},
+            {"source": "estimate"},
+            {"transcript": "PRIVATE_TRANSCRIPT_PATH"},
+        ],
+    )
+    def test_finish_rejects_invalid_counters_provenance_and_private_extra_fields(self, changes):
+        usage = {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_creation_input_tokens": 20,
+            "cache_read_input_tokens": 30,
+            "num_turns": 2,
+            "source": "claude_transcript",
+            **changes,
+        }
+        running = st.advance(hand(), "HAND_STARTED")
+        with pytest.raises(st.StateError) as caught:
+            st.advance(running, "HAND_FINISHED", pr=140, hand_usage=usage)
+        assert "PRIVATE_" not in str(caught.value)
 
     @pytest.mark.parametrize("pr", [None, 0, -3, "140", 1.5, True])
     def test_finishing_needs_a_real_pr_number(self, pr):

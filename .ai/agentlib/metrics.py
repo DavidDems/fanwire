@@ -1,4 +1,4 @@
-"""Deterministic per-unit measurements (schema 1), read-only at the source.
+"""Deterministic per-unit measurements (schema 2), read-only at the source.
 
 All counts come from a merged PR, its Git objects, task history and invocation
 telemetry. CI counts completed test-agent attempts (including earlier reruns),
@@ -17,7 +17,9 @@ identity. It is not a claim that a different person typed those changes.
 Missing attribution, binary line counts, unavailable historical VERSION, and
 unknown cost stay null. Guard violations count recorded GUARD_VIOLATION events;
 without task history that observation is unknown, not zero. Subscription cost
-is null, not an invented dollar estimate. No transcript capture occurs here.
+is null, not an invented dollar estimate. Hand usage is validated metadata
+recorded at hand finish; collection does not read transcripts. New usage fields
+remain null for legacy hand records and for auto/Director units.
 
 VERSION is read from the first unit commit, never today's checkout. Source
 errors abort collection rather than yielding a plausible partial record.
@@ -36,9 +38,9 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-from agentlib import spec, state
+from agentlib import handusage, spec, state
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
 _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 _NUMBER = r"(?:0|[1-9]\d*)"
@@ -419,6 +421,10 @@ def collect(
     if None in rounds:
         raise MetricsError("submitted review has no commit identity")
     dollars, source = _cost(mode, records)
+    try:
+        usage = handusage.validate(task.get("hand_usage")) if mode == "hand" else None
+    except handusage.HandUsageError as exc:
+        raise MetricsError(str(exc)) from None
     return {
         "schema": SCHEMA_VERSION,
         "task_id": task_id,
@@ -443,6 +449,9 @@ def collect(
         else None,
         "cost_usd": dollars,
         "cost_source": source,
+        **{field: usage[field] if usage is not None else None for field in handusage.TOKEN_FIELDS},
+        "num_turns": usage["num_turns"] if usage is not None else None,
+        "usage_source": usage["source"] if usage is not None else None,
         "pipeline_version": _version(root, commits[0]["sha"]),
         "backfilled": bool(backfilled),
     }
