@@ -27,6 +27,7 @@ CI_SUMMARY = WORKFLOWS / "ci-summary.yml"
 COVERAGE = WORKFLOWS / "coverage-check.yml"
 SPEC_DRIFT = WORKFLOWS / "spec-drift.yml"
 WIKI_PROPOSAL = WORKFLOWS / "wiki-proposal.yml"
+METRICS_PUBLISH = WORKFLOWS / "metrics-publish.yml"
 RENOVATE = WORKFLOWS.parent / "renovate.json"
 
 # handoff.md §10, D2b. The one way a workflow step may run agentctl: from the
@@ -458,7 +459,9 @@ class TestTheToolchainIsPinnedInOnePlace:
         return json.loads(self.CONFIG.read_text(encoding="utf-8"))["providers"]["anthropic"]
 
     def scripts(self) -> list[Path]:
-        return sorted(WORKFLOWS.glob("*.yml")) + sorted(p for p in self.BIN.iterdir() if p.is_file())
+        return sorted(WORKFLOWS.glob("*.yml")) + sorted(
+            p for p in self.BIN.iterdir() if p.is_file()
+        )
 
     def test_config_names_the_package_and_one_exact_version(self):
         cfg = self.anthropic()
@@ -1219,7 +1222,7 @@ class TestActionsRunOnNode24:
             m = re.search(r"uses:\s*([\w.-]+/[\w.-]+)\S*", line)
             if not m:
                 continue
-            v = re.search(r"#\s*v(\d+)\b", line[m.end():])
+            v = re.search(r"#\s*v(\d+)\b", line[m.end() :])
             assert v, f"{path.name}: no `# vN` version on: {line.strip()}"
             action, major = m.group(1), int(v.group(1))
             assert action in self.MIN_MAJOR, f"{path.name}: {action} has no Node 24 floor here"
@@ -2602,6 +2605,7 @@ class TestTheStaticChecksGateEveryRun:
         assert package["scripts"]["lint"].startswith("eslint ")
         assert {"typescript", "eslint"} <= set(package["devDependencies"])
 
+
 class TestEveryNpmTreeIsAudited:
     """The first OpenSSF Scorecard run (2026-10-19) reported seven known
     vulnerabilities, every one of them npm, and four were in `infra/`, whose
@@ -3298,9 +3302,9 @@ class TestCodeQlIsAdvisorySastThatBuildsNothing:
         # Exactly these: pull_request_target would run with the base's token.
         assert triggers == {"pull_request", "push", "schedule", "workflow_dispatch"}, triggers
         for event in ("pull_request", "push"):
-            assert re.search(
-                rf"^  {event}:\n    branches: \[main\]$", on, re.MULTILINE
-            ), f"{event}: main only"
+            assert re.search(rf"^  {event}:\n    branches: \[main\]$", on, re.MULTILINE), (
+                f"{event}: main only"
+            )
         cron = re.search(r"cron:\s*['\"](\d+) (\d+) \* \* (\d)['\"]", on)
         assert cron, "weekly, at a fixed minute"
         assert cron.group(1) != "0", "off the hour, not on it"
@@ -3705,3 +3709,115 @@ class TestThePerfRunIsAdvisory:
         text = self.TEMPLATE.read_text(encoding="utf-8")
         assert "perf/run.ps1 -Profile load" in text
         assert "backend/app/" in text
+
+
+class TestMetricsPublicationWritesDataAndExecutesOnlyMainTools:
+    """Prompt11 deliverable3 gives a new job contents:write without a model.
+
+    Its authority may publish derived records only. The data branch can never
+    supply executable tooling, a source checkout cannot become the output tree,
+    and arbitrary PR identity must not become a shell fragment or filename.
+    Real Git tests in test_metricspublish.py exercise the branch/write boundary.
+    """
+
+    @pytest.fixture
+    def wf(self):
+        assert METRICS_PUBLISH.is_file(), "metrics-publish.yml is missing"
+        return METRICS_PUBLISH.read_text(encoding="utf-8")
+
+    def test_closed_task_merges_and_daily_catchup_are_the_triggers(self, wf):
+        on = wf.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        assert "pull_request_target:" in on
+        assert "types: [closed]" in on and "branches: [main]" in on
+        assert "schedule:" in on
+        assert re.search(r"cron:\s*['\"]\d+ \d+ \* \* \*['\"]", on)
+        condition = " ".join(job_block(wf, "collect").split("    permissions:", 1)[0].split())
+        for clause in (
+            "github.event.pull_request.merged == true",
+            "startsWith(github.event.pull_request.head.ref, 'agent/')",
+            "github.event.pull_request.head.repo.full_name == github.repository",
+        ):
+            assert clause in condition
+        assert "github.event_name == 'schedule'" in condition
+
+    def test_collection_is_read_only_and_only_publisher_has_contents_write(self, wf):
+        assert re.search(r"^permissions: \{\}$", wf, re.MULTILINE)
+        for job, expected in (
+            ("collect", {"contents": "read", "pull-requests": "read", "actions": "read"}),
+            ("publish", {"contents": "write"}),
+        ):
+            block = job_block(wf, job)
+            permissions = block.split("    permissions:\n", 1)[1].split("\n    runs-on", 1)[0]
+            actual = dict(
+                line.strip().split(": ", 1)
+                for line in permissions.splitlines()
+                if line.startswith("      ") and line.strip()
+            )
+            assert actual == expected
+        assert "needs: collect" in job_block(wf, "publish")
+        assert "secrets." not in wf
+        assert "ANTHROPIC" not in wf and "TYPESAFE" not in wf
+
+    def test_publish_checks_out_metrics_separately_from_the_trusted_tools(self, wf):
+        block = job_block(wf, "publish")
+        checkouts = [part for part in steps_in(block) if "actions/checkout@" in part]
+        assert len(checkouts) == 2
+        tools = next(part for part in checkouts if "path: tools" in part)
+        data = next(part for part in checkouts if "path: metrics-data" in part)
+        assert "ref: ${{ needs.collect.outputs.tools_sha }}" in tools
+        assert "ref: metrics" in data
+        assert "if:" in data, "an absent data branch needs the explicit empty bootstrap"
+        for part in checkouts:
+            assert "persist-credentials: false" in part
+        assert "metrics_publish.py" in block and "prepare" in block
+        assert "METRICS_ROOT:" in block and "/metrics-data" in block
+        assert "working-directory: metrics-data" not in block
+
+    def test_collection_code_is_trusted_main_with_full_object_history(self, wf):
+        block = job_block(wf, "collect")
+        checkouts = [part for part in steps_in(block) if "actions/checkout@" in part]
+        tools = next(part for part in checkouts if "path: tools" in part)
+        assert "ref: ${{ github.sha }}" in tools or "ref: main" in tools
+        assert "fetch-depth: 0" in tools and "persist-credentials: false" in tools
+        for part in checkouts:
+            assert "pull_request.head.sha" not in part
+            assert "persist-credentials: false" in part
+        assert "tools_sha:" in block
+
+    def test_all_python_is_isolated_main_code_and_no_event_expression_is_a_script(self, wf):
+        for body in run_bodies(wf):
+            assert "${{" not in body
+            executable = "\n".join(
+                line for line in body.splitlines() if not line.lstrip().startswith("#")
+            )
+            for line in body.splitlines():
+                stripped = line.strip()
+                if re.search(r"\bpython3?\b", stripped) and not stripped.startswith("#"):
+                    assert 'python -I "$TOOLS/.ai/bin/metrics_publish.py"' in stripped
+            for runner in ("npm ", "npx ", "pip ", "pytest", "docker ", "source ", "eval "):
+                assert runner not in executable
+        assert "--force" not in "\n".join(run_bodies(wf))
+
+    def test_auth_is_only_in_the_publish_step_and_artifacts_are_current_run_data(self, wf):
+        block = job_block(wf, "publish")
+        holders = [part for part in steps_in(block) if "METRICS_PUSH_TOKEN:" in part]
+        assert len(holders) == 1
+        assert "github.token" in holders[0]
+        assert " publish" in holders[0]
+        assert "GH_TOKEN:" not in block and "GITHUB_TOKEN:" not in block
+        upload = [
+            part
+            for part in steps_in(job_block(wf, "collect"))
+            if "actions/upload-artifact@" in part
+        ]
+        download = [part for part in steps_in(block) if "actions/download-artifact@" in part]
+        assert len(upload) == len(download) == 1
+        assert "name: metrics-records" in upload[0] and "name: metrics-records" in download[0]
+        assert "github-token:" not in download[0] and "run-id:" not in download[0]
+        assert "runner.temp" in upload[0] and "runner.temp" in download[0]
+
+    def test_workflow_serializes_writers_and_has_finite_job_timeouts(self, wf):
+        assert "concurrency:" in wf and "group: metrics-publish" in wf
+        assert "cancel-in-progress: false" in wf
+        for job in ("collect", "publish"):
+            assert re.search(r"timeout-minutes:\s*\d+", job_block(wf, job))
