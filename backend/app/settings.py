@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     environment: str = ""
     perf_jwks_path: str = ""
 
+    # Set by the Lambda runtime, never by this repo. Read only so that
+    # ENVIRONMENT=development can be refused on a deployed function, below.
+    aws_lambda_function_name: str = ""
+
     @model_validator(mode="after")
     def _perf_jwks_only_in_perf(self) -> Self:
         if self.perf_jwks_path and self.environment != "perf":
@@ -90,4 +94,23 @@ class Settings(BaseSettings):
                 "PERF_JWKS_PATH is set but ENVIRONMENT is "
                 f"{self.environment!r}; it is only accepted when ENVIRONMENT is exactly 'perf'"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _development_never_deployed(self) -> Self:
+        # ENVIRONMENT=development makes app.dependencies.get_event_bus deliver
+        # events in process (NOTIFICATIONS-001), so a deployed function missing
+        # its bus name refuses to start rather than dispatch locally. No deployed
+        # stack sets it (infra/test/local-dispatch-env.test.ts pins that).
+        if self.environment == "development":
+            if self.post_event_bus_name:
+                raise ValueError(
+                    "ENVIRONMENT is 'development' but POST_EVENT_BUS_NAME is set; "
+                    "the local stack has no real bus"
+                )
+            if self.aws_lambda_function_name:
+                raise ValueError(
+                    "ENVIRONMENT is 'development' but AWS_LAMBDA_FUNCTION_NAME is set; "
+                    "the local stack does not run on Lambda"
+                )
         return self
