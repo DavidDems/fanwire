@@ -102,7 +102,7 @@ def pull(task=TASK, pr=17, **changes):
         "merged": True,
         "state": "closed",
         "merged_at": "2026-10-01T11:00:00Z",
-        "base": {"repo": {"full_name": REPO}},
+        "base": {"ref": "main", "repo": {"full_name": REPO}},
         "head": {"ref": f"agent/{task}", "repo": {"full_name": REPO}},
         **changes,
     }
@@ -192,7 +192,9 @@ def test_event_can_supply_the_pr_missing_from_legacy_auto_state(publisher, tmp_p
     assert "pr" not in json.loads(source.read_text()), "collection never repairs task state"
 
 
-@pytest.mark.parametrize("kind", ["unmerged", "fork", "director", "wrong_base", "not_closed"])
+@pytest.mark.parametrize(
+    "kind", ["unmerged", "fork", "director", "wrong_base", "wrong_ref", "missing_ref", "not_closed"]
+)
 def test_ineligible_events_do_not_collect_or_query_sources(publisher, tmp_path, kind):
     root, out = tmp_path / "tools", tmp_path / "batch"
     state(root)
@@ -206,6 +208,10 @@ def test_ineligible_events_do_not_collect_or_query_sources(publisher, tmp_path, 
         pr["head"]["ref"] = "director/change"
     elif kind == "wrong_base":
         pr["base"]["repo"]["full_name"] = "other/repo"
+    elif kind == "wrong_ref":
+        pr["base"]["ref"] = "director/stack-parent"
+    elif kind == "missing_ref":
+        del pr["base"]["ref"]
     else:
         payload["action"] = "opened"
 
@@ -238,7 +244,17 @@ def test_branch_task_identity_is_validated_before_filesystem_use(publisher, tmp_
 
 
 @pytest.mark.parametrize(
-    "kind", ["state_pr", "state_id", "source_branch", "source_repo", "source_pr"]
+    "kind",
+    [
+        "state_pr",
+        "state_id",
+        "source_branch",
+        "source_repo",
+        "source_pr",
+        "source_base_ref",
+        "source_missing_ref",
+        "source_merged",
+    ],
 )
 def test_event_source_identity_cannot_disagree_with_task_state(publisher, tmp_path, kind):
     root, out = tmp_path / "tools", tmp_path / "batch"
@@ -257,6 +273,12 @@ def test_event_source_identity_cannot_disagree_with_task_state(publisher, tmp_pa
             value["head"]["repo"]["full_name"] = "fork/repo"
         elif kind == "source_pr":
             value["number"] = 99
+        elif kind == "source_base_ref":
+            value["base"]["ref"] = "director/stack-parent"
+        elif kind == "source_missing_ref":
+            del value["base"]["ref"]
+        elif kind == "source_merged":
+            value["merged"] = False
         return value
 
     with pytest.raises(publisher.PublishError):
@@ -323,7 +345,9 @@ def test_catchup_limit_bounds_attempts_even_when_no_candidate_is_merged(publishe
     assert not out.exists()
 
 
-@pytest.mark.parametrize("discovery", ["unique", "none", "unmerged", "ambiguous"])
+@pytest.mark.parametrize(
+    "discovery", ["unique", "none", "unmerged", "wrong_ref", "missing_ref", "ambiguous"]
+)
 def test_catchup_discovers_missing_auto_pr_only_from_unique_merged_same_repo_head(
     publisher, tmp_path, discovery
 ):
@@ -345,12 +369,19 @@ def test_catchup_discovers_missing_auto_pr_only_from_unique_merged_same_repo_hea
                 return []
             if discovery == "unmerged":
                 return [pull(merged=False, merged_at=None)]
+            if discovery == "wrong_ref":
+                return [pull(base={"ref": "director/stack-parent", "repo": {"full_name": REPO}})]
+            if discovery == "missing_ref":
+                return [pull(base={"repo": {"full_name": REPO}})]
             if discovery == "ambiguous":
-                return [pull(), pull(pr=18)]
+                return [
+                    {k: v for k, v in candidate.items() if k != "merged"}
+                    for candidate in (pull(), pull(pr=18))
+                ]
             return [
                 pull(head={"ref": f"agent/{TASK}", "repo": {"full_name": "fork/repo"}}),
                 pull("OTHER-001", 99),
-                pull(),
+                {k: v for k, v in pull().items() if k != "merged"},
             ]
         assert endpoint == f"repos/{REPO}/pulls/17"
         return pull()
