@@ -10,11 +10,11 @@
  * cannot be switched off by business rule ([[0x05-notifications]]), so there is
  * no second control here and no test asking for one.
  *
- * **The control is not disabled and says nothing about SES.** Email delivery is
- * a deliberate no-op in every environment today — `SesEmailSender` skips sending
- * while `NOTIFICATION_FROM_ADDRESS` is unset, and no identity is verified yet —
- * but that is a deployment state, not a feature flag. The toggle stores a real
- * preference, so the last test here pins that it is usable and unexplained.
+ * **NOTIFICATIONS-002: the control says when email is not available.** The
+ * response's `email_available` decides. False: the box is disabled, still shows
+ * the stored position, and a caption explains why. True: the box behaves as a
+ * plain preference and says nothing. Most of this file runs in the available
+ * state, which is the fixture's default.
  *
  * **Why the control is found by its label, not by `getByRole("checkbox")`.**
  * Whether it is a native checkbox or a `role="switch"` is the implementation's
@@ -24,9 +24,11 @@
  */
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, delay, http, type RequestHandler } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { FakeAuthService, profileFound, renderWithAuth, testSession } from "../../test/auth";
+import fieldStyles from "../../components/FormField.module.css";
 import {
   actorProfilesStub,
   clearStub,
@@ -40,16 +42,25 @@ import { NotificationsPage } from "./NotificationsPage";
 /** Permissive on wording, strict on there being a label at all. */
 const EMAIL_CONTROL = /email/i;
 
+/** The wording the human accepted by merging the spec. Exact on purpose. */
+const CAPTION = "Email notifications are not available right now. You will still see them here.";
+
+const PREFERENCE_PATH = /\/notifications\/preference$/;
+
 /**
  * The page with an empty notification list, so nothing in these tests depends on
  * how an entry renders. The list, actor and clear handlers are installed anyway:
  * msw runs with `onUnhandledRequest: "error"`.
  */
-function renderPreference(enabled: boolean): PreferenceStub {
-  const preference = preferenceStub(enabled);
+function renderPreference(enabled: boolean, available = true): PreferenceStub {
+  const preference = preferenceStub(enabled, available);
+  renderPage(preference.handlers);
+  return preference;
+}
 
+function renderPage(preferenceHandlers: RequestHandler[]): void {
   server.use(
-    ...preference.handlers,
+    ...preferenceHandlers,
     notificationsStub([]).handler,
     actorProfilesStub().handler,
     clearStub().handler,
@@ -60,8 +71,11 @@ function renderPreference(enabled: boolean): PreferenceStub {
     authService: new FakeAuthService({ session: testSession() }),
     route: "/notifications",
   });
+}
 
-  return preference;
+/** Long enough for a request the control wrongly sent to have reached the stub. */
+async function letAnyRequestArrive(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
 }
 
 function emailControl(): HTMLElement {
@@ -192,15 +206,131 @@ describe("a preference update that fails", () => {
   });
 });
 
-describe("the control itself", () => {
-  it("is enabled, and explains nothing about email delivery being switched off", async () => {
-    // SES has no verified identity yet and `NOTIFICATION_FROM_ADDRESS` is unset
-    // everywhere, so nothing acts on this preference today. That is a deployment
-    // state, and the UI is not the place it gets explained — the toggle stores a
-    // real preference and behaves like one.
-    renderPreference(true);
+describe("the control while email is available", () => {
+  it("is enabled, with no caption and no description", async () => {
+    renderPreference(true, true);
 
-    expect(await screen.findByLabelText(EMAIL_CONTROL)).toBeEnabled();
-    expect(screen.queryByText(/ses|not yet|coming soon|unavailable/i)).toBeNull();
+    const control = await screen.findByLabelText(EMAIL_CONTROL);
+    expect(control).toBeEnabled();
+    expect(control).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByText(CAPTION)).toBeNull();
+  });
+
+  it("stays enabled, with no caption, while a PUT is in flight", async () => {
+    const user = userEvent.setup();
+    const preference = renderPreference(true, true);
+    const release = preference.hold();
+
+    await waitFor(() => {
+      expect(emailControl()).toBeChecked();
+    });
+    await user.click(emailControl());
+    await waitFor(() => {
+      expect(preference.puts).toEqual([{ email_notifications_enabled: false }]);
+    });
+
+    // The optimistic position shows the patch landed. An optimistic patch that
+    // dropped `email_available` would read as "not available" right here.
+    await waitFor(() => {
+      expect(emailControl()).not.toBeChecked();
+    });
+    expect(emailControl()).toBeEnabled();
+    expect(screen.queryByText(CAPTION)).toBeNull();
+
+    release();
+    await waitFor(() => {
+      expect(emailControl()).not.toBeChecked();
+    });
+    expect(emailControl()).toBeEnabled();
+  });
+
+  it("restores both fields after a failed PUT", async () => {
+    const user = userEvent.setup();
+    const preference = renderPreference(true, true);
+    preference.fail();
+
+    await waitFor(() => {
+      expect(emailControl()).toBeChecked();
+    });
+    await user.click(emailControl());
+
+    await screen.findByRole("alert");
+    await waitFor(() => {
+      expect(emailControl()).toBeChecked();
+    });
+    expect(emailControl()).toBeEnabled();
+    expect(screen.queryByText(CAPTION)).toBeNull();
+  });
+});
+
+describe("the control while email is not available", () => {
+  it.each([
+    ["on", true],
+    ["off", false],
+  ])("is disabled and shows a stored position of %s", async (_label, stored) => {
+    renderPreference(stored, false);
+
+    const control = await screen.findByLabelText(EMAIL_CONTROL);
+    expect(control).toBeDisabled();
+    expect((control as HTMLInputElement).checked).toBe(stored);
+  });
+
+  it("captions the control through Field's hint, as its accessible description", async () => {
+    renderPreference(true, false);
+
+    const control = await screen.findByLabelText(EMAIL_CONTROL);
+    const caption = screen.getByText(CAPTION);
+    expect(caption).toHaveClass(fieldStyles.hint);
+    expect(caption.id).toBe("email-notifications-hint");
+    expect(control).toHaveAttribute("aria-describedby", caption.id);
+    expect(control).toHaveAccessibleDescription(CAPTION);
+  });
+
+  it.each([
+    ["on", true],
+    ["off", false],
+  ])(
+    "sends no PUT from a stored position of %s, by box, label or keyboard",
+    async (_label, stored) => {
+      const user = userEvent.setup();
+      const preference = renderPreference(stored, false);
+
+      const control = await screen.findByLabelText(EMAIL_CONTROL);
+      await user.click(control);
+      await user.click(screen.getByText("Email me about new notifications"));
+      control.focus();
+      await user.keyboard(" ");
+      await letAnyRequestArrive();
+
+      expect(preference.puts).toEqual([]);
+      expect((control as HTMLInputElement).checked).toBe(stored);
+    },
+  );
+});
+
+describe("before there is a preference to show", () => {
+  it("renders no caption and no checkbox while loading", async () => {
+    renderPage([
+      http.get(PREFERENCE_PATH, async () => {
+        await delay("infinite");
+        return HttpResponse.json({});
+      }),
+    ]);
+
+    await screen.findByText("Loading your email preference…");
+    expect(screen.queryByText(CAPTION)).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("renders no caption and no checkbox when the load fails", async () => {
+    renderPage([
+      http.get(PREFERENCE_PATH, () =>
+        HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 }),
+      ),
+    ]);
+
+    await screen.findByText("We could not load your email preference. Please try again.");
+    expect(screen.queryByText(CAPTION)).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

@@ -20,12 +20,11 @@ import {
  * cannot be switched off by business rule ([[0x05-notifications]]), so there is
  * no second control here.
  *
- * **The control is enabled and explains nothing about SES.** Email delivery is a
- * deliberate no-op in every environment today — `SesEmailSender` skips sending
- * while `NOTIFICATION_FROM_ADDRESS` is unset and no identity is verified yet — but
- * that is a deployment state, not a feature flag. The toggle stores a real
- * preference, and a control that apologised for the environment it happens to be
- * running in would have to be found and removed the day SES is verified.
+ * **The server says whether email is available** (`email_available`,
+ * [[0x05-notifications]]). When it is not, the box is disabled and captioned, and
+ * still shows the stored position: that does not misstate what is stored, and the
+ * choice is honoured if email returns. Nothing here decides availability, so
+ * nothing needs finding and removing the day email is switched on.
  *
  * **Optimistic, through the mutation lifecycle**, the shape `FollowButton` uses:
  * `onMutate` cancels the in-flight read and snapshots the entry, `onError` puts
@@ -47,6 +46,9 @@ type NotificationPreferenceOut =
   components["schemas"]["NotificationPreferenceOut"];
 
 const EMAIL_FIELD_ID = "email-notifications";
+
+const EMAIL_UNAVAILABLE =
+  "Email notifications are not available right now. You will still see them here.";
 
 /** The cache entry `onMutate` patched, kept so `onError` can put it back. */
 interface PreferenceSnapshot {
@@ -82,12 +84,14 @@ export function EmailPreference() {
         queryClient.getQueryData<NotificationPreferenceOut>(
           PREFERENCE_QUERY_KEY,
         );
-      queryClient.setQueryData<NotificationPreferenceOut>(
-        PREFERENCE_QUERY_KEY,
-        {
-          email_notifications_enabled: next,
-        },
-      );
+      // Spread: this write is about the stored flag, and must not lose
+      // `email_available`, or the control reads as unavailable while it is in flight.
+      if (previous !== undefined) {
+        queryClient.setQueryData<NotificationPreferenceOut>(
+          PREFERENCE_QUERY_KEY,
+          { ...previous, email_notifications_enabled: next },
+        );
+      }
 
       return { previous };
     },
@@ -128,13 +132,20 @@ export function EmailPreference() {
     );
   }
 
+  const available = preference.data.email_available;
+
   return (
     <Card className={styles.preference}>
-      <Field id={EMAIL_FIELD_ID} label="Email me about new notifications">
+      <Field
+        id={EMAIL_FIELD_ID}
+        label="Email me about new notifications"
+        {...(available ? {} : { hintText: EMAIL_UNAVAILABLE })}
+      >
         <input
-          {...describeField(EMAIL_FIELD_ID)}
+          {...describeField(EMAIL_FIELD_ID, { hint: !available })}
           type="checkbox"
           checked={preference.data.email_notifications_enabled}
+          disabled={!available}
           onChange={(event) => {
             setFailure(null);
             update.mutate(event.target.checked);
