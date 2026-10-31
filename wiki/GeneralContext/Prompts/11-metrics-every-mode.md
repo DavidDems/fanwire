@@ -1,5 +1,18 @@
 # 11 — Metrics in every mode, and a versioned pipeline
 
+**Update, 2026-10-30 — deliverable 1 implemented for review.** The collector
+derives schema-1 unit records from merged PR/Git/task/telemetry evidence;
+the CLI prints JSON or writes an explicit artifact. Definitions, per-mode
+attribution and unknown values are in
+[the metrics reference](../../../.ai/docs/metrics.md). Director units use an
+explicit PR and need no task state. Historical pipeline versions remain null
+where VERSION did not exist. No generated production records are committed.
+
+After the collector PR merges, continue with **deliverable 2**, investigating
+hand-session usage before changing hand finish. Deliverables 3–5 remain the
+data-branch publisher, version enforcement and report. No workflow, usage
+capture, VERSION file or reporting command is part of this first slice.
+
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System
 track, step 3 of 7.** `12` (evals) depends on this record format, so it

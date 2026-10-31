@@ -31,6 +31,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -61,6 +62,7 @@ from agentlib import (
     ciresult,
     doclint,
     guard,
+    metrics,
     orchestrator,
     promptbuild,
     shadow,
@@ -675,6 +677,44 @@ def cmd_shadow_report(args) -> int:
     return OK
 
 
+# --------------------------------------------------------------------------- unit metrics
+
+
+def cmd_metrics_collect(args) -> int:
+    try:
+        record = metrics.collect(
+            REPO_ROOT, args.task_id, pr=args.pr, repo=args.repo, backfilled=args.backfilled
+        )
+        if args.out:
+            output = Path(args.out).resolve()
+            if any(
+                output.is_relative_to(REPO_ROOT / ".ai" / directory)
+                for directory in ("tasks", "telemetry")
+            ):
+                raise metrics.MetricsError(
+                    "metric artifacts must not overwrite task state or telemetry"
+                )
+            output.parent.mkdir(parents=True, exist_ok=True)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=output.parent, delete=False
+                ) as stream:
+                    temporary = Path(stream.name)
+                    json.dump(record, stream, indent=2, sort_keys=True)
+                    stream.write("\n")
+                os.replace(temporary, output)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+            print(output)
+        else:
+            emit(record)
+    except (metrics.MetricsError, OSError) as exc:
+        die(str(exc))
+    return OK
+
+
 # --------------------------------------------------------------------------- telemetry
 
 
@@ -1036,6 +1076,23 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--attempt", type=int)
     d.add_argument("--out", help="also write the result here")
     d.set_defaults(func=cmd_distill)
+
+    met = sub.add_parser("metrics", help="derived per-unit measurements").add_subparsers(
+        dest="sub", required=True
+    )
+    met_collect = met.add_parser(
+        "collect", help="measure one merged unit without changing its sources"
+    )
+    met_collect.add_argument("task_id")
+    met_collect.add_argument(
+        "--pr", type=int, help="merged PR; otherwise use the task's recorded PR"
+    )
+    met_collect.add_argument("--repo", help="GitHub owner/name; otherwise derive it from origin")
+    met_collect.add_argument("--out", help="explicit JSON artifact path; otherwise print JSON")
+    met_collect.add_argument(
+        "--backfilled", action="store_true", help="mark a retrospective collection"
+    )
+    met_collect.set_defaults(func=cmd_metrics_collect)
 
     tel = sub.add_parser("telemetry").add_subparsers(dest="sub", required=True)
     tel_rec = tel.add_parser("record")
