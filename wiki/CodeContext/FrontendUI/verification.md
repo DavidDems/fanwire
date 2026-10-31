@@ -200,13 +200,13 @@ done: report it as "✅ Playwright MCP, Chromium, <date>" with what was measured
     with `page.route('**/api/feed**', …)`, `route.fetch()` the real response,
     add `live_scores` to an item and `route.fulfill` it. Say so in the PR:
     the rendering is real, the data isn't.
-  - **No notifications from real actions** (`implementation-plan.md` "After
-    the units"). Insert rows into the dev Postgres with `docker compose exec
-    -T postgres psql -U $POSTGRES_USER -d $POSTGRES_DB` (read inside the
-    container) and an `insert into notifications (recipient_user_id, type,
-    actor_user_id, reference_id)`. The enum values are upper case (`FOLLOW`,
-    `REPLY`, `REPOST`). The database has no volume, so the rows go with the
-    stack.
+  - **Notifications come from real actions** (`NOTIFICATIONS-001`).
+    `backend-dev` sets `ENVIRONMENT=development`, so a follow, reply or repost
+    creates its row in process, through the consumer production uses. Have a
+    second account act on the first, and don't insert rows by hand. No email
+    goes out. A consumer failure doesn't fail the request, so if a row is
+    missing, look for `local notification dispatch failed` in `docker compose
+    logs backend-dev`.
   - **A new account's signed-in feed is empty** until it follows someone
     (the backend ranks by follows and preferred team). Reach the other
     account by `/profile/<id>`.
