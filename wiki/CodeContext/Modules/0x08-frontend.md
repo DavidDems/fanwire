@@ -726,13 +726,18 @@ preference is its own component. Clearing is a soft delete on the backend
   built against. A list that throws on one row takes down the rows it *does*
   understand, and one that renders nothing is indistinguishable from a broken
   fetch.
-- **The email toggle is a native checkbox and is never disabled.** Email is a
-  deliberate no-op in every environment today (`SesEmailSender` skips while
-  `NOTIFICATION_FROM_ADDRESS` is unset, and no SES identity is verified —
-  [[0x05-notifications]]), but that is a **deployment state, not a feature
-  flag**: the toggle stores a real preference, and a control that apologised for
-  the environment it happens to run in would have to be found and removed the day
-  SES is verified. Native over `role="switch"`: focusable, space-operable and
+- **The email toggle is a native checkbox, disabled and captioned when the server
+  says email is not available** (`NOTIFICATIONS-002`, reversing "never disabled").
+  `email_available` ([[0x05-notifications]]) decides, so the frontend holds no
+  knowledge of the deployment and nothing needs removing when email is switched on.
+  When false, the box still shows the stored position, which most members will see
+  ticked because the default is on, and the caption goes through `Field`'s
+  `hintText` and `describeField(id, { hint: true })`, so it is the control's
+  accessible description. No interaction sends a `PUT`. The optimistic patch
+  spreads the previous value, so a write in flight can't lose `email_available`
+  and read as unavailable. `.preference > div` wraps so the hint takes its own line
+  under the row, and `cursor: pointer` applies only while the box is enabled.
+  Native over `role="switch"`: focusable, space-operable and
   readable by assistive technology with no code. Request failures are a
   `role="alert"` beside the field rather than `Field`'s own message slot, which
   is the split `FormField` documents.
