@@ -146,7 +146,7 @@ describe("the bottom bar and the header's room", () => {
 
   function topLevelRule(selector: string): CssBlock {
     const rule = shellBlocks().find(
-      (block) => !isAtRule(block) && block.prelude === selector,
+      (block) => !isAtRule(block) && selectorSet(block).has(selector),
     );
     if (rule === undefined) throw new Error(`no top-level ${selector} rule`);
     return rule;
@@ -170,11 +170,13 @@ describe("the bottom bar and the header's room", () => {
   });
 
   it("sizes scroll-padding-bottom for the bar's two-line height, and 0 from 40em", () => {
+    // Whitespace out: Prettier breaks a calc this long over three lines.
     expect(
-      declared(topLevelRule(":global(html)"), "scroll-padding-bottom"),
-    ).toBe(
-      "calc(var(--space-8) + var(--space-2) + env(safe-area-inset-bottom))",
-    );
+      declared(topLevelRule(":global(html)"), "scroll-padding-bottom")?.replace(
+        /\s+/g,
+        "",
+      ),
+    ).toBe("calc(var(--space-8)+var(--space-2)+env(safe-area-inset-bottom))");
     expect(
       declared(
         ruleInMedia(FROM_40EM, ":global(html)"),
