@@ -16,19 +16,18 @@ ratchet so units can clear debt without editing the Director-owned baseline.
 The avatar-rendering fixture failures on #269's base were fixed in #270.
 No corpus files moved in those linter PRs.
 
-**Update, 2026-10-30:** #278 moved D3's choice to
-[ADR 0001](../Decisions/0001-bounded-orchestration.md). This slice moves D2b's
-worker-isolation choice and item 7 to
-[ADR 0002](../Decisions/0002-worker-credential-isolation.md). Handoff headings
-and proof/residue remain; protocol stays in existing references. One obsolete
-deployment citation now links its historical source; its exception is removed.
+**Update, 2026-10-31:** #278 and #284 moved D3 and D2b into
+[ADR 0001](../Decisions/0001-bounded-orchestration.md) and
+[ADR 0002](../Decisions/0002-worker-credential-isolation.md). This slice moves
+D4's red-baseline choice to [ADR 0003](../Decisions/0003-red-baseline.md).
+Handoff headings, proof gaps and residue remain; protocol stays in existing
+references. The obsolete D4 line-citation exception is removed.
 
-After merge, next: D4's red-baseline choice, retaining proof gaps and fixing
-citations. Then: remaining agreements, changelog, short handoff
-reference, canonical index status and unused Reports removal. Continue a few
-files per PR; delete resolved baseline entries. Untyped files still need
-classification. Deliverable 3 remains incomplete. Deliverable 4 remains WikiMaintenance
-and wiki-health; neither is implemented here. Keep jev disabled. Completed app
+After merge, next: remaining agreements, changelog, short handoff reference,
+canonical index status and unused Reports removal. Continue a few files per
+PR; delete resolved baseline entries. Untyped files still need classification.
+Deliverable 3 remains incomplete. Deliverable 4 remains WikiMaintenance and
+wiki-health; neither is implemented here. Keep jev disabled. Completed app
 work is recorded in [the index](../index.md).
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by

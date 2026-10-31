@@ -14,6 +14,7 @@ from agentlib import doclint
 ROOT = Path(__file__).resolve().parents[2]
 ADR = ROOT / "wiki/GeneralContext/Decisions/0001-bounded-orchestration.md"
 D2B_ADR = ROOT / "wiki/GeneralContext/Decisions/0002-worker-credential-isolation.md"
+D4_ADR = ROOT / "wiki/GeneralContext/Decisions/0003-red-baseline.md"
 HANDOFF = ROOT / ".ai/docs/handoff.md"
 ROUTING = ROOT / "wiki/GeneralContext/Architecture/work-modes.md"
 DEPLOYMENT_ARCHIVE = (
@@ -149,4 +150,84 @@ def test_the_repaired_historical_deployment_citation_exception_is_retired():
         separators=(",", ":"),
         ensure_ascii=False,
     )
+    assert retired not in baseline
+
+
+def test_d4_decision_has_a_typed_numbered_home_and_keeps_the_failure_reason_gate():
+    assert D4_ADR.is_file(), "D4's red-baseline choice needs its own numbered ADR"
+    text = D4_ADR.read_text(encoding="utf-8")
+    fields, body, valid = doclint.frontmatter(text)
+    assert valid and fields.get("type") == "decision"
+    assert re.search(r"(?m)^#\s+0003\b", body)
+    assert {"context", "choice", "consequences"} <= doclint.anchors(text)
+    assert len(body.split()) <= doclint.load_budgets(ROOT)["decision"]
+    # Preserve the decision's controls, rather than a line number or prose copy.
+    assert {
+        "ciresult.baseline_verdict",
+        "TEST_AGENT_RUNNING",
+        "CI_FAILED_WRONG_REASON",
+        "MANAGER_REVIEW",
+        "red_baseline_wrong_reason",
+    } <= set(re.findall(r"`([^`]+)`", body))
+    assert re.search(r"fail(?:ing)?[ -]closed", body, re.IGNORECASE)
+
+
+def test_d4_decision_links_to_immutable_evidence_and_the_existing_protocol_owners():
+    assert D4_ADR.is_file()
+    text = D4_ADR.read_text(encoding="utf-8")
+    links = doclint.inline_links(text)
+    assert any(
+        re.fullmatch(
+            r"https://github\.com/DavidDems/fanwire/blob/[0-9a-f]{40}/"
+            r"\.ai/docs/handoff\.md(?:#[\w-]+)?",
+            target,
+        )
+        for target in links
+    ), "Original evidence must survive at an immutable Git revision"
+    for owner in ("state-machine.md", "operations.md"):
+        assert links_to_adr(D4_ADR, text, ROOT / ".ai/docs" / owner)
+
+
+def test_handoff_d4_routes_to_its_decision_without_losing_existing_section_citations():
+    text = HANDOFF.read_text(encoding="utf-8")
+    (row,) = re.findall(r"(?m)^\| D4 \|.*$", text)
+    assert links_to_adr(HANDOFF, row, D4_ADR)
+    assert "state.py:251" not in text
+    for section in ("10", "10.1", "10.3"):
+        assert doclint.has_section(text, section)
+
+
+def test_canonical_routing_discovers_the_migrated_red_baseline_choice():
+    text = ROUTING.read_text(encoding="utf-8")
+    routing = text.split("## How work is handed on and planned", 1)[1].split("\n## ", 1)[0]
+    assert links_to_adr(ROUTING, routing, D4_ADR)
+
+
+def test_d4_unproven_cases_and_residue_remain_visible_in_the_defect_review():
+    text = HANDOFF.read_text(encoding="utf-8")
+    review = text.split("### 10.1 ", 1)[1].split("### 10.2 ", 1)[0]
+    # Keep these limits in the retained review, not only the historical source.
+    for gap in (
+        r"[Uu]nproven[^.]*live failure",
+        r"log fetch[^.]*`workflow_run`",
+        r"real vitest output[^.]*hand-written",
+        r"both suites red at once",
+        r"incidental red[^.]*hostile test agent",
+        r"MANAGER_RETRY[^.]*baseline[^.]*skips the check",
+        r"re-run of a baseline[^.]*editing `state\.json`",
+    ):
+        assert re.search(gap, review), f"D4 migration must retain this limitation: {gap}"
+
+
+def test_d4_retains_the_static_check_distinction_from_a_failed_test_job():
+    text = HANDOFF.read_text(encoding="utf-8")
+    (d5,) = re.findall(r"(?m)^\| D5 \|.*$", text)
+    # D5's dependent safety choice is not migrated or silently dropped here.
+    assert "tsc/mypy" in d5 and "only alongside a failed test job" in d5
+    assert "a lint failure is never right reason" in d5
+
+
+def test_the_migrated_d4_line_citation_exception_is_retired():
+    baseline = json.loads((ROOT / ".ai/docs-baseline.json").read_text(encoding="utf-8"))
+    retired = json.dumps([".ai/docs/handoff.md", "citation", "state.py:251"], separators=(",", ":"))
     assert retired not in baseline

@@ -2,17 +2,14 @@
 Observer subscriber, per wiki/CodeContext/Standards/gof-patterns.md
 "Observer" and wiki/CodeContext/Modules/0x05-notifications.md.
 
-Not wired to any live EventBridge/SQS trigger yet: app.eventbus.
-PostEventBus's only real backing is InMemoryEventPublisher, which just
-records published events for tests and does not dispatch to in-process
-subscribers (wiki/CodeContext/Modules/0x00-architecture.md "PostEventBus
-implementation"). Real EventBridge -> SQS (with a DLQ, per the wiki's AWS
-mapping) -> Lambda wiring is Phase 6 CDK infra, out of scope here -- same
-deferred-infra precedent as app.events.ingestion's
-AbstractEventIngestionPipeline (a plain Python class, not yet wired to any
-actual trigger). handle_domain_event is instead a plain, directly-
-invokable, fully unit-testable function a future Lambda handler will call
-once that wiring exists.
+handle_domain_event is a plain, directly-invokable, fully unit-testable
+function with two callers (wiki/CodeContext/Modules/0x00-architecture.md
+"PostEventBus implementation"). Deployed, EventBridge -> SQS (with a DLQ) ->
+Lambda reach it through app.notifications.lambda_handler. On the local stack,
+with ENVIRONMENT=development and no POST_EVENT_BUS_NAME,
+app.notifications.local_dispatch.LocalDispatchPublisher calls it in process.
+Anywhere else with no bus name, InMemoryEventPublisher only records events and
+nothing reaches this function.
 
 Resolved gap between the wiki's stated design and the actual PostCreated
 payload: the wiki says this subscriber "distinguishes reply/repost from

@@ -92,6 +92,10 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
+      # Delivers domain events to the notifications consumer in process
+      # (NOTIFICATIONS-001, app.notifications.local_dispatch), so a follow,
+      # reply or repost creates its notification on this stack.
+      - ENVIRONMENT=development
       # Cognito ids are not secrets (wiki/GeneralContext/Architecture/
       # dev-auth-setup.md: "pool id and public client id ship in the
       # browser bundle anyway") but are per-developer (each points at

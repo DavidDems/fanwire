@@ -122,8 +122,9 @@ One structure for every mode, so any session can start cold:
 - **Decisions: `Architecture/human-decisions.md`** (product and process) and
   **`.ai/docs/handoff.md` §10.3** (the agent system) hold the legacy records,
   except the extracted D3 orchestration and human-escalation choice in
-  [ADR 0001](../Decisions/0001-bounded-orchestration.md) and D2b worker
-  isolation in [ADR 0002](../Decisions/0002-worker-credential-isolation.md).
+  [ADR 0001](../Decisions/0001-bounded-orchestration.md), D2b worker
+  isolation in [ADR 0002](../Decisions/0002-worker-credential-isolation.md),
+  and D4 red-baseline classification in [ADR 0003](../Decisions/0003-red-baseline.md).
   New typed decisions, including agent-system decisions, use one numbered ADR
   per file in **`wiki/GeneralContext/Decisions/NNNN-short-title.md`**. Choose
   the next unused number on current main. Legacy records remain at their
