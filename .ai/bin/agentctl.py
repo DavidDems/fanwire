@@ -62,6 +62,7 @@ from agentlib import (
     ciresult,
     doclint,
     guard,
+    handusage,
     metrics,
     orchestrator,
     promptbuild,
@@ -419,11 +420,12 @@ def cmd_hand_finish(args) -> int:
         die(f"no state file for {args.task_id}; run `agentctl hand start` first", FAILED)
     s = st.load_state(state_path(args.task_id))
     try:
-        s = st.advance(s, "HAND_FINISHED", pr=args.pr)
+        usage = handusage.capture(args.usage_transcript) if args.usage_transcript else None
+        s = st.advance(s, "HAND_FINISHED", pr=args.pr, hand_usage=usage)
     except st.Paused as exc:
         print(f"agentctl: {exc}", file=sys.stderr)
         return FAILED
-    except st.StateError as exc:
+    except (st.StateError, handusage.HandUsageError) as exc:
         die(str(exc), FAILED)
     st.save_state(state_path(args.task_id), s)
     emit(s)
@@ -1018,6 +1020,12 @@ def build_parser() -> argparse.ArgumentParser:
     h_fin = hand.add_parser("finish", help="mark a hand run COMPLETE, with its PR")
     h_fin.add_argument("task_id")
     h_fin.add_argument("--pr", type=int, required=True, help="the pull request number")
+    h_fin.add_argument(
+        "--usage-transcript",
+        action="append",
+        type=Path,
+        help="explicit Claude JSONL for this unit; repeat for parent/subagent sessions",
+    )
     h_fin.set_defaults(func=cmd_hand_finish)
 
     p_ci = sub.add_parser("ci-event", help="the event a CI run's conclusion means")

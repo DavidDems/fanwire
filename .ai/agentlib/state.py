@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from agentlib import handusage
+
 SCHEMA_VERSION = 1
 
 # Absolute ceiling on implementation attempts. A Manager may raise a task's own
@@ -417,6 +419,11 @@ def _transition(out: dict, current: str, event: str, ctx: dict) -> tuple[str, st
         # bool is an int to Python, and True is not a pull request.
         if isinstance(pr, bool) or not isinstance(pr, int) or pr < 1:
             raise StateError(f"HAND_FINISHED needs the PR number, a positive int; got {pr!r}")
+        try:
+            usage = handusage.validate(ctx.get("hand_usage"))
+        except handusage.HandUsageError as exc:
+            raise StateError(str(exc)) from None
+        out["hand_usage"] = usage
         out["pr"] = pr
         return "COMPLETE", f"hand run finished, PR #{pr}"
 
