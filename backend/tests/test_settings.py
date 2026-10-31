@@ -286,3 +286,53 @@ def test_settings_rejects_a_spam_new_account_hours_that_is_not_a_positive_intege
     monkeypatch.setenv(_SPAM_ENV["spam_new_account_hours"], bad_value)
     with pytest.raises(ValidationError):
         Settings()
+
+
+# --- NOTIFICATIONS-001: ENVIRONMENT=development can never run on a deployment ---
+
+
+@pytest.fixture()
+def _no_deployment_env(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+
+
+@pytest.mark.usefixtures("_no_deployment_env")
+def test_settings_accepts_development_with_no_bus_and_outside_lambda(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert Settings().environment == "development"
+
+
+@pytest.mark.usefixtures("_no_deployment_env")
+def test_settings_refuses_development_with_a_bus_name(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("POST_EVENT_BUS_NAME", "PostEventBus")
+    with pytest.raises(ValidationError, match="POST_EVENT_BUS_NAME"):
+        Settings()
+
+
+@pytest.mark.usefixtures("_no_deployment_env")
+def test_settings_refuses_development_inside_lambda(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "fanwire-api")
+    with pytest.raises(ValidationError, match="AWS_LAMBDA_FUNCTION_NAME"):
+        Settings()
+
+
+@pytest.mark.usefixtures("_no_deployment_env")
+@pytest.mark.parametrize("environment", [None, "", "perf", "production", "Development"])
+def test_a_deployed_function_with_a_bus_name_still_starts(monkeypatch, environment):
+    monkeypatch.setenv("POST_EVENT_BUS_NAME", "PostEventBus")
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "fanwire-api")
+    if environment is not None:
+        monkeypatch.setenv("ENVIRONMENT", environment)
+    assert Settings().post_event_bus_name == "PostEventBus"
+
+
+@pytest.mark.usefixtures("_no_deployment_env")
+def test_a_deployed_function_missing_its_bus_name_still_starts(monkeypatch):
+    # With no ENVIRONMENT it behaves as it does today: the in-memory publisher.
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "fanwire-api")
+    assert Settings().post_event_bus_name == ""

@@ -67,6 +67,74 @@ def test_get_event_bus_wires_real_event_bridge_publisher_when_bus_name_configure
     assert bus._publisher._event_bus_name == "PostEventBus"
 
 
+# --- NOTIFICATIONS-001: the in-process publisher, ENVIRONMENT=development only ---
+
+
+def _no_real_events_client():
+    raise AssertionError("the local stack must not build an EventBridge client")
+
+
+def test_get_event_bus_wires_local_dispatch_in_development_with_no_bus_name(monkeypatch):
+    # Imported here so the rest of this file still runs before the module exists.
+    from app.notifications.local_dispatch import LocalDispatchPublisher
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+    monkeypatch.setattr("app.dependencies._events_client", _no_real_events_client)
+
+    bus = get_event_bus()
+
+    assert isinstance(bus._publisher, LocalDispatchPublisher)
+
+
+def test_get_event_bus_gives_the_local_publisher_the_session_factory(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+    opened = []
+
+    def _open_session():
+        opened.append(True)
+        raise ConnectionError("no database in this test")
+
+    monkeypatch.setattr("app.dependencies.open_session", _open_session)
+
+    get_event_bus().publish("UserFollowed", {})
+
+    assert opened == [True]
+
+
+@pytest.mark.parametrize(
+    "environment", [None, "", "perf", "production", "Development", " development"]
+)
+def test_get_event_bus_stays_in_memory_for_any_other_environment(monkeypatch, environment):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv("POST_EVENT_BUS_NAME", raising=False)
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+    if environment is None:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("ENVIRONMENT", environment)
+
+    bus = get_event_bus()
+
+    assert type(bus._publisher) is InMemoryEventPublisher
+
+
+def test_get_event_bus_stays_on_event_bridge_with_a_bus_name_and_no_environment(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv("POST_EVENT_BUS_NAME", "PostEventBus")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+
+    bus = get_event_bus()
+
+    assert type(bus._publisher) is EventBridgePublisher
+    assert bus._publisher._event_bus_name == "PostEventBus"
+
+
 def test_get_event_bus_returns_a_cached_instance(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
 
