@@ -46,9 +46,10 @@ class EventPublisher(abc.ABC):
     PostEventBus depends on this, never a concrete boto3 EventBridge
     client.
 
-    No real EventBridgePublisher adapter exists yet (no live AWS this
-    phase, same precedent as MalwareScanner/GuardDutyMalwareScanner —
-    future work)."""
+    Three implementations: EventBridgePublisher and InMemoryEventPublisher
+    below, and app.notifications.local_dispatch.LocalDispatchPublisher, which
+    delivers in process on the local stack. app.dependencies.get_event_bus
+    picks one; this module imports none of the subscribers."""
 
     @abc.abstractmethod
     def put_event(self, *, source: str, detail_type: str, detail: str) -> None:
@@ -57,8 +58,9 @@ class EventPublisher(abc.ABC):
 
 
 class InMemoryEventPublisher(EventPublisher):
-    """Test double: records every published event in arrival order as a
-    DomainEvent, never touches AWS."""
+    """Test double, and the fallback wherever no bus and no local dispatch are
+    configured: records every published event in arrival order as a
+    DomainEvent, delivers it to nothing, never touches AWS."""
 
     def __init__(self) -> None:
         self.published: list[DomainEvent] = []
