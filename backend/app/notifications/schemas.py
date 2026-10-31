@@ -7,7 +7,8 @@ same pattern as app.posts.schemas.PostOut / app.users.schemas.UserOut.
 NotificationPreferenceOut/UpdateNotificationPreferenceRequest are built by
 hand from plain values in app.notifications.routes (not from_attributes),
 since GET /notifications/preference must return a default value even when
-no NotificationPreference row exists yet.
+no NotificationPreference row exists yet. email_available is response only:
+it is derived from Settings on every answer, and the request model ignores it.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ class NotificationOut(BaseModel):
 
 class NotificationPreferenceOut(BaseModel):
     email_notifications_enabled: bool
+    email_available: bool
 
 
 class UpdateNotificationPreferenceRequest(BaseModel):

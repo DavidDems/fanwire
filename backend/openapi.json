@@ -1518,13 +1518,18 @@
       },
       "NotificationPreferenceOut": {
         "properties": {
+          "email_available": {
+            "title": "Email Available",
+            "type": "boolean"
+          },
           "email_notifications_enabled": {
             "title": "Email Notifications Enabled",
             "type": "boolean"
           }
         },
         "required": [
-          "email_notifications_enabled"
+          "email_notifications_enabled",
+          "email_available"
         ],
         "title": "NotificationPreferenceOut",
         "type": "object"

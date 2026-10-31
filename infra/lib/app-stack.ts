@@ -137,6 +137,16 @@ export class AppStack extends cdk.Stack {
 
     const common = { DATABASE_URL: databaseUrl, POWERTOOLS_SERVICE_NAME: 'fanwire' };
 
+    // The SES sandbox rejects unverified recipients: no send grant or from-address
+    // until production access. One condition, one value, for both functions: the
+    // notifications function sends from it, and the API only answers whether it is
+    // set (`email_available`), so the API gets the address but no SES grant.
+    const notificationFromAddress =
+      config.domainName && config.sendEmailNotifications ? `notifications@${config.domainName}` : undefined;
+    const fromAddressEnv: Record<string, string> = notificationFromAddress
+      ? { NOTIFICATION_FROM_ADDRESS: notificationFromAddress }
+      : {};
+
     // --- API
     const api = this.backendFunction('Api', {
       command: 'app.main.handler',
@@ -152,6 +162,7 @@ export class AppStack extends cdk.Stack {
         MEDIA_QUARANTINE_BUCKET: storage.quarantineBucket.bucketName,
         MEDIA_PUBLIC_BUCKET: storage.publicMediaBucket.bucketName,
         POST_EVENT_BUS_NAME: messaging.postEventBus.eventBusName,
+        ...fromAddressEnv,
       },
       statements: [
         // presigned PUT (app.media.routes signs with this role's credentials)
@@ -209,12 +220,12 @@ export class AppStack extends cdk.Stack {
       ...common,
       COGNITO_REGION: auth.region,
       COGNITO_USER_POOL_ID: auth.userPool.userPoolId,
+      ...fromAddressEnv,
     };
     if (config.domainName && config.hostedZoneId) {
       this.sesDomainIdentity(config.domainName, config.hostedZoneId, config.hostedZoneName);
     }
-    // The SES sandbox rejects unverified recipients: no send grant or from-address until production access.
-    if (config.domainName && config.sendEmailNotifications) {
+    if (notificationFromAddress) {
       notificationStatements.push(
         new iam.PolicyStatement({
           sid: 'SendFromSiteDomain',
@@ -222,7 +233,6 @@ export class AppStack extends cdk.Stack {
           resources: [`arn:aws:ses:${this.region}:${this.account}:identity/${config.domainName}`],
         }),
       );
-      notificationEnv.NOTIFICATION_FROM_ADDRESS = `notifications@${config.domainName}`;
     }
     const notifications = this.backendFunction('Notifications', {
       command: 'app.notifications.lambda_handler.handler',

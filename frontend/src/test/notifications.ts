@@ -122,15 +122,17 @@ export function repostNotification(overrides: Partial<NotificationOut> = {}): No
  */
 export const UNKNOWN_NOTIFICATION_TYPE = "mention" as unknown as NotificationType;
 
-export function unknownTypeNotification(
-  overrides: Partial<NotificationOut> = {},
-): NotificationOut {
+export function unknownTypeNotification(overrides: Partial<NotificationOut> = {}): NotificationOut {
   return testNotification({ type: UNKNOWN_NOTIFICATION_TYPE, ...overrides });
 }
 
-/** The notification preference body — one flag, and there is no in-app equivalent. */
-export function testPreference(enabled: boolean): NotificationPreferenceOut {
-  return { email_notifications_enabled: enabled };
+/**
+ * The notification preference body: the one stored flag, which has no in-app
+ * equivalent, and whether email can be sent at all. Available by default, the
+ * state in which the control behaves as a plain preference.
+ */
+export function testPreference(enabled: boolean, available = true): NotificationPreferenceOut {
+  return { email_notifications_enabled: enabled, email_available: available };
 }
 
 export interface NotificationsStub {
@@ -160,9 +162,7 @@ export function notificationsStub(notifications: NotificationOut[] = []): Notifi
 
 /** `GET /notifications` → 200, for a test that does not care how often it was asked. */
 export function notificationsAre(notifications: NotificationOut[] = []): RequestHandler {
-  return http.get(NOTIFICATIONS_PATH, () =>
-    HttpResponse.json<NotificationOut[]>(notifications),
-  );
+  return http.get(NOTIFICATIONS_PATH, () => HttpResponse.json<NotificationOut[]>(notifications));
 }
 
 /** `GET /notifications/preference` → 200, for a test that only needs it answered. */
@@ -232,6 +232,11 @@ export interface PreferenceStub {
   readonly puts: UpdateNotificationPreferenceRequest[];
   /** Answer every write from here on with a 500. */
   fail(): void;
+  /**
+   * Hold every write open until the returned function is called, so a test can
+   * look at the control while the `PUT` is in flight. Always release it.
+   */
+  hold(): () => void;
 }
 
 /**
@@ -241,21 +246,23 @@ export interface PreferenceStub {
  * afterwards agrees with the control rather than handing the page back the value
  * the user just changed.
  */
-export function preferenceStub(enabled = true): PreferenceStub {
+export function preferenceStub(enabled = true, available = true): PreferenceStub {
   const gets: string[] = [];
   const puts: UpdateNotificationPreferenceRequest[] = [];
   let stored = enabled;
   let failing = false;
+  let gate: Promise<void> | null = null;
 
   return {
     handlers: [
       http.get(PREFERENCE_PATH, ({ request }) => {
         gets.push(request.url);
-        return HttpResponse.json<NotificationPreferenceOut>(testPreference(stored));
+        return HttpResponse.json<NotificationPreferenceOut>(testPreference(stored, available));
       }),
       http.put(PREFERENCE_PATH, async ({ request }) => {
         const body = (await request.json()) as UpdateNotificationPreferenceRequest;
         puts.push(body);
+        if (gate !== null) await gate;
         if (failing) {
           // The stored value is deliberately left alone: a refetch after a failed
           // write must still report what the server actually has, which is the
@@ -263,13 +270,23 @@ export function preferenceStub(enabled = true): PreferenceStub {
           return HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 });
         }
         stored = body.email_notifications_enabled;
-        return HttpResponse.json<NotificationPreferenceOut>(testPreference(stored));
+        return HttpResponse.json<NotificationPreferenceOut>(testPreference(stored, available));
       }),
     ],
     gets,
     puts,
     fail(): void {
       failing = true;
+    },
+    hold(): () => void {
+      let open = (): void => {};
+      gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return () => {
+        open();
+        gate = null;
+      };
     },
   };
 }

@@ -24,9 +24,11 @@
  * FormField's Field stacks its label over the control. A checkbox reads the
  * other way round, so in this card only: the box first, the label beside it,
  * and the label stretched across the row so the whole line is the hit area.
+ * It wraps so that Field's hint, when there is one, gets a line of its own.
  */
 .preference > div {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   min-height: var(--target-min);
@@ -38,12 +40,21 @@
   width: 1.25rem;
   height: 1.25rem;
   margin: 0;
-  cursor: pointer;
 }
 
 .preference label {
   flex: 1;
+}
+
+/* Only while the box works: disabled keeps base.css's not-allowed. */
+.preference input[type="checkbox"]:enabled,
+.preference label:has(+ input:enabled) {
   cursor: pointer;
+}
+
+.preference > div > p {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 /* The list: no bullets or indent; the card's own padding frames it. */

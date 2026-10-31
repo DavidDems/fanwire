@@ -457,15 +457,27 @@ const EMAIL_FLAG_STATES: Array<[string, Record<string, unknown>, boolean]> = [
   ['sendEmailNotifications absent', { sendEmailNotifications: undefined }, false],
 ];
 
-/** The notifications function (by its image command) in an arbitrary synthesized App template. */
-function notificationsFunctionIn(t: { Resources?: Record<string, CfnResource> }): CfnResource {
+/** A function (by its image command) in an arbitrary synthesized App template. */
+function functionIn(t: { Resources?: Record<string, CfnResource> }, kind: keyof typeof HANDLERS): CfnResource {
   const hit = Object.values(resourcesOfType(t, 'AWS::Lambda::Function')).find(
     (f) =>
       JSON.stringify((f.Properties?.ImageConfig as { Command?: string[] })?.Command) ===
-      JSON.stringify([HANDLERS.notifications]),
+      JSON.stringify([HANDLERS[kind]]),
   );
-  if (!hit) throw new Error('no notifications function');
+  if (!hit) throw new Error(`no ${kind} function`);
   return hit;
+}
+
+const notificationsFunctionIn = (t: { Resources?: Record<string, CfnResource> }) => functionIn(t, 'notifications');
+
+/** Every `ses:` action on the policies attached to a function's own role. */
+function sesActionsOn(t: { Resources?: Record<string, CfnResource> }, f: CfnResource): string[] {
+  const roleId = roleOf(f);
+  return Object.values(resourcesOfType(t, 'AWS::IAM::Policy'))
+    .filter((p) => JSON.stringify(p.Properties?.Roles).includes(`"${roleId}"`))
+    .flatMap((p) => (p.Properties?.PolicyDocument as { Statement: Record<string, unknown>[] }).Statement)
+    .flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action]) as string[])
+    .filter((action) => action.startsWith('ses:'));
 }
 
 describe.each(Object.entries(DOMAIN_MODES))('App stack SES email sending (%s)', (mode, domainOverrides) => {
@@ -494,6 +506,30 @@ describe.each(Object.entries(DOMAIN_MODES))('App stack SES email sending (%s)', 
         expect(Object.keys(env)).not.toContain('NOTIFICATION_FROM_ADDRESS');
       }
     });
+
+    // NOTIFICATIONS-002: `email_available` reads this on the API. Without it the
+    // answer stays false after the flag is turned on, and every backend test passes.
+    test(`NOTIFICATION_FROM_ADDRESS ${sends ? 'IS' : 'is NOT'} set on the api function, the same value`, () => {
+      const template = t();
+      const env = envOf(functionIn(template, 'api'));
+      if (sends) {
+        expect(env.NOTIFICATION_FROM_ADDRESS).toBe('notifications@fanwire.daviddems.com');
+        expect(env.NOTIFICATION_FROM_ADDRESS).toBe(envOf(notificationsFunctionIn(template)).NOTIFICATION_FROM_ADDRESS);
+      } else {
+        expect(Object.keys(env)).not.toContain('NOTIFICATION_FROM_ADDRESS');
+      }
+    });
+
+    test(`the api role has no ses: action, and the notifications role ${sends ? 'has' : 'has no'} ses:SendEmail`, () => {
+      const template = t();
+      expect(sesActionsOn(template, functionIn(template, 'api'))).toEqual([]);
+      expect(sesActionsOn(template, notificationsFunctionIn(template))).toEqual(sends ? ['ses:SendEmail'] : []);
+    });
+  });
+
+  test('the committed cdk.json flag leaves the api function without a from-address', () => {
+    const env = envOf(functionIn(synthFanwire(domainOverrides).json(STACK_NAMES.app), 'api'));
+    expect(Object.keys(env)).not.toContain('NOTIFICATION_FROM_ADDRESS');
   });
 });
 
