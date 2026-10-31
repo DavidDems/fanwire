@@ -910,6 +910,95 @@ class TestAHandRunIsRecorded:
         assert s["state"] == "COMPLETE"
         assert s["pr"] == 140
         assert s["mode"] == "hand"
+        assert s["hand_usage"] is None, "unavailable usage must not become an estimated zero"
+
+    def test_finish_derives_usage_from_explicit_parent_and_subagent_transcripts(
+        self, data_root, tmp_path
+    ):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        parent_record = {
+            "type": "assistant",
+            "requestId": "PRIVATE_REQUEST",
+            "message": {
+                "id": "PRIVATE_MESSAGE",
+                "stop_reason": "end_turn",
+                "content": "PRIVATE_TRANSCRIPT_CONTENT",
+                "usage": {
+                    "input_tokens": 2,
+                    "output_tokens": 3,
+                    "cache_creation_input_tokens": 5,
+                    "cache_read_input_tokens": 7,
+                },
+            },
+        }
+        child_record = json.loads(json.dumps(parent_record))
+        child_record.update(requestId="PRIVATE_CHILD_REQUEST", isSidechain=True)
+        child_record["message"].update(id="PRIVATE_CHILD_MESSAGE")
+        parent = tmp_path / "private-parent.jsonl"
+        child = tmp_path / "private-child.jsonl"
+        parent.write_text(json.dumps(parent_record) + "\n", encoding="utf-8")
+        child.write_text(
+            json.dumps(parent_record) + "\n" + json.dumps(child_record) + "\n", encoding="utf-8"
+        )
+        result = run_in(
+            data_root,
+            "hand",
+            "finish",
+            DATA_TASK,
+            "--pr",
+            "140",
+            "--usage-transcript",
+            str(parent),
+            "--usage-transcript",
+            str(child),
+        )
+        assert result.returncode == 0, result.stderr
+        expected = {
+            "input_tokens": 4,
+            "output_tokens": 6,
+            "cache_creation_input_tokens": 10,
+            "cache_read_input_tokens": 14,
+            "num_turns": 2,
+            "source": "claude_transcript",
+        }
+        assert self._state(data_root)["hand_usage"] == expected
+        assert json.loads(result.stdout)["hand_usage"] == expected
+        assert self._state(data_root)["state"] == "COMPLETE"
+        emitted = result.stdout + result.stderr + self._path(data_root).read_text(encoding="utf-8")
+        for private in ("PRIVATE_", str(parent), str(child)):
+            assert private not in emitted
+
+    @pytest.mark.parametrize("evidence", ["missing", "malformed", "missing_usage"])
+    def test_invalid_usage_never_finishes_or_overwrites_the_existing_state(
+        self, data_root, tmp_path, evidence
+    ):
+        assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
+        before = self._path(data_root).read_bytes()
+        selected = tmp_path / "PRIVATE_TRANSCRIPT_PATH.jsonl"
+        if evidence == "malformed":
+            selected.write_text("{PRIVATE_TRANSCRIPT_CONTENT", encoding="utf-8")
+        elif evidence == "missing_usage":
+            selected.write_text(
+                json.dumps(
+                    {"type": "assistant", "message": {"content": "PRIVATE_TRANSCRIPT_CONTENT"}}
+                ),
+                encoding="utf-8",
+            )
+        result = run_in(
+            data_root,
+            "hand",
+            "finish",
+            DATA_TASK,
+            "--pr",
+            "140",
+            "--usage-transcript",
+            str(selected),
+        )
+        assert result.returncode == 1
+        assert self._path(data_root).read_bytes() == before
+        assert "PRIVATE_" not in result.stdout + result.stderr
+        assert str(selected) not in result.stdout + result.stderr
+        assert "Traceback" not in result.stderr
 
     def test_finish_needs_the_pr(self, data_root):
         assert run_in(data_root, "hand", "start", DATA_TASK).returncode == 0
