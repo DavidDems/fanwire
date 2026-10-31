@@ -3819,5 +3819,6 @@ class TestMetricsPublicationWritesDataAndExecutesOnlyMainTools:
     def test_workflow_serializes_writers_and_has_finite_job_timeouts(self, wf):
         assert "concurrency:" in wf and "group: metrics-publish" in wf
         assert "cancel-in-progress: false" in wf
+        assert '--scan-offset "$(( (GITHUB_RUN_NUMBER - 1) * 50 ))"' in job_block(wf, "collect")
         for job in ("collect", "publish"):
             assert re.search(r"timeout-minutes:\s*\d+", job_block(wf, job))

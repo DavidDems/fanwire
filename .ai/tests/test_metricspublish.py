@@ -811,6 +811,8 @@ def test_cli_ineligible_event_needs_no_sources_and_emits_empty_batch_output(tmp_
         "pull_request_target",
         "--event-path",
         event_path,
+        "--scan-offset",
+        "2",
         output=output,
         cwd=tmp_path,
         no_tools=True,
@@ -849,3 +851,57 @@ def test_cli_invalid_event_evidence_fails_without_traceback_or_source_leak(tmp_p
     assert "PRIVATE_" not in result.stdout + result.stderr
     assert str(private_path) not in result.stdout + result.stderr
     assert source.read_bytes() == before and not out.exists()
+
+
+def test_catchup_ignores_task_readme_without_modifying_source(publisher, tmp_path):
+    root, out = tmp_path / "tools", tmp_path / "batch"
+    state(root)
+    readme = root / ".ai/tasks/README.md"
+    readme.write_text("Task directory reference, not a unit.\n", encoding="utf-8")
+    before = readme.read_bytes()
+    github, collect, _ = sources(root)
+    assert publisher.collect_batch(
+        root, out, repo=REPO, event_name="schedule", event={}, github=github, collect=collect
+    ) == [TASK]
+    assert readme.read_bytes() == before
+    assert json.loads((out / f"{TASK}.json").read_text())["backfilled"] is True
+
+
+def test_bounded_catchup_rotates_past_abandoned_prefix_without_changing_state(publisher, tmp_path):
+    root = tmp_path / "tools"
+    for task, number in (("UNIT-001", 17), ("UNIT-002", 18), ("UNIT-003", 19)):
+        state(root, task, number)
+    before = {p.relative_to(root): p.read_bytes() for p in root.glob(".ai/tasks/*/state.json")}
+    _, collect, _ = sources(root)
+    calls = []
+
+    def github(endpoint):
+        calls.append(endpoint)
+        number = int(endpoint.rsplit("/", 1)[1])
+        if number == 19:
+            return pull("UNIT-003", 19)
+        return pull(
+            "UNIT-001" if number == 17 else "UNIT-002", number, merged=False, merged_at=None
+        )
+
+    for offset, expected in ((0, []), (2, ["UNIT-003"])):
+        calls.clear()
+        out = tmp_path / f"batch-{offset}"
+        assert (
+            publisher.collect_batch(
+                root,
+                out,
+                repo=REPO,
+                event_name="schedule",
+                event={},
+                limit=2,
+                scan_offset=offset,
+                github=github,
+                collect=collect,
+            )
+            == expected
+        )
+        assert len(calls) <= 2
+    assert {
+        p.relative_to(root): p.read_bytes() for p in root.glob(".ai/tasks/*/state.json")
+    } == before
