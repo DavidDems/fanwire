@@ -1401,8 +1401,28 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   (outside the form): a confirm, then `DELETE /users/me`; on 204 the profile
   entry is read again and every other cache entry is reset. The session stays.
   **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
-  every query is invalidated. **Sign out** from the banner also removes the
-  cached profile answer.
+  every query is invalidated. **Sign out** from the banner also leaves the
+  cache empty of that account, as the header's does (next entry).
+- **The header's Sign out** (`FRONTEND-027`): a secondary `Button` in
+  `AppLayout`, after the primary nav and outside it, at the header's right
+  edge. Shown when `useAuth().status` is `authenticated`, whatever the profile
+  says, so a visitor with no profile yet or an unavailable one has a way out;
+  not to a deactivated account, whose banner and recovery screen offer it. A
+  public route stays where it is, `RequireAuth` sends a guarded one to
+  `/sign-in`, and focus moves to `main` because the button has gone.
+- **`useSignOut` leaves nothing of the account** (`FRONTEND-027`): no feed key
+  carries a viewer, so it removes the profile entry and resets every other
+  query. It signs out inside `flushSync` first, so the reset sees a signed-out
+  app: a mounted public page reads again as a guest with its old result already
+  gone, while a guarded page and a disabled signed-in-only query ask nothing.
+  `useReported` is not query data and survives a sign-out on the same tab.
+- **The bottom bar is one line tall** (`FRONTEND-027`): a phone cell has no
+  inline padding, so "Your profile" (61 px, 63 px as the current page) fits a
+  69 px cell, measured with a classic scrollbar: a 55.4 px bar down to 330 px of
+  content. It wrapped before, which made the bar 69.8 px against a 64 px
+  `scroll-padding-bottom`. Under 330 px it can still wrap, so that padding is
+  now `--space-8` + `--space-2`, 72 px. From 40em until 44em the wordmark is
+  visually hidden, because Sign out needs about 682 px of content beside it.
 - **The post menu** (`features/feed/PostMenu.tsx`, on `components/ui/Menu`):
   one "More options" per card, at the end of the action row, rendered only
   while open. Copy link for everyone (`navigator.clipboard.writeText` of

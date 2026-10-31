@@ -129,6 +129,87 @@ describe("the shell's CSS module (criterion 8)", () => {
   });
 });
 
+/**
+ * FRONTEND-027: what the measurements chose (the PR body has the numbers). These
+ * pin the choice against a regression and prove nothing about how it looks; the
+ * browser rows do that.
+ *
+ * Measured: at 345 px of content "Your profile" (61 px, 63 px as the current
+ * page) wrapped in a 61 px cell, which made the bar 69.8 px tall against a 64 px
+ * padding. No inline padding on a phone cell keeps it on one line (a 55.4 px bar)
+ * down to 330 px of content. Under that it can still wrap, so the padding covers
+ * the two-line bar too. With Sign out, the header needs about 682 px of content,
+ * so the wordmark steps aside from 40em until 44em, where the nav is inline.
+ */
+describe("the bottom bar and the header's room", () => {
+  const FROM_44EM = /^@media\b.*\(\s*min-width\s*:\s*44em\s*\)/i;
+
+  function topLevelRule(selector: string): CssBlock {
+    const rule = shellBlocks().find(
+      (block) => !isAtRule(block) && selectorSet(block).has(selector),
+    );
+    if (rule === undefined) throw new Error(`no top-level ${selector} rule`);
+    return rule;
+  }
+
+  function ruleInMedia(condition: RegExp, selector: string): CssBlock {
+    const media = shellBlocks().find(
+      (block) => isAtRule(block) && condition.test(block.prelude),
+    );
+    if (media === undefined) throw new Error(`no ${String(condition)} query`);
+    const rule = media.children.find((block) => block.prelude === selector);
+    if (rule === undefined) throw new Error(`no ${selector} in that query`);
+    return rule;
+  }
+
+  it("gives a phone cell no inline padding, and the header's links keep theirs", () => {
+    expect(declared(topLevelRule(".link"), "padding")).toBe("var(--space-2) 0");
+    expect(declared(ruleInMedia(FROM_40EM, ".link"), "padding")).toBe(
+      "var(--space-2) var(--space-3)",
+    );
+  });
+
+  it("sizes scroll-padding-bottom for the bar's two-line height, and 0 from 40em", () => {
+    // Whitespace out: Prettier breaks a calc this long over three lines.
+    expect(
+      declared(topLevelRule(":global(html)"), "scroll-padding-bottom")?.replace(
+        /\s+/g,
+        "",
+      ),
+    ).toBe("calc(var(--space-8)+var(--space-2)+env(safe-area-inset-bottom))");
+    expect(
+      declared(
+        ruleInMedia(FROM_40EM, ":global(html)"),
+        "scroll-padding-bottom",
+      ),
+    ).toBe("0");
+  });
+
+  it("says the bar's real height in the comment at the top", () => {
+    const comment = readSrcFile(SHELL_CSS).split("*/")[0];
+
+    expect(comment).not.toMatch(/under\s+space-8\s+tall/);
+    expect(comment).toMatch(/55\s*px/);
+  });
+
+  it("pushes Sign out to the header's right edge", () => {
+    expect(declared(topLevelRule(".signOut"), "margin-left")).toBe("auto");
+  });
+
+  it("hides the wordmark from 40em and shows it again from 44em", () => {
+    expect(declared(ruleInMedia(FROM_40EM, ".wordmark"), "position")).toBe(
+      "absolute",
+    );
+    expect(declared(ruleInMedia(FROM_40EM, ".wordmark"), "clip")).toBe(
+      "rect(0 0 0 0)",
+    );
+    expect(declared(ruleInMedia(FROM_44EM, ".wordmark"), "position")).toBe(
+      "static",
+    );
+    expect(declared(ruleInMedia(FROM_44EM, ".wordmark"), "clip")).toBe("auto");
+  });
+});
+
 describe("every *.module.css under src/routes (criterion 9)", () => {
   const files = moduleCssFiles(ROUTES_DIR);
   const names = files.map((file) =>
