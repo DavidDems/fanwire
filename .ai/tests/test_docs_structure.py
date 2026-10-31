@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ADR = ROOT / "wiki/GeneralContext/Decisions/0001-bounded-orchestration.md"
 D2B_ADR = ROOT / "wiki/GeneralContext/Decisions/0002-worker-credential-isolation.md"
 D4_ADR = ROOT / "wiki/GeneralContext/Decisions/0003-red-baseline.md"
+D5_ADR = ROOT / "wiki/GeneralContext/Decisions/0004-required-quality-checks.md"
 HANDOFF = ROOT / ".ai/docs/handoff.md"
 ROUTING = ROOT / "wiki/GeneralContext/Architecture/work-modes.md"
 DEPLOYMENT_ARCHIVE = (
@@ -220,14 +221,117 @@ def test_d4_unproven_cases_and_residue_remain_visible_in_the_defect_review():
 
 
 def test_d4_retains_the_static_check_distinction_from_a_failed_test_job():
-    text = HANDOFF.read_text(encoding="utf-8")
-    (d5,) = re.findall(r"(?m)^\| D5 \|.*$", text)
-    # D5's dependent safety choice is not migrated or silently dropped here.
-    assert "tsc/mypy" in d5 and "only alongside a failed test job" in d5
-    assert "a lint failure is never right reason" in d5
+    text = D4_ADR.read_text(encoding="utf-8")
+    # D5's row can migrate now; the same safety distinction is already owned
+    # by immutable ADR 0003, rather than by the handoff's temporary inline copy.
+    assert re.search(r"type-check failures.*?qualify only with a failed test job", text, re.DOTALL)
+    assert "a lint failure never qualifies" in text
 
 
 def test_the_migrated_d4_line_citation_exception_is_retired():
     baseline = json.loads((ROOT / ".ai/docs-baseline.json").read_text(encoding="utf-8"))
     retired = json.dumps([".ai/docs/handoff.md", "citation", "state.py:251"], separators=(",", ":"))
     assert retired not in baseline
+
+
+def test_d5_decision_has_a_typed_numbered_home_and_keeps_the_required_quality_jobs():
+    assert D5_ADR.is_file(), "D5's required quality checks need their own numbered ADR"
+    text = D5_ADR.read_text(encoding="utf-8")
+    fields, body, valid = doclint.frontmatter(text)
+    assert valid and fields.get("type") == "decision"
+    assert re.search(r"(?m)^#\s+0004\b", body)
+    assert {"context", "choice", "consequences"} <= doclint.anchors(text)
+    assert len(body.split()) <= doclint.load_budgets(ROOT)["decision"]
+    assert {
+        "backend-ruff",
+        "backend-mypy",
+        "frontend-typecheck",
+        "frontend-lint",
+        "app",
+    } <= set(re.findall(r"`([^`]+)`", body))
+
+
+def test_d5_links_the_existing_baseline_choice_protocol_and_immutable_evidence():
+    assert D5_ADR.is_file()
+    text = D5_ADR.read_text(encoding="utf-8")
+    assert links_to_adr(D5_ADR, text, D4_ADR)
+    for owner in (ROOT / ".ai/docs/state-machine.md", ROOT / ".github/workflows/test-agent.yml"):
+        assert links_to_adr(D5_ADR, text, owner)
+    assert (
+        "https://github.com/DavidDems/fanwire/blob/"
+        "c6af661ef1dd6fef0a9eb0f0042c38beee65a425/.ai/docs/handoff.md#101-defects"
+    ) in doclint.inline_links(text)
+
+
+def test_handoff_d5_routes_to_its_decision_without_losing_numbered_sections():
+    text = HANDOFF.read_text(encoding="utf-8")
+    (row,) = re.findall(r"(?m)^\| D5 \|.*$", text)
+    assert links_to_adr(HANDOFF, row, D5_ADR)
+    for section in ("10", "10.1", "10.3"):
+        assert doclint.has_section(text, section)
+
+
+def test_canonical_routing_discovers_the_migrated_quality_check_choice():
+    text = ROUTING.read_text(encoding="utf-8")
+    routing = text.split("## How work is handed on and planned", 1)[1].split("\n## ", 1)[0]
+    assert links_to_adr(ROUTING, routing, D5_ADR)
+
+
+def test_d5_live_proof_gaps_remain_visible_in_the_defect_review():
+    text = HANDOFF.read_text(encoding="utf-8")
+    review = text.split("### 10.1 ", 1)[1].split("### 10.2 ", 1)[0]
+    # Extracting the choice must not turn unexercised runner paths into proof.
+    for gap in (
+        "Unproven until live: the cache reads",
+        "`--log-failed`'s `Process completed` line",
+        "`compose run -T --no-deps --entrypoint` on the runner",
+    ):
+        assert gap in review
+
+
+def test_d5_residue_and_the_historical_pin_correction_remain_visible():
+    text = HANDOFF.read_text(encoding="utf-8")
+    review = text.split("### 10.1 ", 1)[1].split("### 10.2 ", 1)[0]
+    for limit in (
+        "ruff/mypy were `>=`-pinned",
+        "**pinned 2026-10-19**",
+        "`ruff==0.17.1`",
+        "`mypy==2.4.0`",
+        "test-agent run 39295837789",
+        "test agents cannot run lint (D7)",
+        "`ruff format` is not gated",
+        "`distill` does not parse vitest's per-test lines",
+    ):
+        assert limit in review
+
+
+def test_the_failure_exercise_citation_names_section_six_item_three():
+    text = HANDOFF.read_text(encoding="utf-8")
+    assert doclint.has_section(text, "6")
+    assert not doclint.has_section(text, "6.3"), "Do not invent a heading to satisfy old debt"
+    section = text.split("## 6. ", 1)[1].split("## 7. ", 1)[0]
+    (exercise,) = re.findall(r"(?ms)^3\. (.*?)(?=^\d+\. |\Z)", section)
+    assert "Exercise a failure path on purpose" in exercise
+    agreement = text.split("### 10.3 ", 1)[1].split("### 10.4 ", 1)[0]
+    (item,) = re.findall(r"(?ms)^2\. (.*?)(?=^\d+\. |\Z)", agreement)
+    assert "§6.3" not in item
+    assert re.search(r"§6\s*[,;:]?\s*item\s*3\b", item)
+
+
+def test_the_repaired_failure_exercise_citation_exception_is_retired():
+    baseline = json.loads((ROOT / ".ai/docs-baseline.json").read_text(encoding="utf-8"))
+    retired = json.dumps(
+        [".ai/docs/handoff.md", "citation", ".ai/docs/handoff.md §6.3"],
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    assert retired not in baseline
+
+
+def test_the_live_prompt_routes_to_d5_and_stays_within_its_prompt_budget():
+    prompt = ROOT / "wiki/GeneralContext/Prompts/10-docs-structure.md"
+    text = prompt.read_text(encoding="utf-8")
+    fields, body, valid = doclint.frontmatter(text)
+    assert valid and fields.get("type") == "prompt"
+    assert len(body.split()) <= doclint.load_budgets(ROOT)["prompt"]
+    assert links_to_adr(prompt, text, D5_ADR)
