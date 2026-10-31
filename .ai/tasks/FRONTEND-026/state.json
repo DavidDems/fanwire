@@ -5,6 +5,7 @@
   "control": "RUN",
   "distilled": null,
   "escalation_reason": null,
+  "hand_usage": null,
   "history": [
     {
       "at": "2026-10-31T20:07:48Z",
@@ -12,6 +13,13 @@
       "from": "DRAFT",
       "note": "hand run started",
       "to": "HAND_RUNNING"
+    },
+    {
+      "at": "2026-10-31T20:19:00Z",
+      "event": "HAND_FINISHED",
+      "from": "HAND_RUNNING",
+      "note": "hand run finished, PR #290",
+      "to": "COMPLETE"
     }
   ],
   "last_ci": null,
@@ -20,10 +28,11 @@
   "manager_invocations": 0,
   "max_attempts": 3,
   "mode": "hand",
+  "pr": 290,
   "require_red_baseline": true,
   "schema": 1,
   "sessions": {},
-  "state": "HAND_RUNNING",
+  "state": "COMPLETE",
   "task_id": "FRONTEND-026",
-  "updated_at": "2026-10-31T20:07:48Z"
+  "updated_at": "2026-10-31T20:19:00Z"
 }
