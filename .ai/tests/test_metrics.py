@@ -206,7 +206,7 @@ def collect(metrics, history, **overrides):
 
 def test_schema_pins_every_measurement_and_uses_git_not_commit_subjects(metrics, history):
     assert collect(metrics, history) == {
-        "schema": 1,
+        "schema": 2,
         "task_id": TASK,
         "pr": 17,
         "mode": "hand",
@@ -222,9 +222,113 @@ def test_schema_pins_every_measurement_and_uses_git_not_commit_subjects(metrics,
         "guard_violations": 2,
         "cost_usd": None,
         "cost_source": "subscription",
+        "input_tokens": None,
+        "output_tokens": None,
+        "cache_creation_input_tokens": None,
+        "cache_read_input_tokens": None,
+        "num_turns": None,
+        "usage_source": None,
         "pipeline_version": "1.2.3",
         "backfilled": False,
     }
+
+
+def test_hand_usage_is_carried_into_the_record_with_null_subscription_dollars(metrics, history):
+    history.state["hand_usage"] = {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "cache_creation_input_tokens": 20,
+        "cache_read_input_tokens": 30,
+        "num_turns": 2,
+        "source": "claude_transcript",
+    }
+    save_state(history)
+    # Provider telemetry cannot replace the hand session's selected evidence.
+    invocation(history, "unrelated.json", input_tokens=999, num_turns=999)
+    record = collect(metrics, history)
+    for field in (
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "num_turns",
+    ):
+        assert record[field] == history.state["hand_usage"][field]
+    assert record["usage_source"] == "claude_transcript"
+    assert record["cost_usd"] is None and record["cost_source"] == "subscription"
+
+
+@pytest.mark.parametrize("usage", [None, {}])
+def test_unknown_and_invalid_hand_usage_are_not_interchangeable(metrics, history, usage):
+    history.state["hand_usage"] = usage
+    save_state(history)
+    if usage is None:
+        record = collect(metrics, history)
+        assert all(
+            record[field] is None
+            for field in (
+                "input_tokens",
+                "output_tokens",
+                "cache_creation_input_tokens",
+                "cache_read_input_tokens",
+                "num_turns",
+                "usage_source",
+            )
+        )
+    else:
+        with pytest.raises(metrics.MetricsError):
+            collect(metrics, history)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"input_tokens": True},
+        {"output_tokens": -1},
+        {"cache_creation_input_tokens": 1.5},
+        {"cache_read_input_tokens": None},
+        {"num_turns": "2"},
+        {"num_turns": 0},
+        {"num_turns": True},
+        {"source": "estimate"},
+        {"transcript": "PRIVATE_TRANSCRIPT_PATH"},
+    ],
+)
+def test_invalid_stored_hand_usage_fails_instead_of_reporting_partial_measurements(
+    metrics, history, changes
+):
+    history.state["hand_usage"] = {
+        "input_tokens": 10,
+        "output_tokens": 3,
+        "cache_creation_input_tokens": 20,
+        "cache_read_input_tokens": 30,
+        "num_turns": 2,
+        "source": "claude_transcript",
+        **changes,
+    }
+    save_state(history)
+    with pytest.raises(metrics.MetricsError) as caught:
+        collect(metrics, history)
+    assert "PRIVATE_" not in str(caught.value)
+
+
+def test_auto_does_not_treat_a_hand_usage_field_as_auto_telemetry(metrics, history):
+    history.state.update(mode="auto", hand_usage={"input_tokens": "PRIVATE_INVALID_HAND_EVIDENCE"})
+    save_state(history)
+    invocation(history, "provider.json", input_tokens=999, num_turns=999)
+    record = collect(metrics, history)
+    assert record["cost_usd"] == 1.25 and record["cost_source"] == "provider"
+    assert all(
+        record[field] is None
+        for field in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+            "num_turns",
+            "usage_source",
+        )
+    )
 
 
 @pytest.mark.parametrize("history", ["distinct_authors"], indirect=True)
@@ -299,6 +403,17 @@ def test_director_units_do_not_need_or_create_task_state(metrics, history):
     assert record["human_delta_lines"] == 2
     assert record["guard_violations"] is None
     assert record["cost_usd"] is None and record["cost_source"] == "subscription"
+    assert all(
+        record[field] is None
+        for field in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+            "num_turns",
+            "usage_source",
+        )
+    )
     assert not (history.task_dir / "state.json").exists()
 
 

@@ -45,6 +45,13 @@ DRAFT ──HAND_STARTED──► HAND_RUNNING ──HAND_FINISHED (--pr N)─�
   `pr`. `COMPLETE` means ready for human review here too: the PR is open, not
   merged.
 
+Finishing also records `hand_usage`: validated counters from explicitly selected
+local transcripts, or null when no usage evidence was supplied. Invalid selected
+evidence leaves state unchanged. Selection, deduplication, counter meanings and
+the commands belong to [the metrics reference](metrics.md#hand-session-usage).
+The transition validates supplied metadata even outside the CLI; it never stores
+transcript content, paths or identifiers.
+
 `mode` is `auto` (the orchestrator's) or `hand`. A state file from before
 modes existed has none and is `auto` (`state.task_mode`). The two share no
 events except a human's `CANCEL` and `ESCALATE`: `advance` refuses every
