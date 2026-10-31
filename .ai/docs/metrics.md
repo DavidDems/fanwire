@@ -19,7 +19,9 @@ state, and should not be committed to main. The storage decision belongs in
 ## Collection
 
 Use a checkout containing the PR's commit objects and an authenticated GitHub
-CLI. Collection does not fetch missing history automatically.
+CLI. The standalone collector does not fetch missing history automatically.
+The publication wrapper fetches validated numeric PR head refs as Git objects
+before invoking the trusted collector, covering squash and rebase merges.
 
 1. Collect a hand-run unit using the PR recorded in its existing state. This
    example writes a retrospective artifact outside the repository:
@@ -71,7 +73,8 @@ the total commits field.
 The field definitions also live beside the schema in the
 [collector module](../agentlib/metrics.py). Unknown measurements stay null;
 successful source reads establishing no events produce zero. Collection consumes
-stored hand usage but does not read transcripts, publish records or enforce versions.
+stored hand usage but does not read transcripts or enforce versions. Publication
+is a separate boundary described below.
 
 ## Hand-session usage
 
@@ -111,3 +114,63 @@ or identities, incompatible duplicate input, or an unfinished maximum fails
 the command without modifying state. Errors expose no transcript data. Report
 why usage is unavailable rather than substituting zero or an estimate. No
 production task record is changed merely by installing this capture support.
+
+## Data-branch publication
+
+`metrics-publish.yml` collects on closed, merged same-repository `agent/*` PRs
+targeting main. A daily run and optional manual dispatch perform bounded
+catchup. Director PRs are outside this trigger; their explicit collector
+interface remains available. No model, paid call or model key is used.
+
+The collector verifies the current PR detail against its number, repository,
+head task ID, main base and recorded task identity before collection. A
+recorded PR must agree. Legacy auto state can lack a PR: the merge event can
+supply it, while catchup discovers exactly one closed, merged same-repository
+PR for that exact task head, then independently verifies its detail. No match
+or an unmerged match is skipped; multiple merged matches fail. State is never
+repaired or advanced by publication.
+
+Catchup validates existing records before skipping their IDs and checks for
+task/PR conflicts. Ordinary files such as the task-directory README are skipped;
+symlink task paths are rejected. Remaining candidates are sorted by task ID,
+then a bounded window rotates by the nonnegative `--scan-offset` modulo the
+remaining candidate count. The workflow derives that offset from its trusted
+run counter in steps of 50, so abandoned or unmerged prefix tasks cannot
+permanently hide later candidates behind a fixed prefix. Each run attempts at
+most 50 candidates; collected records are marked `backfilled: true`. The CLI
+defaults to offset zero, while merge events collect their explicit unit without
+rotation. No cursor or other nonrecord state is stored. A failed source
+read or invalid collected record fails the whole batch before any artifact is
+exposed. Unknown measurements retain the collector's nulls. Source content,
+transcripts and raw errors never become publication error messages.
+
+The `metrics` branch holds only `records/<TASK-ID>.json`, each the exact flat
+schema-2 record above. No extra private fields, nested trees, unsafe filenames
+or symlinks are accepted. The first publication creates an empty orphan
+metrics branch when it is absent, without copying main's files. A clean
+checkout on the exact metrics branch is mandatory. New records append;
+semantic-identical repeats do nothing. Different data for an existing ID
+fails without overwriting that file. Concurrent stale writers fail their
+ordinary push; there is one push, no force and no automatic conflict retry.
+
+Collection has read-only contents, pull-request and Actions permissions.
+Publication runs in a fresh job with only `contents: write`. Its tools checkout
+is pinned to the SHA collected from trusted main, separately from the metrics
+data checkout. Both disable persisted credentials; PR code and data-branch
+code are never executed. The current-run `metrics-records` artifact contains
+only validated JSON; default
+[artifact download authentication](https://github.com/actions/download-artifact)
+needs no additional Actions permission or explicit token override.
+
+The wrapper uses isolated Python and the executing tools checkout's collector;
+the source root is passed as data. Git hooks are disabled, inherited `GIT_*`
+routing is removed, and write credentials reach only the one push through
+transient child configuration, never command arguments or on-disk config.
+Main, task state and telemetry are never publication destinations.
+
+No ruleset setting change is needed: the repository's main-only ruleset
+excludes metrics. The first live proof of artifact transfer, bootstrap and
+GitHub push permissions must wait until the workflow lands on main; local
+bare-repository tests do not prove those remote permissions. No manual action
+is needed before merge. After merge, a scheduled run or eligible task merge
+can establish that proof; manual dispatch is optional.

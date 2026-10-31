@@ -1,6 +1,7 @@
 # 11 — Metrics in every mode, and a versioned pipeline
 
-**Update, 2026-10-31 — deliverable 1 merged as #281; deliverable 2 for review.**
+**Update, 2026-10-31 — deliverables 1 (#281) and 2 (#287) merged;
+deliverable 3 for review.**
 The collector reads merged PR/Git/task/telemetry evidence; Director units need
 an explicit PR and no task state. The usage slice adds selected local Claude
 JSONL capture at hand finish and schema-2 hand counters. Definitions, nulls,
@@ -13,9 +14,19 @@ with matching input/cache counters. Missing or incompatible evidence stays
 unknown; no task allocation or subscription dollars are estimated. Historical
 VERSION remains null. No production task state or generated records changed.
 
-After this slice merges, continue with **deliverable 3**, the decided `metrics`
-data-branch publisher with no model or key. Then deliverables 4 and 5: VERSION
-enforcement and reporting. None of those is built by this usage slice.
+Deliverable 3 adds the decided `metrics` data-branch publisher with no model or
+key: verified task merges plus daily rotating bounded catchup, immutable schema-2 JSON,
+trusted main tools and a separate minimal-permission writer. Legacy auto PRs
+can be discovered without modifying state. Local isolated Git tests cover
+bootstrap, immutability and stale-writer refusal. The main-only ruleset already
+excludes metrics; no settings change is needed. First live proof remains
+**after the workflow lands on main**; do not dispatch or claim remote
+publication permission before that merge.
+
+**Next: deliverable 4**, VERSION/changelog and deterministic enforcement,
+then **deliverable 5**, reporting. Neither is bundled with this publisher.
+Keep jev disabled. Publication definitions and trust boundaries live in
+[the metrics reference](../../../.ai/docs/metrics.md).
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System
