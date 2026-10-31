@@ -9,18 +9,25 @@ backend/tests/posts/test_routes.py. Overrides get_current_user/get_session.
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.db import Base, make_engine, make_session_factory
-from app.dependencies import get_session
+from app.dependencies import get_session, get_settings
 from app.notifications.models import Notification, NotificationPreference, NotificationType
 from app.notifications.routes import router
+from app.settings import Settings
 from app.users.dependencies import get_current_user
 from app.users.models import User
+
+FROM_ADDRESS = "notifications@example.test"
+OPENAPI_PATH = Path(__file__).resolve().parents[2] / "openapi.json"
 
 
 @pytest.fixture()
@@ -45,6 +52,9 @@ def app(session_factory):
             session.close()
 
     app.dependency_overrides[get_session] = _get_session_override
+    # No from-address unless a test says otherwise. get_settings is lru_cached,
+    # so a test sets this through _configure_from_address, never the environment.
+    _configure_from_address(app, "")
     return app
 
 
@@ -64,6 +74,11 @@ def _make_user(session, **overrides) -> User:
     session.add(user)
     session.commit()
     return user
+
+
+def _configure_from_address(app, address: str) -> None:
+    settings = Settings(database_url="postgresql://unused", notification_from_address=address)
+    app.dependency_overrides[get_settings] = lambda: settings
 
 
 def _as_user(app, user: User) -> None:
@@ -231,7 +246,7 @@ def test_get_preference_defaults_to_enabled_when_no_row_exists(app, client, sess
     response = client.get("/notifications/preference")
 
     assert response.status_code == 200
-    assert response.json() == {"email_notifications_enabled": True}
+    assert response.json() == {"email_notifications_enabled": True, "email_available": False}
 
 
 def test_put_preference_creates_row_when_none_exists(app, client, session_factory):
@@ -243,7 +258,7 @@ def test_put_preference_creates_row_when_none_exists(app, client, session_factor
     response = client.put("/notifications/preference", json={"email_notifications_enabled": False})
 
     assert response.status_code == 200
-    assert response.json() == {"email_notifications_enabled": False}
+    assert response.json() == {"email_notifications_enabled": False, "email_available": False}
     with session_factory() as session:
         fetched = session.get(NotificationPreference, me_id)
         assert fetched.email_notifications_enabled is False
@@ -260,7 +275,7 @@ def test_put_preference_updates_existing_row(app, client, session_factory):
     response = client.put("/notifications/preference", json={"email_notifications_enabled": False})
 
     assert response.status_code == 200
-    assert response.json() == {"email_notifications_enabled": False}
+    assert response.json() == {"email_notifications_enabled": False, "email_available": False}
     with session_factory() as session:
         fetched = session.get(NotificationPreference, me_id)
         assert fetched.email_notifications_enabled is False
@@ -276,4 +291,163 @@ def test_get_preference_reflects_existing_row(app, client, session_factory):
     response = client.get("/notifications/preference")
 
     assert response.status_code == 200
-    assert response.json() == {"email_notifications_enabled": False}
+    assert response.json() == {"email_notifications_enabled": False, "email_available": False}
+
+
+# --- email_available (NOTIFICATIONS-002) ----------------------------------------
+
+AVAILABILITY_CASES = [
+    pytest.param("", False, id="no-from-address"),
+    pytest.param(FROM_ADDRESS, True, id="from-address"),
+]
+
+
+@pytest.mark.parametrize(("address", "available"), AVAILABILITY_CASES)
+def test_get_preference_reports_availability_without_a_row(
+    app, client, session_factory, address, available
+):
+    with session_factory() as session:
+        me = _make_user(
+            session, cognito_sub=f"sub-av-get-{available}", username=f"av_g_{available}"
+        )
+    _as_user(app, me)
+    _configure_from_address(app, address)
+
+    response = client.get("/notifications/preference")
+
+    assert response.json() == {"email_notifications_enabled": True, "email_available": available}
+
+
+@pytest.mark.parametrize(("address", "available"), AVAILABILITY_CASES)
+def test_get_preference_reports_availability_with_a_row(
+    app, client, session_factory, address, available
+):
+    with session_factory() as session:
+        me = _make_user(
+            session, cognito_sub=f"sub-av-row-{available}", username=f"av_r_{available}"
+        )
+        session.add(NotificationPreference(user_id=me.id, email_notifications_enabled=False))
+        session.commit()
+    _as_user(app, me)
+    _configure_from_address(app, address)
+
+    response = client.get("/notifications/preference")
+
+    assert response.json() == {"email_notifications_enabled": False, "email_available": available}
+
+
+@pytest.mark.parametrize(("address", "available"), AVAILABILITY_CASES)
+def test_put_preference_reports_availability_without_a_row(
+    app, client, session_factory, address, available
+):
+    with session_factory() as session:
+        me = _make_user(
+            session, cognito_sub=f"sub-av-put-{available}", username=f"av_p_{available}"
+        )
+    _as_user(app, me)
+    _configure_from_address(app, address)
+
+    response = client.put("/notifications/preference", json={"email_notifications_enabled": False})
+
+    assert response.json() == {"email_notifications_enabled": False, "email_available": available}
+
+
+@pytest.mark.parametrize(("address", "available"), AVAILABILITY_CASES)
+def test_put_preference_reports_availability_with_a_row(
+    app, client, session_factory, address, available
+):
+    with session_factory() as session:
+        me = _make_user(
+            session, cognito_sub=f"sub-av-upd-{available}", username=f"av_u_{available}"
+        )
+        session.add(NotificationPreference(user_id=me.id, email_notifications_enabled=False))
+        session.commit()
+    _as_user(app, me)
+    _configure_from_address(app, address)
+
+    response = client.put("/notifications/preference", json={"email_notifications_enabled": True})
+
+    assert response.json() == {"email_notifications_enabled": True, "email_available": available}
+
+
+@pytest.mark.parametrize(("address", "available"), AVAILABILITY_CASES)
+def test_put_preference_ignores_a_client_supplied_email_available(
+    app, client, session_factory, address, available
+):
+    with session_factory() as session:
+        me = _make_user(
+            session, cognito_sub=f"sub-av-body-{available}", username=f"av_b_{available}"
+        )
+    _as_user(app, me)
+    _configure_from_address(app, address)
+
+    # The opposite of the truth: the server's answer must not move, on the PUT
+    # or on the read after it.
+    response = client.put(
+        "/notifications/preference",
+        json={"email_notifications_enabled": False, "email_available": not available},
+    )
+
+    assert response.status_code == 200
+    expected = {"email_notifications_enabled": False, "email_available": available}
+    assert response.json() == expected
+    assert client.get("/notifications/preference").json() == expected
+
+
+def test_preference_is_stored_and_read_back_while_email_is_unavailable(
+    app, client, session_factory
+):
+    with session_factory() as session:
+        me = _make_user(session, cognito_sub="sub-av-stored", username="av_stored")
+        me_id = me.id
+    _as_user(app, me)
+
+    client.put("/notifications/preference", json={"email_notifications_enabled": False})
+
+    with session_factory() as session:
+        assert session.get(NotificationPreference, me_id).email_notifications_enabled is False
+    assert client.get("/notifications/preference").json() == {
+        "email_notifications_enabled": False,
+        "email_available": False,
+    }
+
+
+def test_preference_routes_neither_return_nor_log_the_from_address(
+    app, client, session_factory, caplog
+):
+    with session_factory() as session:
+        me = _make_user(session, cognito_sub="sub-av-leak", username="av_leak")
+    _as_user(app, me)
+    _configure_from_address(app, FROM_ADDRESS)
+
+    with caplog.at_level(logging.DEBUG, logger="app.notifications.routes"):
+        read = client.get("/notifications/preference")
+        written = client.put(
+            "/notifications/preference", json={"email_notifications_enabled": True}
+        )
+
+    assert read.json()["email_available"] is True
+    assert written.json()["email_available"] is True
+    assert FROM_ADDRESS not in read.text
+    assert FROM_ADDRESS not in written.text
+    assert [r for r in caplog.records if r.name == "app.notifications.routes"] == []
+
+
+def test_committed_contract_for_the_preference_schemas():
+    schemas = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))["components"]["schemas"]
+
+    response = schemas["NotificationPreferenceOut"]
+    assert set(response["properties"]) == {"email_notifications_enabled", "email_available"}
+    assert set(response["required"]) == {"email_notifications_enabled", "email_available"}
+    assert response["properties"]["email_available"]["type"] == "boolean"
+    assert set(schemas["UpdateNotificationPreferenceRequest"]["properties"]) == {
+        "email_notifications_enabled"
+    }
+
+
+def test_committed_contract_has_no_from_address_property():
+    schemas = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))["components"]["schemas"]
+
+    properties = [name for schema in schemas.values() for name in schema.get("properties", {})]
+    assert properties, "the walk found no properties at all"
+    assert [name for name in properties if "from_address" in name.lower()] == []

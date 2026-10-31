@@ -27,6 +27,14 @@ import buttonStyles from "../../components/ui/Button.module.css";
 import cardStyles from "../../components/ui/Card.module.css";
 import emptyStyles from "../../components/ui/EmptyState.module.css";
 import messageStyles from "../../components/ui/message.module.css";
+import {
+  allBlocks,
+  isAtRule,
+  parseCss,
+  readSrcFile,
+  selectors,
+  type CssBlock,
+} from "../../test/css";
 import { FakeAuthService, profileFound, renderWithAuth, testSession } from "../../test/auth";
 import {
   ACTOR_USER_ID,
@@ -248,5 +256,68 @@ describe("the email preference (criterion 4)", () => {
     expect(checkbox).toHaveAttribute("type", "checkbox");
     expect(checkbox).not.toHaveAttribute("role");
     expect(screen.getByLabelText(EMAIL_LABEL)).toBe(checkbox);
+  });
+});
+
+describe("the unavailable-email caption (NOTIFICATIONS-002)", () => {
+  const CAPTION = "Email notifications are not available right now. You will still see them here.";
+
+  const rules = (file: string): CssBlock[] =>
+    allBlocks(parseCss(readSrcFile(file))).filter((block) => !isAtRule(block));
+  const declared = (block: CssBlock, property: string): string | undefined =>
+    block.declarations.find((declaration) => declaration.property === property)?.value;
+  const pageRules = (): CssBlock[] => rules("features/notifications/Notifications.module.css");
+
+  /** The rule that turns `Field` into a row, the one `components.md` records. */
+  const FIELD_ROW = /^\.preference\s*>\s*div$/;
+
+  it("sits after the checkbox, in the same Card", async () => {
+    server.use(
+      notificationsStub([]).handler,
+      clearStub().handler,
+      actorProfilesStub().handler,
+      ...preferenceStub(true, false).handlers,
+      profileFound(),
+    );
+    renderWithAuth(<NotificationsPage />, {
+      authService: new FakeAuthService({ session: testSession() }),
+      route: "/notifications",
+    });
+
+    const checkbox = await screen.findByRole("checkbox", { name: EMAIL_LABEL });
+    const caption = screen.getByText(CAPTION);
+
+    expect(ancestorWithClass(caption, cardStyles.card)).toBe(
+      ancestorWithClass(checkbox, cardStyles.card),
+    );
+    expect(checkbox.compareDocumentPosition(caption)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("wraps to its own line under the row, rather than squeezing the label", () => {
+    const row = pageRules().find((block) => selectors(block).some((s) => FIELD_ROW.test(s)));
+    expect(row && declared(row, "flex-wrap"), "the Field row wraps").toBe("wrap");
+
+    const own = pageRules().filter((block) =>
+      selectors(block).some((s) => /^\.preference\s*>\s*div\s*>\s*p$/.test(s)),
+    );
+    expect(own.map((block) => declared(block, "flex-basis"))).toEqual(["100%"]);
+  });
+
+  it("does not leave cursor: pointer on a disabled control or its label", () => {
+    const pointers = pageRules()
+      .filter((block) => declared(block, "cursor") === "pointer")
+      .flatMap(selectors);
+
+    expect(pointers.length, "the enabled control keeps its pointer").toBeGreaterThan(0);
+    for (const selector of pointers) {
+      expect(selector, "a pointer rule must be conditional on an enabled control").toMatch(
+        /:enabled/,
+      );
+    }
+  });
+
+  it("uses a Field hint class that exists on disk", () => {
+    const defined = rules("components/FormField.module.css").flatMap(selectors);
+    expect(defined).toContain(".hint");
   });
 });
