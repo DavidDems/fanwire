@@ -26,7 +26,11 @@ DELETE /users/me. Idempotent: already-cleared is a no-op, 204 either way.
 GET/PUT /notifications/preference read/write NotificationPreference by the
 caller's own id only. GET returns email_notifications_enabled=True when no
 row exists yet (matches the column's stated default), rather than
-requiring a row to have been created first.
+requiring a row to have been created first. Both also answer email_available:
+whether Settings.notification_from_address is non-empty, the same empty check
+SesEmailSender skips on, so there is no second switch to disagree with the
+sender. It means switched on, not delivered, and only the boolean leaves here.
+The stored preference is independent of it.
 """
 
 from __future__ import annotations
@@ -37,7 +41,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_session
+from app.dependencies import get_session, get_settings
 from app.notifications.models import Notification, NotificationPreference, NotificationType
 from app.notifications.schemas import (
     NotificationOut,
@@ -45,6 +49,7 @@ from app.notifications.schemas import (
     UpdateNotificationPreferenceRequest,
 )
 from app.posts.service import deleted_post_ids, existing_post_ids
+from app.settings import Settings
 from app.users.dependencies import get_current_user
 from app.users.models import User
 
@@ -114,10 +119,14 @@ def clear_notification(
 def get_preference(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> NotificationPreferenceOut:
     preference = session.get(NotificationPreference, current_user.id)
     enabled = True if preference is None else preference.email_notifications_enabled
-    return NotificationPreferenceOut(email_notifications_enabled=enabled)
+    return NotificationPreferenceOut(
+        email_notifications_enabled=enabled,
+        email_available=bool(settings.notification_from_address),
+    )
 
 
 @router.put("/preference", response_model=NotificationPreferenceOut)
@@ -125,6 +134,7 @@ def update_preference(
     body: UpdateNotificationPreferenceRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> NotificationPreferenceOut:
     preference = session.get(NotificationPreference, current_user.id)
     if preference is None:
@@ -137,5 +147,6 @@ def update_preference(
         preference.email_notifications_enabled = body.email_notifications_enabled
     session.commit()
     return NotificationPreferenceOut(
-        email_notifications_enabled=preference.email_notifications_enabled
+        email_notifications_enabled=preference.email_notifications_enabled,
+        email_available=bool(settings.notification_from_address),
     )

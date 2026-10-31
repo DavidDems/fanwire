@@ -1288,6 +1288,8 @@ export interface components {
         };
         /** NotificationPreferenceOut */
         NotificationPreferenceOut: {
+            /** Email Available */
+            email_available: boolean;
             /** Email Notifications Enabled */
             email_notifications_enabled: boolean;
         };
