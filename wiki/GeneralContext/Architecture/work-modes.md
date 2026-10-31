@@ -124,7 +124,8 @@ One structure for every mode, so any session can start cold:
   except the extracted D3 orchestration and human-escalation choice in
   [ADR 0001](../Decisions/0001-bounded-orchestration.md), D2b worker
   isolation in [ADR 0002](../Decisions/0002-worker-credential-isolation.md),
-  and D4 red-baseline classification in [ADR 0003](../Decisions/0003-red-baseline.md).
+  D4 red-baseline classification in [ADR 0003](../Decisions/0003-red-baseline.md),
+  and D5 required quality checks in [ADR 0004](../Decisions/0004-required-quality-checks.md).
   New typed decisions, including agent-system decisions, use one numbered ADR
   per file in **`wiki/GeneralContext/Decisions/NNNN-short-title.md`**. Choose
   the next unused number on current main. Legacy records remain at their
