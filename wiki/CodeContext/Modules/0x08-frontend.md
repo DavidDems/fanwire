@@ -482,6 +482,14 @@ each owns one piece:
   happened, since an emptied draft and a never-filled one are the same value, so
   the widget watches a reset counter on the mediator. A stale thumbnail over an
   empty composer is the failure that guards against.
+- **A 429 says to slow down, on the three posting paths only** (`FRONTEND-026`):
+  `POST /posts` from `ComposePage` (a quote repost included) and `InlineComposer`,
+  and `POST /posts/{id}/repost` from the card, whose `setReposted` raises
+  `RepostRateLimited`. It goes by status alone, since an edge 429 has another
+  body, and states no duration: either of the two windows can trip it and the API
+  sends no `Retry-After`. A like, an unlike and an undone repost share
+  `TogglePostAction` but keep its generic message: none of them is posting, and
+  each can see a 429 only from the edge.
 - **The media widget's field error is the `InlineAlert` itself, named by id.**
   The file input's `aria-describedby` points at `compose-media-error`, which is
   `InlineAlert`'s `id` prop on the `<p role="alert">` (2026-10-07,

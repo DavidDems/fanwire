@@ -13,7 +13,7 @@ import { ComposeMediator } from "./ComposeMediator";
 import { ComposeTextBox } from "./ComposeTextBox";
 import { MediaWidget } from "./MediaWidget";
 import { PostBuilder } from "./PostBuilder";
-import { createPost } from "./createPost";
+import { PostNotCreated, createPost } from "./createPost";
 import styles from "./InlineComposer.module.css";
 
 export interface InlineComposerProps {
@@ -89,9 +89,11 @@ export function InlineComposer({
       mediator.reset();
       onPosted?.();
     },
-    onError: () => {
+    onError: (error) => {
       setFailure(
-        "We could not post your reply. It is still here — please try again.",
+        error instanceof PostNotCreated && error.status === 429
+          ? "You are posting too quickly. Your reply is still here — please wait a little and try again."
+          : "We could not post your reply. It is still here — please try again.",
       );
     },
   });

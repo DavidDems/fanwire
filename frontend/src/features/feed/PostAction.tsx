@@ -14,6 +14,7 @@ import type { ModalFlowState } from "../../routes/modal-flow";
 import styles from "./PostAction.module.css";
 import {
   FEED_KEY_ROOT,
+  RepostRateLimited,
   cacheHolds,
   mapCachedPosts,
   type FeedCacheValue,
@@ -209,13 +210,17 @@ export function TogglePostAction({
       return { patched };
     },
 
-    onError: (_error, _next, snapshot) => {
+    onError: (error, _next, snapshot) => {
       for (const [key, value] of snapshot?.patched ?? []) {
         queryClient.setQueryData(key, value);
       }
       // Never the failure's own text: it may carry a URL or a status line the
       // reader cannot act on, and retrying is the one thing they can.
-      setFailure("We could not save that just now. Please try again.");
+      setFailure(
+        error instanceof RepostRateLimited
+          ? "You are posting too quickly. Please wait a little and try again."
+          : "We could not save that just now. Please try again.",
+      );
     },
 
     onSettled: (_data, _error, _next, snapshot) => {
