@@ -353,3 +353,142 @@ def test_real_isolated_parser_accepts_option_without_importing_data_root_code(tm
     assert result.returncode == 0
     assert "--diagnostic-json" in result.stdout
     assert SECRET not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("failure", ["pr-identity", "artifact-identity"])
+def test_later_candidate_validation_keeps_identity_without_exposing_partial_batch(
+    tmp_path, monkeypatch, failure
+):
+    root, out = tmp_path / "data", tmp_path / "batch"
+    state(root)
+    state(root, "UNIT-002", 18)
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    collected = []
+
+    def run(arguments, **kwargs):
+        arguments = list(map(str, arguments))
+        assert not any(key.startswith("GIT_") for key in kwargs["env"])
+        if arguments[0] == "gh":
+            number = int(arguments[-1].rsplit("/", 1)[1])
+            detail = pull(TASK if number == 17 else "UNIT-002", number)
+            if number == 18 and failure == "pr-identity":
+                detail["head"]["ref"] = "agent/UNIT-999"
+            return subprocess.CompletedProcess(arguments, 0, json.dumps([detail]), "")
+        if arguments[0] == "git":
+            assert "fetch" in arguments
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        assert arguments[:3] == [sys.executable, "-I", str(AGENTCTL)]
+        task = arguments[5]
+        number = int(arguments[arguments.index("--pr") + 1])
+        destination = Path(arguments[arguments.index("--out") + 1])
+        value = record(task, 999 if number == 18 else number, backfilled=True)
+        destination.write_text(json.dumps(value), encoding="utf-8")
+        collected.append(task)
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    args = collect_arguments(root, out, {}, tmp_path)
+    args[args.index("pull_request_target")] = "schedule"
+    result = invoke(PUBLISHER, args, monkeypatch)
+    assert diagnostic(result) == expected(
+        task_id="UNIT-002",
+        pr=18,
+        category="other",
+        stage="pr-detail" if failure == "pr-identity" else "collector",
+        tool="gh" if failure == "pr-identity" else "python",
+    )
+    assert collected == ([TASK] if failure == "pr-identity" else [TASK, "UNIT-002"])
+    assert not out.exists() and not output.exists()
+    assert not list(tmp_path.glob("metrics-stage-*"))
+
+
+@pytest.mark.parametrize("explicit_pr", [False, True], ids=["recorded-pr", "explicit-pr"])
+def test_standalone_git_failure_retains_resolved_pr(tmp_path, monkeypatch, explicit_pr):
+    root, artifact = tmp_path / "data", tmp_path / "record.json"
+    state(root, history=[])
+    sha = "a" * 40
+    commands = []
+
+    def run(arguments, **kwargs):
+        commands.append(arguments)
+        assert not any(key.startswith("GIT_") for key in kwargs["env"])
+        if arguments[0] == "gh":
+            if "/commits?" in arguments[-1]:
+                response = [[{"sha": sha}]]
+            else:
+                response = [pull(created_at="2026-10-01T10:00:00Z")]
+            return subprocess.CompletedProcess(arguments, 0, json.dumps(response), "")
+        assert arguments[0] == "git"
+        if "rev-list" in arguments:
+            return subprocess.CompletedProcess(arguments, 0, sha + "\n", "")
+        assert "show" in arguments and "--numstat" in arguments
+        return subprocess.CompletedProcess(arguments, 128, SECRET, f"connection reset {SECRET}")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    args = [
+        "metrics",
+        "collect",
+        TASK,
+        "--repo",
+        REPO,
+        "--out",
+        str(artifact),
+        "--diagnostic-json",
+    ]
+    if explicit_pr:
+        args.extend(["--pr", "17"])
+    result = invoke(AGENTCTL, args, monkeypatch, data_root=root)
+    assert diagnostic(result) == expected(
+        source="metrics",
+        stage="other",
+        tool="git",
+        category="transport",
+        exit_code=128,
+    )
+    assert sum("--numstat" in command for command in commands) == 1
+    assert not artifact.exists() and result.stdout == ""
+
+
+def test_publisher_fetch_failure_retains_git_classification(tmp_path, monkeypatch):
+    root, out = tmp_path / "data", tmp_path / "batch"
+    state(root)
+    commands = []
+
+    def run(arguments, **kwargs):
+        commands.append(arguments)
+        if arguments[0] == "gh":
+            return subprocess.CompletedProcess(arguments, 0, json.dumps([pull()]), "")
+        assert arguments[0] == "git" and "fetch" in arguments
+        return subprocess.CompletedProcess(arguments, 128, SECRET, f"connection reset {SECRET}")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    result = invoke(PUBLISHER, collect_arguments(root, out, event(), tmp_path), monkeypatch)
+    assert diagnostic(result) == expected(
+        stage="collector",
+        tool="git",
+        category="transport",
+        exit_code=128,
+    )
+    assert len(commands) == 2 and not out.exists()
+
+
+def test_python_child_launch_failure_identifies_python_and_candidate(tmp_path, monkeypatch):
+    root, out = tmp_path / "data", tmp_path / "batch"
+    state(root)
+    commands = []
+
+    def run(arguments, **kwargs):
+        commands.append(arguments)
+        if arguments[0] == "gh":
+            return subprocess.CompletedProcess(arguments, 0, json.dumps([pull()]), "")
+        if arguments[0] == "git":
+            assert "fetch" in arguments
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        assert list(map(str, arguments[:3])) == [sys.executable, "-I", str(AGENTCTL)]
+        raise OSError(SECRET)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    result = invoke(PUBLISHER, collect_arguments(root, out, event(), tmp_path), monkeypatch)
+    assert diagnostic(result) == expected(stage="collector", tool="python", category="other")
+    assert len(commands) == 3 and not out.exists()
