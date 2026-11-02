@@ -37,6 +37,11 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { FEED_PAGES_KEY } from "../features/feed/api";
+import {
+  NOTIFICATIONS_QUERY_KEY,
+  PREFERENCE_QUERY_KEY,
+} from "../features/notifications/api";
 import { SRC_DIR } from "../test/css";
 import {
   FakeAuthService,
@@ -48,8 +53,9 @@ import {
 } from "../test/auth";
 import { createTestQueryClient } from "../test/render";
 import { server } from "../test/server";
-import { useAccount } from "./account";
+import { useAccount, useSignOut } from "./account";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { PROFILE_QUERY_KEY } from "./profile";
 
 function renderAccount(authService = new FakeAuthService()) {
   const client = createTestQueryClient();
@@ -174,6 +180,67 @@ describe("useAccount", () => {
     await waitFor(() =>
       expect(result.current.account.status).toBe("anonymous"),
     );
+  });
+});
+
+/*
+ * FRONTEND-027: useSignOut, now that an active member with a full cache can
+ * press it. No feed key carries a viewer, so what is cached would be shown to
+ * whoever comes next on this tab.
+ */
+describe("useSignOut", () => {
+  const CACHED: [string, readonly unknown[]][] = [
+    ["the notifications list", NOTIFICATIONS_QUERY_KEY],
+    ["the notification preference", PREFERENCE_QUERY_KEY],
+    ["the feed pages", FEED_PAGES_KEY],
+    ["the profile", PROFILE_QUERY_KEY],
+  ];
+
+  function renderSignOut() {
+    server.use(profileFound());
+    const client = createTestQueryClient();
+    const service = signedIn();
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={client}>
+          <AuthProvider authService={service}>{children}</AuthProvider>
+        </QueryClientProvider>
+      );
+    }
+    const hook = renderHook(() => useSignOut(), { wrapper: Wrapper });
+    return { hook, client, service };
+  }
+
+  it("signs out once", () => {
+    const { hook, service } = renderSignOut();
+
+    act(() => {
+      hook.result.current();
+    });
+
+    expect(service.callsTo("signOut")).toHaveLength(1);
+  });
+
+  it.each(CACHED)("leaves no data for %s", (_name, key) => {
+    const { hook, client } = renderSignOut();
+    client.setQueryData(key, { from: "the previous account" });
+
+    act(() => {
+      hook.result.current();
+    });
+
+    expect(client.getQueryData(key)).toBeUndefined();
+  });
+
+  it("leaves no data under a key nobody thought of", () => {
+    const { hook, client } = renderSignOut();
+    client.setQueryData(["a", "later", "feature"], "the previous account's");
+
+    act(() => {
+      hook.result.current();
+    });
+
+    expect(client.getQueryData(["a", "later", "feature"])).toBeUndefined();
   });
 });
 

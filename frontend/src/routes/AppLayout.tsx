@@ -12,9 +12,9 @@ import {
 import symbol from "../assets/brand/symbol.svg";
 import wordmarkDark from "../assets/brand/wordmark-dark.svg";
 import wordmarkLight from "../assets/brand/wordmark-light.svg";
-import { useAccount, type AccountStatus } from "../auth/account";
+import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
-import { buttonClass } from "../components/ui/Button";
+import { Button, buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
 import {
   BellIcon,
@@ -117,10 +117,17 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  *
  * "Sign in" is offered to an anonymous visitor only, and not on `/sign-in`
  * itself, where it would be a link to the page already open.
+ *
+ * "Sign out" (`FRONTEND-027`) is offered for any restored session, profile or
+ * not, because a visitor with no profile yet has no other way out. Not to a
+ * deactivated account: its banner and recovery screen already offer it. It sits
+ * after the nav, outside it. Guards handle a signed-in-only route, and a public
+ * page stays where it is, read again as a guest (`useSignOut`).
  */
 export function AppLayout() {
   const { status } = useAuth();
   const account = useAccount();
+  const signOut = useSignOut();
   const ownUserId = account.status === "active" ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
   const mainRef = useRef<HTMLElement>(null);
@@ -179,6 +186,21 @@ export function AppLayout() {
           >
             Sign in
           </Link>
+        ) : null}
+        {status === "authenticated" && account.status !== "deactivated" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className={styles.signOut}
+            onClick={() => {
+              signOut();
+              // This button has just gone: without this, focus falls to the body.
+              mainRef.current?.focus();
+            }}
+          >
+            Sign out
+          </Button>
         ) : null}
       </header>
       {account.status === "deactivated" ? <DeactivatedBanner /> : null}

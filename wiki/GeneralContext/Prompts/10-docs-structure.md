@@ -16,19 +16,21 @@ ratchet so units can clear debt without editing the Director-owned baseline.
 The avatar-rendering fixture failures on #269's base were fixed in #270.
 No corpus files moved in those linter PRs.
 
-**Update, 2026-10-31:** #278 and #284 moved D3 and D2b into
-[ADR 0001](../Decisions/0001-bounded-orchestration.md) and
-[ADR 0002](../Decisions/0002-worker-credential-isolation.md). This slice moves
-D4's red-baseline choice to [ADR 0003](../Decisions/0003-red-baseline.md).
+**Update, 2026-10-31:** D3, D2b and D4 merged in #278, #284 and #286:
+[ADR 0001](../Decisions/0001-bounded-orchestration.md),
+[ADR 0002](../Decisions/0002-worker-credential-isolation.md) and
+[ADR 0003](../Decisions/0003-red-baseline.md). This slice moves D5's required
+quality-check choice to [ADR 0004](../Decisions/0004-required-quality-checks.md).
 Handoff headings, proof gaps and residue remain; protocol stays in existing
-references. The obsolete D4 line-citation exception is removed.
+references. The failure-exercise citation now names section 6, item 3; its
+obsolete exception is removed.
 
-After merge, next: remaining agreements, changelog, short handoff reference,
-canonical index status and unused Reports removal. Continue a few files per
-PR; delete resolved baseline entries. Untyped files still need classification.
-Deliverable 3 remains incomplete. Deliverable 4 remains WikiMaintenance and
-wiki-health; neither is implemented here. Keep jev disabled. Completed app
-work is recorded in [the index](../index.md).
+After merge, next: D6 and remaining agreements, changelog, short handoff
+reference, canonical index status and unused Reports removal. Continue a few
+files per PR; delete resolved baseline entries. Untyped files still need
+classification. Deliverable 3 remains incomplete. Deliverable 4 remains
+WikiMaintenance and wiki-health; neither is implemented here. Keep jev disabled.
+Completed app work is recorded in [the index](../index.md).
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System

@@ -22,12 +22,15 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import type { ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setTokenProvider } from "../api/client";
+import type { AuthService } from "../auth/AuthService";
 import {
   BellIcon,
   ChartColumnIcon,
@@ -36,13 +39,16 @@ import {
   UserIcon,
   type IconProps,
 } from "../components/ui/icons";
+import { deactivatedShown } from "../test/account";
 import { OWN_USER_ID, renderAppAt, type Visitor } from "../test/app-route";
-import { testProfile } from "../test/auth";
+import { TEST_ID_TOKEN, testProfile, type FakeAuthService } from "../test/auth";
 import { SRC_DIR, parseCss, readSrcFile, selectors } from "../test/css";
+import { feedPage, testPostView } from "../test/feed";
 import {
   lastCompoundClasses,
   topLevelFixedBottomRules,
 } from "../test/module-css";
+import { notificationsStub } from "../test/notifications";
 import { testPlayerDetail } from "../test/stats";
 import { usernameForId } from "../test/users";
 
@@ -486,6 +492,225 @@ describe("Sign in in the header (criterion 7)", () => {
       ).toBeNull();
     },
   );
+});
+
+/**
+ * FRONTEND-027: the header's Sign out. Who sees it, where it sits, and what
+ * pressing it leaves behind.
+ */
+describe("Sign out in the header", () => {
+  function headerSignOut(): HTMLElement | null {
+    return within(pageBanner()).queryByRole("button", { name: "Sign out" });
+  }
+
+  function pageSignOuts(): HTMLElement[] {
+    return screen.queryAllByRole("button", { name: "Sign out" });
+  }
+
+  afterEach(() => {
+    setTokenProvider(() => null);
+  });
+
+  it.each([
+    visit("/", "member"),
+    visit("/search", "member"),
+    visit(OWN_PROFILE_PATH, "member"),
+    visit("/create-profile", "newcomer"),
+  ])(
+    "is the page's one Sign out, after the nav, at $path for a $as visitor",
+    async (v) => {
+      await renderVisit(v);
+
+      const button = await within(pageBanner()).findByRole("button", {
+        name: "Sign out",
+      });
+
+      expect(pageSignOuts()).toEqual([button]);
+      expect(primaryNav()).not.toContainElement(button);
+      expect(
+        primaryNav().compareDocumentPosition(button) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(tabbables()[0]).toBe(
+        screen.getByRole("link", { name: "Skip to content" }),
+      );
+    },
+  );
+
+  it("carries the class of the shell's rule for it", async () => {
+    const { default: styles } = await importLate<Record<string, string>>(
+      "./AppLayout.module.css",
+    );
+    await renderVisit(visit("/", "member"));
+
+    expect(headerSignOut()).toHaveClass(styles.signOut);
+  });
+
+  it("is offered when the profile could not be read: the visitor still has a way out", async () => {
+    renderAppAt("/", "member", [
+      http.get("*/users/me", () =>
+        HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 }),
+      ),
+    ]);
+
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Sign out",
+    });
+
+    expect(pageSignOuts()).toEqual([button]);
+    expect(
+      within(primaryNav()).queryByRole("link", { name: "Your profile" }),
+    ).toBeNull();
+  });
+
+  it.each(["/", "/search", OTHER_PROFILE_PATH])(
+    "is not offered to an anonymous visitor at %s",
+    async (path) => {
+      await renderVisit(visit(path, "anonymous"));
+
+      expect(pageSignOuts()).toEqual([]);
+    },
+  );
+
+  it("is not offered while the session is being restored", async () => {
+    renderAppAt("/", "member");
+
+    // The first commit: the session has not been answered yet.
+    expect(pageSignOuts()).toEqual([]);
+
+    // And it does arrive, so the line above is not vacuously true.
+    expect(
+      await within(pageBanner()).findByRole("button", { name: "Sign out" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is not offered to a deactivated account, whose banner has the one Sign out", async () => {
+    renderAppAt("/", "deactivated");
+    const banner = await deactivatedShown();
+
+    expect(headerSignOut()).toBeNull();
+    expect(pageSignOuts()).toEqual([
+      within(banner).getByRole("button", { name: "Sign out" }),
+    ]);
+  });
+
+  it("is not offered to a deactivated account on a signed-in-only route either", async () => {
+    renderAppAt("/notifications", "deactivated");
+    await deactivatedShown();
+
+    expect(headerSignOut()).toBeNull();
+  });
+
+  it("signs out once on a public route: same address, Sign in offered, focus on main", async () => {
+    const user = userEvent.setup();
+    const app = renderAppAt("/search", "member");
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Sign out",
+    });
+
+    await user.click(button);
+
+    expect(
+      (app.authService as FakeAuthService).callsTo("signOut"),
+    ).toHaveLength(1);
+    expect(app.router.state.location.pathname).toBe("/search");
+    expect(
+      await within(pageBanner()).findByRole("link", { name: "Sign in" }),
+    ).toHaveAttribute("href", "/sign-in");
+    expect(pageSignOuts()).toEqual([]);
+    expect(document.activeElement).toBe(screen.getByRole("main"));
+  });
+
+  it("on a signed-in-only route lands on /sign-in through the guard, focus on main", async () => {
+    const user = userEvent.setup();
+    const app = renderAppAt("/notifications", "member");
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Sign out",
+    });
+
+    await user.click(button);
+
+    await waitFor(() =>
+      expect(app.router.state.location.pathname).toBe("/sign-in"),
+    );
+    expect(document.activeElement).toBe(screen.getByRole("main"));
+  });
+
+  it("asks nothing as a guest of the signed-in-only page it is leaving", async () => {
+    const user = userEvent.setup();
+    const notifications = notificationsStub();
+    const app = renderAppAt("/notifications", "member", [
+      notifications.handler,
+    ]);
+    await screen.findByRole("heading", { name: /^notifications$/i });
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Sign out",
+    });
+    await waitFor(() => expect(notifications.requests).toHaveLength(1));
+
+    await user.click(button);
+    await waitFor(() =>
+      expect(app.router.state.location.pathname).toBe("/sign-in"),
+    );
+    // Long enough for a refetch that was going to happen to reach the stub.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(notifications.requests).toHaveLength(1);
+  });
+
+  it("reads a mounted feed again as a guest, with nothing of the member's left pressed", async () => {
+    const user = userEvent.setup();
+    const authorizations: (string | null)[] = [];
+    let releaseGuest = () => {};
+    const guestMayAnswer = new Promise<void>((resolve) => {
+      releaseGuest = resolve;
+    });
+    let authService: AuthService | null = null;
+    // The app's real wiring (`tokenProvider.ts`), once the double exists; the
+    // shell's first read goes out before `renderAppAt` hands the double back.
+    setTokenProvider(() =>
+      authService === null ? TEST_ID_TOKEN : authService.getIdToken(),
+    );
+
+    const app = renderAppAt("/", "member", [
+      http.get("*/feed", async ({ request }) => {
+        const authorization = request.headers.get("Authorization");
+        authorizations.push(authorization);
+        if (authorization === null) await guestMayAnswer;
+        const asMember = authorization !== null;
+        return HttpResponse.json(
+          feedPage([
+            testPostView({
+              liked_by_viewer: asMember,
+              reposted_by_viewer: asMember,
+            }),
+          ]),
+        );
+      }),
+    ]);
+    authService = app.authService;
+
+    const liked = await screen.findByRole("button", { name: "Like" });
+    await waitFor(() => expect(liked).toHaveAttribute("aria-pressed", "true"));
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Sign out",
+    });
+
+    await user.click(button);
+
+    // The guest's answer is still held: the member's one must be gone already.
+    await waitFor(() => expect(authorizations.at(-1)).toBeNull());
+    expect(document.querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);
+
+    releaseGuest();
+    const guestLike = await screen.findByRole("button", { name: "Like" });
+    expect(guestLike).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Repost" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(app.router.state.location.pathname).toBe("/");
+  });
 });
 
 describe("the nav carries the shell module's fixed-to-bottom class (criterion 8)", () => {

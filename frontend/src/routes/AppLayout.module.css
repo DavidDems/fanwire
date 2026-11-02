@@ -3,10 +3,13 @@
  * every rule outside a media query is the phone layout, and only min-width
  * queries widen it. Values come from tokens.css by name only.
  *
- * The header is target-min tall plus space-2 above and below; the bottom bar
- * is under space-8 tall plus the safe area. scroll-padding and main's bottom
- * padding are sized from those so nothing focused or last in the list is
- * hidden under either bar (accessibility.md A5). main's bottom padding also
+ * The header is target-min tall plus space-2 above and below. The bottom bar is
+ * about 55 px tall plus the safe area, with every label on one line, which holds
+ * down to 330 px of content; under that "Your profile" wraps and the bar is about
+ * 70 px, which scroll-padding-bottom (space-8 + space-2, 72 px) still clears.
+ * scroll-padding and main's bottom padding are sized from those so nothing
+ * focused or last in the list is hidden under either bar (accessibility.md A5).
+ * main's bottom padding also
  * reaches past the floating + (FRONTEND-020: FloatingButton, 3.5rem, its
  * bottom space-8 + space-4 above the viewport's on phones and space-5 from
  * 40em), so the last card's controls scroll fully clear of it.
@@ -14,7 +17,9 @@
 
 :global(html) {
   scroll-padding-top: calc(var(--target-min) + 3 * var(--space-2));
-  scroll-padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(
+    var(--space-8) + var(--space-2) + env(safe-area-inset-bottom)
+  );
 }
 
 /* Skip link: visually hidden until focused, then above everything. */
@@ -105,8 +110,9 @@
   }
 }
 
-/* Sign in sits at the right edge of the header. */
-.signIn {
+/* Sign in and Sign out sit at the right edge of the header. */
+.signIn,
+.signOut {
   margin-left: auto;
 }
 
@@ -140,7 +146,8 @@
   justify-content: center;
   gap: var(--space-1);
   min-height: var(--target-min);
-  padding: var(--space-2) var(--space-1);
+  /* No inline padding: "Your profile" needs all of a 69 px cell for one line. */
+  padding: var(--space-2) 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tight);
@@ -189,6 +196,16 @@
     scroll-padding-bottom: 0;
   }
 
+  /* The nav joins the header and leaves Sign out no room: the symbol alone. */
+  .wordmark {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
   .nav {
     position: static;
     padding-bottom: 0;
@@ -219,6 +236,18 @@
 
   .main {
     padding-bottom: calc(var(--space-5) + 3.5rem + var(--space-4));
+  }
+}
+
+/* From 44em (704 px): room for the wordmark again, even beside a scrollbar. */
+@media (min-width: 44em) {
+  .wordmark {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
   }
 }
 

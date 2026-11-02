@@ -4,6 +4,7 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from "@tanstack/react-query";
+import { flushSync } from "react-dom";
 
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
@@ -134,16 +135,27 @@ export function useRecoverAccount(): UseMutationResult<void, Error, void> {
 }
 
 /**
- * Sign out, and drop the profile answer read for that account: the next
- * person to sign in on this tab must not be told, from the cache, that their
- * account is deactivated. Removed rather than refetched: with no session there
- * is nothing to ask.
+ * Sign out, and leave nothing of that account for the next person on this tab.
+ * No feed key carries a viewer, so the cache holds the member's ranking and
+ * pressed Likes, and their notifications, under keys a guest reads too.
+ *
+ * The profile answer is removed rather than read again: with no session there
+ * is nothing to ask. Everything else is reset, not removed, because a mounted
+ * page would otherwise go on showing its old result: reset drops the data and
+ * reads again what is on screen, and the token provider reads the session per
+ * request, so that read goes out as a guest.
+ *
+ * **`flushSync`, so the reset sees a signed-out app.** The app has to have
+ * rendered the sign-out first: a guarded page has been swapped for its redirect
+ * and a signed-in-only query is disabled by then, so neither is read again as a
+ * guest, which would only be answered with a 401.
  */
 export function useSignOut(): () => void {
   const { signOut } = useAuth();
   const queryClient = useQueryClient();
   return () => {
-    signOut();
+    flushSync(signOut);
     queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY, exact: true });
+    void queryClient.resetQueries();
   };
 }

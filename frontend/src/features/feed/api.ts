@@ -110,12 +110,26 @@ export async function setLiked(postId: number, liked: boolean): Promise<void> {
 }
 
 /**
+ * A repost the server refused for posting too quickly (`POSTS-002`), which the
+ * card says differently from any other failure (`FRONTEND-026`).
+ */
+export class RepostRateLimited extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RepostRateLimited";
+  }
+}
+
+/**
  * Repost (`POST`) or undo it (`DELETE`) on the one path — the twin of
  * `setLiked`. `POST` answers 201 with the new repost, or 200 with the one the
  * viewer already had; `DELETE` answers 204. The body is not read: what the card
  * shows is the original's `reposted_by_viewer` and `repost_count`, which the
  * refetch after the toggle brings back. Any other status (a 409 for a repost
  * that has replies of its own, say) is a failure the card rolls back.
+ *
+ * Only a `POST` answering 429 is `RepostRateLimited`: an undo is not posting,
+ * and can only see a 429 from the edge.
  */
 export async function setReposted(
   postId: number,
@@ -127,9 +141,10 @@ export async function setReposted(
     : await apiClient.DELETE("/posts/{post_id}/repost", options);
 
   if (!response.ok) {
-    throw new Error(
-      `${reposted ? "POST" : "DELETE"} /posts/${postId}/repost answered ${response.status}`,
-    );
+    const message = `${reposted ? "POST" : "DELETE"} /posts/${postId}/repost answered ${response.status}`;
+    throw reposted && response.status === 429
+      ? new RepostRateLimited(message)
+      : new Error(message);
   }
 }
 
