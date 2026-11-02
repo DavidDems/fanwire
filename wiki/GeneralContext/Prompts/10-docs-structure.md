@@ -16,16 +16,17 @@ ratchet so units can clear debt without editing the Director-owned baseline.
 The avatar-rendering fixture failures on #269's base were fixed in #270.
 No corpus files moved in those linter PRs.
 
-**Update, 2026-10-31:** D3, D2b and D4 merged in #278, #284 and #286:
-[ADR 0001](../Decisions/0001-bounded-orchestration.md),
-[ADR 0002](../Decisions/0002-worker-credential-isolation.md) and
-[ADR 0003](../Decisions/0003-red-baseline.md). This slice moves D5's required
-quality-check choice to [ADR 0004](../Decisions/0004-required-quality-checks.md).
+**Update, 2026-11-02:** D3, D2b, D4 and D5 merged in #278, #284, #286
+and #289: [ADR 0001](../Decisions/0001-bounded-orchestration.md),
+[ADR 0002](../Decisions/0002-worker-credential-isolation.md),
+[ADR 0003](../Decisions/0003-red-baseline.md) and
+[ADR 0004](../Decisions/0004-required-quality-checks.md). This slice extracts
+D6's provider-cost choice to [ADR 0005](../Decisions/0005-provider-cost-telemetry.md).
 Handoff headings, proof gaps and residue remain; protocol stays in existing
-references. The failure-exercise citation now names section 6, item 3; its
-obsolete exception is removed.
+references. The prior slice repaired the failure-exercise citation and removed
+its obsolete exception.
 
-After merge, next: D6 and remaining agreements, changelog, short handoff
+After merge, next: remaining agreements, changelog, short handoff
 reference, canonical index status and unused Reports removal. Continue a few
 files per PR; delete resolved baseline entries. Untyped files still need
 classification. Deliverable 3 remains incomplete. Deliverable 4 remains
@@ -59,7 +60,7 @@ You are a **Director**. This edits `.ai/`, `.github/`, `wiki/GeneralContext/`,
 
 1. `wiki/GeneralContext/index.md`: the declared purpose ("every fact about
    the project lives in exactly one place") and the prompt lifecycle.
-2. `.ai/docs/handoff.md`: skim the headings (`grep -n "^#" .ai/docs/handoff.md`)
+2. `.ai/docs/handoff.md`: skim the headings
    and the status blocks at the top. It is the main migration target. Do not
    read all of it before step 3 needs it.
 3. `Architecture/work-modes.md` "How work is handed on and planned": where
