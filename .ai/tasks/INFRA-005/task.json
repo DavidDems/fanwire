@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-005",
+  "objective": "Delete the infra API-SPORTS left behind, which has had no consumer since EVENTS-003: the idempotency and live-score cache tables and the API-SPORTS secret from Fanwire-Data, the ingestion-retry queue, its DLQ, their policies and the DLQ's alarm from Fanwire-Messaging, and all seven of their exports. Synth only: the two RETAIN resources are named in the PR for the human to delete by hand.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation. They fail today because every resource and export below still synthesizes.",
+    "Fanwire-Data no longer synthesizes IdempotencyTable22A5A209 (AWS::DynamoDB::Table, RETAIN), LiveScoreCacheTable277AE7C2 (AWS::DynamoDB::Table, Delete) or ApiSportsKey4432EB4A (AWS::SecretsManager::Secret, RETAIN), and has no AWS::DynamoDB::Table at all.",
+    "Fanwire-Data no longer has the outputs ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97, ExportsOutputFnGetAttLiveScoreCacheTable277AE7C2Arn3F1E2DD3, ExportsOutputRefApiSportsKey4432EB4A2C8D0DDC, ExportsOutputRefIdempotencyTable22A5A209F6C0179A or ExportsOutputRefLiveScoreCacheTable277AE7C28479FE72.",
+    "Fanwire-Messaging no longer synthesizes IngestionRetryQueueD528F9A2 and IngestionRetryDlqAD1363B6 (AWS::SQS::Queue), IngestionRetryQueuePolicy60151471 and IngestionRetryDlqPolicy72728599 (AWS::SQS::QueuePolicy) or IngestionRetryDlqDepthAlarm7CDD189B (AWS::CloudWatch::Alarm), and no longer has the outputs ExportsOutputFnGetAttIngestionRetryQueueD528F9A2Arn07FDF528 or ExportsOutputFnGetAttIngestionRetryDlqAD1363B6Arn3F8A5660.",
+    "A test over every stack in every synth mode asserts that no resource's logical id and no output contains IdempotencyTable, LiveScoreCache, ApiSports or IngestionRetry, and that no template contains an Fn::ImportValue naming them.",
+    "alarms.test.ts's pinned count falls from 21 to 20, with its comment saying 2 DLQ alarms. Every other alarm is unchanged.",
+    "What stays: the database secret, the origin-verify secret, the notification and media-scan-result queues and DLQs with their logical ids, the CMK and its description and policy, the VPC's DynamoDB gateway endpoint, and the NAT egress rule. The Data key's template is byte-identical before and after.",
+    "Nothing still reads what is removed. The PR body shows the search and its result for: secrets, env vars, Lambda code, schedules and event source mappings, IAM statements, tests, infra/test/cfn-exec-policy.test.ts and infra/iam/. git grep over infra/lib, infra/bin and backend/app finds no code reading those resources, only comments.",
+    "infra/iam/** is unchanged and CloudFormation's role needs no new version: dynamodb:*, sqs:*, secretsmanager:* and cloudwatch:* stay, because this deploy's deletes use them. Every cfn-exec-policy, iam-policy and permissions-boundary test passes in every domain mode.",
+    "No code path changes: every remaining Lambda's env vars, IAM statements and triggers are identical before and after. The App template is byte-identical apart from anything the PR explains line by line.",
+    "The PR body carries a before/after synth diff of cdk.out/*.template.json for all eight stacks, each stack either marked identical or with its changes listed. Only the resources and outputs above are removed, plus at most the Fanwire-Data stack description. No resource is added or replaced.",
+    "The PR body names IdempotencyTable22A5A209 and ApiSportsKey4432EB4A as RETAIN and gives the human, as an ordered list of single-line PowerShell commands: before approving the deploy, the seven list-imports checks and capturing both physical ids; after it, deleting both. It says the physical ids cannot be read from the stack once the deploy has removed them.",
+    "npm run build, npm run lint, npm test and npm run synth pass in infra/. Comments that say these resources stay are corrected in data-stack.ts, messaging-stack.ts, app-stack.ts and network-stack.ts. Nobody runs cdk deploy.",
+    "wiki/CodeContext/Modules/0x00-architecture.md's stack table and wiki/CodeContext/Modules/0x02-events.md's storage passage no longer list the removed resources."
+  ],
+  "allowed_paths": [
+    "infra/lib/data-stack.ts",
+    "infra/lib/messaging-stack.ts",
+    "infra/lib/app-stack.ts",
+    "infra/lib/network-stack.ts",
+    "infra/lib/app.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "backend/**",
+    "frontend/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/build-deployment.md"
+  ],
+  "required_skills": ["infra-cdk", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
