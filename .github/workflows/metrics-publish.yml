@@ -1,0 +1,138 @@
+name: metrics-publish
+
+# Data-only publication. Local tests prove branch isolation and conflicts;
+# only a live run proves GitHub push permission. The first live run must wait
+# until this workflow and its trusted tools have landed on main.
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: metrics-publish
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'agent/') &&
+      github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tools_sha: ${{ steps.tools.outputs.sha }}
+      has_records: ${{ steps.collect.outputs.has_records }}
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      METRICS_ROOT: ${{ github.workspace }}/metrics-data
+      REMOTE: https://github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          path: tools
+          fetch-depth: 0
+          persist-credentials: false
+      - id: tools
+        name: Record trusted tools identity
+        run: |
+          set -euo pipefail
+          echo "sha=$(git -c core.hooksPath=/dev/null -C "$TOOLS" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: branch
+        name: Probe metrics branch without treating network errors as absence
+        run: |
+          set -euo pipefail
+          status=0
+          git -c core.hooksPath=/dev/null ls-remote --exit-code --heads "$REMOTE" refs/heads/metrics > "$RUNNER_TEMP/metrics-ref" || status=$?
+          case "$status" in
+            0) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
+            2) echo 'exists=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'Metrics branch probe failed' >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.branch.outputs.exists == 'true'
+        with:
+          ref: metrics
+          path: metrics-data
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Prepare empty data store
+        if: steps.branch.outputs.exists == 'false'
+        run: python -I "$TOOLS/.ai/bin/metrics_publish.py" prepare --data-root "$METRICS_ROOT" --remote "$REMOTE"
+      - id: collect
+        name: Collect bounded verified records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: python -I "$TOOLS/.ai/bin/metrics_publish.py" collect --root "$TOOLS" --out-dir "$RUNNER_TEMP/metrics-records" --repo "$GITHUB_REPOSITORY" --event-name "$EVENT_NAME" --event-path "$GITHUB_EVENT_PATH" --existing-root "$METRICS_ROOT" --limit 50 --scan-offset "$(( (GITHUB_RUN_NUMBER - 1) * 50 ))"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: steps.collect.outputs.has_records == 'true'
+        with:
+          name: metrics-records
+          path: ${{ runner.temp }}/metrics-records/*.json
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: collect
+    if: needs.collect.outputs.has_records == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      METRICS_ROOT: ${{ github.workspace }}/metrics-data
+      REMOTE: https://github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.collect.outputs.tools_sha }}
+          path: tools
+          persist-credentials: false
+      - id: branch
+        name: Probe metrics branch without treating network errors as absence
+        run: |
+          set -euo pipefail
+          status=0
+          git -c core.hooksPath=/dev/null ls-remote --exit-code --heads "$REMOTE" refs/heads/metrics > "$RUNNER_TEMP/metrics-ref" || status=$?
+          case "$status" in
+            0) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
+            2) echo 'exists=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'Metrics branch probe failed' >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.branch.outputs.exists == 'true'
+        with:
+          ref: metrics
+          path: metrics-data
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Prepare empty data store
+        if: steps.branch.outputs.exists == 'false'
+        run: python -I "$TOOLS/.ai/bin/metrics_publish.py" prepare --data-root "$METRICS_ROOT" --remote "$REMOTE"
+      # The default current-run artifact download uses runtime authentication;
+      # no actions permission or github-token override is required.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: metrics-records
+          path: ${{ runner.temp }}/metrics-records
+      - name: Publish immutable data
+        env:
+          METRICS_PUSH_TOKEN: ${{ github.token }}
+        run: python -I "$TOOLS/.ai/bin/metrics_publish.py" publish --data-root "$METRICS_ROOT" --records-dir "$RUNNER_TEMP/metrics-records"
