@@ -42,6 +42,35 @@ GitHub origin URL. Without an output path, it prints the same record and no
 file action is needed. The backfilled flag marks retrospective collection;
 it does not invent historical facts.
 
+## Failure evidence
+
+The collector's optional diagnostic JSON flag emits exactly one JSON envelope
+on stderr when collection fails. Its only envelope key is `metrics_error`;
+success output and atomic artifact replacement are unchanged. The publisher
+requests this mode from its isolated collector and emits a validated envelope
+alongside its existing generic failure line. No manual action is needed.
+
+Each diagnostic has finite `source` (metrics or publisher), `stage` (pr-detail,
+pr-discovery, collector or other), `tool` (gh, git, python or none), and
+`category` (http, dns, tls, timeout, transport, authentication, pipe or other).
+A validated task ID and positive PR number identify the current candidate when
+available. HTTP status is restricted to 100 to 599; exit code to -255 to 255; PR to
+1 to 2147483647. Boolean integers and extra fields are rejected. Classification
+uses captured command failures internally; HTTP 401/403 are grouped under
+authentication as observed HTTP evidence. A 403 can also reflect rate limits or
+permissions. These labels do not establish a confirmed root cause.
+
+The child boundary accepts at most 4,096 characters containing one JSON object,
+with no duplicate keys, extra fields, trailing text or multiple records. Task,
+PR and metrics source must match the trusted invocation. Invalid evidence
+falls back to the publisher's collector/python/other diagnostic with its
+validated candidate identity and bounded exit code. Unexpected source exceptions
+retain the caller's trusted operation and candidate context. Raw stdout,
+stderr, exception messages, URLs and discovery queries are never forwarded.
+Failures still abort the whole batch, discard staging, expose no artifact or
+success output, and introduce no retries. This plumbing does not establish why
+a previous live run failed or prove successful remote publication.
+
 ## Field meanings
 
 | Fields | Derivation |

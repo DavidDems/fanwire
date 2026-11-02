@@ -712,8 +712,16 @@ def cmd_metrics_collect(args) -> int:
             print(output)
         else:
             emit(record)
-    except (metrics.MetricsError, OSError) as exc:
-        die(str(exc))
+    except Exception as exc:
+        if args.diagnostic_json:
+            value = metrics.validate_diagnostic(
+                getattr(exc, "diagnostic", None), task_id=args.task_id, pr=args.pr, source="metrics"
+            ) or metrics.failure_diagnostic(source="metrics", task_id=args.task_id, pr=args.pr)
+            print(json.dumps({"metrics_error": value}, sort_keys=True), file=sys.stderr)
+            return USAGE
+        if isinstance(exc, (metrics.MetricsError, OSError)):
+            die(str(exc))
+        raise
     return OK
 
 
@@ -1099,6 +1107,9 @@ def build_parser() -> argparse.ArgumentParser:
     met_collect.add_argument("--out", help="explicit JSON artifact path; otherwise print JSON")
     met_collect.add_argument(
         "--backfilled", action="store_true", help="mark a retrospective collection"
+    )
+    met_collect.add_argument(
+        "--diagnostic-json", action="store_true", help="emit bounded failure evidence on stderr"
     )
     met_collect.set_defaults(func=cmd_metrics_collect)
 
