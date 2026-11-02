@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from agentlib import metricspublish
+from agentlib import metrics, metricspublish
 
 
 class _Parser(argparse.ArgumentParser):
@@ -62,7 +62,11 @@ def main():
             if os.environ.get("GITHUB_OUTPUT"):
                 with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
                     output.write(f"has_records={'true' if tasks else 'false'}\n")
-    except (metricspublish.PublishError, OSError, UnicodeError, ValueError, TypeError):
+    except (metricspublish.PublishError, OSError, UnicodeError, ValueError, TypeError) as exc:
+        value = metrics.validate_diagnostic(
+            getattr(exc, "diagnostic", None)
+        ) or metrics.failure_diagnostic(source="publisher")
+        print(json.dumps({"metrics_error": value}, sort_keys=True), file=sys.stderr)
         print("metrics publication failed; source data withheld", file=sys.stderr)
         return 1
     return 0

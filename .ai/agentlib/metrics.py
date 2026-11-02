@@ -52,8 +52,133 @@ _VERSION = re.compile(
 _CONTENT_ROLES = frozenset({"test_agent", "code_agent", "context_maintainer"})
 
 
+_DIAGNOSTIC_ENUMS = {
+    "stage": {"pr-detail", "pr-discovery", "collector", "other"},
+    "source": {"metrics", "publisher"},
+    "tool": {"gh", "git", "python", "none"},
+    "category": {"http", "dns", "tls", "timeout", "transport", "authentication", "pipe", "other"},
+}
+
+
+def validate_diagnostic(value, *, task_id=None, pr=None, source=None):
+    """Return a fresh bounded allowlisted record, or None; never copy source text."""
+    if type(value) is not dict or not set(_DIAGNOSTIC_ENUMS) <= value.keys():
+        return None
+    if value.keys() - (_DIAGNOSTIC_ENUMS.keys() | {"task_id", "pr", "http_status", "exit_code"}):
+        return None
+    for key, choices in _DIAGNOSTIC_ENUMS.items():
+        if type(value[key]) is not str or value[key] not in choices:
+            return None
+    if "task_id" in value and (
+        type(value["task_id"]) is not str or not spec.TASK_ID_RE.fullmatch(value["task_id"])
+    ):
+        return None
+    for key, low, high in (
+        ("pr", 1, 2147483647),
+        ("http_status", 100, 599),
+        ("exit_code", -255, 255),
+    ):
+        if key in value and (type(value[key]) is not int or not low <= value[key] <= high):
+            return None
+    for key, expected in (("task_id", task_id), ("pr", pr), ("source", source)):
+        if expected is not None and value.get(key) != expected:
+            return None
+    return dict(value)
+
+
+def failure_diagnostic(*, source, stage="other", tool="none", task_id=None, pr=None):
+    value = {"source": source, "stage": stage, "tool": tool, "category": "other"}
+    if type(task_id) is str and spec.TASK_ID_RE.fullmatch(task_id):
+        value["task_id"] = task_id
+    if type(pr) is int and 1 <= pr <= 2147483647:
+        value["pr"] = pr
+    return value
+
+
+def command_diagnostic(tool, raw="", exit_code=None, *, source):
+    """Classify captured command evidence internally; retain no raw fragments."""
+    value = failure_diagnostic(source=source, tool=tool)
+    text = raw.lower() if isinstance(raw, str) else ""
+    status = re.search(r"\bhttp(?:/\d(?:\.\d)?)?[ :]*(?:status[ :]+)?([1-5]\d{2})\b", text)
+    if status:
+        value["http_status"] = int(status[1])
+        value["category"] = "authentication" if int(status[1]) in {401, 403} else "http"
+    else:
+        for category, needles in (
+            ("dns", ("no such host", "name resolution", "getaddrinfo")),
+            ("tls", ("tls", "x509", "certificate", "ssl")),
+            ("timeout", ("timeout", "timed out", "deadline exceeded")),
+            ("pipe", ("broken pipe",)),
+            (
+                "transport",
+                (
+                    "connection reset",
+                    "connection refused",
+                    "network is unreachable",
+                    "unexpected eof",
+                ),
+            ),
+            ("authentication", ("authentication", "not logged", "bad credentials")),
+        ):
+            if any(needle in text for needle in needles):
+                value["category"] = category
+                break
+    if type(exit_code) is int and -255 <= exit_code <= 255:
+        value["exit_code"] = exit_code
+    return value
+
+
+def diagnostic_context(call, error_type, *, source, stage, tool, task_id=None, pr=None):
+    """Bind validated failure evidence to the caller's trusted operation identity."""
+    try:
+        return call()
+    except Exception as exc:
+        value = validate_diagnostic(getattr(exc, "diagnostic", None))
+        context = failure_diagnostic(source=source, stage=stage, tool=tool, task_id=task_id, pr=pr)
+        if value is not None:
+            # Only validated classification survives; identity belongs to this call.
+            context.update(
+                {
+                    key: value[key]
+                    for key in ("category", "http_status", "exit_code")
+                    if key in value
+                }
+            )
+            if (
+                stage == "other"
+                and value["source"] == source
+                and all(
+                    expected is None or value.get(key, expected) == expected
+                    for key, expected in (("task_id", task_id), ("pr", pr))
+                )
+            ):
+                context = {
+                    **value,
+                    **{key: context[key] for key in ("task_id", "pr") if key in context},
+                }
+            elif (
+                stage == "collector"
+                and (
+                    value["source"] == "metrics"
+                    or (value["source"] == source and value["stage"] == "collector")
+                )
+                and validate_diagnostic(value, task_id=task_id, pr=pr)
+            ):
+                context = value
+        message = (
+            str(exc)
+            if error_type is MetricsError and isinstance(exc, MetricsError)
+            else "metric source read failed"
+        )
+        raise error_type(message, diagnostic=context) from exc
+
+
 class MetricsError(Exception):
     """The requested measurement cannot be derived from its source evidence."""
+
+    def __init__(self, message, *, diagnostic=None):
+        super().__init__(message)
+        self.diagnostic = validate_diagnostic(diagnostic) or failure_diagnostic(source="metrics")
 
 
 def _run(arguments: list[str], root: Path) -> str:
@@ -69,10 +194,18 @@ def _run(arguments: list[str], root: Path) -> str:
             check=False,
         )
     except (OSError, UnicodeError) as exc:
-        raise MetricsError(f"could not read {arguments[0]} source") from exc
+        raise MetricsError(
+            f"could not read {arguments[0]} source",
+            diagnostic=command_diagnostic(arguments[0], str(exc), source="metrics"),
+        ) from exc
     if result.returncode:
         # Raw tool errors can contain URLs/credentials; identify the source only.
-        raise MetricsError(f"{arguments[0]} source read failed")
+        raise MetricsError(
+            f"{arguments[0]} source read failed",
+            diagnostic=command_diagnostic(
+                arguments[0], result.stderr, result.returncode, source="metrics"
+            ),
+        )
     return result.stdout
 
 
@@ -328,7 +461,7 @@ def _ci(get: Callable, prefix: str, branch: str, shas: set[str], pr: int, merged
     )
 
 
-def collect(
+def _collect(
     root: str | Path,
     task_id: str,
     *,
@@ -358,100 +491,141 @@ def collect(
     pr = _integer(pr if pr is not None else recorded_pr, "merged PR number")
     prefix = f"repos/{repository}"
 
-    def get(endpoint):
-        try:
-            return github(endpoint) if github is not None else _github(root, endpoint)
-        except MetricsError:
-            raise
-        except Exception as exc:
-            raise MetricsError("GitHub source read failed") from exc
+    def measure():
+        def get(endpoint):
+            return diagnostic_context(
+                lambda: github(endpoint) if github is not None else _github(root, endpoint),
+                MetricsError,
+                source="metrics",
+                stage="pr-detail" if endpoint == f"{prefix}/pulls/{pr}" else "other",
+                tool="gh",
+                task_id=task_id,
+                pr=pr,
+            )
 
-    pull = _object(get(f"{prefix}/pulls/{pr}"), "pull request")
-    base_repository = _object(_object(pull.get("base"), "PR base").get("repo"), "base repository")
-    if (
-        pull.get("number") != pr
-        or str(base_repository.get("full_name")).casefold() != repository.casefold()
-    ):
-        raise MetricsError("PR identity does not match the requested repository/number")
-    if pull.get("merged") is not True:
-        raise MetricsError("unit PR must be merged")
-    merged = _time(pull.get("merged_at"), "merge")
-    opened = _time(pull.get("created_at"), "PR creation")
-    branch = _object(pull.get("head"), "PR head").get("ref")
-    if not isinstance(branch, str) or not branch:
-        raise MetricsError("PR head branch is unavailable")
-    if branch.startswith("agent/"):
-        if branch != f"agent/{task_id}" or task is None:
-            raise MetricsError("agent PR must match the task and have recorded state")
-        mode = task.get("mode", "auto")
-        if mode not in state.MODES:
-            raise MetricsError("unknown task mode")
-    else:
-        if task is not None:
-            raise MetricsError("task state cannot identify a non-agent PR")
-        mode = "director"
-    history = _items(task.get("history"), "task history") if task is not None else None
-    raw_commits = _items(get(f"{prefix}/pulls/{pr}/commits?per_page=100"), "PR commits")
-    if not raw_commits:
-        raise MetricsError("merged PR has no available commits")
-    commits = [_commit(root, item) for item in raw_commits]
-    shas = {item["sha"] for item in commits}
-    if len(shas) != len(commits):
-        raise MetricsError("duplicate PR commits")
-    records = _invocations(root, task_id)
-    start = min(item["authored"] for item in commits)
-    if mode == "auto":
-        dispatched = [
-            _time(item.get("at"), "dispatch")
-            for item in history
-            if str(item.get("event", "")).startswith("DISPATCH_")
-        ]
-        if dispatched:
-            start = min(dispatched)
-    if start > merged:
-        raise MetricsError("unit starts after its merge")
-    ci_runs, red = _ci(get, prefix, branch, shas, pr, merged)
-    reviews = _items(get(f"{prefix}/pulls/{pr}/reviews?per_page=100"), "reviews")
-    comments = _items(get(f"{prefix}/pulls/{pr}/comments?per_page=100"), "review comments")
-    rounds = {
-        item.get("commit_id")
-        for item in reviews
-        if item.get("submitted_at") is not None and _time(item["submitted_at"], "review") <= merged
-    }
-    if None in rounds:
-        raise MetricsError("submitted review has no commit identity")
-    dollars, source = _cost(mode, records)
-    try:
-        usage = handusage.validate(task.get("hand_usage")) if mode == "hand" else None
-    except handusage.HandUsageError as exc:
-        raise MetricsError(str(exc)) from None
-    return {
-        "schema": SCHEMA_VERSION,
-        "task_id": task_id,
-        "pr": pr,
-        "mode": mode,
-        "merged_at": pull["merged_at"],
-        "wall_time_seconds": int((merged - start).total_seconds()),
-        "commits": len(commits),
-        "test_commits": sum(
-            not item["merge"]
-            and bool(item["files"])
-            and all(_test_path(path) for path in item["files"])
-            for item in commits
-        ),
-        "ci_runs": ci_runs,
-        "red_ci_runs": red,
-        "review_rounds": len(rounds),
-        "review_comments": len(comments),
-        "human_delta_lines": _human_delta(mode, commits, opened, records),
-        "guard_violations": sum(item.get("event") == "GUARD_VIOLATION" for item in history)
-        if history is not None
-        else None,
-        "cost_usd": dollars,
-        "cost_source": source,
-        **{field: usage[field] if usage is not None else None for field in handusage.TOKEN_FIELDS},
-        "num_turns": usage["num_turns"] if usage is not None else None,
-        "usage_source": usage["source"] if usage is not None else None,
-        "pipeline_version": _version(root, commits[0]["sha"]),
-        "backfilled": bool(backfilled),
-    }
+        pull = _object(get(f"{prefix}/pulls/{pr}"), "pull request")
+        base_repository = _object(
+            _object(pull.get("base"), "PR base").get("repo"), "base repository"
+        )
+        if (
+            pull.get("number") != pr
+            or str(base_repository.get("full_name")).casefold() != repository.casefold()
+        ):
+            raise MetricsError("PR identity does not match the requested repository/number")
+        if pull.get("merged") is not True:
+            raise MetricsError("unit PR must be merged")
+        merged = _time(pull.get("merged_at"), "merge")
+        opened = _time(pull.get("created_at"), "PR creation")
+        branch = _object(pull.get("head"), "PR head").get("ref")
+        if not isinstance(branch, str) or not branch:
+            raise MetricsError("PR head branch is unavailable")
+        if branch.startswith("agent/"):
+            if branch != f"agent/{task_id}" or task is None:
+                raise MetricsError("agent PR must match the task and have recorded state")
+            mode = task.get("mode", "auto")
+            if mode not in state.MODES:
+                raise MetricsError("unknown task mode")
+        else:
+            if task is not None:
+                raise MetricsError("task state cannot identify a non-agent PR")
+            mode = "director"
+        history = _items(task.get("history"), "task history") if task is not None else None
+        raw_commits = _items(get(f"{prefix}/pulls/{pr}/commits?per_page=100"), "PR commits")
+        if not raw_commits:
+            raise MetricsError("merged PR has no available commits")
+        commits = [_commit(root, item) for item in raw_commits]
+        shas = {item["sha"] for item in commits}
+        if len(shas) != len(commits):
+            raise MetricsError("duplicate PR commits")
+        records = _invocations(root, task_id)
+        start = min(item["authored"] for item in commits)
+        if mode == "auto":
+            dispatched = [
+                _time(item.get("at"), "dispatch")
+                for item in history
+                if str(item.get("event", "")).startswith("DISPATCH_")
+            ]
+            if dispatched:
+                start = min(dispatched)
+        if start > merged:
+            raise MetricsError("unit starts after its merge")
+        ci_runs, red = _ci(get, prefix, branch, shas, pr, merged)
+        reviews = _items(get(f"{prefix}/pulls/{pr}/reviews?per_page=100"), "reviews")
+        comments = _items(get(f"{prefix}/pulls/{pr}/comments?per_page=100"), "review comments")
+        rounds = {
+            item.get("commit_id")
+            for item in reviews
+            if item.get("submitted_at") is not None
+            and _time(item["submitted_at"], "review") <= merged
+        }
+        if None in rounds:
+            raise MetricsError("submitted review has no commit identity")
+        dollars, source = _cost(mode, records)
+        try:
+            usage = handusage.validate(task.get("hand_usage")) if mode == "hand" else None
+        except handusage.HandUsageError as exc:
+            raise MetricsError(str(exc)) from None
+        return {
+            "schema": SCHEMA_VERSION,
+            "task_id": task_id,
+            "pr": pr,
+            "mode": mode,
+            "merged_at": pull["merged_at"],
+            "wall_time_seconds": int((merged - start).total_seconds()),
+            "commits": len(commits),
+            "test_commits": sum(
+                not item["merge"]
+                and bool(item["files"])
+                and all(_test_path(path) for path in item["files"])
+                for item in commits
+            ),
+            "ci_runs": ci_runs,
+            "red_ci_runs": red,
+            "review_rounds": len(rounds),
+            "review_comments": len(comments),
+            "human_delta_lines": _human_delta(mode, commits, opened, records),
+            "guard_violations": sum(item.get("event") == "GUARD_VIOLATION" for item in history)
+            if history is not None
+            else None,
+            "cost_usd": dollars,
+            "cost_source": source,
+            **{
+                field: usage[field] if usage is not None else None
+                for field in handusage.TOKEN_FIELDS
+            },
+            "num_turns": usage["num_turns"] if usage is not None else None,
+            "usage_source": usage["source"] if usage is not None else None,
+            "pipeline_version": _version(root, commits[0]["sha"]),
+            "backfilled": bool(backfilled),
+        }
+
+    return diagnostic_context(
+        measure,
+        MetricsError,
+        source="metrics",
+        stage="other",
+        tool="none",
+        task_id=task_id,
+        pr=pr,
+    )
+
+
+def collect(
+    root: str | Path,
+    task_id: str,
+    *,
+    pr: int | None = None,
+    repo: str | None = None,
+    github: Callable[[str], object] | None = None,
+    backfilled: bool = False,
+) -> dict:
+    """Collect a complete record, binding failures to the requested unit identity."""
+    return diagnostic_context(
+        lambda: _collect(root, task_id, pr=pr, repo=repo, github=github, backfilled=backfilled),
+        MetricsError,
+        source="metrics",
+        stage="other",
+        tool="none",
+        task_id=task_id,
+        pr=pr,
+    )

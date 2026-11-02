@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -23,6 +24,12 @@ from agentlib import metrics, spec
 
 class PublishError(Exception):
     """Publication failed; messages contain no source data or credentials."""
+
+    def __init__(self, message, *, diagnostic=None):
+        super().__init__(message)
+        self.diagnostic = metrics.validate_diagnostic(diagnostic) or metrics.failure_diagnostic(
+            source="publisher"
+        )
 
 
 _COUNTERS = {
@@ -77,11 +84,26 @@ def _run(arguments, root, *, environment=None, allowed=(0,)):
             encoding="utf-8",
             check=False,
         )
-        if result.returncode not in allowed:
-            raise PublishError("metric source or publication command failed")
+        if allowed is not None and result.returncode not in allowed:
+            raise PublishError(
+                "metric source or publication command failed",
+                diagnostic=metrics.command_diagnostic(
+                    "gh" if arguments[0] == "gh" else "git",
+                    result.stderr,
+                    result.returncode,
+                    source="publisher",
+                ),
+            )
         return result
     except (OSError, UnicodeError) as exc:
-        raise PublishError("metric source or publication command failed") from exc
+        raise PublishError(
+            "metric source or publication command failed",
+            diagnostic=metrics.command_diagnostic(
+                "gh" if arguments[0] == "gh" else "git",
+                str(exc),
+                source="publisher",
+            ),
+        ) from exc
 
 
 def _git(root, *arguments, environment=None, allowed=(0,)):
@@ -259,7 +281,23 @@ def _github(root, endpoint):
 def _collect(root, task, *, pr, repo, out, backfilled):
     # Fetch an explicitly validated numeric PR ref as object data only. Squash
     # and rebase merges need original PR objects, absent from main's ancestry.
-    _git(root, "fetch", "--no-tags", "--no-recurse-submodules", "origin", f"refs/pull/{pr}/head")
+    metrics.diagnostic_context(
+        partial(
+            _git,
+            root,
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "origin",
+            f"refs/pull/{pr}/head",
+        ),
+        PublishError,
+        source="publisher",
+        stage="collector",
+        tool="git",
+        task_id=task,
+        pr=pr,
+    )
     environment = _environment(readonly=True)
     environment["AGENTCTL_DATA_ROOT"] = str(root)
     arguments = [
@@ -275,10 +313,41 @@ def _collect(root, task, *, pr, repo, out, backfilled):
         repo,
         "--out",
         str(out),
+        "--diagnostic-json",
     ]
     if backfilled:
         arguments.append("--backfilled")
-    _run(arguments, root, environment=environment)
+    response = _run(arguments, root, environment=environment, allowed=None)
+    if response.returncode:
+        fallback = metrics.failure_diagnostic(
+            source="publisher", stage="collector", tool="python", task_id=task, pr=pr
+        )
+        if type(response.returncode) is int and -255 <= response.returncode <= 255:
+            fallback["exit_code"] = response.returncode
+        try:
+
+            def pairs(items):
+                value = {}
+                for key, item in items:
+                    if key in value:
+                        raise ValueError("duplicate field")
+                    value[key] = item
+                return value
+
+            # json.loads rejects trailing records/text; no raw stream is forwarded.
+            if not isinstance(response.stderr, str) or len(response.stderr) > 4096:
+                raise ValueError("oversized diagnostic")
+            envelope = json.loads(response.stderr, object_pairs_hook=pairs)
+            value = (
+                metrics.validate_diagnostic(
+                    envelope["metrics_error"], task_id=task, pr=pr, source="metrics"
+                )
+                if type(envelope) is dict and set(envelope) == {"metrics_error"}
+                else None
+            )
+        except (ValueError, TypeError, RecursionError):
+            value = None
+        raise PublishError("metric collector failed", diagnostic=value or fallback)
 
 
 def collect_batch(
@@ -392,32 +461,96 @@ def _collect_batch(
                         "per_page": 100,
                     }
                 )
-                matches = github(f"repos/{repo}/pulls?{query}")
-                if not isinstance(matches, list):
-                    raise PublishError("invalid PR discovery response")
-                matches = [
-                    item
-                    for item in matches
-                    if _listed_merge(item, repo) and item["head"]["ref"] == f"agent/{task}"
-                ]
-                if len(matches) > 1:
-                    raise PublishError("ambiguous task PR identity")
-                if not matches:
+                matches = metrics.diagnostic_context(
+                    partial(github, f"repos/{repo}/pulls?{query}"),
+                    PublishError,
+                    source="publisher",
+                    stage="pr-discovery",
+                    tool="gh",
+                    task_id=task,
+                )
+
+                def discovered_number(matches=matches, task=task):
+                    if not isinstance(matches, list):
+                        raise PublishError("invalid PR discovery response")
+                    matches = [
+                        item
+                        for item in matches
+                        if _listed_merge(item, repo) and item["head"]["ref"] == f"agent/{task}"
+                    ]
+                    if len(matches) > 1:
+                        raise PublishError("ambiguous task PR identity")
+                    return _number(matches[0].get("number")) if matches else None
+
+                number = metrics.diagnostic_context(
+                    discovered_number,
+                    PublishError,
+                    source="publisher",
+                    stage="pr-discovery",
+                    tool="gh",
+                    task_id=task,
+                )
+                if number is None:
                     continue
-                number = _number(matches[0].get("number"))
-            detail = github(f"repos/{repo}/pulls/{number}")
+            detail = metrics.diagnostic_context(
+                partial(github, f"repos/{repo}/pulls/{number}"),
+                PublishError,
+                source="publisher",
+                stage="pr-detail",
+                tool="gh",
+                task_id=task,
+                pr=number,
+            )
             if backfilled and isinstance(detail, dict) and detail.get("merged") is False:
                 continue
-            _identity(detail, repo, task, number)
+            metrics.diagnostic_context(
+                partial(_identity, detail, repo, task, number),
+                PublishError,
+                source="publisher",
+                stage="pr-detail",
+                tool="gh",
+                task_id=task,
+                pr=number,
+            )
             destination = staged / f"{task}.json"
-            collect(root, task, pr=number, repo=repo, out=destination, backfilled=backfilled)
-            value = _record(_json(destination), task)
-            if (
-                value["pr"] != number
-                or value["mode"] != task_state.get("mode", "auto")
-                or value["backfilled"] != backfilled
+            metrics.diagnostic_context(
+                partial(
+                    collect,
+                    root,
+                    task,
+                    pr=number,
+                    repo=repo,
+                    out=destination,
+                    backfilled=backfilled,
+                ),
+                PublishError,
+                source="publisher",
+                stage="collector",
+                tool="python",
+                task_id=task,
+                pr=number,
+            )
+
+            def validate_collected(
+                destination=destination, task=task, number=number, task_state=task_state
             ):
-                raise PublishError("collected metric identity mismatch")
+                value = _record(_json(destination), task)
+                if (
+                    value["pr"] != number
+                    or value["mode"] != task_state.get("mode", "auto")
+                    or value["backfilled"] != backfilled
+                ):
+                    raise PublishError("collected metric identity mismatch")
+
+            metrics.diagnostic_context(
+                validate_collected,
+                PublishError,
+                source="publisher",
+                stage="collector",
+                tool="python",
+                task_id=task,
+                pr=number,
+            )
             completed.append(task)
         if completed:
             if set(_records(staged)) != set(completed):

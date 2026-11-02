@@ -1,7 +1,7 @@
 # 11 — Metrics in every mode, and a versioned pipeline
 
-**Update, 2026-10-31 — deliverables 1 (#281) and 2 (#287) merged;
-deliverable 3 for review.**
+**Update, 2026-11-02: deliverables 1 (#281), 2 (#287), and 3 (#292)
+merged; the overall thread remains incomplete.**
 The collector reads merged PR/Git/task/telemetry evidence; Director units need
 an explicit PR and no task state. The usage slice adds selected local Claude
 JSONL capture at hand finish and schema-2 hand counters. Definitions, nulls,
@@ -14,14 +14,18 @@ with matching input/cache counters. Missing or incompatible evidence stays
 unknown; no task allocation or subscription dollars are estimated. Historical
 VERSION remains null. No production task state or generated records changed.
 
-Deliverable 3 adds the decided `metrics` data-branch publisher with no model or
-key: verified task merges plus daily rotating bounded catchup, immutable schema-2 JSON,
-trusted main tools and a separate minimal-permission writer. Legacy auto PRs
-can be discovered without modifying state. Local isolated Git tests cover
-bootstrap, immutability and stale-writer refusal. The main-only ruleset already
-excludes metrics; no settings change is needed. First live proof remains
-**after the workflow lands on main**; do not dispatch or claim remote
-publication permission before that merge.
+Deliverable 3 merged the decided `metrics` data-branch publisher with no model
+or key: verified task merges plus daily rotating bounded catchup, immutable
+schema-2 JSON, trusted main tools and a separate minimal-permission writer.
+Legacy auto PRs can be discovered without modifying state. Local isolated Git
+tests cover bootstrap, immutability and stale-writer refusal. The main-only
+ruleset excludes metrics; no settings change is needed.
+
+The first manual run on main, **41480697894**, failed collection, produced no
+artifact and skipped publication. Its root cause is **unknown**. A safe
+diagnostic repair is underway to retain bounded failure evidence without raw
+source output. First successful proof of artifact transfer, bootstrap and push
+permissions still awaits a repaired main run **after the repair merges**.
 
 **Next: deliverable 4**, VERSION/changelog and deterministic enforcement,
 then **deliverable 5**, reporting. Neither is bundled with this publisher.
