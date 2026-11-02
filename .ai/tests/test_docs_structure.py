@@ -1,8 +1,8 @@
 """Prompt 10 migrations keep decisions canonical without losing safety choices.
 
-The first slice moves D3 out of a mixed history/status handoff. Existing
-section citations remain useful through routing links; the ADR owns the choice,
-and the state-machine reference continues to own executable protocol details.
+The slices move choices out of a mixed history/status handoff. Existing
+section citations remain useful through routing links; ADRs own choices,
+while existing references and implementation contracts keep protocol details.
 """
 
 import json
@@ -16,6 +16,7 @@ ADR = ROOT / "wiki/GeneralContext/Decisions/0001-bounded-orchestration.md"
 D2B_ADR = ROOT / "wiki/GeneralContext/Decisions/0002-worker-credential-isolation.md"
 D4_ADR = ROOT / "wiki/GeneralContext/Decisions/0003-red-baseline.md"
 D5_ADR = ROOT / "wiki/GeneralContext/Decisions/0004-required-quality-checks.md"
+D6_ADR = ROOT / "wiki/GeneralContext/Decisions/0005-provider-cost-telemetry.md"
 HANDOFF = ROOT / ".ai/docs/handoff.md"
 ROUTING = ROOT / "wiki/GeneralContext/Architecture/work-modes.md"
 DEPLOYMENT_ARCHIVE = (
@@ -335,3 +336,110 @@ def test_the_live_prompt_routes_to_d5_and_stays_within_its_prompt_budget():
     assert valid and fields.get("type") == "prompt"
     assert len(body.split()) <= doclint.load_budgets(ROOT)["prompt"]
     assert links_to_adr(prompt, text, D5_ADR)
+
+
+def test_d6_decision_has_one_typed_numbered_home_within_the_decision_budget():
+    assert D6_ADR.is_file(), "D6's provider-cost choice needs its own numbered ADR"
+    text = D6_ADR.read_text(encoding="utf-8")
+    fields, body, valid = doclint.frontmatter(text)
+    assert valid and fields.get("type") == "decision"
+    assert re.search(r"(?m)^#\s+0005\b", body)
+    assert {"context", "choice", "consequences"} <= doclint.anchors(text)
+    assert len(body.split()) <= doclint.load_budgets(ROOT)["decision"]
+
+
+def test_d6_preserves_provider_priority_honest_fallback_and_cost_provenance():
+    assert D6_ADR.is_file()
+    text = D6_ADR.read_text(encoding="utf-8")
+    # Presence alone would allow an ADR that reversed the priority. Require
+    # explicit relationships while leaving sentence structure to the writer.
+    assert re.search(
+        r"total_cost_usd[^.]*?(?:authoritative|priority|prefer|precedence|first)",
+        text,
+        re.IGNORECASE,
+    )
+    assert {"cost_usd", "cost_source", "provider", "estimate", "estimated_cost_usd"} <= set(
+        re.findall(r"`([^`]+)`", text)
+    )
+    assert re.search(r"estimate[^.]*fallback|fallback[^.]*estimate", text, re.IGNORECASE)
+    assert re.search(r"null[^.]*honest|honest[^.]*null", text, re.IGNORECASE)
+    assert re.search(r"(?:unknown|missing|absent)[^.]*price", text, re.IGNORECASE)
+    assert re.search(
+        r"(?:unsplit|split|duration)[^.]*cache|cache[^.]*duration", text, re.IGNORECASE
+    )
+
+
+def test_d6_keeps_cache_thinking_turns_sanitized_denials_and_the_legacy_warning():
+    assert D6_ADR.is_file()
+    text = D6_ADR.read_text(encoding="utf-8")
+    assert {
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_1h_input_tokens",
+        "cache_creation_5m_input_tokens",
+        "thinking_tokens",
+        "num_turns",
+        "permission_denials",
+    } <= set(re.findall(r"`([^`]+)`", text))
+    assert re.search(r"(?:filtered|saniti[sz]ed)[^.]*tool names", text, re.IGNORECASE)
+    assert re.search(r"denial[^.]*count|count[^.]*denial", text, re.IGNORECASE)
+    assert re.search(r"(?:never|exclude|omit|without)[^.]*tool_input", text, re.IGNORECASE)
+    assert re.search(r"(?:legacy|before D6|pre-D6)[^.]*under.?count", text, re.IGNORECASE)
+    assert re.search(r"(?:legacy|before D6|pre-D6)[^.]*cache", text, re.IGNORECASE)
+
+
+def test_d6_links_the_existing_cost_and_invocation_owners_and_exact_source_revision():
+    assert D6_ADR.is_file()
+    text = D6_ADR.read_text(encoding="utf-8")
+    for owner in (
+        ROOT / ".ai/docs/operations.md",
+        ROOT / ".ai/agentlib/telemetry.py",
+        ROOT / ".ai/agentlib/agentresult.py",
+    ):
+        assert links_to_adr(D6_ADR, text, owner), f"Link the existing owner: {owner.name}"
+    assert (
+        "https://github.com/DavidDems/fanwire/blob/"
+        "4795f19f50405ac0d0a95276ddd427014559b392/.ai/docs/handoff.md#101-defects"
+    ) in doclint.inline_links(text)
+
+
+def test_handoff_d6_routes_to_the_decision_and_preserves_the_review_sections():
+    text = HANDOFF.read_text(encoding="utf-8")
+    (row,) = re.findall(r"(?m)^\| D6 \|.*$", text)
+    assert links_to_adr(HANDOFF, row, D6_ADR)
+    for section in ("10", "10.1", "10.3", "10.5"):
+        assert doclint.has_section(text, section)
+
+
+def test_d6_proof_gaps_and_residue_remain_verbatim_visible_in_the_retained_review():
+    text = HANDOFF.read_text(encoding="utf-8")
+    review = text.split("### 10.1 ", 1)[1].split("### 10.2 ", 1)[0]
+    # These are historical limits, not the ADR's normative choice. Keep the
+    # exact evidence caveats visible locally even if the table is shortened.
+    for limit in (
+        (
+            "Unproven until live: the envelope on CI's CLI version, multi-turn cost, "
+            "a real `permission_denials` entry, cost on a non-zero CLI exit."
+        ),
+        (
+            "Residue: the provider figure is read from a file the model's user could touch "
+            "(not a new boundary: the tokens came from the same file); "
+            "nothing reconciles it with the Console"
+        ),
+    ):
+        assert limit in re.sub(r"<!--.*?-->", "", review, flags=re.DOTALL)
+
+
+def test_canonical_routing_discovers_the_provider_cost_choice():
+    text = ROUTING.read_text(encoding="utf-8")
+    routing = text.split("## How work is handed on and planned", 1)[1].split("\n## ", 1)[0]
+    assert links_to_adr(ROUTING, routing, D6_ADR)
+
+
+def test_the_budgeted_live_prompt_routes_to_the_d6_choice():
+    prompt = ROOT / "wiki/GeneralContext/Prompts/10-docs-structure.md"
+    text = prompt.read_text(encoding="utf-8")
+    fields, body, valid = doclint.frontmatter(text)
+    assert valid and fields.get("type") == "prompt"
+    assert len(body.split()) <= doclint.load_budgets(ROOT)["prompt"]
+    assert links_to_adr(prompt, text, D6_ADR)
