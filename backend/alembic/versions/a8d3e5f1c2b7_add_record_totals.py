@@ -1,4 +1,5 @@
-"""add player_season_totals and team_game_totals (the records library)
+"""add player_season_totals and team_game_totals (the records library), and
+eight partial indexes for single-game player records
 
 Revision ID: a8d3e5f1c2b7
 Revises: c7a4e2f9b6d1
@@ -100,6 +101,24 @@ LEFT JOIN box AS b ON b.game_id = r.game_id AND b.team_id = r.team_id
 """
 
 
+_PLAYED = "seconds_played IS NOT NULL"
+
+# app.events.models' EVENTS-012 player_game_stats indexes: name -> key.
+_STAT_INDEXES: dict[str, sa.TextClause | str] = {
+    f"ix_player_game_stats_{stat}_played": stat
+    for stat in (
+        "plus_minus",
+        "free_throws_made",
+        "blocks",
+        "defensive_rebounds",
+        "steals",
+        "offensive_rebounds",
+        "field_goals_made",
+    )
+}
+_STAT_INDEXES["ix_player_game_stats_minutes_played"] = sa.text("(seconds_played / 60)")
+
+
 def _id() -> sa.Column:
     return sa.Column("id", sa.BigInteger(), sa.Identity(always=True), nullable=False)
 
@@ -107,7 +126,8 @@ def _id() -> sa.Column:
 def upgrade() -> None:
     """Hand-written, mirroring app.events.models.PlayerSeasonTotals and
     TeamGameTotals exactly: no foreign key (derived rows; nothing may block
-    deleting a team or game) and no index but the primary key."""
+    deleting a team or game) and no index but the primary key. Then the
+    eight player_game_stats partial indexes, as the models declare them."""
     op.create_table(
         "player_season_totals",
         _id(),
@@ -139,8 +159,12 @@ def upgrade() -> None:
     )
     op.execute(_PLAYER_SEASON_TOTALS)
     op.execute(_TEAM_GAME_TOTALS)
+    for name, key in _STAT_INDEXES.items():
+        op.create_index(name, "player_game_stats", [key], postgresql_where=sa.text(_PLAYED))
 
 
 def downgrade() -> None:
+    for name in reversed(list(_STAT_INDEXES)):
+        op.drop_index(name, table_name="player_game_stats")
     op.drop_table("team_game_totals")
     op.drop_table("player_season_totals")

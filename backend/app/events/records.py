@@ -51,6 +51,7 @@ from typing import Any, Literal
 
 from sqlalchemy import (
     BigInteger,
+    Integer,
     Numeric,
     RowMapping,
     Select,
@@ -61,6 +62,7 @@ from sqlalchemy import (
     cast,
     func,
     literal,
+    literal_column,
     null,
     select,
     true,
@@ -72,6 +74,7 @@ from sqlalchemy.sql.selectable import CTE
 
 from app.events.models import (
     FINALS_LABEL,
+    MINUTES_PLAYED,
     TRIPLE_DOUBLE,
     Game,
     Player,
@@ -497,7 +500,13 @@ def _career(value: ColumnElement[Any], *where: ColumnElement[bool]) -> Candidate
 
 def _career_triple_doubles() -> Candidates:
     # models.TRIPLE_DOUBLE: also the predicate of the index that serves this.
-    return _career(func.count(), TRIPLE_DOUBLE)
+    # Counted as distinct games (the same number: a player has one line per
+    # game), so the aggregate wants its lines in (player_id, game_id) order,
+    # which ix_player_game_stats_triple_doubles yields and no other index
+    # over played lines does. With count(*) the planner was free to hash any
+    # of them, and on a small table with constant minutes it took
+    # ix_player_game_stats_minutes_played, whose key's correlation is 1.
+    return _career(func.count(PlayerGameStats.game_id.distinct()), TRIPLE_DOUBLE)
 
 
 # ------------------------------------------ the aggregate tables' families
@@ -509,8 +518,9 @@ _TGT = TeamGameTotals
 
 
 def _minutes(seconds: _Column) -> ColumnElement[Any]:
-    """Whole minutes (integer division)."""
-    return seconds // literal(60)
+    """Whole minutes (integer division), 60 written into the SQL as
+    models.MINUTES_PLAYED writes it."""
+    return seconds // literal_column("60", Integer)
 
 
 def _fraction(made: _Column, attempted: _Column) -> ColumnElement[Any]:
@@ -1455,7 +1465,7 @@ _PLAYER_GAME = _in(
         "Most minutes in a game",
         "minutes",
         f"Whole minutes played by one player in one game. {_SINGLE_GAME}.",
-        _player_game(_minutes(_P.seconds_played)),
+        _player_game(MINUTES_PLAYED),
         "count",
         _MINUTES,
         _GAME,

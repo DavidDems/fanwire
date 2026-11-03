@@ -232,6 +232,32 @@ Index(
     PlayerGameStats.game_id,
     postgresql_where=PlayerGameStats.played & TRIPLE_DOUBLE,
 )
+# Whole minutes on the court (integer division): the one spelling shared by
+# player-minutes-game (app.events.records) and the index below that serves it.
+MINUTES_PLAYED: ColumnElement[int | None] = PlayerGameStats.seconds_played // _inline(60)
+
+# EVENTS-012: the single-game player lists measured over 300 ms on the perf
+# profile, each served the way the four above are; the migration
+# (a8d3e5f1c2b7) creates the same eight.
+for _stat in (
+    "plus_minus",
+    "free_throws_made",
+    "blocks",
+    "defensive_rebounds",
+    "steals",
+    "offensive_rebounds",
+    "field_goals_made",
+):
+    Index(
+        f"ix_player_game_stats_{_stat}_played",
+        getattr(PlayerGameStats, _stat),
+        postgresql_where=PlayerGameStats.played,
+    )
+Index(
+    "ix_player_game_stats_minutes_played",
+    MINUTES_PLAYED,
+    postgresql_where=PlayerGameStats.played,
+)
 Index("ix_games_margin", func.abs(Game.home_score - Game.away_score))
 Index(
     "ix_games_nba_finals",
