@@ -10,7 +10,7 @@ ranks on whole minutes (`seconds_played / 60`), so its key must be that
 expression for the index to serve the ORDER BY. That the planner uses each
 one is tests/events/test_records_indexes.py's job; this pins that the
 migrations create them, the models declare them, and downgrading to the
-head before EVENTS-012 (c7a4e2f9b6d1) removes them.
+head before EVENTS-012 (e8a6d4c2b901) removes them.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from app.db import make_engine
 from app.events.models import PlayerGameStats
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
-_PARENT_REVISION = "c7a4e2f9b6d1"  # add_users_profile_avatar_key, head before EVENTS-012
+_PARENT_REVISION = "e8a6d4c2b901"  # add_history_indexes (POSTS-008), head before EVENTS-012
 _PLAYED = "seconds_playedisnotnull"
 
 

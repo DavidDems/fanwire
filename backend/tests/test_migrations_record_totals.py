@@ -2,8 +2,8 @@
 and populated from the games and box scores already stored, and dropped
 cleanly on downgrade. Written before the revision exists.
 
-The new revision's parent is named explicitly (c7a4e2f9b6d1, the head before
-EVENTS-012), not "-1", so this keeps meaning "undo this migration" after a
+The new revision's parent is named explicitly (e8a6d4c2b901, POSTS-008's
+history indexes, the head before EVENTS-012), not "-1", so this keeps meaning "undo this migration" after a
 later revision becomes head (tests/test_migrations.py's lesson).
 
 Every test leaves the database at head with the rows it wrote deleted.
@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 from alembic import command
@@ -22,7 +23,8 @@ from app.db import make_engine
 from tests.record_totals_support import TOTALS_TABLES, identity_pk, rebuilt_snapshots, snapshots
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
-_PARENT_REVISION = "c7a4e2f9b6d1"  # add_users_profile_avatar_key, head before EVENTS-012
+_PARENT_REVISION = "e8a6d4c2b901"  # add_history_indexes (POSTS-008), head before EVENTS-012
+_REVISION = "a8d3e5f1c2b7"  # add_record_totals, EVENTS-012
 
 _STATS = (
     "field_goals_made",
@@ -135,6 +137,14 @@ def _insert_history(conn) -> None:
                 ),
                 {"g": game_id, "p": player_id, "t": team_id, **dict.fromkeys(_STATS, 5)},
             )
+
+
+def test_the_revision_is_the_single_head_and_chains_onto_the_parent():
+    """Reads the scripts only, no database: one head, EVENTS-012's, whose
+    parent is the head before it, so the history stays linear."""
+    scripts = ScriptDirectory.from_config(Config(str(_BACKEND_DIR / "alembic.ini")))
+    assert scripts.get_heads() == [_REVISION]
+    assert scripts.get_revision(_REVISION).down_revision == _PARENT_REVISION
 
 
 @pytest.mark.parametrize("table", TOTALS_TABLES)
