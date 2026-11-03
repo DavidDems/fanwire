@@ -5,7 +5,8 @@ export default {
   entryJsRawGrowth: 2_048,
   entryJsGzipGrowth: 1_000,
   // Sharing the in-page tabs with History extracts them from the navigator.
-  changed: { StatsNavigator: 4_010, "css:StatsNavigator.css": 364 },
+  changed: { StatsNavigator: 4_010 },
+  removed: ["css:StatsNavigator.css"],
   added: {
     HistoryPage: 4_000,
     "css:HistoryPage.css": 700,
