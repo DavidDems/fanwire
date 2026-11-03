@@ -9,9 +9,8 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import symbol from "../assets/brand/symbol.svg";
-import wordmarkDark from "../assets/brand/wordmark-dark.svg";
-import wordmarkLight from "../assets/brand/wordmark-light.svg";
+import wordmarkDark from "../assets/brand/wordmark-dark.png";
+import wordmarkLight from "../assets/brand/wordmark-light.png";
 import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { Button, buttonClass } from "../components/ui/Button";
@@ -146,13 +145,12 @@ export function AppLayout() {
       </a>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
-          <img src={symbol} alt="" width={28} height={28} />
           <picture className={styles.wordmark}>
             <source
               srcSet={wordmarkDark}
               media="(prefers-color-scheme: dark)"
             />
-            <img src={wordmarkLight} alt="fanwire" width={93} height={20} />
+            <img src={wordmarkLight} alt="fanwire" width={105} height={28} />
           </picture>
         </Link>
         <nav aria-label="Primary" className={styles.nav}>
