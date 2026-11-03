@@ -1,12 +1,15 @@
 """feed/ HTTP routes.
 
-Security: both routes use get_optional_current_user (users/'s auth
+Security: public feed/thread routes use get_optional_current_user (users/'s auth
 dependency, the sanctioned cross-module contact point) -- no Authorization
 header at all is a guest request (the guest feed / a guest's read of a
 thread), a valid token personalizes GET /feed, and a *present but invalid*
 token still 401s, inherited from get_optional_current_user itself. Reading
 a feed/thread never requires being logged in, matching GET /posts/... and
 GET /events/...'s guest-read precedent.
+
+History is private: get_current_user requires a verified token and an active
+account, and the route reads only that caller's activity.
 
 No tables, no migrations here -- feed/ is a pure computation layer over
 posts/users/media/events' public read functions (0x00-architecture.md
@@ -19,18 +22,48 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
-from app.feed.schemas import FeedPage, ThreadView
+from app.feed.history import HistoryPosition, decode_history_cursor
+from app.feed.schemas import FeedPage, HistoryPage, ThreadView
 from app.feed.strategies import strategy_for
 from app.feed.views import assemble_post_views
 from app.posts.models import Post
-from app.posts.service import deleted_post_ids, replies_to
-from app.users.dependencies import get_optional_current_user
+from app.posts.service import HistoryTab, deleted_post_ids, query_history_posts, replies_to
+from app.users.dependencies import get_current_user, get_optional_current_user
 from app.users.models import User
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
 _DEFAULT_LIMIT = 20
 _MAX_LIMIT = 50
+
+
+@router.get("/history", response_model=HistoryPage)
+def get_history(
+    tab: HistoryTab = "posts",
+    cursor: str | None = None,
+    limit: int = Query(default=_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT),
+    viewer: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> HistoryPage:
+    """Only the authenticated active caller's activity; never a requested user id."""
+    position = decode_history_cursor(cursor, tab)
+    rows = query_history_posts(
+        session,
+        user_id=viewer.id,
+        tab=tab,
+        before_id=position.post_id if position else None,
+        before_liked_at=position.liked_at if position else None,
+        limit=limit + 1,
+    )
+    page = rows[:limit]
+    next_cursor = None
+    if len(rows) > limit:
+        post, liked_at = page[-1]
+        next_cursor = HistoryPosition(tab=tab, post_id=post.id, liked_at=liked_at).encode()
+    return HistoryPage(
+        items=assemble_post_views(session, [post for post, _ in page], viewer_id=viewer.id),
+        next_cursor=next_cursor,
+    )
 
 
 @router.get("", response_model=FeedPage)

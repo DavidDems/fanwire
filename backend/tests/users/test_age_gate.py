@@ -33,6 +33,8 @@ from app.users.routes import router
 # date. It used to be the server's local date, which a deployment in UTC (the
 # Lambdas) never told apart, and which a developer's machine west of UTC did,
 # for some hours every evening.
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+
 TODAY = datetime.now(UTC).date()
 
 
@@ -77,7 +79,9 @@ def client(app):
 
 
 def _as_identity(app, sub: str) -> None:
-    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(sub=sub)
+    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
+        sub=sub, auth_time=RECENT_AUTH_TIME
+    )
 
 
 def _user_count(session_factory, username: str) -> int:

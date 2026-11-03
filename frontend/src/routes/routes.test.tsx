@@ -40,6 +40,7 @@ import {
   testSession,
 } from "../test/auth";
 import { emptyFeed } from "../test/feed";
+import { historyStub } from "../test/history";
 import { notificationsAre, preferenceIs } from "../test/notifications";
 import { gameFiltersAre } from "../test/search";
 import { server } from "../test/server";
@@ -100,6 +101,8 @@ const VIEWS: View[] = [
   },
   { path: "/compose", heading: /^compose$/i, as: "member" },
   { path: "/notifications", heading: /^notifications$/i, as: "member" },
+  { path: "/history", heading: /^history$/i, as: "member" },
+  { path: "/settings", heading: /^account settings$/i, as: "member" },
   {
     path: "/create-profile",
     heading: /^create your profile$/i,
@@ -116,6 +119,7 @@ function arrange(as: Visitor): AuthService {
   // runs with `onUnhandledRequest: "error"` and several cases here render `/`.
   // Nothing in this file asserts on the feed.
   server.use(publicProfilesById(), teamsAre(), emptyFeed());
+  server.use(historyStub().handler);
   // `/notifications` renders FRONTEND-006's page for a `member` visitor and it
   // fetches on mount, so its two reads are answered here for every visitor —
   // the same reason. Nothing here asserts on either: an empty list and a
@@ -159,6 +163,12 @@ function renderView(view: View) {
 afterEach(cleanup);
 
 describe("the route table", () => {
+  it("keeps History directly reachable without adding its later account-menu link", async () => {
+    renderAt("/history", arrange("member"));
+    await screen.findByRole("heading", { name: /^history$/i });
+    expect(screen.queryByRole("link", { name: /^history$/i })).toBeNull();
+  });
+
   it.each(VIEWS)("renders a view at $path for a $as visitor", async (view) => {
     renderView(view);
 
@@ -194,7 +204,10 @@ describe("the route table", () => {
         // FRONTEND-020: /compose opens over the feed, which stays underneath.
         if (view.path === "/compose" && other.path === "/") continue;
         expect(
-          screen.queryAllByRole("heading", { name: other.heading }),
+          screen.queryAllByRole("heading", {
+            level: 1,
+            name: other.heading,
+          }),
           `${view.path} must not render the ${other.path} view`,
         ).toHaveLength(0);
       }
@@ -215,7 +228,7 @@ describe("the route table", () => {
 
 describe("the guards are wired into the table, not just written", () => {
   it("sends an anonymous visitor from a protected route to sign-in", async () => {
-    for (const path of ["/compose", "/notifications"]) {
+    for (const path of ["/compose", "/notifications", "/history", "/settings"]) {
       renderAt(path, arrange("anonymous"));
 
       expect(
@@ -227,7 +240,7 @@ describe("the guards are wired into the table, not just written", () => {
   });
 
   it("sends a signed-in visitor with no profile from a protected route to profile creation", async () => {
-    renderAt("/compose", arrange("newcomer"));
+    renderAt("/settings", arrange("newcomer"));
 
     expect(
       await screen.findByRole("heading", { name: /^create your profile$/i }),

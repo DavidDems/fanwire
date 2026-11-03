@@ -138,8 +138,10 @@ describe("the shell's CSS module (criterion 8)", () => {
  * page) wrapped in a 61 px cell, which made the bar 69.8 px tall against a 64 px
  * padding. No inline padding on a phone cell keeps it on one line (a 55.4 px bar)
  * down to 330 px of content. Under that it can still wrap, so the padding covers
- * the two-line bar too. With Sign out, the header needs about 682 px of content,
- * so the wordmark steps aside from 40em until 44em, where the nav is inline.
+ * the two-line bar too. With Sign out and a 17 px scrollbar at 640 px, the
+ * 28 px cursive wordmark (105 px wide) wraps "Your profile"; at 18 px (68 px
+ * wide) the header holds one line, so the wordmark shrinks from 40em until 44em.
+ * It is never hidden: there is no symbol beside it any more.
  */
 describe("the bottom bar and the header's room", () => {
   const FROM_44EM = /^@media\b.*\(\s*min-width\s*:\s*44em\s*\)/i;
@@ -196,17 +198,24 @@ describe("the bottom bar and the header's room", () => {
     expect(declared(topLevelRule(".signOut"), "margin-left")).toBe("auto");
   });
 
-  it("hides the wordmark from 40em and shows it again from 44em", () => {
-    expect(declared(ruleInMedia(FROM_40EM, ".wordmark"), "position")).toBe(
-      "absolute",
+  it("never hides the wordmark", () => {
+    const rules = shellBlocks().flatMap((block) =>
+      isAtRule(block) ? block.children : [block],
     );
-    expect(declared(ruleInMedia(FROM_40EM, ".wordmark"), "clip")).toBe(
-      "rect(0 0 0 0)",
+    for (const rule of rules.filter((r) => selectorSet(r).has(".wordmark"))) {
+      expect(declared(rule, "position")).not.toBe("absolute");
+      expect(declared(rule, "clip")).toBeUndefined();
+    }
+  });
+
+  it("draws the wordmark 28 px tall, 18 px from 40em, and 28 px again from 44em", () => {
+    expect(declared(topLevelRule(".wordmark img"), "height")).toBe("1.75rem");
+    expect(declared(ruleInMedia(FROM_40EM, ".wordmark img"), "height")).toBe(
+      "1.125rem",
     );
-    expect(declared(ruleInMedia(FROM_44EM, ".wordmark"), "position")).toBe(
-      "static",
+    expect(declared(ruleInMedia(FROM_44EM, ".wordmark img"), "height")).toBe(
+      "1.75rem",
     );
-    expect(declared(ruleInMedia(FROM_44EM, ".wordmark"), "clip")).toBe("auto");
   });
 });
 

@@ -119,13 +119,38 @@ export interface paths {
         };
         /**
          * Get Records
-         * @description Every historical record, team records then player records, each
-         *     with its rule and its holder: the first entry of its list and
-         *     `tied_count`, how many share that value; null when no stored data
-         *     qualifies. `since_season` and `through_season` are the stored data's
-         *     window. Cacheable: `Cache-Control: public, max-age=300`.
+         * @description The records library's catalog: every record, team records first, with
+         *     its category, rule, `value_kind` (which of an entry's figures it fills),
+         *     search `keywords` and `featured_rank`, and no holder (GET
+         *     /events/records/holders). `since_season` and `through_season` are the
+         *     stored data's window. Cacheable: `Cache-Control: public, max-age=300`.
          */
         get: operations["get_records_events_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/records/holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Record Holders
+         * @description Each named record's holder: the first entry of its list and
+         *     `tied_count`, how many share that value; null when no stored data
+         *     qualifies. Cacheable: `Cache-Control: public, max-age=300`.
+         *
+         *     422: `ids` missing or empty, naming more than 24 records, repeating one,
+         *     or naming an unknown record.
+         */
+        get: operations["get_record_holders_events_records_holders_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -331,6 +356,26 @@ export interface paths {
         };
         /** Get Feed */
         get: operations["get_feed_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/feed/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get History
+         * @description Only the authenticated active caller's activity; never a requested user id.
+         */
+        get: operations["get_history_feed_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1153,6 +1198,13 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HistoryPage */
+        HistoryPage: {
+            /** Items */
+            items: components["schemas"]["PostView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /**
          * LeaderOut
          * @description `teams` are the abbreviations the player played for in the counted
@@ -1725,6 +1777,42 @@ export interface components {
             username: string;
         };
         /**
+         * RecordCatalogItemOut
+         * @description One record of the catalog (EVENTS-012): what it is, never who holds
+         *     it. `category` is one of the library's seven; `keywords` are the words
+         *     a search matches beside the title; `featured_rank` is 1 to 16 for the
+         *     featured records, in order, and null for every other.
+         */
+        RecordCatalogItemOut: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "team-franchise" | "team-season" | "team-game" | "player-game" | "player-season" | "player-career" | "player-playoffs";
+            /** Featured Rank */
+            featured_rank: number | null;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "team" | "player";
+            /** Id */
+            id: string;
+            /** Keywords */
+            keywords: string[];
+            /** Rule */
+            rule: string;
+            /** Title */
+            title: string;
+            /** Unit */
+            unit: string;
+            /**
+             * Value Kind
+             * @enum {string}
+             */
+            value_kind: "count" | "win_loss" | "made_total" | "shot_pct" | "average";
+        };
+        /**
          * RecordEntryOut
          * @description One entry of a ranked record list. `rank` is competition ranking
          *     (equal values share a rank, the next rank skips). `team` is the team
@@ -1732,9 +1820,25 @@ export interface components {
          *     a player's count or career sum; `season` and `game` are null where the
          *     record has none. `value` is an integer, except a season record's win
          *     percentage (a fraction from 0 to 1, three places).
+         *
+         *     The figures behind `value` (EVENTS-011), each null where the record's
+         *     `value_kind` does not use it: a win_loss record's `wins`, `losses` and
+         *     `pct` (the win percentage, equal to `value`); a made_total record's
+         *     `made` (equal to `value`), `attempted` and `pct` (null when nothing was
+         *     attempted); a shot_pct record's `made`, `attempted` and `pct` (equal to
+         *     `value`). An average's `value` is the mean, one place, with no figure
+         *     beside it. `pct` is a fraction from 0 to 1, three places.
          */
         RecordEntryOut: {
+            /** Attempted */
+            attempted: number | null;
             game: components["schemas"]["RecordGameOut"] | null;
+            /** Losses */
+            losses: number | null;
+            /** Made */
+            made: number | null;
+            /** Pct */
+            pct: number | null;
             player: components["schemas"]["RecordPlayerOut"] | null;
             /** Rank */
             rank: number;
@@ -1743,6 +1847,8 @@ export interface components {
             team: components["schemas"]["TeamRefOut"] | null;
             /** Value */
             value: number;
+            /** Wins */
+            wins: number | null;
         };
         /**
          * RecordGameOut
@@ -1767,7 +1873,15 @@ export interface components {
          *     value (1 when it is alone).
          */
         RecordHolderOut: {
+            /** Attempted */
+            attempted: number | null;
             game: components["schemas"]["RecordGameOut"] | null;
+            /** Losses */
+            losses: number | null;
+            /** Made */
+            made: number | null;
+            /** Pct */
+            pct: number | null;
             player: components["schemas"]["RecordPlayerOut"] | null;
             /** Rank */
             rank: number;
@@ -1778,6 +1892,19 @@ export interface components {
             tied_count: number;
             /** Value */
             value: number;
+            /** Wins */
+            wins: number | null;
+        };
+        /**
+         * RecordHoldersOut
+         * @description GET /events/records/holders: one key per asked id, its holder or null
+         *     when no stored data qualifies.
+         */
+        RecordHoldersOut: {
+            /** Holders */
+            holders: {
+                [key: string]: components["schemas"]["RecordHolderOut"] | null;
+            };
         };
         /**
          * RecordListOut
@@ -1806,6 +1933,11 @@ export interface components {
             total: number;
             /** Unit */
             unit: string;
+            /**
+             * Value Kind
+             * @enum {string}
+             */
+            value_kind: "count" | "win_loss" | "made_total" | "shot_pct" | "average";
         };
         /**
          * RecordOut
@@ -1836,31 +1968,14 @@ export interface components {
             /** Last Name */
             last_name: string | null;
         };
-        /** RecordSummaryOut */
-        RecordSummaryOut: {
-            /**
-             * Group
-             * @enum {string}
-             */
-            group: "team" | "player";
-            holder: components["schemas"]["RecordHolderOut"] | null;
-            /** Id */
-            id: string;
-            /** Rule */
-            rule: string;
-            /** Title */
-            title: string;
-            /** Unit */
-            unit: string;
-        };
         /**
-         * RecordsSummaryOut
-         * @description GET /events/records. The data window is the earliest and latest
-         *     stored seasons, null when there are none.
+         * RecordsCatalogOut
+         * @description GET /events/records: every record, no holder. The data window is the
+         *     earliest and latest stored seasons, null when there are none.
          */
-        RecordsSummaryOut: {
+        RecordsCatalogOut: {
             /** Records */
-            records: components["schemas"]["RecordSummaryOut"][];
+            records: components["schemas"]["RecordCatalogItemOut"][];
             /** Since Season */
             since_season: string | null;
             /** Through Season */
@@ -2425,7 +2540,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RecordsSummaryOut"];
+                    "application/json": components["schemas"]["RecordsCatalogOut"];
+                };
+            };
+        };
+    };
+    get_record_holders_events_records_holders_get: {
+        parameters: {
+            query: {
+                /** @description 1 to 24 distinct record ids, comma-separated. Sort them, so the same set is the same cache entry. */
+                ids: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordHoldersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2683,6 +2830,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_feed_history_get: {
+        parameters: {
+            query?: {
+                tab?: "posts" | "replies" | "likes" | "reposts";
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
                 };
             };
             /** @description Validation Error */
@@ -3455,6 +3635,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Recent authentication is required to deactivate an account. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "recent_auth_required"
+                     *     }
+                     */
+                    "application/json": unknown;
+                };
             };
         };
     };

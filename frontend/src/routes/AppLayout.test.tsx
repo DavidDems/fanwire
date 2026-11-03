@@ -36,7 +36,6 @@ import {
   ChartColumnIcon,
   HouseIcon,
   SearchIcon,
-  UserIcon,
   type IconProps,
 } from "../components/ui/icons";
 import { deactivatedShown } from "../test/account";
@@ -165,14 +164,14 @@ function primaryNav(): HTMLElement {
 
 /**
  * Render the app at the visit's path and wait for the view's heading — and,
- * for a member, for "Your profile", the nav link that only appears once
- * `GET /users/me` has answered, so the whole nav is on screen.
+ * for a member, for the account menu that only appears once `GET /users/me`
+ * has answered, so the whole shell is on screen.
  */
 async function renderVisit({ path, as, heading }: Visit): Promise<void> {
   renderAppAt(path, as);
   await screen.findByRole("heading", { name: heading });
   if (as === "member") {
-    await within(primaryNav()).findByRole("link", { name: "Your profile" });
+    await within(pageBanner()).findByRole("button", { name: "Account menu" });
   }
 }
 
@@ -181,14 +180,12 @@ const NAV_ITEMS: [string, ComponentType<IconProps>][] = [
   // FRONTEND-020: Compose left the nav for the floating + (compose-modal.test.tsx).
   ["Notifications", BellIcon],
   ["Search", SearchIcon],
-  // FRONTEND-009: between Search and the profile item.
+  // FRONTEND-009: Stats follows Search; account destinations live in the menu.
   ["Stats", ChartColumnIcon],
-  ["Your profile", UserIcon],
 ];
 
-function navNamesFor(as: Visitor): string[] {
-  const names = NAV_ITEMS.map(([name]) => name);
-  return as === "member" ? names : names.filter((n) => n !== "Your profile");
+function navNamesFor(): string[] {
+  return NAV_ITEMS.map(([name]) => name);
 }
 
 /** An icon's drawing — its shape elements and their attributes — independent of size or class. */
@@ -235,7 +232,7 @@ function tabbables(): Element[] {
 /**
  * A dynamic import Vite does not resolve at transform time.
  *
- * A literal `import("../assets/brand/symbol.svg")` is resolved when this file
+ * A literal `import("../assets/brand/wordmark-light.png")` is resolved when this file
  * is transformed, so a file the implementation has not added yet would fail
  * the whole file to load and hide every other test's red. A computed
  * specifier is resolved only when the test that needs it runs.
@@ -341,14 +338,12 @@ describe("the brand link (criterion 4)", () => {
     },
   );
 
-  it('holds the symbol as a decorative <img alt="">', async () => {
+  it("holds no symbol: the wordmark is the brand link's only image", async () => {
     await renderVisit(visit("/", "anonymous"));
-    const { symbols } = brandParts();
+    const { brand, symbols } = brandParts();
 
-    expect(symbols, "one <img> outside the <picture>: the symbol").toHaveLength(
-      1,
-    );
-    expect(symbols[0]).toHaveAttribute("alt", "");
+    expect(symbols, "an <img> outside the <picture>").toHaveLength(0);
+    expect(brand.querySelectorAll("img")).toHaveLength(1);
   });
 
   it('holds the wordmark as a <picture> with a dark <source> and an <img alt="fanwire">', async () => {
@@ -369,14 +364,14 @@ describe("the brand link (criterion 4)", () => {
     // Imported here, not at the top, so a missing file fails this test alone.
     // Whatever the bundler makes of an import — a path or a data: URI — is
     // what the shell's own import of the same file renders.
-    const names = ["symbol.svg", "wordmark-light.svg", "wordmark-dark.svg"];
+    const names = ["wordmark-light.png", "wordmark-dark.png"];
     for (const name of names) {
       expect(
         existsSync(join(SRC_DIR, "assets", "brand", name)),
         `src/assets/brand/${name} must exist`,
       ).toBe(true);
     }
-    const [symbolUrl, lightUrl, darkUrl] = await Promise.all(
+    const [lightUrl, darkUrl] = await Promise.all(
       names.map(
         async (name) =>
           (await importLate<string>(`../assets/brand/${name}`)).default,
@@ -384,9 +379,8 @@ describe("the brand link (criterion 4)", () => {
     );
 
     await renderVisit(visit("/", "anonymous"));
-    const { darkSource, wordmark, symbols } = brandParts();
+    const { darkSource, wordmark } = brandParts();
 
-    expect(symbols[0]?.getAttribute("src")).toBe(symbolUrl);
     expect(wordmark?.getAttribute("src")).toBe(lightUrl);
     expect((darkSource?.getAttribute("srcset") ?? "").trim()).toMatch(
       new RegExp(`^${darkUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`),
@@ -410,8 +404,8 @@ describe("aria-current on the current route's nav link (criterion 5)", () => {
     { path: PLAYER_PATH, as: "anonymous", current: "Stats" },
     { path: "/stats/seasons", as: "member", current: "Stats" },
     { path: PLAYER_PATH, as: "member", current: "Stats" },
-    { path: OWN_PROFILE_PATH, as: "member", current: "Your profile" },
-    // Someone else's profile, a page outside the nav, and a wrong address:
+    { path: OWN_PROFILE_PATH, as: "member", current: null },
+    // Own/other profiles, a page outside the nav, and a wrong address:
     // no nav link is the current page.
     { path: OTHER_PROFILE_PATH, as: "member", current: null },
     { path: "/sign-in", as: "anonymous", current: null },
@@ -423,7 +417,7 @@ describe("aria-current on the current route's nav link (criterion 5)", () => {
     async ({ path, as, current }) => {
       await renderVisit(visit(path, as));
       const nav = primaryNav();
-      const names = navNamesFor(as);
+      const names = navNamesFor();
 
       expect(within(nav).getAllByRole("link")).toHaveLength(names.length);
       const marked = names.filter(
@@ -446,7 +440,7 @@ describe("nav link names and icons (criterion 6)", () => {
       const nav = primaryNav();
 
       expect(within(nav).getAllByRole("link")).toEqual(
-        navNamesFor(as).map((name) => within(nav).getByRole("link", { name })),
+        navNamesFor().map((name) => within(nav).getByRole("link", { name })),
       );
     },
   );

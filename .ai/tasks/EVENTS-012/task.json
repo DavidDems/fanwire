@@ -17,6 +17,7 @@
     "Measured on the full dataset or the scale fixture on the db.t4g.micro proxy (--cpus=1 --memory=1g), and reported per route in the PR: the catalog at most 20 ms median; 24 holders at most 400 ms median, the featured 16 included; every list at most 300 ms median. Upgrade time and table sizes are reported too. Any new index names the statement it serves, in test_records_indexes.py.",
     "The Records screen keeps working at this commit: until FRONTEND-030 merges the frontend reads holders through the new route with no visual change. Its tests pass after only their request mocks change.",
     "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated. No new dependency.",
+    "frontend/src/test/bundle-budgets/EVENTS-012.ts declares every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
     "wiki/CodeContext/Modules/0x02-events.md replaces 'Computed live: no aggregate table' with the new rule and these measurements, and lists the routes as built."
   ],
   "allowed_paths": [
@@ -33,6 +34,7 @@
     "frontend/src/test/records.ts",
     "frontend/src/test/records-screen.ts",
     "frontend/src/test/stats.ts",
+    "frontend/src/test/bundle-budgets/EVENTS-012.ts",
     "infra/lib/cdn-stack.ts",
     "infra/test/cdn-stack.test.ts",
     "wiki/CodeContext/Modules/0x02-events.md"

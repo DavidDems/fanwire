@@ -33,6 +33,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
 | `src/features/search/` | `/search` — the free-text bar and the Accounts and Posts sections, paged apart. Accounts and posts only since `FRONTEND-009`: sports data is on `/stats` |
 | `src/features/feed/` | `/` — the paged feed, the `PostNode` Composite, the post card's controls (`PostAction`: like, reply, repost, each with its count, `UI-009`), the optimistic like and repost, repost rendering, the media and `PostText` (game mentions as links, `FRONTEND-008`) |
+| `src/features/history/` | Lazy `/history`, behind `RequireAuth`, with no shell link. `SegmentedTabs`: Posts, Replies, Likes, Reposts; `?tab=` defaults to Posts when absent/unknown. Reads [[0x06-feed]]'s history API; `["feed", "history", tab]` stays fresh for 30 seconds. Load more appends until `next_cursor` is null. Each tab has its own empty message; failures offer `InlineAlert` and Retry. `PreparedPostNode` keeps the complete-card reveal, and shared feed-cache updates preserve optimistic like/repost and rollback behavior. |
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
@@ -1356,6 +1357,16 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     has no value for is left out. A season record notes that it ranks the
     exact percentage, so equal three-place figures can rank apart. An unknown
     id is "Record not found" in place, with Back.
+  - **A value by its `value_kind`** (`EVENTS-011`; `isRate`'s guess from the
+    unit is gone): `RecordValue` (`components/stats-nav/`) draws a card's and
+    a list cell's value. `win_loss` is `73–9` (an en dash) then `(.890)`; a
+    screen reader hears one phrase, "73 wins, 9 losses, .890" (the visible
+    part is `aria-hidden`, the phrase visually hidden), and the list's value
+    column is headed Record (the unit). `made_total` is `12 (57.1%)`, the
+    count alone when `pct` is null; a card puts its unit after the count
+    (`14 threes (58.3%)`). The parenthesis is `.share`, `--color-text-muted`
+    (4.5:1 on the card's surface and hover surface in both themes). A
+    `count` is the value alone, as before.
   - **The record level's group is its list's.** `?record=` never carries
     `group`; until the list or cached summary arrives, the id's prefix
     supplies the group (`FRONTEND-021`, R30). Unknown prefixes retain the

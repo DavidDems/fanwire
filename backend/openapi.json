@@ -1143,6 +1143,34 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistoryPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PostView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "HistoryPage",
+        "type": "object"
+      },
       "LeaderOut": {
         "description": "`teams` are the abbreviations the player played for in the counted\ngames; `average` is per game, one place.",
         "properties": {
@@ -2914,9 +2942,104 @@
         "title": "PublicUserOut",
         "type": "object"
       },
-      "RecordEntryOut": {
-        "description": "One entry of a ranked record list. `rank` is competition ranking\n(equal values share a rank, the next rank skips). `team` is the team\n(for a player's single-game record, the team they played for), null for\na player's count or career sum; `season` and `game` are null where the\nrecord has none. `value` is an integer, except a season record's win\npercentage (a fraction from 0 to 1, three places).",
+      "RecordCatalogItemOut": {
+        "description": "One record of the catalog (EVENTS-012): what it is, never who holds\nit. `category` is one of the library's seven; `keywords` are the words\na search matches beside the title; `featured_rank` is 1 to 16 for the\nfeatured records, in order, and null for every other.",
         "properties": {
+          "category": {
+            "enum": [
+              "team-franchise",
+              "team-season",
+              "team-game",
+              "player-game",
+              "player-season",
+              "player-career",
+              "player-playoffs"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "featured_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Featured Rank"
+          },
+          "group": {
+            "enum": [
+              "team",
+              "player"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value_kind": {
+            "enum": [
+              "count",
+              "win_loss",
+              "made_total",
+              "shot_pct",
+              "average"
+            ],
+            "title": "Value Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "group",
+          "category",
+          "title",
+          "unit",
+          "rule",
+          "value_kind",
+          "keywords",
+          "featured_rank"
+        ],
+        "title": "RecordCatalogItemOut",
+        "type": "object"
+      },
+      "RecordEntryOut": {
+        "description": "One entry of a ranked record list. `rank` is competition ranking\n(equal values share a rank, the next rank skips). `team` is the team\n(for a player's single-game record, the team they played for), null for\na player's count or career sum; `season` and `game` are null where the\nrecord has none. `value` is an integer, except a season record's win\npercentage (a fraction from 0 to 1, three places).\n\nThe figures behind `value` (EVENTS-011), each null where the record's\n`value_kind` does not use it: a win_loss record's `wins`, `losses` and\n`pct` (the win percentage, equal to `value`); a made_total record's\n`made` (equal to `value`), `attempted` and `pct` (null when nothing was\nattempted); a shot_pct record's `made`, `attempted` and `pct` (equal to\n`value`). An average's `value` is the mean, one place, with no figure\nbeside it. `pct` is a fraction from 0 to 1, three places.",
+        "properties": {
+          "attempted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempted"
+          },
           "game": {
             "anyOf": [
               {
@@ -2926,6 +3049,39 @@
                 "type": "null"
               }
             ]
+          },
+          "losses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Losses"
+          },
+          "made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
           },
           "player": {
             "anyOf": [
@@ -2972,6 +3128,17 @@
               }
             ],
             "title": "Value"
+          },
+          "wins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wins"
           }
         },
         "required": [
@@ -2980,7 +3147,12 @@
           "team",
           "player",
           "season",
-          "game"
+          "game",
+          "wins",
+          "losses",
+          "made",
+          "attempted",
+          "pct"
         ],
         "title": "RecordEntryOut",
         "type": "object"
@@ -3032,6 +3204,17 @@
       "RecordHolderOut": {
         "description": "The list's first entry; `tied_count` is how many entries share its\nvalue (1 when it is alone).",
         "properties": {
+          "attempted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempted"
+          },
           "game": {
             "anyOf": [
               {
@@ -3041,6 +3224,39 @@
                 "type": "null"
               }
             ]
+          },
+          "losses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Losses"
+          },
+          "made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
           },
           "player": {
             "anyOf": [
@@ -3091,6 +3307,17 @@
               }
             ],
             "title": "Value"
+          },
+          "wins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wins"
           }
         },
         "required": [
@@ -3100,9 +3327,38 @@
           "player",
           "season",
           "game",
+          "wins",
+          "losses",
+          "made",
+          "attempted",
+          "pct",
           "tied_count"
         ],
         "title": "RecordHolderOut",
+        "type": "object"
+      },
+      "RecordHoldersOut": {
+        "description": "GET /events/records/holders: one key per asked id, its holder or null\nwhen no stored data qualifies.",
+        "properties": {
+          "holders": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordHolderOut"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Holders",
+            "type": "object"
+          }
+        },
+        "required": [
+          "holders"
+        ],
+        "title": "RecordHoldersOut",
         "type": "object"
       },
       "RecordListOut": {
@@ -3164,6 +3420,17 @@
           "unit": {
             "title": "Unit",
             "type": "string"
+          },
+          "value_kind": {
+            "enum": [
+              "count",
+              "win_loss",
+              "made_total",
+              "shot_pct",
+              "average"
+            ],
+            "title": "Value Kind",
+            "type": "string"
           }
         },
         "required": [
@@ -3172,6 +3439,7 @@
           "title",
           "unit",
           "rule",
+          "value_kind",
           "since_season",
           "through_season",
           "total",
@@ -3256,60 +3524,12 @@
         "title": "RecordPlayerOut",
         "type": "object"
       },
-      "RecordSummaryOut": {
-        "properties": {
-          "group": {
-            "enum": [
-              "team",
-              "player"
-            ],
-            "title": "Group",
-            "type": "string"
-          },
-          "holder": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RecordHolderOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "rule": {
-            "title": "Rule",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "unit": {
-            "title": "Unit",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "group",
-          "title",
-          "unit",
-          "rule",
-          "holder"
-        ],
-        "title": "RecordSummaryOut",
-        "type": "object"
-      },
-      "RecordsSummaryOut": {
-        "description": "GET /events/records. The data window is the earliest and latest\nstored seasons, null when there are none.",
+      "RecordsCatalogOut": {
+        "description": "GET /events/records: every record, no holder. The data window is the\nearliest and latest stored seasons, null when there are none.",
         "properties": {
           "records": {
             "items": {
-              "$ref": "#/components/schemas/RecordSummaryOut"
+              "$ref": "#/components/schemas/RecordCatalogItemOut"
             },
             "title": "Records",
             "type": "array"
@@ -3342,7 +3562,7 @@
           "through_season",
           "records"
         ],
-        "title": "RecordsSummaryOut",
+        "title": "RecordsCatalogOut",
         "type": "object"
       },
       "SeasonLineOut": {
@@ -4859,14 +5079,14 @@
     },
     "/events/records": {
       "get": {
-        "description": "Every historical record, team records then player records, each\nwith its rule and its holder: the first entry of its list and\n`tied_count`, how many share that value; null when no stored data\nqualifies. `since_season` and `through_season` are the stored data's\nwindow. Cacheable: `Cache-Control: public, max-age=300`.",
+        "description": "The records library's catalog: every record, team records first, with\nits category, rule, `value_kind` (which of an entry's figures it fills),\nsearch `keywords` and `featured_rank`, and no holder (GET\n/events/records/holders). `since_season` and `through_season` are the\nstored data's window. Cacheable: `Cache-Control: public, max-age=300`.",
         "operationId": "get_records_events_records_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecordsSummaryOut"
+                  "$ref": "#/components/schemas/RecordsCatalogOut"
                 }
               }
             },
@@ -4874,6 +5094,51 @@
           }
         },
         "summary": "Get Records",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/records/holders": {
+      "get": {
+        "description": "Each named record's holder: the first entry of its list and\n`tied_count`, how many share that value; null when no stored data\nqualifies. Cacheable: `Cache-Control: public, max-age=300`.\n\n422: `ids` missing or empty, naming more than 24 records, repeating one,\nor naming an unknown record.",
+        "operationId": "get_record_holders_events_records_holders_get",
+        "parameters": [
+          {
+            "description": "1 to 24 distinct record ids, comma-separated. Sort them, so the same set is the same cache entry.",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "description": "1 to 24 distinct record ids, comma-separated. Sort them, so the same set is the same cache entry.",
+              "title": "Ids",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordHoldersOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Record Holders",
         "tags": [
           "events"
         ]
@@ -5324,6 +5589,84 @@
           }
         },
         "summary": "Get Feed",
+        "tags": [
+          "feed"
+        ]
+      }
+    },
+    "/feed/history": {
+      "get": {
+        "description": "Only the authenticated active caller's activity; never a requested user id.",
+        "operationId": "get_history_feed_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "default": "posts",
+              "enum": [
+                "posts",
+                "replies",
+                "likes",
+                "reposts"
+              ],
+              "title": "Tab",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get History",
         "tags": [
           "feed"
         ]
@@ -6300,6 +6643,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "recent_auth_required"
+                }
+              }
+            },
+            "description": "Recent authentication is required to deactivate an account."
           }
         },
         "summary": "Delete Me",

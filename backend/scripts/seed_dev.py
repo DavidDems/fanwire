@@ -10,7 +10,9 @@ fake data under real keys, so this script writes no Team or Game rows.
 
 Kept, rather than deleted, so the documented dev-stack command still works:
     docker compose exec backend-dev python scripts/seed_dev.py
-It touches no database and always exits 0.
+It touches no database and always exits 0. Since it writes no game or box
+score, it has no records library totals to rebuild (EVENTS-012): the loader
+it points to rebuilds them in its own transaction.
 """
 
 from __future__ import annotations

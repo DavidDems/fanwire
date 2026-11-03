@@ -24,6 +24,16 @@ const NotificationsPage = lazy(() =>
     default: m.NotificationsPage,
   })),
 );
+const HistoryPage = lazy(() =>
+  import("../features/history/HistoryPage").then((m) => ({
+    default: m.HistoryPage,
+  })),
+);
+const AccountSettings = lazy(() =>
+  import("../features/account/AccountSettings").then((m) => ({
+    default: m.AccountSettings,
+  })),
+);
 const ProfilePage = lazy(() =>
   import("../features/profile/ProfilePage").then((m) => ({
     default: m.ProfilePage,
@@ -99,6 +109,22 @@ const pages: RouteObject[] = [
   // app's index: the guest feed is a read path by decision ([[0x06-feed]]
   // Security).
   { index: true, element: <HomeView /> },
+  {
+    path: "history",
+    element: (
+      <RequireAuth>
+        <HistoryPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "settings",
+    element: (
+      <RequireAuth>
+        <AccountSettings />
+      </RequireAuth>
+    ),
+  },
   {
     path: "notifications",
     element: (

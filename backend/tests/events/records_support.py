@@ -30,6 +30,10 @@ code). The fixture holds every trap of the brief:
 and lines, the same teams and players), for the query-count tests' second
 size.
 
+EVENTS-012: every builder here writes games and box scores, so, like every
+load path, each ends by calling `rebuild_record_totals(session)` in the
+caller's transaction (`rebuild_totals`), before the caller commits.
+
 Every played line has at least 1 point, rebound, assist and three, so a
 single-game list's length does not depend on whether zeros are listed.
 """
@@ -112,6 +116,18 @@ CORE_PLAYERS: dict[str, tuple[str, ...]] = {
     letter: tuple(f"{letter}{n}" for n in (1, 2, 3)) for letter in TEAM_LETTERS
 }
 PAIRS: tuple[str, ...] = ("AB", "AC", "AD", "BC", "BD", "CD")
+
+
+# ------------------------------------------------------- record totals
+
+
+def rebuild_totals(session: Session) -> None:
+    """EVENTS-012's rebuild_record_totals, in the caller's transaction.
+    Looked up when called, so a module importing this one still collects
+    before the function exists."""
+    from app.events import records
+
+    records.rebuild_record_totals(session)
 
 
 # ------------------------------------------------------------------ rows
@@ -294,6 +310,7 @@ def build_fixture(session: Session) -> Fixture:
         fx.player_names[player.id] = (key, "Player")
     for plan in _plans():
         _build_season(session, fx, plan)
+    rebuild_totals(session)
     return fx
 
 
@@ -302,6 +319,7 @@ def add_copies(session: Session, fx: Fixture, copies: int = 3) -> None:
     for copy in range(1, copies + 1):
         for plan in _plans(year_offset=4 * copy):
             _build_season(session, fx, plan)
+    rebuild_totals(session)
 
 
 def _next_scores(fx: Fixture) -> tuple[int, int]:
@@ -486,6 +504,7 @@ def build_career_cap(session: Session) -> list[tuple[int, int, int]]:
             )
         )
     session.flush()
+    rebuild_totals(session)
     expected = []
     for n, value in enumerate(points):
         rank = 1 + sum(1 for other in points if other > value)

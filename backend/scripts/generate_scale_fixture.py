@@ -38,7 +38,9 @@ Fixed seed: two runs with the same arguments write the same rows.
 Idempotent: if any game is already stored in the generator's id range, it
 writes nothing and exits 0. Everything is one transaction, written with
 Postgres COPY (games, players, box scores), so the full default scale
-takes minutes, not hours.
+takes minutes, not hours; it ends by rebuilding the records library's
+totals (app.events.record_totals.rebuild_record_totals) in that same
+transaction.
 
 Fail-closed: refuses (exit 1, nothing written) unless `ENVIRONMENT` is
 exactly "development" or "perf", and when any stored game has an
@@ -76,6 +78,7 @@ from sqlalchemy import Connection, text
 
 from app.db import make_engine
 from app.events.nba_history import _TEAMS
+from app.events.record_totals import rebuild_record_totals
 
 ALLOWED_ENVIRONMENTS = ("development", "perf")
 
@@ -649,6 +652,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             started = time.monotonic()
             report = generate(conn, args.seasons, args.games_per_team)
+            # EVENTS-012: the records library's totals, in the same transaction.
+            rebuild_record_totals(conn)
             elapsed = time.monotonic() - started
             sizes = conn.execute(
                 text("SELECT pg_relation_size('player_game_stats'), pg_relation_size('games')")

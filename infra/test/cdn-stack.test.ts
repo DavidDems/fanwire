@@ -140,7 +140,7 @@ describe('CDN stack', () => {
       expect([...(behavior(RECORDS).AllowedMethods as string[])].sort()).toEqual(['GET', 'HEAD']);
     });
 
-    test('a new cache policy honouring the origin Cache-Control: TTL 0/0/300, keyed on limit and offset only', () => {
+    test('a new cache policy honouring the origin Cache-Control: TTL 0/0/300, keyed on ids, limit and offset only', () => {
       expect(behavior(RECORDS)).toBeDefined();
       expect(behavior(RECORDS).CachePolicyId).not.toBe(CACHING_DISABLED);
       const config = cachePolicy();
@@ -152,11 +152,11 @@ describe('CDN stack', () => {
       expect(key.HeadersConfig?.Headers).toBeUndefined();
       expect(key.CookiesConfig?.CookieBehavior).toBe('none');
       expect(key.QueryStringsConfig?.QueryStringBehavior).toBe('whitelist');
-      expect(sortedQueryStrings(key.QueryStringsConfig)).toEqual(['limit', 'offset']);
+      expect(sortedQueryStrings(key.QueryStringsConfig)).toEqual(['ids', 'limit', 'offset']);
       expect(JSON.stringify(key).toLowerCase()).not.toContain('authorization');
     });
 
-    test('an origin request policy forwarding limit and offset, no viewer header and no cookie', () => {
+    test('an origin request policy forwarding ids, limit and offset, no viewer header and no cookie', () => {
       expect(behavior(RECORDS)).toBeDefined();
       expect(behavior(RECORDS).OriginRequestPolicyId).not.toBe(ALL_VIEWER_EXCEPT_HOST);
       const config = originRequestPolicy();
@@ -167,7 +167,76 @@ describe('CDN stack', () => {
       expect(headers.Headers).toBeUndefined();
       expect(cookies.CookieBehavior).toBe('none');
       expect(queryStrings.QueryStringBehavior).toBe('whitelist');
-      expect(sortedQueryStrings(queryStrings)).toEqual(['limit', 'offset']);
+      expect(sortedQueryStrings(queryStrings)).toEqual(['ids', 'limit', 'offset']);
+    });
+
+    // EVENTS-012: GET /events/records/holders?ids=a,b. CloudFront's cache key
+    // is the path plus whatever the cache policy names; modelled here from
+    // the synthesized policy itself, so a policy that drops `ids` (or adds a
+    // header or cookie) changes what these tests see.
+    const cacheKey = (request: {
+      uri: string;
+      query: Record<string, string>;
+      headers?: Record<string, string>;
+      cookies?: Record<string, string>;
+    }): string => {
+      const key = cachePolicy().ParametersInCacheKeyAndForwardedToOrigin as Record<string, Record<string, unknown>>;
+      const pick = (config: Record<string, unknown> | undefined, behaviorKey: string, listKey: string, values: Record<string, string> = {}) => {
+        const behavior = config?.[behaviorKey];
+        const names = ((config?.[listKey] as { Items?: string[] } | string[] | undefined) ?? []) as unknown;
+        const list = Array.isArray(names) ? (names as string[]) : ((names as { Items?: string[] }).Items ?? []);
+        const lower = list.map((n) => n.toLowerCase());
+        return Object.entries(values)
+          .filter(([name]) =>
+            behavior === 'all' || behavior === 'allViewer'
+              ? true
+              : behavior === 'whitelist'
+                ? lower.includes(name.toLowerCase())
+                : behavior === 'allExcept'
+                  ? !lower.includes(name.toLowerCase())
+                  : false,
+          )
+          .sort(([a], [b]) => a.localeCompare(b));
+      };
+      return JSON.stringify([
+        request.uri,
+        pick(key.QueryStringsConfig, 'QueryStringBehavior', 'QueryStrings', request.query),
+        pick(key.HeadersConfig, 'HeaderBehavior', 'Headers', request.headers),
+        pick(key.CookiesConfig, 'CookieBehavior', 'Cookies', request.cookies),
+      ]);
+    };
+    const HOLDERS = '/api/events/records/holders';
+
+    test('two different ids values are two cache entries: a 200 for ids=a never answers ids=b', () => {
+      const a = cacheKey({ uri: HOLDERS, query: { ids: 'team-best-season' } });
+      const b = cacheKey({ uri: HOLDERS, query: { ids: 'player-points-game' } });
+      const ab = cacheKey({ uri: HOLDERS, query: { ids: 'player-points-game,team-best-season' } });
+      expect(a).not.toEqual(b);
+      expect(a).not.toEqual(ab);
+      expect(b).not.toEqual(ab);
+      expect(cacheKey({ uri: HOLDERS, query: { ids: 'team-best-season' } })).toEqual(a);
+    });
+
+    test('no header or cookie joins the holders cache key, and no other query string does', () => {
+      const plain = cacheKey({ uri: HOLDERS, query: { ids: 'team-best-season' } });
+      const noisy = cacheKey({
+        uri: HOLDERS,
+        query: { ids: 'team-best-season', utm_source: 'x', page: '2' },
+        headers: { Authorization: 'Bearer secret', Accept: 'application/json', Origin: 'https://x' },
+        cookies: { session: 'abc', theme: 'dark' },
+      });
+      expect(noisy).toEqual(plain);
+      const key = cachePolicy().ParametersInCacheKeyAndForwardedToOrigin as Record<string, Record<string, unknown>>;
+      expect(key.HeadersConfig?.HeaderBehavior).toBe('none');
+      expect(key.CookiesConfig?.CookieBehavior).toBe('none');
+    });
+
+    test('the holders path is served by the records behaviour, with ids forwarded to the origin', () => {
+      const pattern = RECORDS.replace(/\*$/, '');
+      expect(HOLDERS.startsWith(pattern)).toBe(true);
+      const f = functionAssociatedWith(behavior(RECORDS));
+      expect(runFunction(f, HOLDERS)).toBe('/events/records/holders');
+      expect(sortedQueryStrings(originRequestPolicy().QueryStringsConfig)).toContain('ids');
     });
 
     test('/api/* is unchanged: still CACHING_DISABLED with AllViewerExceptHostHeader', () => {

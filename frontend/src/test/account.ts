@@ -1,8 +1,19 @@
+import { createElement } from "react";
 import { screen, within } from "@testing-library/react";
 import { HttpResponse, http, type RequestHandler } from "msw";
+import { Route, Routes } from "react-router-dom";
 
 import type { components } from "../api/schema";
-import { ACCOUNT_DEACTIVATED_BODY, testProfile } from "./auth";
+import { AccountSettings } from "../features/account/AccountSettings";
+import { AppLayout } from "../routes/AppLayout";
+import { server } from "./server";
+import {
+  ACCOUNT_DEACTIVATED_BODY,
+  FakeAuthService,
+  renderWithAuth,
+  testProfile,
+  testSession,
+} from "./auth";
 
 /**
  * The account-lifecycle kit (`FRONTEND-012`, on `USERS-003`): a small mutable
@@ -99,6 +110,31 @@ export function accountServer(
       };
     },
   };
+}
+
+/** Render USERS-006's Account settings route with the mutable account API fixture. */
+export function renderSettingsApp(
+  initial: AccountStatus = "active",
+  authService: FakeAuthService = new FakeAuthService({ session: testSession() }),
+) {
+  const account = accountServer(initial);
+  server.use(...account.handlers);
+  const rendered = renderWithAuth(
+    createElement(
+      Routes,
+      null,
+      createElement(
+        Route,
+        { path: "/", element: createElement(AppLayout) },
+        createElement(
+          Route,
+          { path: "settings", element: createElement(AccountSettings) },
+        ),
+      ),
+    ),
+    { authService, route: "/settings" },
+  );
+  return { ...rendered, account, authService };
 }
 
 /** What the deactivated banner's accessible name (and its text) says. */

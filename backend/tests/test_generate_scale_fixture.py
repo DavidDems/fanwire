@@ -301,3 +301,40 @@ def test_is_deterministic_and_runs_in_development_too(_postgres_server, generate
         assert _counts(url) == generated["counts"]
         assert games(url) == games(generated["url"])
         assert lines(url) == lines(generated["url"])
+
+
+# --- EVENTS-012: record totals ----------------------------------------------
+
+
+def _totals(url: str) -> tuple[dict, dict]:
+    """The stored totals, and what a fresh rebuild of the stored data gives."""
+    from tests.record_totals_support import rebuilt_snapshots, snapshots
+
+    engine = make_engine(url)
+    try:
+        with engine.connect() as conn:
+            stored = snapshots(conn)
+        return stored, rebuilt_snapshots(engine)
+    finally:
+        engine.dispose()
+
+
+def test_the_generated_data_has_its_record_totals(generated):
+    """The script rebuilds the totals in its one transaction, so they are
+    there, and current, the moment it exits."""
+    _succeeded(generated)
+
+    stored, rebuilt = _totals(generated["url"])
+
+    assert all(stored.values()), {table: len(rows) for table, rows in stored.items()}
+    assert stored == rebuilt
+
+
+def test_a_refused_run_writes_no_record_totals(empty_db):
+    from tests.record_totals_support import TOTALS_TABLES
+
+    result = _run(empty_db, None, *_ARGS)
+
+    assert result.returncode != 0
+    for table in TOTALS_TABLES:
+        assert _scalar(empty_db, f"SELECT count(*) FROM {table}") == 0

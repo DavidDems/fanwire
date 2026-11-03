@@ -28,7 +28,9 @@ ids are ten-digit strings with two leading zeros ("0022300061"), so below
 and nothing else may ever write into 9_000_000_000-9_199_999_999.
 
 Idempotent: if `perf-user-1` already exists the seed is a no-op, so a second
-run adds no rows. Everything else is one transaction.
+run adds no rows. Everything else is one transaction, which ends by
+rebuilding the records library's totals (EVENTS-012,
+app.events.record_totals.rebuild_record_totals) from the games it wrote.
 
 Fail-closed by design: refuses to run unless `ENVIRONMENT` is exactly
 `"development"` or `"perf"`, so it can never be pointed at a deployed
@@ -57,6 +59,7 @@ from sqlalchemy import text
 
 from app.db import make_engine
 from app.dependencies import get_settings
+from app.events.record_totals import rebuild_record_totals
 
 ALLOWED_ENVIRONMENTS = ("development", "perf")
 MARKER_SUB = "perf-user-1"
@@ -299,6 +302,9 @@ def main() -> int:
                 result = conn.execute(text(sql), params)
                 if result.rowcount is not None and result.rowcount >= 0:
                     print(f"  {name}: {result.rowcount} rows")
+            # EVENTS-012: the games above make record totals; rebuilt in the
+            # same transaction, as every path that writes games does.
+            rebuild_record_totals(conn)
             print(f"seeded the perf dataset in {time.monotonic() - started:.1f}s")
     finally:
         engine.dispose()
