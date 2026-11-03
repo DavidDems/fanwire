@@ -45,54 +45,56 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main 4795f19 and on
- * that commit merged with Renovate's #296 (openapi-fetch 0.17), which may land
- * either side of this fold. USERS-004, FRONTEND-023, 024, 026 and 027 are folded
- * in. The entry's ceilings are one-sided, so each is the larger of the two
- * measurements; a lazy output is held both ways, so each is their midpoint. The
- * entry, its stylesheet, and every lazy output → gzip bytes. Measure with the
- * test's build, not `npm run build`: the two differ by about 0.2 kB raw on the
- * entry.
+ * The base, measured by this test's own build on origin/main b1dfa99, with
+ * EVENTS-011 and POSTS-008 folded in (USERS-004 and FRONTEND-023, 024, 026
+ * and 027 were folded at 4795f19). One tree, so every number is its single
+ * measurement. The entry, its stylesheet, and every lazy output → gzip bytes.
+ * Measure with the test's build, not `npm run build`: under Vitest the build
+ * inlines `test.env`'s `VITE_*` values, which makes the entry about 0.2 kB
+ * larger raw.
  */
 export const BASE = {
-  entryJsGzip: 151_817,
-  entryJsRaw: 476_963,
-  entryCssGzip: 5_821,
+  entryJsGzip: 148_566,
+  entryJsRaw: 467_943,
+  entryCssGzip: 5_808,
   lazy: {
     "AuthPage.module": 158,
-    ComposePage: 3_847,
-    ConfirmPage: 1_053,
+    ComposePage: 3_870,
+    ConfirmPage: 1_052,
     errors: 241,
-    ForgotPasswordPage: 1_081,
+    ForgotPasswordPage: 1_082,
     format: 430,
-    GamePage: 4_047,
+    GamePage: 4_048,
+    HistoryPage: 1_046,
     NotificationsPage: 1_741,
-    PeriodScores: 470,
-    PlayerPage: 3_833,
+    PeriodScores: 469,
+    PlayerPage: 3_834,
     PlayerResults: 823,
-    PlayersTab: 580,
-    ProfilePage: 3_121,
-    ProfileSetupPage: 1_412,
-    RecordsTab: 3_205,
-    SeasonsTab: 1_643,
-    SignInPage: 987,
+    PlayersTab: 578,
+    ProfilePage: 3_123,
+    ProfileSetupPage: 1_411,
+    RecordsTab: 3_541,
+    SeasonsTab: 1_661,
+    SegmentedTabs: 584,
+    SignInPage: 985,
     SignUpPage: 874,
     stats: 760,
     "Stats.module": 375,
-    "StatsNav.module": 445,
-    StatsNavigator: 4_010,
-    StatsPage: 399,
-    StatsPicker: 2_186,
-    VisuallyHidden: 142,
+    "StatsNav.module": 457,
+    StatsNavigator: 3_668,
+    StatsPage: 400,
+    StatsPicker: 2_202,
+    VisuallyHidden: 140,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 411,
     "css:GamePage.css": 1_081,
+    "css:HistoryPage.css": 174,
     "css:NotificationsPage.css": 496,
     "css:PlayerPage.css": 879,
     "css:ProfilePage.css": 813,
+    "css:SegmentedTabs.css": 364,
     "css:Stats.css": 469,
-    "css:StatsNav.css": 1_295,
-    "css:StatsNavigator.css": 364,
+    "css:StatsNav.css": 1_311,
     "css:StatsPage.css": 398,
     "css:StatsPicker.css": 466,
   } as Record<string, number>,
