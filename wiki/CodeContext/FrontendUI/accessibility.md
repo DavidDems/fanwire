@@ -26,13 +26,13 @@ primary controls and nav as a design choice, and 24 px as the hard floor.
 | **A10** | Text spacing overrides (line-height 1.5, paragraph 2×, letter 0.12em, word 0.16em) don't clip content: no fixed heights on text containers | 1.4.12 | B |
 | **A11** | There is a "Skip to content" link, first in the tab order, that moves focus to `<main>` | 2.4.1 | T |
 | **A12** | Exactly one `<main>`, one `<header>` (banner) and one `<nav aria-label="Primary">` per page, at every breakpoint | 1.3.1 | T |
-| **A13** | The brand link's accessible name is exactly `fanwire`, lowercase, whether the wordmark, the symbol alone, or the interim text is showing | 1.1.1, 2.4.4 | T |
+| **A13** | The brand link's accessible name is exactly `fanwire`, lowercase, at every width: the header holds the wordmark alone, never hidden | 1.1.1, 2.4.4 | T |
 | **A14** | Every icon is `aria-hidden="true"` and every control keeps a visible text label equal to (or contained in) its accessible name | 1.1.1, 2.5.3 | T, S |
 | **A15** | Status and alert regions keep their current roles: request failures `role="alert"`, loading and progress `role="status"`, the live score `role="status"` named "Live score". Styling never changes a role | 4.1.3 | T (existing tests) |
 | **A16** | A disabled control still shows its label (`--opacity-disabled` 0.55, never `visibility: hidden` or below 0.4). Where the app removes a control instead (Load more at the end), it is absent rather than disabled | 1.4.3 exemption, usability | S |
 | **A17** | Input boundaries (text, select, checkbox, file button) meet 3:1 against their background (`--color-border-strong`) | 1.4.11 | S |
 | **A18** | Both themes are complete: every semantic colour token has a dark value, and `color-scheme: light dark` is declared so native controls follow | 1.4.3 in dark | S |
-| **A19** | Images: post media keep their current `alt`; the symbol in the header is `alt=""`; the wordmark `<img>` has `alt="fanwire"` | 1.1.1 | T |
+| **A19** | Images: post media keep their current `alt`; the header has no symbol; the wordmark `<img>` has `alt="fanwire"` | 1.1.1 | T |
 | **A20** | Forced-colors mode (Windows High Contrast) keeps focus rings, button edges and the selected-nav bar visible (use `outline` and `border`, not `box-shadow` alone, for anything that carries meaning) | 1.4.11 | B |
 
 ## Notes for implementers
