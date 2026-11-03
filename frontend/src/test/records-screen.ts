@@ -4,6 +4,7 @@ import type { RequestHandler } from "msw";
 import { teamsAre } from "./auth";
 import { renderAppAt, type AppRouter } from "./app-route";
 import {
+  recordHoldersStub,
   recordListStub,
   recordsSummaryStub,
   testRecordsSummary,
@@ -32,7 +33,10 @@ import {
  */
 
 export interface RecordsStubs {
+  /** `GET /events/records`, the catalog (`EVENTS-012`). */
   summary: Stub;
+  /** `GET /events/records/holders` (`EVENTS-012`), answered from `summary`. */
+  holders: Stub;
   list: Stub;
   seasons: Stub;
   leaders: Stub;
@@ -42,6 +46,7 @@ export interface RecordsStubs {
 }
 
 export interface OpenRecordsOptions {
+  /** The screen's data; the catalog and holders stubs both answer from it. */
   summary?: RecordsSummaryOut;
   list?: (id: string) => RecordListOut | null;
   rules?: Record<string, string>;
@@ -53,8 +58,11 @@ export function openRecords(
   path = "/stats/records",
   options: OpenRecordsOptions = {},
 ) {
+  const summary = options.summary ?? testRecordsSummary();
+  // holders before list: the list's `:record_id` also matches "holders".
   const stubs: RecordsStubs = {
-    summary: recordsSummaryStub(options.summary ?? testRecordsSummary()),
+    summary: recordsSummaryStub(summary),
+    holders: recordHoldersStub(summary),
     list: recordListStub(options.list),
     seasons: seasonsStub(),
     leaders: leadersStub(options.rules ?? {}),

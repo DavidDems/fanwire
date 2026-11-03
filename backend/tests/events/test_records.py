@@ -1,13 +1,17 @@
-"""Tests for GET /events/records and GET /events/records/{record_id}
-(EVENTS-010). Spec: .ai/tasks/EVENTS-010/.
+"""Tests for GET /events/records, GET /events/records/holders and
+GET /events/records/{record_id} (EVENTS-010, reshaped by EVENTS-012). Spec:
+.ai/tasks/EVENTS-010/ and .ai/tasks/EVENTS-012/.
 
 Pinned contract (extra fields are tolerated):
 
-- GET /events/records: `{since_season, through_season, records}`; records
-  are the twelve of `RECORD_IDS`, in that order, each with `id`, `group`
-  ("team" or "player"), `title`, `unit`, `rule` (non-empty strings) and
-  `holder`: the list's first entry plus `tied_count` (how many entries
-  share the first-ranked value), or null when nothing qualifies.
+- GET /events/records (EVENTS-012): the catalog, `{since_season,
+  through_season, records}`; records are the registry's, in its order, the
+  twelve of `RECORD_IDS` among them, each with `id`, `group` ("team" or
+  "player"), `title`, `unit`, `rule` (non-empty strings) and no holder.
+- GET /events/records/holders?ids=a,b (EVENTS-012): `{holders: {id:
+  holder}}`, one key per asked id; a holder is the list's first entry plus
+  `tied_count` (how many entries share the first-ranked value), or null when
+  nothing qualifies.
 - GET /events/records/{record_id}?limit=&offset=: `{id, group, title, unit,
   rule, since_season, through_season, total, entries}`. A list holds at
   most its top 100 entries, `total` is min(qualifying, 100), `limit` is
@@ -29,6 +33,7 @@ from __future__ import annotations
 import pytest
 
 from app.db import Base, make_session_factory
+from app.events.records import RECORDS
 from tests.events.players_support import make_client, make_players_engine
 from tests.events.records_support import (
     COUNT_RECORDS,
@@ -83,10 +88,23 @@ def fixture(session_factory):
     return fx
 
 
-def _summary(client) -> dict:
+def _catalog(client) -> dict:
     response = client.get("/events/records")
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def _holders(client, ids) -> dict:
+    """GET /events/records/holders for `ids`: id -> holder or None."""
+    response = client.get("/events/records/holders", params={"ids": ",".join(ids)})
+    assert response.status_code == 200, response.text
+    holders = response.json()["holders"]
+    assert sorted(holders) == sorted(ids), holders
+    return holders
+
+
+def _holder(client, record_id: str) -> dict | None:
+    return _holders(client, [record_id])[record_id]
 
 
 def _list(client, record_id: str, **params) -> dict:
@@ -95,24 +113,32 @@ def _list(client, record_id: str, **params) -> dict:
     return response.json()
 
 
-# ------------------------------------------------------------------ summary
+# ------------------------------------------------------------------ catalog
 
 
-def test_the_summary_lists_the_twelve_records_in_their_fixed_order(client, fixture):
-    body = _summary(client)
+def test_the_catalog_lists_the_registry_with_the_twelve_among_it(client, fixture):
+    body = _catalog(client)
 
-    assert [record["id"] for record in body["records"]] == list(RECORD_IDS)
+    ids = [record["id"] for record in body["records"]]
+    assert ids == [record.id for record in RECORDS]
+    assert set(RECORD_IDS) <= set(ids)
     for record in body["records"]:
-        assert record["group"] == ("team" if record["id"] in TEAM_RECORDS else "player")
+        assert record["group"] == ("team" if record["id"].startswith("team-") else "player")
+        if record["id"] in RECORD_IDS:
+            assert record["group"] == ("team" if record["id"] in TEAM_RECORDS else "player")
         for key in ("title", "unit", "rule"):
             assert isinstance(record[key], str) and record[key].strip(), (record["id"], key)
+        assert "holder" not in record, record["id"]
 
 
-def test_the_summary_states_the_data_window(client, fixture):
-    body = _summary(client)
+def test_the_catalog_states_the_data_window(client, fixture):
+    body = _catalog(client)
 
     assert (body["since_season"], body["through_season"]) == expected_window(fixture)
     assert (body["since_season"], body["through_season"]) == ("2010-11", "2013-14")
+
+
+# ------------------------------------------------------------------ holders
 
 
 @pytest.mark.parametrize("record_id", RECORD_IDS)
@@ -122,8 +148,7 @@ def test_each_holder_is_the_derived_first_entry_with_its_tied_count(client, fixt
     # Guards the fixture: these records have a tie for first.
     assert expected.tied_count == TIES_FOR_FIRST.get(record_id, expected.tied_count)
 
-    (record,) = [r for r in _summary(client)["records"] if r["id"] == record_id]
-    holder = record["holder"]
+    holder = _holders(client, RECORD_IDS)[record_id]
 
     assert holder is not None
     assert normalize(holder) == expected.entries[0]
@@ -131,11 +156,15 @@ def test_each_holder_is_the_derived_first_entry_with_its_tied_count(client, fixt
 
 
 @pytest.mark.parametrize("record_id", RECORD_IDS)
-def test_each_summary_holder_equals_its_lists_first_entry(client, fixture, record_id):
-    (record,) = [r for r in _summary(client)["records"] if r["id"] == record_id]
+def test_a_holder_asked_alone_is_the_same_as_asked_with_others(client, fixture, record_id):
+    assert _holder(client, record_id) == _holders(client, RECORD_IDS)[record_id]
+
+
+@pytest.mark.parametrize("record_id", RECORD_IDS)
+def test_each_holder_equals_its_lists_first_entry(client, fixture, record_id):
     first = _list(client, record_id, limit=1)["entries"][0]
 
-    holder = dict(record["holder"])
+    holder = dict(_holder(client, record_id))
     holder.pop("tied_count")
     assert holder == first
 
@@ -302,11 +331,11 @@ def test_a_list_holds_at_most_its_top_100_and_cuts_a_tie_at_the_100th(client, ca
     assert [rank for rank, _, _ in _triples(body)[98:]] == [99, 99]
 
 
-def test_the_summary_holder_of_a_capped_list(client, capped):
-    (record,) = [r for r in _summary(client)["records"] if r["id"] == "player-career-points"]
+def test_the_holder_of_a_capped_list(client, capped):
+    holder = _holder(client, "player-career-points")
 
-    assert record["holder"]["value"] == 300
-    assert record["holder"]["tied_count"] == 1
+    assert holder["value"] == 300
+    assert holder["tied_count"] == 1
 
 
 @pytest.mark.parametrize(
@@ -327,11 +356,11 @@ def test_paging_slices_the_top_100(client, capped, limit, offset):
 
 
 def test_an_empty_database_gives_null_holders_and_no_window(client):
-    body = _summary(client)
+    body = _catalog(client)
 
     assert (body["since_season"], body["through_season"]) == (None, None)
-    assert [record["id"] for record in body["records"]] == list(RECORD_IDS)
-    assert all(record["holder"] is None for record in body["records"])
+    assert set(RECORD_IDS) <= {record["id"] for record in body["records"]}
+    assert _holders(client, RECORD_IDS) == dict.fromkeys(RECORD_IDS)
 
 
 @pytest.mark.parametrize("record_id", RECORD_IDS)
@@ -386,7 +415,14 @@ def test_the_bounds_themselves_are_accepted(client, limit, offset):
 # ------------------------------------------------------------------- cache
 
 
-@pytest.mark.parametrize("url", ["/events/records", "/events/records/player-career-points"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/events/records",
+        "/events/records/holders?ids=player-career-points,team-best-season",
+        "/events/records/player-career-points",
+    ],
+)
 def test_the_records_routes_are_cacheable_for_five_minutes(client, fixture, url):
     response = client.get(url)
 

@@ -7,13 +7,17 @@ Pinned contract:
   shot_pct, average, and has no default: a record cannot be registered
   without one. Both records routes return it on each record.
 - `team-best-season` and `team-worst-season` are win_loss with unit
-  "record"; `player-threes-game` is made_total; every other record of
-  EVENTS-010's twelve is a count.
+  "record"; `player-threes-game` is made_total. EVENTS-012 frees the other
+  ten of EVENTS-010's twelve to any kind; each still names one.
 - Every entry and holder carries `wins`, `losses`, `made`, `attempted`
   (integers or null) and `pct` (a number or null). win_loss sets wins,
   losses and pct; made_total sets made, attempted and pct (null when
   nothing was attempted); a count sets none. `value` keeps its meaning: a
   season's win percentage, a line's threes made.
+- EVENTS-012: shot_pct sets made, attempted and pct, `value` being the pct;
+  an average sets neither wins nor losses. The catalog (GET /events/records)
+  carries each record's value_kind; holders come from
+  GET /events/records/holders.
 
 Expected percentages are rounded here, in Python, to three places (the rule
 of service._pct), never by calling app code.
@@ -39,20 +43,25 @@ from tests.events.players_support import (
     make_client,
     make_players_engine,
 )
-from tests.events.records_support import RECORD_IDS, build_fixture
+from tests.events.records_library import LIBRARY_IDS
+from tests.events.records_support import RECORD_IDS, build_fixture, rebuild_totals
 
 VALUE_KINDS = frozenset({"count", "win_loss", "made_total", "shot_pct", "average"})
 NEW_FIELDS = ("wins", "losses", "made", "attempted", "pct")
-EXPECTED_KINDS: dict[str, str] = {record_id: "count" for record_id in RECORD_IDS} | {
+# The kinds EVENTS-011 settled that EVENTS-012 keeps.
+EXPECTED_KINDS: dict[str, str] = {
     "team-best-season": "win_loss",
     "team-worst-season": "win_loss",
     "player-threes-game": "made_total",
 }
-# The fields each kind fills; every other new field is null.
+# The fields each kind fills; every other new field is null. An average's
+# figures are not pinned beyond wins and losses being null.
 USED_FIELDS: dict[str, frozenset[str]] = {
     "count": frozenset(),
     "win_loss": frozenset({"wins", "losses", "pct"}),
     "made_total": frozenset({"made", "attempted", "pct"}),
+    "shot_pct": frozenset({"made", "attempted", "pct"}),
+    "average": frozenset({"made", "attempted", "pct"}),
 }
 CACHE_CONTROL = "public, max-age=300"
 
@@ -64,7 +73,8 @@ def test_every_record_names_a_known_value_kind():
     kinds = {record.id: record.value_kind for record in RECORDS}
 
     assert set(kinds.values()) <= VALUE_KINDS, kinds
-    assert kinds == EXPECTED_KINDS
+    assert set(RECORD_IDS) <= set(kinds)
+    assert {i: kinds[i] for i in EXPECTED_KINDS} == EXPECTED_KINDS
 
 
 @pytest.mark.parametrize("record_id", ["team-best-season", "team-worst-season"])
@@ -119,12 +129,23 @@ def _kind_enum(schema: dict[str, Any], schemas: dict[str, Any]) -> set[str]:
     return set(prop["enum"])
 
 
-@pytest.mark.parametrize("name", ["RecordSummaryOut", "RecordListOut"])
-def test_both_route_models_require_a_value_kind_of_the_five(schemas, name):
-    schema = schemas[name]
+def _resolve(schema: dict[str, Any], schemas: dict[str, Any]) -> dict[str, Any]:
+    if "$ref" in schema:
+        return schemas[schema["$ref"].rsplit("/", 1)[-1]]
+    return schema
 
-    assert "value_kind" in schema.get("required", []), schema
-    assert _kind_enum(schema, schemas) == VALUE_KINDS
+
+def _catalog_record_schema(schemas: dict[str, Any]) -> dict[str, Any]:
+    """The schema of one record of GET /events/records, through its 200."""
+    operation = app.openapi()["paths"]["/events/records"]["get"]
+    body = _resolve(operation["responses"]["200"]["content"]["application/json"]["schema"], schemas)
+    return _resolve(body["properties"]["records"]["items"], schemas)
+
+
+def test_the_catalog_and_list_models_require_a_value_kind_of_the_five(schemas):
+    for schema in (_catalog_record_schema(schemas), schemas["RecordListOut"]):
+        assert "value_kind" in schema.get("required", []), schema
+        assert _kind_enum(schema, schemas) == VALUE_KINDS
 
 
 def _nullable_types(prop: dict[str, Any]) -> set[str]:
@@ -161,11 +182,15 @@ def client(session_factory):
     return make_client(session_factory)
 
 
-def _summary(client) -> dict:
+def _catalog(client) -> dict:
     response = client.get("/events/records")
     assert response.status_code == 200, response.text
     assert response.headers.get("cache-control") == CACHE_CONTROL
     return response.json()
+
+
+def _kinds(client) -> dict[str, str]:
+    return {r["id"]: r["value_kind"] for r in _catalog(client)["records"]}
 
 
 def _list(client, record_id: str, **params) -> dict:
@@ -176,21 +201,25 @@ def _list(client, record_id: str, **params) -> dict:
 
 
 def _holder(client, record_id: str) -> dict:
-    (record,) = [r for r in _summary(client)["records"] if r["id"] == record_id]
-    assert record["holder"] is not None, record_id
-    return record["holder"]
+    response = client.get("/events/records/holders", params={"ids": record_id})
+    assert response.status_code == 200, response.text
+    assert response.headers.get("cache-control") == CACHE_CONTROL
+    holder = response.json()["holders"][record_id]
+    assert holder is not None, record_id
+    return holder
 
 
 def test_both_routes_return_each_records_value_kind(client):
-    summary = _summary(client)
+    kinds = _kinds(client)
 
-    assert {r["id"]: r["value_kind"] for r in summary["records"]} == EXPECTED_KINDS
-    for record_id, kind in EXPECTED_KINDS.items():
-        assert _list(client, record_id)["value_kind"] == kind, record_id
+    assert kinds == {record.id: record.value_kind for record in RECORDS}
+    assert {i: kinds[i] for i in EXPECTED_KINDS} == EXPECTED_KINDS
+    for record_id in RECORD_IDS:
+        assert _list(client, record_id)["value_kind"] == kinds[record_id], record_id
 
 
 def test_both_routes_give_the_season_records_unit_record(client):
-    summary = {r["id"]: r for r in _summary(client)["records"]}
+    summary = {r["id"]: r for r in _catalog(client)["records"]}
 
     for record_id in ("team-best-season", "team-worst-season"):
         assert summary[record_id]["unit"] == "record"
@@ -269,6 +298,7 @@ def _build_shapes(session) -> ShapesFixture:
     _shooting_line(session, game=game, team=best, player=steady, made=5, attempted=10)
     _shooting_line(session, game=game, team=worst, player=no_attempts, made=0, attempted=0)
     session.flush()
+    rebuild_totals(session)
     return ShapesFixture(
         best=best.id,
         worst=worst.id,
@@ -380,8 +410,7 @@ def fixture(session_factory):
     return fx
 
 
-def _check_shape(record_id: str, entry: dict) -> None:
-    kind = EXPECTED_KINDS[record_id]
+def _check_shape(record_id: str, kind: str, entry: dict) -> None:
     used = USED_FIELDS[kind]
     assert set(NEW_FIELDS) <= set(entry), entry
     for field in NEW_FIELDS:
@@ -397,13 +426,41 @@ def _check_shape(record_id: str, entry: dict) -> None:
         assert made == entry["value"], entry
         expected_pct = round(made / attempted, 3) if attempted else None
         assert entry["pct"] == expected_pct, entry
+    if kind == "shot_pct":
+        made, attempted = entry["made"], entry["attempted"]
+        assert isinstance(made, int) and isinstance(attempted, int) and attempted > 0, entry
+        assert entry["pct"] == round(made / attempted, 3) == entry["value"], entry
 
 
 @pytest.mark.parametrize("record_id", RECORD_IDS)
 def test_every_entry_and_holder_fills_exactly_its_kinds_figures(client, fixture, record_id):
+    kind = _kinds(client)[record_id]
     holder = _holder(client, record_id)
     entries = _list(client, record_id, limit=100)["entries"]
     assert entries
 
     for entry in (holder, *entries):
-        _check_shape(record_id, entry)
+        _check_shape(record_id, kind, entry)
+
+
+@pytest.mark.parametrize("record_id", LIBRARY_IDS)
+def test_every_library_list_answers_and_fills_its_kinds_figures(client, fixture, record_id):
+    """EVENTS-012: every id of the brief is a list the route answers, on
+    EVENTS-010's fixture, and its holder is the list's first entry."""
+    kind = _kinds(client)[record_id]
+    body = _list(client, record_id, limit=100)
+    response = client.get("/events/records/holders", params={"ids": record_id})
+    assert response.status_code == 200, response.text
+    holder = response.json()["holders"][record_id]
+
+    assert body["value_kind"] == kind
+    for entry in body["entries"]:
+        _check_shape(record_id, kind, entry)
+    if body["entries"]:
+        assert holder is not None
+        _check_shape(record_id, kind, holder)
+        first = dict(holder)
+        first.pop("tied_count")
+        assert first == body["entries"][0]
+    else:
+        assert holder is None

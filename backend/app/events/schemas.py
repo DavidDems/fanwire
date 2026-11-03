@@ -398,6 +398,16 @@ RecordGroup = Literal["team", "player"]
 # What a record's value is (EVENTS-011), and so which of an entry's figures
 # it fills: see RecordEntryOut.
 RecordValueKind = Literal["count", "win_loss", "made_total", "shot_pct", "average"]
+# Where a record sits in the library (EVENTS-012).
+RecordCategory = Literal[
+    "team-franchise",
+    "team-season",
+    "team-game",
+    "player-game",
+    "player-season",
+    "player-career",
+    "player-playoffs",
+]
 
 
 class RecordPlayerOut(BaseModel):
@@ -431,7 +441,9 @@ class RecordEntryOut(BaseModel):
     `value_kind` does not use it: a win_loss record's `wins`, `losses` and
     `pct` (the win percentage, equal to `value`); a made_total record's
     `made` (equal to `value`), `attempted` and `pct` (null when nothing was
-    attempted). `pct` is a fraction from 0 to 1, three places."""
+    attempted); a shot_pct record's `made`, `attempted` and `pct` (equal to
+    `value`). An average's `value` is the mean, one place, with no figure
+    beside it. `pct` is a fraction from 0 to 1, three places."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -455,27 +467,43 @@ class RecordHolderOut(RecordEntryOut):
     tied_count: int
 
 
-class RecordSummaryOut(BaseModel):
+class RecordCatalogItemOut(BaseModel):
+    """One record of the catalog (EVENTS-012): what it is, never who holds
+    it. `category` is one of the library's seven; `keywords` are the words
+    a search matches beside the title; `featured_rank` is 1 to 16 for the
+    featured records, in order, and null for every other."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     group: RecordGroup
+    category: RecordCategory
     title: str
     unit: str
     rule: str
     value_kind: RecordValueKind
-    holder: RecordHolderOut | None
+    keywords: list[str]
+    featured_rank: int | None
 
 
-class RecordsSummaryOut(BaseModel):
-    """GET /events/records. The data window is the earliest and latest
-    stored seasons, null when there are none."""
+class RecordsCatalogOut(BaseModel):
+    """GET /events/records: every record, no holder. The data window is the
+    earliest and latest stored seasons, null when there are none."""
 
     model_config = ConfigDict(from_attributes=True)
 
     since_season: str | None
     through_season: str | None
-    records: list[RecordSummaryOut]
+    records: list[RecordCatalogItemOut]
+
+
+class RecordHoldersOut(BaseModel):
+    """GET /events/records/holders: one key per asked id, its holder or null
+    when no stored data qualifies."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    holders: dict[str, RecordHolderOut | None]
 
 
 class RecordListOut(BaseModel):

@@ -429,3 +429,19 @@ def test_a_successful_load_logs_and_returns_no_credential(env, uploaded, scratch
     captured = capsys.readouterr()
     _assert_secret_free(caplog.text, secrets, "log records")
     _assert_secret_free(captured.out + captured.err, secrets, "stdout/stderr")
+
+
+# ------------------------------------------------- EVENTS-012: record totals
+
+
+def test_a_load_rebuilds_the_record_totals_with_its_data(env, engine, uploaded, scratch):
+    """The handler's load (load_nba_history) leaves the totals exactly what a
+    fresh rebuild of the loaded data gives, and not empty."""
+    from tests.record_totals_support import rebuilt_snapshots, snapshots
+
+    load_handler.handler({"seasons": SEASONS}, None)
+
+    with engine.connect() as conn:
+        stored = snapshots(conn)
+    assert all(stored.values()), stored
+    assert stored == rebuilt_snapshots(engine)

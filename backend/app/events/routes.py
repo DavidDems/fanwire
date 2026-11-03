@@ -29,8 +29,9 @@ from app.events.schemas import (
     PlayerDetailOut,
     PlayerGameOut,
     PlayerListItemOut,
+    RecordHoldersOut,
     RecordListOut,
-    RecordsSummaryOut,
+    RecordsCatalogOut,
     StandingsOut,
     TeamOut,
     TeamSeasonOut,
@@ -225,17 +226,42 @@ def get_team_season(
     return found
 
 
-@router.get("/records", response_model=RecordsSummaryOut)
+@router.get("/records", response_model=RecordsCatalogOut)
 def get_records(
     response: Response, session: Session = Depends(get_session)
-) -> records.RecordsSummary:
-    """Every historical record, team records then player records, each
-    with its rule, its `value_kind` (which of an entry's figures it fills)
-    and its holder: the first entry of its list and `tied_count`, how many
-    share that value; null when no stored data qualifies. `since_season` and `through_season` are the stored data's
-    window. Cacheable: `Cache-Control: public, max-age=300`."""
+) -> records.RecordsCatalog:
+    """The records library's catalog: every record, team records first, with
+    its category, rule, `value_kind` (which of an entry's figures it fills),
+    search `keywords` and `featured_rank`, and no holder (GET
+    /events/records/holders). `since_season` and `through_season` are the
+    stored data's window. Cacheable: `Cache-Control: public, max-age=300`."""
     response.headers["Cache-Control"] = RECORDS_CACHE_CONTROL
-    return records.records_summary(session)
+    return records.records_catalog(session)
+
+
+# Declared before /records/{record_id}, or "holders" would be read as an id.
+@router.get("/records/holders", response_model=RecordHoldersOut)
+def get_record_holders(
+    response: Response,
+    ids: str = Query(
+        ...,
+        description="1 to 24 distinct record ids, comma-separated. Sort them, so the same"
+        " set is the same cache entry.",
+    ),
+    session: Session = Depends(get_session),
+) -> records.RecordHolders:
+    """Each named record's holder: the first entry of its list and
+    `tied_count`, how many share that value; null when no stored data
+    qualifies. Cacheable: `Cache-Control: public, max-age=300`.
+
+    422: `ids` missing or empty, naming more than 24 records, repeating one,
+    or naming an unknown record."""
+    try:
+        wanted = records.holder_ids(ids)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    response.headers["Cache-Control"] = RECORDS_CACHE_CONTROL
+    return records.record_holders(session, wanted)
 
 
 @router.get("/records/{record_id}", response_model=RecordListOut)
