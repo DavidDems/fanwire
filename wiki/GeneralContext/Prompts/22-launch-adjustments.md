@@ -1,3 +1,7 @@
+---
+type: prompt
+---
+
 # 22 — Launch adjustments: ten units before the site goes public
 
 **Brief for hand-run sessions** (one unit per session, on `agent/<ID>`, held by
@@ -6,7 +10,7 @@ the one spec you are running.
 
 **Objective:** the human is about to share fanwire on LinkedIn and with friends and
 recruiters (2026-11-02). These ten units are the last product changes before that.
-They are recorded in `Architecture/human-decisions.md` §10 and §5, and they close
+They are recorded in `Architecture/human-decisions.md` §10 and `human-decisions.md` §5, and they close
 the `TODO/02-backlog.md` section "Launch adjustments".
 
 ## Read first, in this order
