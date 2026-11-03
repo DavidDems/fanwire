@@ -12,7 +12,8 @@ import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
-import { formatRecordValue, isRate, playerName } from "./recordLabels";
+import { playerName } from "./recordLabels";
+import { RecordValue } from "./RecordValue";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
 import styles from "./StatsNav.module.css";
 import type { StatsLevel, StatsNavAdapter } from "./types";
@@ -78,14 +79,12 @@ function RecordList({
   data: RecordListOut;
   adapter: StatsNavAdapter;
 }) {
-  const { entries, group, unit } = data;
+  const { entries, group, unit, value_kind } = data;
   const isPlayer = group === "player";
   const hasGame = entries.some((entry) => entry.game !== null);
   const hasSeason = !hasGame && entries.some((entry) => entry.season !== null);
   // A team record's team is its row header; a player's is a column of its own.
   const hasTeam = isPlayer && entries.some((entry) => entry.team !== null);
-  // A season record ranks the exact fraction, shown to three places.
-  const rate = isRate(unit);
 
   return (
     <>
@@ -141,14 +140,15 @@ function RecordList({
                   </td>
                 ) : null}
                 <td className={styles.figure}>
-                  {formatRecordValue(entry.value, unit)}
+                  <RecordValue entry={entry} kind={value_kind} />
                 </td>
               </tr>
             ))}
           </tbody>
         </ScrollTable>
       )}
-      {rate && hasSeason ? (
+      {/* A season record ranks the exact fraction, shown to three places. */}
+      {value_kind === "win_loss" && hasSeason ? (
         <p className={styles.muted}>
           Ranked by the exact win percentage, so two teams that show the same
           three places can rank apart.

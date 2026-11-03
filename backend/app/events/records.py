@@ -71,6 +71,12 @@ SINGLE_GAME_TYPES: tuple[str, ...] = (REGULAR, "playoffs")
 
 RecordGroup = Literal["team", "player"]
 
+# What a record's value is, and so which figures its entries carry beside it
+# (EVENTS-011): a count fills none; win_loss fills wins, losses and pct (value
+# stays the win percentage); made_total fills made, attempted and pct (value
+# is the made count). shot_pct and average are named for the records to come.
+ValueKind = Literal["count", "win_loss", "made_total", "shot_pct", "average"]
+
 # A column a candidates query labels: an expression or a mapped attribute.
 _Column = ColumnElement[Any] | QueryableAttribute[Any]
 
@@ -100,6 +106,12 @@ class RecordEntry:
     player: RecordPlayer | None
     season: str | None
     game: RecordGame | None
+    # The figures behind the value, null where the record's kind has none.
+    wins: int | None
+    losses: int | None
+    made: int | None
+    attempted: int | None
+    pct: float | None
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,7 @@ class RecordSummary:
     title: str
     unit: str
     rule: str
+    value_kind: ValueKind
     holder: RecordHolder | None
 
 
@@ -137,6 +150,7 @@ class RecordList:
     title: str
     unit: str
     rule: str
+    value_kind: ValueKind
     since_season: str | None
     through_season: str | None
     total: int
@@ -158,10 +172,6 @@ class Candidates:
 
     rows: Select[Any]
     order: tuple[tuple[str, bool], ...]
-    # The value shown is a win percentage, from the `wins` and `games`
-    # columns, rounded by events/' one percentage rule (service._pct, as
-    # standings' win_pct); the exact fraction still ranks and orders.
-    percentage: bool = False
 
 
 @dataclass(frozen=True)
@@ -172,6 +182,10 @@ class RecordDefinition:
     unit: str
     rule: str
     candidates: Callable[[], Candidates]
+    # No default: a record cannot be registered without saying what its value
+    # is. win_loss candidates label `wins`, `losses` and `games`; made_total
+    # candidates label `attempted` (the value is the made count).
+    value_kind: ValueKind
 
 
 def _typed_null(type_: Any) -> ColumnElement[Any]:
@@ -275,13 +289,13 @@ def _season_record(*, best: bool) -> Candidates:
             season=sides.c.season,
             fraction=fraction,
             wins=wins,
+            losses=games - wins,
             games=games,
         )
     ).group_by(sides.c.season, sides.c.team_id)
     return Candidates(
         rows=rows,
         order=(("fraction", best), ("wins", best), ("season", False), ("team_id", False)),
-        percentage=True,
     )
 
 
@@ -342,7 +356,14 @@ def _player_championships() -> Candidates:
     return Candidates(rows=rows, order=(("value", True), ("player_id", False)))
 
 
-def _player_game(stat: str) -> Callable[[], Candidates]:
+def _player_game(stat: str, attempted: str | None = None) -> Callable[[], Candidates]:
+    """`attempted`: the stat's attempts column, for a made_total record. Rows
+    carry it beside the made count as a fetched column, never a key, so the
+    index that serves `stat` still does."""
+    extra: dict[str, _Column] = (
+        {"attempted": getattr(PlayerGameStats, attempted)} if attempted is not None else {}
+    )
+
     def candidates() -> Candidates:
         opponent = case(
             (Game.home_team_id == PlayerGameStats.team_id, Game.away_team_id),
@@ -359,6 +380,7 @@ def _player_game(stat: str) -> Callable[[], Candidates]:
                     opponent_id=opponent,
                     date=Game.date,
                     line_id=PlayerGameStats.id,
+                    **extra,
                 )
             )
             .select_from(PlayerGameStats)
@@ -413,22 +435,25 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="titles",
         rule=f"NBA titles won. {_FINALS}.",
         candidates=_team_championships,
+        value_kind="count",
     ),
     RecordDefinition(
         id="team-best-season",
         group="team",
         title="Best regular season",
-        unit="win %",
+        unit="record",
         rule=f"Highest win percentage in one season, then most wins. {_SEASONS}.",
         candidates=lambda: _season_record(best=True),
+        value_kind="win_loss",
     ),
     RecordDefinition(
         id="team-worst-season",
         group="team",
         title="Worst regular season",
-        unit="win %",
+        unit="record",
         rule=f"Lowest win percentage in one season, then fewest wins. {_SEASONS}.",
         candidates=lambda: _season_record(best=False),
+        value_kind="win_loss",
     ),
     RecordDefinition(
         id="team-most-points-game",
@@ -437,6 +462,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="points",
         rule=f"Points scored by one team in one game. {_SINGLE_GAME}.",
         candidates=_team_most_points_game,
+        value_kind="count",
     ),
     RecordDefinition(
         id="team-largest-win",
@@ -445,6 +471,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="points",
         rule=f"Margin of victory in one game. {_SINGLE_GAME}.",
         candidates=_team_largest_win,
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-championships",
@@ -456,6 +483,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
             f" in that season's NBA Finals. {_FINALS}."
         ),
         candidates=_player_championships,
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-points-game",
@@ -464,6 +492,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="points",
         rule=f"Points by one player in one game. {_SINGLE_GAME}.",
         candidates=_player_game("points"),
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-rebounds-game",
@@ -472,6 +501,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="rebounds",
         rule=f"Rebounds by one player in one game. {_SINGLE_GAME}.",
         candidates=_player_game("rebounds"),
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-assists-game",
@@ -480,6 +510,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="assists",
         rule=f"Assists by one player in one game. {_SINGLE_GAME}.",
         candidates=_player_game("assists"),
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-threes-game",
@@ -487,7 +518,8 @@ RECORDS: tuple[RecordDefinition, ...] = (
         title="Most threes in a game",
         unit="threes",
         rule=f"Three-pointers made by one player in one game. {_SINGLE_GAME}.",
-        candidates=_player_game("three_pointers_made"),
+        candidates=_player_game("three_pointers_made", "three_pointers_attempted"),
+        value_kind="made_total",
     ),
     RecordDefinition(
         id="player-career-points",
@@ -496,6 +528,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
         unit="points",
         rule="Regular-season points, summed over every played game.",
         candidates=_career_points,
+        value_kind="count",
     ),
     RecordDefinition(
         id="player-career-triple-doubles",
@@ -507,6 +540,7 @@ RECORDS: tuple[RecordDefinition, ...] = (
             " assists, steals and blocks."
         ),
         candidates=_career_triple_doubles,
+        value_kind="count",
     ),
 )
 
@@ -544,7 +578,34 @@ def _with_refs(source: Subquery | CTE, *extra: ColumnElement[Any]) -> Select[Any
     )
 
 
-def _entry_fields(row: RowMapping, *, percentage: bool) -> dict[str, Any]:
+def _figures(row: RowMapping, value_kind: ValueKind) -> dict[str, Any]:
+    """`value` and the figures behind it, by the record's kind. Percentages
+    use events/' one rounding rule (service._pct, as standings' win_pct);
+    the exact fraction still ranks and orders."""
+    figures: dict[str, Any] = dict.fromkeys(("wins", "losses", "made", "attempted", "pct"))
+    if value_kind == "win_loss":
+        pct = _pct(row["wins"], row["games"])
+        return {
+            **figures,
+            # A listed season has played games, so the percentage is never null.
+            "value": pct or 0.0,
+            "wins": int(row["wins"]),
+            "losses": int(row["losses"]),
+            "pct": pct,
+        }
+    if value_kind == "made_total":
+        made, attempted = int(row["value"]), int(row["attempted"])
+        return {
+            **figures,
+            "value": made,
+            "made": made,
+            "attempted": attempted,
+            "pct": _pct(made, attempted),
+        }
+    return {**figures, "value": row["value"]}
+
+
+def _entry_fields(row: RowMapping, *, value_kind: ValueKind) -> dict[str, Any]:
     team = (
         TeamRef(id=row["team_id"], name=row["team_name"], abbreviation=row["team_abbreviation"])
         if row["team_id"] is not None
@@ -567,12 +628,11 @@ def _entry_fields(row: RowMapping, *, percentage: bool) -> dict[str, Any]:
     )
     return {
         "rank": int(row["rank"]),
-        # A listed season has played games, so the percentage is never null.
-        "value": (_pct(row["wins"], row["games"]) or 0.0) if percentage else row["value"],
         "team": team,
         "player": player,
         "season": row["season"],
         "game": game,
+        **_figures(row, value_kind),
     }
 
 
@@ -652,10 +712,10 @@ def _list_statement(candidates: Candidates, *, limit: int, offset: int) -> Selec
 # Built once per process: the statements take no parameters, and building all
 # of them is about 20 ms of Python per summary on the full load.
 @cache
-def _holder_for(record_id: str) -> tuple[Select[Any], bool]:
-    """A record's holder statement, and whether its value is a percentage."""
-    candidates = RECORDS_BY_ID[record_id].candidates()
-    return _holder_statement(candidates), candidates.percentage
+def _holder_for(record_id: str) -> tuple[Select[Any], ValueKind]:
+    """A record's holder statement, and its definition's value_kind."""
+    record = RECORDS_BY_ID[record_id]
+    return _holder_statement(record.candidates()), record.value_kind
 
 
 def records_summary(session: Session) -> RecordsSummary:
@@ -664,11 +724,11 @@ def records_summary(session: Session) -> RecordsSummary:
     since, through = _window(session)
     summaries = []
     for record in RECORDS:
-        statement, percentage = _holder_for(record.id)
+        statement, value_kind = _holder_for(record.id)
         row = session.execute(statement).mappings().first()
         holder = (
             RecordHolder(
-                **_entry_fields(row, percentage=percentage),
+                **_entry_fields(row, value_kind=value_kind),
                 tied_count=int(row["tied_count"]),
             )
             if row is not None
@@ -681,6 +741,7 @@ def records_summary(session: Session) -> RecordsSummary:
                 title=record.title,
                 unit=record.unit,
                 rule=record.rule,
+                value_kind=record.value_kind,
                 holder=holder,
             )
         )
@@ -698,7 +759,7 @@ def record_list(session: Session, record_id: str, *, limit: int, offset: int) ->
     rows = session.execute(_list_statement(candidates, limit=limit, offset=offset)).mappings().all()
     total = int(rows[0]["total"]) if rows else 0
     entries = [
-        RecordEntry(**_entry_fields(row, percentage=candidates.percentage))
+        RecordEntry(**_entry_fields(row, value_kind=record.value_kind))
         for row in rows
         if row["position"] is not None
     ]
@@ -708,6 +769,7 @@ def record_list(session: Session, record_id: str, *, limit: int, offset: int) ->
         title=record.title,
         unit=record.unit,
         rule=record.rule,
+        value_kind=record.value_kind,
         since_season=since,
         through_season=through,
         total=total,

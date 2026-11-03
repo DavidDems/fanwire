@@ -120,9 +120,9 @@ export interface paths {
         /**
          * Get Records
          * @description Every historical record, team records then player records, each
-         *     with its rule and its holder: the first entry of its list and
-         *     `tied_count`, how many share that value; null when no stored data
-         *     qualifies. `since_season` and `through_season` are the stored data's
+         *     with its rule, its `value_kind` (which of an entry's figures it fills)
+         *     and its holder: the first entry of its list and `tied_count`, how many
+         *     share that value; null when no stored data qualifies. `since_season` and `through_season` are the stored data's
          *     window. Cacheable: `Cache-Control: public, max-age=300`.
          */
         get: operations["get_records_events_records_get"];
@@ -1732,9 +1732,23 @@ export interface components {
          *     a player's count or career sum; `season` and `game` are null where the
          *     record has none. `value` is an integer, except a season record's win
          *     percentage (a fraction from 0 to 1, three places).
+         *
+         *     The figures behind `value` (EVENTS-011), each null where the record's
+         *     `value_kind` does not use it: a win_loss record's `wins`, `losses` and
+         *     `pct` (the win percentage, equal to `value`); a made_total record's
+         *     `made` (equal to `value`), `attempted` and `pct` (null when nothing was
+         *     attempted). `pct` is a fraction from 0 to 1, three places.
          */
         RecordEntryOut: {
+            /** Attempted */
+            attempted: number | null;
             game: components["schemas"]["RecordGameOut"] | null;
+            /** Losses */
+            losses: number | null;
+            /** Made */
+            made: number | null;
+            /** Pct */
+            pct: number | null;
             player: components["schemas"]["RecordPlayerOut"] | null;
             /** Rank */
             rank: number;
@@ -1743,6 +1757,8 @@ export interface components {
             team: components["schemas"]["TeamRefOut"] | null;
             /** Value */
             value: number;
+            /** Wins */
+            wins: number | null;
         };
         /**
          * RecordGameOut
@@ -1767,7 +1783,15 @@ export interface components {
          *     value (1 when it is alone).
          */
         RecordHolderOut: {
+            /** Attempted */
+            attempted: number | null;
             game: components["schemas"]["RecordGameOut"] | null;
+            /** Losses */
+            losses: number | null;
+            /** Made */
+            made: number | null;
+            /** Pct */
+            pct: number | null;
             player: components["schemas"]["RecordPlayerOut"] | null;
             /** Rank */
             rank: number;
@@ -1778,6 +1802,8 @@ export interface components {
             tied_count: number;
             /** Value */
             value: number;
+            /** Wins */
+            wins: number | null;
         };
         /**
          * RecordListOut
@@ -1806,6 +1832,11 @@ export interface components {
             total: number;
             /** Unit */
             unit: string;
+            /**
+             * Value Kind
+             * @enum {string}
+             */
+            value_kind: "count" | "win_loss" | "made_total" | "shot_pct" | "average";
         };
         /**
          * RecordOut
@@ -1852,6 +1883,11 @@ export interface components {
             title: string;
             /** Unit */
             unit: string;
+            /**
+             * Value Kind
+             * @enum {string}
+             */
+            value_kind: "count" | "win_loss" | "made_total" | "shot_pct" | "average";
         };
         /**
          * RecordsSummaryOut

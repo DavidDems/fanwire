@@ -230,9 +230,9 @@ def get_records(
     response: Response, session: Session = Depends(get_session)
 ) -> records.RecordsSummary:
     """Every historical record, team records then player records, each
-    with its rule and its holder: the first entry of its list and
-    `tied_count`, how many share that value; null when no stored data
-    qualifies. `since_season` and `through_season` are the stored data's
+    with its rule, its `value_kind` (which of an entry's figures it fills)
+    and its holder: the first entry of its list and `tied_count`, how many
+    share that value; null when no stored data qualifies. `since_season` and `through_season` are the stored data's
     window. Cacheable: `Cache-Control: public, max-age=300`."""
     response.headers["Cache-Control"] = RECORDS_CACHE_CONTROL
     return records.records_summary(session)
