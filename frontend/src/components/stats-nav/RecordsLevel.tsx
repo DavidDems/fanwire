@@ -12,7 +12,8 @@ import { SegmentedTabs } from "../ui/SegmentedTabs";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
 import { LevelLink } from "./LevelLink";
-import { formatRecordValue, groupTitle, playerName } from "./recordLabels";
+import { groupTitle, playerName } from "./recordLabels";
+import { RecordValue } from "./RecordValue";
 import styles from "./StatsNav.module.css";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
@@ -146,8 +147,12 @@ function RecordCard({
       ) : (
         <>
           <p>
-            <strong>{formatRecordValue(holder.value, record.unit)}</strong>{" "}
-            {record.unit}
+            <RecordValue
+              entry={holder}
+              kind={record.value_kind}
+              unit={record.value_kind === "win_loss" ? undefined : record.unit}
+              strong
+            />
           </p>
           <p>
             {name}

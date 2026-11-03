@@ -203,9 +203,20 @@
   font-weight: var(--font-weight-regular);
 }
 
-/* A table's headline figure (a leader's average, a record's value). */
+/*
+ * A table's headline figure (a leader's average, a record's value). It holds
+ * a record's visually hidden phrase, which is absolutely positioned, so it is
+ * that phrase's containing block inside the scroll region.
+ */
 .figure {
+  position: relative;
   font-weight: var(--font-weight-semibold);
+}
+
+/* A record's percentage beside its figure: `(.890)`, `(57.1%)` (EVENTS-011). */
+.share {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
 }
 
 /* A level control without an address: a button that reads as a link. */

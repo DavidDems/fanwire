@@ -2943,8 +2943,19 @@
         "type": "object"
       },
       "RecordEntryOut": {
-        "description": "One entry of a ranked record list. `rank` is competition ranking\n(equal values share a rank, the next rank skips). `team` is the team\n(for a player's single-game record, the team they played for), null for\na player's count or career sum; `season` and `game` are null where the\nrecord has none. `value` is an integer, except a season record's win\npercentage (a fraction from 0 to 1, three places).",
+        "description": "One entry of a ranked record list. `rank` is competition ranking\n(equal values share a rank, the next rank skips). `team` is the team\n(for a player's single-game record, the team they played for), null for\na player's count or career sum; `season` and `game` are null where the\nrecord has none. `value` is an integer, except a season record's win\npercentage (a fraction from 0 to 1, three places).\n\nThe figures behind `value` (EVENTS-011), each null where the record's\n`value_kind` does not use it: a win_loss record's `wins`, `losses` and\n`pct` (the win percentage, equal to `value`); a made_total record's\n`made` (equal to `value`), `attempted` and `pct` (null when nothing was\nattempted). `pct` is a fraction from 0 to 1, three places.",
         "properties": {
+          "attempted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempted"
+          },
           "game": {
             "anyOf": [
               {
@@ -2954,6 +2965,39 @@
                 "type": "null"
               }
             ]
+          },
+          "losses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Losses"
+          },
+          "made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
           },
           "player": {
             "anyOf": [
@@ -3000,6 +3044,17 @@
               }
             ],
             "title": "Value"
+          },
+          "wins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wins"
           }
         },
         "required": [
@@ -3008,7 +3063,12 @@
           "team",
           "player",
           "season",
-          "game"
+          "game",
+          "wins",
+          "losses",
+          "made",
+          "attempted",
+          "pct"
         ],
         "title": "RecordEntryOut",
         "type": "object"
@@ -3060,6 +3120,17 @@
       "RecordHolderOut": {
         "description": "The list's first entry; `tied_count` is how many entries share its\nvalue (1 when it is alone).",
         "properties": {
+          "attempted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempted"
+          },
           "game": {
             "anyOf": [
               {
@@ -3069,6 +3140,39 @@
                 "type": "null"
               }
             ]
+          },
+          "losses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Losses"
+          },
+          "made": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
           },
           "player": {
             "anyOf": [
@@ -3119,6 +3223,17 @@
               }
             ],
             "title": "Value"
+          },
+          "wins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wins"
           }
         },
         "required": [
@@ -3128,6 +3243,11 @@
           "player",
           "season",
           "game",
+          "wins",
+          "losses",
+          "made",
+          "attempted",
+          "pct",
           "tied_count"
         ],
         "title": "RecordHolderOut",
@@ -3192,6 +3312,17 @@
           "unit": {
             "title": "Unit",
             "type": "string"
+          },
+          "value_kind": {
+            "enum": [
+              "count",
+              "win_loss",
+              "made_total",
+              "shot_pct",
+              "average"
+            ],
+            "title": "Value Kind",
+            "type": "string"
           }
         },
         "required": [
@@ -3200,6 +3331,7 @@
           "title",
           "unit",
           "rule",
+          "value_kind",
           "since_season",
           "through_season",
           "total",
@@ -3319,6 +3451,17 @@
           "unit": {
             "title": "Unit",
             "type": "string"
+          },
+          "value_kind": {
+            "enum": [
+              "count",
+              "win_loss",
+              "made_total",
+              "shot_pct",
+              "average"
+            ],
+            "title": "Value Kind",
+            "type": "string"
           }
         },
         "required": [
@@ -3327,6 +3470,7 @@
           "title",
           "unit",
           "rule",
+          "value_kind",
           "holder"
         ],
         "title": "RecordSummaryOut",
@@ -4887,7 +5031,7 @@
     },
     "/events/records": {
       "get": {
-        "description": "Every historical record, team records then player records, each\nwith its rule and its holder: the first entry of its list and\n`tied_count`, how many share that value; null when no stored data\nqualifies. `since_season` and `through_season` are the stored data's\nwindow. Cacheable: `Cache-Control: public, max-age=300`.",
+        "description": "Every historical record, team records then player records, each\nwith its rule, its `value_kind` (which of an entry's figures it fills)\nand its holder: the first entry of its list and `tied_count`, how many\nshare that value; null when no stored data qualifies. `since_season` and `through_season` are the stored data's\nwindow. Cacheable: `Cache-Control: public, max-age=300`.",
         "operationId": "get_records_events_records_get",
         "responses": {
           "200": {

@@ -395,6 +395,9 @@ class TeamSeasonOut(BaseModel):
 # team's W-L record; these are historical records.)
 
 RecordGroup = Literal["team", "player"]
+# What a record's value is (EVENTS-011), and so which of an entry's figures
+# it fills: see RecordEntryOut.
+RecordValueKind = Literal["count", "win_loss", "made_total", "shot_pct", "average"]
 
 
 class RecordPlayerOut(BaseModel):
@@ -422,7 +425,13 @@ class RecordEntryOut(BaseModel):
     (for a player's single-game record, the team they played for), null for
     a player's count or career sum; `season` and `game` are null where the
     record has none. `value` is an integer, except a season record's win
-    percentage (a fraction from 0 to 1, three places)."""
+    percentage (a fraction from 0 to 1, three places).
+
+    The figures behind `value` (EVENTS-011), each null where the record's
+    `value_kind` does not use it: a win_loss record's `wins`, `losses` and
+    `pct` (the win percentage, equal to `value`); a made_total record's
+    `made` (equal to `value`), `attempted` and `pct` (null when nothing was
+    attempted). `pct` is a fraction from 0 to 1, three places."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -432,6 +441,11 @@ class RecordEntryOut(BaseModel):
     player: RecordPlayerOut | None
     season: str | None
     game: RecordGameOut | None
+    wins: int | None
+    losses: int | None
+    made: int | None
+    attempted: int | None
+    pct: float | None
 
 
 class RecordHolderOut(RecordEntryOut):
@@ -449,6 +463,7 @@ class RecordSummaryOut(BaseModel):
     title: str
     unit: str
     rule: str
+    value_kind: RecordValueKind
     holder: RecordHolderOut | None
 
 
@@ -474,6 +489,7 @@ class RecordListOut(BaseModel):
     title: str
     unit: str
     rule: str
+    value_kind: RecordValueKind
     since_season: str | None
     through_season: str | None
     total: int

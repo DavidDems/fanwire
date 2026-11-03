@@ -1357,6 +1357,16 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     has no value for is left out. A season record notes that it ranks the
     exact percentage, so equal three-place figures can rank apart. An unknown
     id is "Record not found" in place, with Back.
+  - **A value by its `value_kind`** (`EVENTS-011`; `isRate`'s guess from the
+    unit is gone): `RecordValue` (`components/stats-nav/`) draws a card's and
+    a list cell's value. `win_loss` is `73–9` (an en dash) then `(.890)`; a
+    screen reader hears one phrase, "73 wins, 9 losses, .890" (the visible
+    part is `aria-hidden`, the phrase visually hidden), and the list's value
+    column is headed Record (the unit). `made_total` is `12 (57.1%)`, the
+    count alone when `pct` is null; a card puts its unit after the count
+    (`14 threes (58.3%)`). The parenthesis is `.share`, `--color-text-muted`
+    (4.5:1 on the card's surface and hover surface in both themes). A
+    `count` is the value alone, as before.
   - **The record level's group is its list's.** `?record=` never carries
     `group`; until the list or cached summary arrives, the id's prefix
     supplies the group (`FRONTEND-021`, R30). Unknown prefixes retain the
