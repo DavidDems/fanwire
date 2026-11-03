@@ -18,6 +18,7 @@ import { config } from "../../config";
  */
 
 export type FeedPageBody = components["schemas"]["FeedPage"];
+export type HistoryPageBody = components["schemas"]["HistoryPage"];
 export type MediaItemView = components["schemas"]["MediaItemView"];
 export type PostView = components["schemas"]["PostView"];
 export type ThreadView = components["schemas"]["ThreadView"];
@@ -210,7 +211,9 @@ export async function deletePost(postId: number): Promise<void> {
  * original through a repost of it would leave the original's own card behind.
  */
 export type FeedCacheValue =
-  InfiniteData<FeedPageBody, number | null> | ThreadView | null;
+  | InfiniteData<FeedPageBody | HistoryPageBody, number | string | null>
+  | ThreadView
+  | null;
 
 /** Whether this post is `postId`, or reposts it. */
 function holds(post: PostView, postId: number): boolean {

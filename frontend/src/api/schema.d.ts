@@ -339,6 +339,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/feed/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get History
+         * @description Only the authenticated active caller's activity; never a requested user id.
+         */
+        get: operations["get_history_feed_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/feed/thread/{post_id}": {
         parameters: {
             query?: never;
@@ -1152,6 +1172,13 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HistoryPage */
+        HistoryPage: {
+            /** Items */
+            items: components["schemas"]["PostView"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * LeaderOut
@@ -2683,6 +2710,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_history_feed_history_get: {
+        parameters: {
+            query?: {
+                tab?: "posts" | "replies" | "likes" | "reposts";
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
                 };
             };
             /** @description Validation Error */

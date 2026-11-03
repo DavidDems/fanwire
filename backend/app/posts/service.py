@@ -44,8 +44,9 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from datetime import UTC, datetime
+from typing import Literal
 
-from sqlalchemy import ColumnElement, and_, delete, func, or_, select
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.eventbus import PostEventBus
@@ -55,6 +56,52 @@ from app.posts.models import EventMention, Post, PostLike, Report
 from app.users.models import User
 
 POST_REPORTED = "PostReported"
+
+HistoryTab = Literal["posts", "replies", "likes", "reposts"]
+
+
+def query_history_posts(
+    session: Session,
+    *,
+    user_id: int,
+    tab: HistoryTab,
+    before_id: int | None,
+    before_liked_at: datetime | None,
+    limit: int,
+) -> list[tuple[Post, datetime | None]]:
+    """Own activity, filtered before paging, through posts/' public read API.
+
+    Likes read ix_post_likes_user_created_post in descending (time, id)
+    order. The other tabs read ix_posts_author_id_id in descending id order,
+    with their flag predicates applied before LIMIT. A caller supplies one
+    extra row to detect the true last page without a count query.
+    """
+    if tab == "likes":
+        stmt = (
+            select(Post, PostLike.created_at)
+            .join(PostLike, PostLike.post_id == Post.id)
+            .where(PostLike.user_id == user_id, _visible())
+        )
+        if before_id is not None and before_liked_at is not None:
+            stmt = stmt.where(
+                tuple_(PostLike.created_at, PostLike.post_id) < (before_liked_at, before_id)
+            )
+        rows = session.execute(
+            stmt.order_by(PostLike.created_at.desc(), PostLike.post_id.desc()).limit(limit)
+        )
+        return [(post, liked_at) for post, liked_at in rows]
+
+    posts_stmt = select(Post).where(Post.author_id == user_id, _visible())
+    if tab == "posts":
+        posts_stmt = posts_stmt.where(Post.is_reply.is_(False), Post.is_repost.is_(False))
+    elif tab == "replies":
+        posts_stmt = posts_stmt.where(Post.is_reply.is_(True))
+    else:
+        posts_stmt = posts_stmt.where(Post.is_repost.is_(True))
+    if before_id is not None:
+        posts_stmt = posts_stmt.where(Post.id < before_id)
+    posts = session.scalars(posts_stmt.order_by(Post.id.desc()).limit(limit))
+    return [(post, None) for post in posts]
 
 
 class NotPostOwnerError(ValueError):
