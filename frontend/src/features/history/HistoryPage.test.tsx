@@ -1,8 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useLocation } from "react-router-dom";
 
+import { setTokenProvider } from "../../api/client";
+import { installTokenProvider } from "../../auth/tokenProvider";
 import {
   FakeAuthService,
   profileFound,
@@ -28,6 +30,8 @@ function Address() {
 }
 
 function renderHistory(route = "/history") {
+  const authService = new FakeAuthService({ session: testSession() });
+  installTokenProvider(authService);
   return renderWithAuth(
     <>
       <HistoryPage />
@@ -35,7 +39,7 @@ function renderHistory(route = "/history") {
     </>,
     {
       route,
-      authService: new FakeAuthService({ session: testSession() }),
+      authService,
     },
   );
 }
@@ -44,6 +48,10 @@ beforeEach(() => {
   server.use(profileFound());
   stubImages({ autoLoad: true });
   stubIntersectionObserver();
+});
+
+afterEach(() => {
+  setTokenProvider(() => null);
 });
 
 describe("History", () => {
