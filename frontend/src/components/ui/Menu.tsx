@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { buttonClass } from "./Button";
+import { buttonClass, type ButtonSize } from "./Button";
 import styles from "./Menu.module.css";
 
 export interface MenuItem {
@@ -26,6 +26,10 @@ export interface MenuProps {
   items: MenuItem[];
   /** Shown in the button in place of the label, which stays its name. */
   icon?: ReactNode;
+  /** Override the menu button's default compact target size. */
+  buttonSize?: ButtonSize;
+  /** Extra class for a caller with a larger target requirement. */
+  buttonClassName?: string;
 }
 
 /** Space between the button and the menu, and between the menu and the viewport's edge. */
@@ -58,7 +62,13 @@ const EDGE_PX = 8;
  * see it either. **Tab leaves**: focus moves on as usual, and the menu closes
  * behind it.
  */
-export function Menu({ label, items, icon }: MenuProps) {
+export function Menu({
+  label,
+  items,
+  icon,
+  buttonSize = "sm",
+  buttonClassName,
+}: MenuProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const menuId = useId();
@@ -195,7 +205,7 @@ export function Menu({ label, items, icon }: MenuProps) {
       <button
         ref={buttonRef}
         type="button"
-        className={`${buttonClass("ghost", "sm")} ${styles.button}`}
+        className={`${buttonClass("ghost", buttonSize)} ${styles.button}${buttonClassName ? ` ${buttonClassName}` : ""}`}
         aria-label={icon === undefined ? undefined : label}
         aria-haspopup="menu"
         aria-expanded={open}

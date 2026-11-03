@@ -98,6 +98,12 @@
   margin-left: auto;
 }
 
+.accountMenuButton {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0;
+}
+
 /* Primary nav, phone: a bar fixed to the bottom of the viewport. */
 .nav {
   position: fixed;

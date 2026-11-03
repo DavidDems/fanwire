@@ -229,6 +229,118 @@ export class CognitoAuthService implements AuthService {
     return session?.idToken ?? null;
   }
 
+  reauthenticate(password: string): Promise<void> {
+    const user = this.pool.getCurrentUser();
+    if (user === null) {
+      return Promise.reject(
+        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+      );
+    }
+
+    return new Promise((resolve, reject) => {
+      user.getSession((error: Error | null, session: CognitoUserSession | null) => {
+        if (error || !session || !session.isValid()) {
+          reject(toAuthError(error ?? new Error("There is no valid session.")));
+          return;
+        }
+        const email = session.getIdToken().payload.email;
+        if (typeof email !== "string" || email.length === 0) {
+          reject(new AuthError("NotAuthorizedException", "The signed-in account has no email."));
+          return;
+        }
+
+        user.authenticateUser(
+          new AuthenticationDetails({ Username: email, Password: password }),
+          {
+            onSuccess: () => resolve(),
+            onFailure: (failure: unknown) => reject(toAuthError(failure)),
+            newPasswordRequired: () =>
+              reject(
+                new AuthError(
+                  "NewPasswordRequiredException",
+                  "This account has to set a new password before it can sign in.",
+                ),
+              ),
+            mfaRequired: () =>
+              reject(
+                new AuthError(
+                  "MfaRequiredException",
+                  "This account needs a multi-factor code, which this app cannot collect yet.",
+                ),
+              ),
+          },
+        );
+      });
+    });
+  }
+
+  async emailVerified(): Promise<boolean> {
+    const user = this.pool.getCurrentUser();
+    if (user === null) return false;
+    const session = await new Promise<CognitoUserSession | null>((resolve, reject) => {
+      user.getSession((error: Error | null, current: CognitoUserSession | null) => {
+        if (error) {
+          reject(toAuthError(error));
+          return;
+        }
+        resolve(current);
+      });
+    });
+    return session?.getIdToken().payload.email_verified === true;
+  }
+
+  requestEmailVerification(): Promise<void> {
+    const user = this.pool.getCurrentUser();
+    if (user === null) {
+      return Promise.reject(
+        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+      );
+    }
+    return new Promise((resolve, reject) => {
+      user.getAttributeVerificationCode("email", {
+        onSuccess: () => resolve(),
+        onFailure: (error) => reject(toAuthError(error)),
+        inputVerificationCode: () => undefined,
+      });
+    });
+  }
+
+  confirmEmailVerification(code: string): Promise<void> {
+    const user = this.pool.getCurrentUser();
+    if (user === null) {
+      return Promise.reject(
+        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+      );
+    }
+    return new Promise((resolve, reject) => {
+      user.verifyAttribute("email", code, {
+        onSuccess: () => {
+          // VerifyAttribute does not return a new token. Force the one refresh
+          // needed for email_verified to appear in the next ID token.
+          user.getSession(
+            (sessionError: Error | null, session: CognitoUserSession | null) => {
+              if (sessionError || !session) {
+                reject(toAuthError(sessionError ?? new Error("There is no valid session.")));
+                return;
+              }
+              user.refreshSession(
+                session.getRefreshToken(),
+                (refreshError: Error | null, refreshed: CognitoUserSession | null) => {
+                  if (refreshError || !refreshed) {
+                    reject(toAuthError(refreshError ?? new Error("Session refresh failed.")));
+                    return;
+                  }
+                  resolve();
+                },
+              );
+            },
+          );
+        },
+        onFailure: (error) => reject(toAuthError(error)),
+      });
+    });
+  }
+
   private userFor(email: string): CognitoUser {
     return new CognitoUser({ Username: email, Pool: this.pool });
   }

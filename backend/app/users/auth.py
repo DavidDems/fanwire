@@ -26,11 +26,13 @@ from app.users.jwks import JWKSProvider
 @dataclass(frozen=True)
 class VerifiedIdentity:
     """The result of a successful token verification — just enough to
-    identify the caller (`sub`) and, optionally, their email as Cognito
-    reports it. Never carries the raw token or any unverified claim."""
+    identify the caller (`sub`), their verified authentication time, and,
+    optionally, their email as Cognito reports it. Never carries the raw token
+    or any unverified claim."""
 
     sub: str
     email: str | None = None
+    auth_time: int | None = None
 
 
 class InvalidTokenError(Exception):
@@ -77,7 +79,7 @@ class CognitoTokenVerifier(TokenVerifier):
                 issuer=self._issuer,
                 # Every Cognito ID token carries all five. Without `require`,
                 # a validly signed token with no `exp` would never expire.
-                options={"require": ["exp", "iat", "sub", "iss", "aud"]},
+                options={"require": ["exp", "iat", "sub", "iss", "aud", "auth_time"]},
             )
         except jwt.PyJWTError as exc:
             raise InvalidTokenError(str(exc)) from exc
@@ -92,7 +94,11 @@ class CognitoTokenVerifier(TokenVerifier):
         if claims.get("token_use") != "id" or "aud" not in claims:
             raise InvalidTokenError("token is not a Cognito ID token")
 
-        return VerifiedIdentity(sub=claims["sub"], email=claims.get("email"))
+        auth_time = claims.get("auth_time")
+        if isinstance(auth_time, bool) or not isinstance(auth_time, int):
+            raise InvalidTokenError("token has an invalid auth_time")
+
+        return VerifiedIdentity(sub=claims["sub"], email=claims.get("email"), auth_time=auth_time)
 
     def _matching_key(self, token: str) -> Any:
         # jwt.get_unverified_header (a malformed token) and PyJWK (a JWK it

@@ -3552,6 +3552,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Recent authentication is required to deactivate an account. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "recent_auth_required"
+                     *     }
+                     */
+                    "application/json": unknown;
+                };
+            };
         };
     };
     patch_me_users_me_patch: {

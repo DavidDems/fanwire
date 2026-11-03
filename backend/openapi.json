@@ -6550,6 +6550,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "recent_auth_required"
+                }
+              }
+            },
+            "description": "Recent authentication is required to deactivate an account."
           }
         },
         "summary": "Delete Me",

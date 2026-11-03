@@ -15,13 +15,14 @@ import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { Button, buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
+import { Avatar } from "../components/ui/Avatar";
+import { Menu } from "../components/ui/Menu";
 import {
   BellIcon,
   ChartColumnIcon,
   CirclePlusIcon,
   HouseIcon,
   SearchIcon,
-  UserIcon,
   type IconProps,
 } from "../components/ui/icons";
 import styles from "./AppLayout.module.css";
@@ -93,16 +94,9 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * never changes shape between breakpoints, because jsdom applies no media
  * queries and a second nav would double every nav link the tests look for.
  *
- * "Your profile" is built from the signed-in user's id, because `/profile/:userId`
- * has no fixed address for "me" and without this link there is no way to reach
- * the own-profile variant from inside the app. It is rendered only for a visitor
- * who has a profile: an anonymous one has no id to link to, and a signed-in one
- * whose `GET /users/me` is a 404 has no profile row yet — the state
- * `RequireNewProfile` exists for, and `/profile/undefined` is the bug it
- * prevents — nor for a deactivated account, whose profile is hidden. Both come
- * from `useAccount()`, which reads the one shared profile query gated on the
- * session exactly as the guards are, so the shell asks the API nothing until
- * somebody signs in.
+ * The account menu is rendered only for an active profile. Its own-profile
+ * destination uses the id from the one shared account query; anonymous,
+ * profile-less and deactivated visitors have no menu or undefined profile URL.
  *
  * **A deactivated account** (`FRONTEND-012`) gets `DeactivatedBanner` on every
  * page, between the header and `main`: a named region, so the header stays the
@@ -168,15 +162,34 @@ export function AppLayout() {
               Icon={ChartColumnIcon}
               alsoCurrentOn={["/players/*"]}
             />
-            {ownUserId === null ? null : (
-              <NavItem
-                to={`/profile/${ownUserId}`}
-                label="Your profile"
-                Icon={UserIcon}
-              />
-            )}
           </ul>
         </nav>
+        {ownUserId === null || account.status !== "active" ? null : (
+          <Menu
+            label="Account menu"
+            buttonSize="md"
+            buttonClassName={styles.accountMenuButton}
+            icon={
+              <Avatar
+                username={account.profile.username}
+                size="sm"
+                avatarKey={account.profile.profile_avatar_key}
+                pictureKey={account.profile.profile_picture_key}
+              />
+            }
+            items={[
+              {
+                label: "Profile",
+                onSelect: () => navigate(`/profile/${ownUserId}`),
+              },
+              { label: "History", onSelect: () => navigate("/history") },
+              {
+                label: "Account settings",
+                onSelect: () => navigate("/settings"),
+              },
+            ]}
+          />
+        )}
         {status === "anonymous" && !onSignInPage ? (
           <Link
             to="/sign-in"
