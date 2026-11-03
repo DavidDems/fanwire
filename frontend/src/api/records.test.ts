@@ -21,11 +21,16 @@
  * - **One call per list.** `fetchRecord` asks `limit=100` and never sends
  *   `offset`; `fetchRecords` sends no query at all.
  * - All HTTP goes through `api/client.ts` (msw sees the real client).
+ * - **EVENTS-011.** Each record carries `value_kind` (count, win_loss,
+ *   made_total, shot_pct, average), and each entry and holder the nullable
+ *   `wins`, `losses`, `made`, `attempted` and `pct`, passed through as the
+ *   API sends them; the types come from the regenerated `schema.d.ts`.
  */
 import { describe, expect, it } from "vitest";
 
 import { server } from "../test/server";
 import {
+  VALUE_KINDS,
   recordListStub,
   recordsSummaryStub,
   testRecordList,
@@ -39,7 +44,9 @@ import {
   recordKey,
   recordQuery,
   recordsQuery,
+  type RecordEntryOut,
   type RecordListOut,
+  type RecordSummaryOut,
   type RecordsSummaryOut,
 } from "./records";
 
@@ -117,5 +124,56 @@ describe("the query options", () => {
     expect(JSON.stringify(recordKey("player-points-game"))).toContain(
       "player-points-game",
     );
+  });
+});
+
+describe("value_kind and the figures (EVENTS-011)", () => {
+  it("pass a record's kind and an entry's figures through as sent", async () => {
+    server.use(recordsSummaryStub().handler, recordListStub().handler);
+
+    const summary = await fetchRecords();
+    const best = summary.records.find(
+      (record) => record.id === "team-best-season",
+    );
+    expect(best?.value_kind).toBe("win_loss");
+    expect(best?.unit).toBe("record");
+    expect(best?.holder).toMatchObject({
+      value: 0.89,
+      wins: 73,
+      losses: 9,
+      pct: 0.89,
+      made: null,
+      attempted: null,
+    });
+
+    const threes = await fetchRecord("player-threes-game");
+    expect(threes?.value_kind).toBe("made_total");
+    expect(threes?.entries[1]).toMatchObject({
+      value: 12,
+      made: 12,
+      attempted: 21,
+      pct: 0.571,
+      wins: null,
+      losses: null,
+    });
+  });
+
+  it("type value_kind as the five kinds and the figures as nullable", () => {
+    const kinds: RecordSummaryOut["value_kind"][] = [...VALUE_KINDS];
+    const listKind: RecordListOut["value_kind"] = "made_total";
+    const figures: Pick<
+      RecordEntryOut,
+      "wins" | "losses" | "made" | "attempted" | "pct"
+    > = { wins: null, losses: null, made: 12, attempted: 21, pct: null };
+
+    expect(kinds).toEqual([
+      "count",
+      "win_loss",
+      "made_total",
+      "shot_pct",
+      "average",
+    ]);
+    expect(listKind).toBe("made_total");
+    expect(figures.made).toBe(12);
   });
 });

@@ -27,7 +27,9 @@
  *   - the holder as plain text: the team's name, or the player's first and
  *     last name and, for a single-game record, the team they played for; the
  *     value with its unit (a win percentage as `.890`, three places, no
- *     leading zero, as the standings show one); the season, or the game's date
+ *     leading zero, as the standings show one; since EVENTS-011 a season
+ *     record shows its wins and losses first, `73–9 (.890)`, and
+ *     `RecordValues.test.tsx` pins the shapes); the season, or the game's date
  *     (`d MMM yyyy`, as `games/format` prints it) and opponent;
  *   - a tie: "and 1 other" for `tied_count` 2, "and 2 others" for 3;
  *   - no holder: a line saying nothing qualifies yet;
@@ -339,7 +341,7 @@ describe("the cards", () => {
     }
   });
 
-  it("a team's season record: the team, the percentage with its unit, the season", async () => {
+  it("a team's season record: the team, the record and its percentage, the season", async () => {
     openRecords();
 
     const card = await findCard(
@@ -350,7 +352,8 @@ describe("the cards", () => {
     expect(text).toContain(WARRIORS.name);
     expect(text).toMatch(/(?<![\d.])\.890(?!\d)/);
     expect(text).not.toMatch(/0\.89/);
-    expect(text).toContain("win %");
+    // EVENTS-011: a season reads as its record, 73–9, before the percentage.
+    expect(text).toContain("73–9");
     expect(text).toContain("2015-16");
     expect(text).not.toMatch(/\bother/);
     // The holder is plain text: the card's one link is View all.

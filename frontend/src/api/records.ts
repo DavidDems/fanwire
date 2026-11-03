@@ -25,6 +25,8 @@ export type RecordHolderOut = components["schemas"]["RecordHolderOut"];
 export type RecordListOut = components["schemas"]["RecordListOut"];
 export type RecordEntryOut = components["schemas"]["RecordEntryOut"];
 export type RecordGroup = RecordSummaryOut["group"];
+/** What a record's value is, and which of an entry's figures it fills (EVENTS-011). */
+export type RecordValueKind = RecordSummaryOut["value_kind"];
 
 /** The whole list in one call (a list holds at most 100). */
 export const RECORD_LIMIT = 100;
