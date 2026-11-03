@@ -2,7 +2,7 @@
 eight partial indexes for single-game player records
 
 Revision ID: a8d3e5f1c2b7
-Revises: c7a4e2f9b6d1
+Revises: e8a6d4c2b901
 Create Date: 2026-11-03 00:00:00.000000
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a8d3e5f1c2b7"
-down_revision: str | Sequence[str] | None = "c7a4e2f9b6d1"
+down_revision: str | Sequence[str] | None = "e8a6d4c2b901"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
