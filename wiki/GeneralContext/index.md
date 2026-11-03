@@ -76,6 +76,8 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 Live:
 
+- **`22-launch-adjustments.md`** (2026-11-02): ten hand-run units before the site is shared publicly: records library and search, team icons, avatar colours, History, the account menu and Account settings, sign-up without verification, delete my data, Invite. Order and manual steps are in the brief.
+
 - **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).
 - **`04-cheap-automations.md`**: the spec drift check, CI failure summary, criteria coverage check and wiki update proposal on Haiku 5.5 or `jev` (`TODO/02` item 14). Its prerequisite, D4–D7, is met.
 - **`19-dependency-upkeep.md`** (2026-10-21): Renovate's first PRs. It covers the `claude CLI` flag check and the `npm non-major` stack diff, both due Monday 2026-10-26, and the red Node 24 runtime PR #202 (multipart uploads under MSW). It continues `09`'s supply-chain thread (handoff §10.6).

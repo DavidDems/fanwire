@@ -31,8 +31,10 @@ any styling unit; it is short on purpose. `decisions.md` outranks it.
 
 ## What fanwire is not
 
-- **Not a team-coloured fan site.** No team colours, crests, jerseys or logos
-  as decoration (`branding.md` §10). Teams appear as text. Teal is ΔE 1.4 from
+- **Not a team-coloured fan site.** No crests, jerseys or logos, and no team
+  colour as page decoration (`branding.md` §10). Since 2026-11-02 a team's two
+  colours appear on its small round icon, and nowhere else (`decisions.md`). Teams
+  appear as text beside it. Teal is ΔE 1.4 from
   the Charlotte Hornets' teal, so it stays on small surfaces: buttons, links,
   focus rings and selection marks. It is never a page background, a header bar
   or a hero.

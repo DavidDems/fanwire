@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-012",
+  "objective": "Grow the records registry into a searchable library of at least 100 relevant records, with sixteen featured, without making any public read slower than today's.",
+  "acceptance_criteria": [
+    "Start gate: EVENTS-011 has merged to main. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "RECORDS holds at least 100 definitions, including every id in the brief's library table, each with a value_kind and a rule stating its counting window and any minimum. All twelve existing ids still resolve and mean the same thing, apart from their value_kind.",
+    "Every record has a category, one of team-franchise, team-season, team-game, player-game, player-season, player-career or player-playoffs, and a non-empty keywords list. A shooting record's keywords include the spellings fans use, so 3pt, three, threes and 3-pointer all match the threes records.",
+    "Exactly sixteen records have a featured_rank, 1 to 16, unique, in the order the brief lists them.",
+    "For each of field goals, threes and free throws, and at each of game, season and career scope, two records exist: the highest total (made_total: value is made, with attempted and pct) and the best percentage above a stated minimum of attempts (shot_pct: value is pct, with made and attempted). Minimums are the brief's, stated in the rule text, and a line or player under the minimum is never listed.",
+    "GET /events/records returns the whole catalog, {since_season, through_season, records: [{id, group, category, title, unit, rule, value_kind, keywords, featured_rank}]}, with no holder and exactly one database statement.",
+    "GET /events/records/holders?ids=a,b,c returns {holders: {id: holder or null}} for 1 to 24 distinct known ids. More than 24 ids, none, a duplicate or an unknown id is a 422. It runs at most 1 + the number of ids statements, each fetching at most one row.",
+    "GET /events/records/holders is declared before /events/records/{record_id}, answers Cache-Control: public, max-age=300, reads no user dependency, and test_records_contract.py pins all three. An unknown id on /events/records/{record_id} is still a 404.",
+    "infra/lib/cdn-stack.ts adds ids to both the records cache policy and the origin request policy allow lists. infra/test/cdn-stack.test.ts proves that two different ids values are separate cache entries and that no header or cookie joins the key. A 200 for ids=a must never answer ids=b.",
+    "Two tables, player_season_totals and team_game_totals, each with a bigint identity primary key, hold the aggregates the new records read. Written by one function, rebuild_record_totals(session), which replaces their contents in the caller's transaction. The Alembic migration creates and populates them and downgrades cleanly.",
+    "Every path that writes games or box scores calls rebuild_record_totals in the same transaction: load_nba_history, load_handler, seed_dev and the scale fixture. A test proves that a load which adds a game changes a season total, and that a failed load leaves the old totals.",
+    "Measured on the full dataset or the scale fixture on the db.t4g.micro proxy (--cpus=1 --memory=1g), and reported per route in the PR: the catalog at most 20 ms median; 24 holders at most 400 ms median, the featured 16 included; every list at most 300 ms median. Upgrade time and table sizes are reported too. Any new index names the statement it serves, in test_records_indexes.py.",
+    "The Records screen keeps working at this commit: until FRONTEND-030 merges the frontend reads holders through the new route with no visual change. Its tests pass after only their request mocks change.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated. No new dependency.",
+    "wiki/CodeContext/Modules/0x02-events.md replaces 'Computed live: no aggregate table' with the new rule and these measurements, and lists the routes as built."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/**",
+    "backend/scripts/seed_dev.py",
+    "backend/scripts/generate_scale_fixture.py",
+    "backend/scripts/seed_perf.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/**",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/test/records.ts",
+    "frontend/src/test/records-screen.ts",
+    "frontend/src/test/stats.ts",
+    "infra/lib/cdn-stack.ts",
+    "infra/test/cdn-stack.test.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/src/routes/**",
+    "backend/app/posts/**",
+    "backend/app/users/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "fastapi-module",
+    "backend-testing",
+    "infra-cdk",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

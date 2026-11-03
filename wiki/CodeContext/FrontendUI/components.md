@@ -215,8 +215,10 @@ both teams by abbreviation.
   read via search 2026-10-06). The marks belong to the leagues and clubs, who
   police them (`branding.md` §10). Hotlinking would also be a third-party
   request on every view.
-- **No team colours anywhere**, not even as a small accent beside a team's
-  name. A team colour pair is exactly what `branding.md` §10 says never to use.
+- ~~**No team colours anywhere**~~ **Superseded 2026-11-02** (`decisions.md`,
+  "Team icons and avatar colours"): a team is shown with `TeamIcon`, its
+  abbreviation on the team's inner and outer colours (`FRONTEND-031`). Still no
+  logo, crest or image.
 
 ### Mentions in posts
 
