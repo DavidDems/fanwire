@@ -197,3 +197,15 @@ named on each line.
   classes and icon are what make it this component.
 - **Performance:** none expected (one optional attribute, and one element fewer
   than the wrapper). If that ever proves wrong, revisit it here.
+
+## Team icons and avatar colours — decided 2026-11-02
+
+- **Team icons replace "text only".** Each team gets a round icon, its
+  abbreviation in black on an inner colour with an outer ring, as code and no
+  image (`FRONTEND-031`). This supersedes "no team colours anywhere" in
+  `components.md` and the team-colour line of `direction.md`, a choice the human
+  made knowing `branding.md` §10. No logos still holds.
+- **Avatars take colours from the same palette**, inner from inner and outer from
+  outer, over the initials. The eight geometric presets are removed (`USERS-005`).
+- `components.md` and `tokens.md` are updated as built, by the Director PR after
+  each unit.

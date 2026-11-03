@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "task_id": "USERS-007",
+  "objective": "Signing up no longer requires an emailed code: a new account can sign in straight away and verifies later from Account settings, with the consequences for password reset stated honestly.",
+  "acceptance_criteria": [
+    "Start gate: USERS-006 is live in production, and the brief's dev-pool proof is recorded in the PR body with its date. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "infra/lib/auth-stack.ts adds a pre sign-up trigger on the user pool: an inline function in the auth stack, not the shared backend image and not in the VPC, that sets autoConfirmUser true and leaves autoVerifyEmail false, so a new account is confirmed with email_verified false and no code is sent at sign-up.",
+    "The trigger's role has no permission beyond writing its own logs, carries the permissions boundary, and iam-policy.test.ts and permissions-boundary.test.ts pass unchanged. Its runtime is pinned, and its timeout is 5 seconds or less. auth-stack.test.ts pins the trigger, the runtime and that the code does not set autoVerifyEmail.",
+    "autoVerify stays { email: true }, so a code can still be requested for verification, and keepOriginal stays. deletionProtection stays. No pool replacement appears in the synthesised change.",
+    "SignUpPage needs no new step: userConfirmed true already goes to sign-in, and the test that pins this stays. Its copy no longer mentions a code. The page tells the user they can sign in now and verify later.",
+    "ConfirmPage and SignInPage keep handling an unconfirmed account, so anyone mid-flow when this ships is not stranded. Their existing tests pass unchanged.",
+    "ForgotPasswordPage says, before the code step, that a reset code is only sent to a verified address, and Account settings' unverified state says that verifying is what makes password reset possible.",
+    "Notification email is never sent to an address that is not verified: app.notifications.email treats email_verified not true on the AdminGetUser answer as a skip, logged without the address. A test pins it.",
+    "An existing confirmed account is unaffected and still signs in. Nothing is migrated.",
+    "Browser rows on localhost against the dev pool, reported with evidence or NOT DONE: sign up with a new human-provided test address, then sign in with no code; create the profile; Account settings shows the unverified state; the emailed verification code works and the state turns green; forgot password on an unverified account shows the honest copy.",
+    "frontend/src/test/bundle-budgets/USERS-007.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency.",
+    "wiki/CodeContext/Modules/0x01-users.md and 0x08-frontend.md record the new sign-up rule and its reset limit."
+  ],
+  "allowed_paths": [
+    "infra/lib/auth-stack.ts",
+    "infra/test/auth-stack.test.ts",
+    "backend/app/notifications/email.py",
+    "backend/tests/notifications/**",
+    "frontend/src/auth/SignUpPage.tsx",
+    "frontend/src/auth/SignUpPage.test.tsx",
+    "frontend/src/auth/ForgotPasswordPage.tsx",
+    "frontend/src/auth/ForgotPasswordPage.test.tsx",
+    "frontend/src/auth/accessibility.test.tsx",
+    "frontend/src/routes/auth-flow.test.tsx",
+    "frontend/src/features/account/**",
+    "frontend/src/test/bundle-budgets/USERS-007.ts",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/alembic/**",
+    "frontend/src/styles/tokens.css",
+    "infra/lib/app-stack.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "infra-cdk",
+    "backend-testing",
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

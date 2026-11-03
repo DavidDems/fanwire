@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-031",
+  "objective": "Every team is shown with a code-drawn round icon: its abbreviation in black on the team's inner colour with an outer ring, from one small shared palette, and no image.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "frontend/src/lib/teamColors.ts exports INNER_COLORS and OUTER_COLORS (key and name, in the brief's order) and a mapping from each of the 30 abbreviations to its inner and outer key, exactly as the brief's table gives them. A test pins all 30 pairs and proves no outer key is an inner key.",
+    "tokens.css defines --team-inner-<key> and --team-outer-<key> for every palette entry, with the brief's hex values, outside any theme block, so they do not change with the theme. Module CSS reads them by name.",
+    "components/ui/TeamIcon.tsx renders the abbreviation in black text on the inner colour with a ring in the outer colour, at sm (32 px) and lg (64 px). It renders no img, svg or external request.",
+    "Text in the icon meets 4.5:1 on its fill at both sizes, and three letters fit inside the ring at sm without clipping: measured for all 30 abbreviations, with W-heavy ones included.",
+    "An unknown or null abbreviation renders the neutral form, the same circle in the --color-surface-muted fill and --color-border ring with --color-text, and never throws.",
+    "The icon is aria-hidden wherever the team's name or abbreviation is adjacent text. Where it stands alone it has an accessible name giving the team's name. In forced-colors mode the ring and text stay visible. A 1 px --color-border hairline outside the ring keeps a dark ring visible on the dark surface.",
+    "The icon appears beside the team on: standings rows and the team level (SeasonLevel, TeamLevel), the team search results (TeamSearch), the game page's header (GamePage) and each box score's heading (BoxScore), team records on cards and lists (RecordLevel, RecordsLevel), game and player preview cards in the feed (features/feed/previews), the composer's picker rows (StatsPicker), and the player page's current team (PlayerPage). Each has a test.",
+    "It does not replace text: every place that showed a team's name still shows it, and dense table cells that show only an opponent's abbreviation (a player's single-game entry, a box-score line) stay as text, with no icon.",
+    "Nothing reads TeamOut.logo_url, and a test scans frontend/src for it outside the generated schema.",
+    "Browser rows at 360 and 1280, light and dark, reported with measurements or NOT DONE: standings; a team page; a game page; the feed with a game preview; the composer's picker; all 30 icons together on a contact sheet page in test-only markup; 200% text size.",
+    "frontend/src/test/bundle-budgets/FRONTEND-031.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request or image file. Hex values appear only in tokens.css.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records TeamIcon and where it is used."
+  ],
+  "allowed_paths": [
+    "frontend/src/lib/teamColors.ts",
+    "frontend/src/lib/teamColors.test.ts",
+    "frontend/src/components/ui/TeamIcon.tsx",
+    "frontend/src/components/ui/TeamIcon.module.css",
+    "frontend/src/components/ui/TeamIcon.test.tsx",
+    "frontend/src/components/ui/ui-css.test.ts",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/players/**",
+    "frontend/src/features/feed/previews/**",
+    "frontend/src/features/compose/StatsPicker.tsx",
+    "frontend/src/features/compose/AttachmentPicker.test.tsx",
+    "frontend/src/styles/tokens.css",
+    "frontend/src/styles/tokens.test.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-031.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/routes/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/tokens.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

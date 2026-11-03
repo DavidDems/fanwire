@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-011",
+  "objective": "Records show the figure a fan quotes: a team season reads 73–9 rather than .890, and a shooting total carries its percentage greyed beside it.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "RecordDefinition gains value_kind, one of count, win_loss, made_total, shot_pct, average. GET /events/records and GET /events/records/{record_id} return it on each record, and a new record cannot be registered without one.",
+    "RecordEntryOut and RecordHolderOut gain nullable integers wins, losses, made, attempted and a nullable number pct. Each is null where the record's value_kind does not use it. pct uses events/' one rounding rule (service._pct).",
+    "team-best-season and team-worst-season have value_kind win_loss and unit 'record'. A fixture season of 73 wins and 9 losses returns wins 73, losses 9 and pct 0.89 on both routes. value stays the win percentage, so existing consumers do not break.",
+    "player-threes-game has value_kind made_total: value is threes made, and made, attempted and pct come from the same line.",
+    "Ids, titles, order, ranks, tied_count, statement counts and the Cache-Control header are unchanged. test_records_queries.py and test_records_indexes.py pass with only the new fields added. No new index.",
+    "A record card and a record's list show a win_loss value as 73–9, with an en dash, followed by (.890) in the muted text colour. The list's value column is headed Record. The note about ranking by the exact percentage stays.",
+    "A made_total value shows as 12 followed by (57.1%) in the muted text colour. A null pct, which only happens with no attempts, shows the count alone. The percentage's muted colour keeps at least 4.5:1 on the card's surface and on its hover surface in both themes.",
+    "The value and its parenthesis are one readable phrase to a screen reader: the accessible text of a win_loss cell is '73 wins, 9 losses, .890'.",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated in the implementation commit.",
+    "frontend/src/test/bundle-budgets/EVENTS-011.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x02-events.md and 0x08-frontend.md record value_kind and the new fields."
+  ],
+  "allowed_paths": [
+    "backend/app/events/records.py",
+    "backend/app/events/schemas.py",
+    "backend/app/events/routes.py",
+    "backend/tests/events/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/api/records.ts",
+    "frontend/src/api/records.test.ts",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/test/records.ts",
+    "frontend/src/test/records-screen.ts",
+    "frontend/src/test/stats.ts",
+    "frontend/src/test/bundle-budgets/EVENTS-011.ts",
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "infra/**",
+    "backend/alembic/**",
+    "frontend/src/routes/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "fastapi-module",
+    "backend-testing",
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

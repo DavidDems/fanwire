@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-030",
+  "objective": "The records page opens on sixteen featured record cards, three to a row on a large screen, with a search box over the whole library.",
+  "acceptance_criteria": [
+    "Start gate: EVENTS-012 has merged to main. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "/stats/records, Historical view, shows a labelled search box, a Top records / Team / Player bar defaulting to Top records, and on Top records exactly the sixteen featured records in featured_rank order.",
+    "Cards are one column below 40rem, two from 40rem and three from 64rem. They are measured at 320, 360, 800 and 1280 CSS px with scrollWidth equal to clientWidth at each, including with a classic scrollbar.",
+    "--content-max-wide: 64rem is added to tokens.css and applies to main only under /stats/records, chosen in AppLayout from the route. Every other route keeps --content-max, and a test pins both.",
+    "Typing filters the whole library in the browser with no request per keystroke. Every whitespace-separated term must match, case-insensitive, somewhere in title, category, group, unit or keywords, so '3pt season' finds the season threes records.",
+    "Team and Player show that group's whole library in catalog order. A query on Top records searches the whole library; a query on Team or Player searches that group.",
+    "The query is the URL: ?q= is written with replace, so typing adds no history entries. Reloading or sharing that address restores it. An existing ?group=player and ?record=<id> address still opens what it opened, and switching to Seasonal drops q.",
+    "Results show 24 cards with a Load more button that adds 24. Each page asks once, GET /events/records/holders with its ids sorted. Returning to a page already read asks nothing.",
+    "A card's title and category appear from the catalog at once; its holder holds a fixed space while loading, so a landing answer moves nothing. A failed holders read shows one alert for that batch and keeps the titles and links.",
+    "No match shows an empty state naming the query, with a button that clears it. The result count is announced politely through a live region, debounced, and not on every keystroke.",
+    "Each card keeps the existing single-tab-stop stretched View all link, and opens the record's list as today. A record list's rule text states the record's minimum.",
+    "shot_pct shows 45.4% with (402/886) muted; made_total and win_loss keep EVENTS-011's form; average shows one decimal with its unit.",
+    "Browser rows at 360 and 1280, light and dark, each reported with its measurement or NOT DONE: top records grid; search with results; empty search; Team tab with Load more; a card opened and returned to; keyboard-only search and open; 200% text size with no overlap.",
+    "frontend/src/test/bundle-budgets/FRONTEND-030.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the page's shape and the wide column."
+  ],
+  "allowed_paths": [
+    "frontend/src/api/records.ts",
+    "frontend/src/api/records.test.ts",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/styles/tokens.css",
+    "frontend/src/styles/tokens.test.ts",
+    "frontend/src/test/records.ts",
+    "frontend/src/test/records-screen.ts",
+    "frontend/src/test/stats.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-030.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

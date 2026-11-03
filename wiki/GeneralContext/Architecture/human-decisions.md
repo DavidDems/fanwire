@@ -77,6 +77,17 @@ and a self-declared DOB is not age verification.
   `main` under `brand/`, and the trademark-database check found nothing similar
   (2026-10-06).
 
+- **Team colours (2026-11-02), superseding "no team colours anywhere":** each
+  team is shown with a code-drawn icon, its abbreviation in black on an inner
+  colour with an outer ring, from one small shared palette. No logo, image or
+  crest. The human made this choice knowing `branding.md` §10 lists a team's
+  colour pair as a hazard, because the site needs some representation of a team.
+  The palette and mapping: `.ai/tasks/FRONTEND-031/brief.md`.
+- **Avatars (2026-11-02), superseding `USERS-004`'s eight presets:** initials
+  only, with an optional inner and outer colour from the team palette (inner
+  from the inner list, outer from the outer list). Black text whenever an inner
+  colour is set (`USERS-005`).
+
 All of these are recorded, with the measured contrast table, in
 `wiki/CodeContext/FrontendUI/decisions.md`.
 
@@ -207,3 +218,23 @@ landed by 2026-10-23 (`USERS-003`, `EVENTS-009`, `POSTS-004` to `-006`,
   and `$` and Undo mention (`FRONTEND-013`); the attachment picker is the
   one way to reference sports data in a new post.
 - **"Post about this" (2026-10-22):** shown to signed-in viewers only.
+
+## §10. Launch adjustments (2026-11-02)
+
+Before the site is shared publicly. Specs: `Prompts/22-launch-adjustments.md`.
+
+- **Records:** a library of at least 100 records with search, and sixteen
+  featured cards, three to a row on a large screen. A team season shows its
+  record (73–9), and every shooting total also has a best-percentage record with
+  a minimum number of attempts.
+- **Account menu:** "Your profile" leaves the nav. The avatar opens Profile,
+  History and Account settings, before Sign out.
+- **History:** four tabs: posts, replies, likes, reposts.
+- **Account settings:** verify this account (green and inert once verified);
+  a notifications setting shown on and disabled, because a real one needs a
+  database change (the human's rule); deactivate; and delete my data, a hard
+  delete. Both destructive actions ask for the password first.
+- **Sign-up without email verification.** Verifying moves to Account settings.
+  Accepted with it: an unverified account cannot reset its password, and an
+  address can be registered by someone who does not own it (`USERS-007` brief).
+- **Invite:** a button beside compose copies the site's root, the guest feed.

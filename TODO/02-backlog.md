@@ -115,6 +115,25 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (#161), `0x03-posts.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
 
+## Launch adjustments (2026-11-02)
+
+Before the site is shared publicly. Specs are on `main`; the live brief, order and
+manual steps are `wiki/GeneralContext/Prompts/22-launch-adjustments.md`. Every unit
+is `hand`.
+
+| Order | Task | What |
+|---|---|---|
+| 1 | `EVENTS-011` | Record value shapes: 73–9, and totals with a greyed percentage |
+| 2 | `EVENTS-012` | The records library (at least 100), catalog and holders routes, aggregate tables |
+| 3 | `FRONTEND-030` | Records home: sixteen featured cards, three to a row, search |
+| 4 | `FRONTEND-031` | Team icons from the shared palette |
+| 5 | `USERS-005` | Avatar colours replace the presets |
+| 6 | `POSTS-008` | The History page |
+| 7 | `USERS-006` | Account menu and Account settings, password-checked deactivate |
+| 8 | `USERS-007` | Sign-up without email verification |
+| 9 | `USERS-008` | Delete my data (after a Director PR for the role boundary) |
+| 10 | `FRONTEND-032` | The Invite button |
+
 ## Frontend
 
 | Item | Mode | Task | Where it came from | Notes |
@@ -123,7 +142,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
 | **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
 | **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
-| **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `hand` | — | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**`. Browser check at 360 px |
+| **"Your profile" clips in the bottom bar** at 360 px with a classic scrollbar (345 px of content) | `hand` | `USERS-006` (removes the item) | `UI-005`–`UI-007` browser pass | Shell, `src/routes/**`. Browser check at 360 px |
 | **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |
 | **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components.md` §5, `FRONTEND-007` | `src/components/` |
 | **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, compose's `attachmentReads.ts` since FRONTEND-013, stats), sharing one cache key | `hand` | — | `FRONTEND-007` | Move into `api/`; needs all four features in scope |

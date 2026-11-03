@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-032",
+  "objective": "A signed-in member can copy the site's public feed link from an Invite button beside the compose button.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "For an active account, on every page, a button with visible text 'Invite' and a link icon sits immediately to the left of the compose button, sharing its baseline and fixed position. It is not shown when the compose button is not shown.",
+    "Pressing it writes window.location.origin + '/' to the clipboard, which is the guest feed's address: / is what an anonymous visitor sees. It makes no API call and adds no query string or tracking parameter.",
+    "On success the visible text changes to 'Copied' for 2 seconds and a polite live region announces 'Link copied'. Pressing again restarts it, and the timer is cleared on unmount.",
+    "Where the clipboard API is missing or refuses, an inline message shows the full address as selectable text, so the link can still be copied by hand, and no error is thrown.",
+    "Its target height is at least 44 CSS px with a visible focus ring. At 320, 360 and 1280 CSS px it does not overlap the compose button, and it clears the bottom nav on phones. routes/floating-clearance.test.ts is extended so main's bottom padding still clears both.",
+    "It sits outside main, as the compose button does, so the compose dialog takes it out of the tab order while open. Tab order is Invite, then Compose.",
+    "It meets the same colour rules as Button secondary in both themes and in forced-colors mode. The link icon is added to components/ui/icons from the existing icon set under its licence, in the same way as the other icons.",
+    "Browser rows at 320, 360 and 1280, light and dark, on a localhost test account, reported with measurements or NOT DONE: the button's place beside compose; the real clipboard's contents after a press, with the permission granted; the fallback with the permission denied; keyboard; the compose dialog open; 200% text size.",
+    "frontend/src/test/bundle-budgets/FRONTEND-032.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the button."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/ui/InviteButton.tsx",
+    "frontend/src/components/ui/InviteButton.module.css",
+    "frontend/src/components/ui/InviteButton.test.tsx",
+    "frontend/src/components/ui/FloatingButton.tsx",
+    "frontend/src/components/ui/FloatingButton.module.css",
+    "frontend/src/components/ui/FloatingButton.test.tsx",
+    "frontend/src/components/ui/ui-css.test.ts",
+    "frontend/src/components/ui/icons/**",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/floating-clearance.test.ts",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-032.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/package.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/features/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
