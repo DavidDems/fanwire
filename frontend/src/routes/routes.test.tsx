@@ -102,6 +102,7 @@ const VIEWS: View[] = [
   { path: "/compose", heading: /^compose$/i, as: "member" },
   { path: "/notifications", heading: /^notifications$/i, as: "member" },
   { path: "/history", heading: /^history$/i, as: "member" },
+  { path: "/settings", heading: /^account settings$/i, as: "member" },
   {
     path: "/create-profile",
     heading: /^create your profile$/i,
@@ -224,7 +225,7 @@ describe("the route table", () => {
 
 describe("the guards are wired into the table, not just written", () => {
   it("sends an anonymous visitor from a protected route to sign-in", async () => {
-    for (const path of ["/compose", "/notifications", "/history"]) {
+    for (const path of ["/compose", "/notifications", "/history", "/settings"]) {
       renderAt(path, arrange("anonymous"));
 
       expect(
@@ -236,7 +237,7 @@ describe("the guards are wired into the table, not just written", () => {
   });
 
   it("sends a signed-in visitor with no profile from a protected route to profile creation", async () => {
-    renderAt("/compose", arrange("newcomer"));
+    renderAt("/settings", arrange("newcomer"));
 
     expect(
       await screen.findByRole("heading", { name: /^create your profile$/i }),
