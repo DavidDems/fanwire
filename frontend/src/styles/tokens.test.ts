@@ -126,6 +126,8 @@ const TYPE_SPACE_SHAPE: Record<string, string> = {
   "--focus-ring": "2px solid var(--color-focus)",
   "--target-min": "2.75rem",
   "--content-max": "40rem",
+  // FRONTEND-030: the records home's column, for three cards to a row.
+  "--content-max-wide": "64rem",
   "--duration-fast": "120ms",
   "--duration-base": "200ms",
   "--ease-out": "cubic-bezier(0.2, 0, 0, 1)",

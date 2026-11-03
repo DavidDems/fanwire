@@ -12,10 +12,13 @@
  *   <title>" or "Player records › <title>" by the list's group, the title
  *   item `aria-current="location"`; until the list lands, its first item
  *   reads "Records". The first item is a link to its group's tab
- *   (`/stats/records`, or `/stats/records?group=player`).
+ *   (`/stats/records?group=team`, or `/stats/records?group=player`: since
+ *   `FRONTEND-030` Top records is the default, so Team is written).
  * - **Back** and the breadcrumb's first item return to Historical on the
  *   list's group's tab, Player selected for a player record, even from a cold
- *   `?record=`.
+ *   `?record=`; an unknown id's Back returns to Top records.
+ * - **The rule** states the record's minimum where it has one
+ *   (`FRONTEND-030`): a shooting percentage's attempts, an average's games.
  * - **Headings.** The record level's `h2` is the record's title: from the
  *   cached summary when a card opened it (so it is never empty while the list
  *   loads), and from the list on a cold load.
@@ -186,7 +189,8 @@ describe("opening a record from its card", () => {
   });
 
   it("names the record in its heading from the cached summary while the list loads", async () => {
-    openRecords("/stats/records?group=player", {
+    // On Top records: the career records are past the Player tab's first 24.
+    openRecords("/stats/records", {
       handlers: [
         http.get("*/events/records/:record_id", async () => {
           await delay("infinite");
@@ -260,7 +264,7 @@ describe("Back, the breadcrumb and the browser's Back", () => {
     });
   });
 
-  it("Back from a team record returns to /stats/records, Team selected", async () => {
+  it("Back from a team record returns to ?group=team, Team selected", async () => {
     const { router } = openRecords();
     const user = userEvent.setup();
     await openFromCard(user, "team", "team-most-points-game");
@@ -268,9 +272,12 @@ describe("Back, the breadcrumb and the browser's Back", () => {
 
     await user.click(backButton() as HTMLElement);
 
-    await waitFor(() => expect(router.state.location.search).toBe(""));
+    await waitFor(() =>
+      expect(router.state.location.search).toBe("?group=team"),
+    );
     expect(router.state.location.pathname).toBe("/stats/records");
     await findCards("team");
+    expect(selectedTab(groupBar())).toBe("Team");
   });
 
   it("the breadcrumb's first item links to its group's tab and returns there", async () => {
@@ -292,14 +299,17 @@ describe("Back, the breadcrumb and the browser's Back", () => {
     );
   });
 
-  it("the breadcrumb's first item of a team record links to /stats/records", async () => {
+  it("the breadcrumb's first item of a team record links to /stats/records?group=team", async () => {
     openRecords();
     const user = userEvent.setup();
     await openFromCard(user, "team", "team-championships");
     await recordLevelShown("team-championships");
     await waitFor(() => expect(crumbTexts()[0]).toBe("Team records"));
 
-    expect(controlIn(crumbs()[0])).toHaveAttribute("href", "/stats/records");
+    expect(controlIn(crumbs()[0])).toHaveAttribute(
+      "href",
+      "/stats/records?group=team",
+    );
   });
 
   it("the browser's Back returns to the cards on the same group tab", async () => {
@@ -373,7 +383,7 @@ describe("a cold ?record= (a reload or a shared link)", () => {
     await user.click(backButton() as HTMLElement);
 
     await waitFor(() => expect(params(router).has("record")).toBe(false));
-    await findCards("team");
+    await findCards("top");
   });
 
   it("switching the view drops record", async () => {
@@ -390,6 +400,24 @@ describe("a cold ?record= (a reload or a shared link)", () => {
 });
 
 describe("the list", () => {
+  it.each([
+    ["player-three-pct-season", "At least 200 attempts"],
+    ["player-three-pct-game", "At least 8 attempts"],
+    ["player-career-three-pct", "At least 1,000 attempts"],
+    ["player-ppg-season", "At least 58 games played"],
+  ])("states %s's minimum in its rule: %s", async (id, minimum) => {
+    openRecords(`/stats/records?record=${id}`);
+
+    await screen.findByRole("heading", {
+      level: 2,
+      name: recordDefinition(id).title,
+    });
+    expect(recordDefinition(id).rule).toContain(minimum);
+    await waitFor(() =>
+      expect(norm(screen.getByRole("main").textContent)).toContain(minimum),
+    );
+  });
+
   it("shows the rule and Since <since_season>", async () => {
     openRecords("/stats/records?record=player-points-game");
 
