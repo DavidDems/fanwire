@@ -65,6 +65,7 @@ from sqlalchemy.orm import Session
 
 from app.events.errors import UnrecognizedPlayerError, UnrecognizedTeamError
 from app.events.models import Game, Player, PlayerGameStats, Team
+from app.events.record_totals import rebuild_record_totals
 
 _BATCH_SIZE = 5000
 
@@ -436,8 +437,10 @@ def load_nba_history(
 
     `seasons` ("YYYY-YY", 2003-04 or later) limits which games are processed
     and reported; default: every season from 2003-04. Every team is stored
-    regardless; a player only when a loaded box score names them. Commits
-    once on success; on any exception rolls back the whole run and re-raises.
+    regardless; a player only when a loaded box score names them. Rebuilds
+    the records library's totals (rebuild_record_totals) after every write.
+    Commits once on success; on any exception rolls back the whole run and
+    re-raises.
     """
     try:
         wanted = validate_seasons(seasons)
@@ -458,6 +461,9 @@ def load_nba_history(
         team_ids, teams_created = _upsert_teams(session)
         player_ids, players_created = _upsert_players(session, players)
         _write_games(session, stored, team_ids, player_ids, counts)
+        # EVENTS-012: the records library's totals, in this same transaction,
+        # so they are current the moment the load commits.
+        rebuild_record_totals(session)
 
         session.commit()
     except Exception:

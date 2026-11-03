@@ -5,7 +5,7 @@ import {
   RECORDS_KEY,
   recordQuery,
   type RecordGroup,
-  type RecordsSummaryOut,
+  type RecordsCatalogOut,
 } from "../../api/records";
 import { seasonsQuery } from "../../api/stats";
 import {
@@ -61,7 +61,7 @@ function href(stack: StatsLevel[]): string {
  * switching the view drops the other view's parameters; opening and popping
  * a level push the address of the new stack.
  *
- * A record level's group is its list's (or the cached summary's, which says
+ * A record level's group is its list's (or the cached catalog's, which says
  * the same), so `?record=` never carries `group`; until the read lands,
  * the id's team- or player- prefix supplies it. Unknown prefixes keep the
  * "Records" fallback.
@@ -117,7 +117,7 @@ function Historical({
   go: (stack: StatsLevel[], replace: boolean) => void;
 }) {
   const cached = useQueryClient()
-    .getQueryData<RecordsSummaryOut>(RECORDS_KEY)
+    .getQueryData<RecordsCatalogOut>(RECORDS_KEY)
     ?.records.find((record) => record.id === recordId)?.group;
   const list = useQuery({
     ...recordQuery(recordId ?? ""),
