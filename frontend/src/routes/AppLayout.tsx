@@ -104,6 +104,10 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * session exactly as the guards are, so the shell asks the API nothing until
  * somebody signs in.
  *
+ * **The column** is `--content-max` wide on every route but `/stats/records`,
+ * where it is `--content-max-wide` (`FRONTEND-030`), chosen here from the
+ * route, so the records home's cards fit three to a row.
+ *
  * **A deactivated account** (`FRONTEND-012`) gets `DeactivatedBanner` on every
  * page, between the header and `main`: a named region, so the header stays the
  * page's one banner landmark.
@@ -129,6 +133,8 @@ export function AppLayout() {
   const signOut = useSignOut();
   const ownUserId = account.status === "active" ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
+  // The records home's cards sit three to a row in a wider column (FRONTEND-030).
+  const wide = useMatch("/stats/records") !== null;
   const mainRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const composeState = useComposeLinkState();
@@ -202,7 +208,12 @@ export function AppLayout() {
         ) : null}
       </header>
       {account.status === "deactivated" ? <DeactivatedBanner /> : null}
-      <main id="main" tabIndex={-1} ref={mainRef} className={styles.main}>
+      <main
+        id="main"
+        tabIndex={-1}
+        ref={mainRef}
+        className={wide ? `${styles.main} ${styles.wide}` : styles.main}
+      >
         <ShellAccountStatus.Provider value={account.status}>
           <Outlet />
         </ShellAccountStatus.Provider>

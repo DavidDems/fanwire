@@ -172,6 +172,11 @@
     );
 }
 
+/* The records home's wider column (FRONTEND-030): three cards to a row. */
+.main.wide {
+  max-width: var(--content-max-wide);
+}
+
 /* From 40em (640 px): the nav sits inline in the header, labels only. */
 @media (min-width: 40em) {
   :global(html) {

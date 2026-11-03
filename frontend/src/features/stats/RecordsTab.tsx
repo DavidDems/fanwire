@@ -4,7 +4,6 @@ import { useSearchParams } from "react-router-dom";
 import {
   RECORDS_KEY,
   recordQuery,
-  type RecordGroup,
   type RecordsCatalogOut,
 } from "../../api/records";
 import { seasonsQuery } from "../../api/stats";
@@ -23,6 +22,7 @@ import {
   RecordTitle,
 } from "../../components/stats-nav/RecordLevel";
 import { RecordsLevel } from "../../components/stats-nav/RecordsLevel";
+import type { RecordsBar } from "../../components/stats-nav/types";
 import { SegmentedTabs } from "../../components/ui/SegmentedTabs";
 import { Leaders } from "./Leaders";
 import { ROUTE_LINKS } from "./links";
@@ -33,13 +33,19 @@ const VIEWS = [
   { id: "seasonal", label: "Seasonal" },
 ];
 
-/** The address of a records stack: its group, or its record. */
+/**
+ * The address of a records stack: its record, or its bar and query. Top
+ * records is the default and is not written; Team and Player are.
+ */
 function search(stack: StatsLevel[]): URLSearchParams {
   const result = new URLSearchParams();
   const top = stack[stack.length - 1];
   if (top?.kind === "record") result.set("record", top.id);
-  else if (top?.kind === "records" && top.group === "player")
-    result.set("group", "player");
+  else if (top?.kind === "records") {
+    if (top.group === "team" || top.group === "player")
+      result.set("group", top.group);
+    if (top.q !== undefined && top.q !== "") result.set("q", top.q);
+  }
   return result;
 }
 
@@ -54,8 +60,10 @@ function href(stack: StatsLevel[]): string {
  *
  * **The URL is the state, and this is the navigator's route adapter.**
  * `?view=seasonal` is Seasonal (Historical is the default and is not
- * written); on Historical, `?group=player` is the Player cards (Team is the
- * default) and `?record=<id>` a record's list, over its group's cards; on
+ * written); on Historical, `?group=team` and `?group=player` are a group's
+ * cards (Top records is the default and is not written, FRONTEND-030), `?q=`
+ * the search (written with replace, so typing adds no history entry), and
+ * `?record=<id>` a record's list, over its group's cards; on
  * Seasonal, `?season=` is the picked season (the newest by default). An
  * unknown value shows the default. The bars replace the history entry, and
  * switching the view drops the other view's parameters; opening and popping
@@ -97,7 +105,8 @@ export function RecordsTab() {
           ) : (
             <Historical
               recordId={params.get("record") || null}
-              group={params.get("group") === "player" ? "player" : "team"}
+              group={bar(params.get("group"))}
+              q={params.get("q") ?? ""}
               go={(stack, replace) => setParams(search(stack), { replace })}
             />
           )}
@@ -107,13 +116,20 @@ export function RecordsTab() {
   );
 }
 
+/** The bar `?group=` names; anything else is Top records. */
+function bar(group: string | null): RecordsBar {
+  return group === "team" || group === "player" ? group : "top";
+}
+
 function Historical({
   recordId,
   group,
+  q,
   go,
 }: {
   recordId: string | null;
-  group: RecordGroup;
+  group: RecordsBar;
+  q: string;
   go: (stack: StatsLevel[], replace: boolean) => void;
 }) {
   const cached = useQueryClient()
@@ -126,7 +142,7 @@ function Historical({
 
   const stack: StatsLevel[] =
     recordId === null
-      ? [{ kind: "records", group }]
+      ? [{ kind: "records", group, q }]
       : [
           {
             kind: "records",
@@ -165,7 +181,7 @@ function Historical({
             <RecordsLevel
               level={level}
               adapter={adapter}
-              onGroup={(group) => replace({ kind: "records", group })}
+              onLevel={(group, q) => replace({ kind: "records", group, q })}
               onRecord={(id) => open({ kind: "record", id })}
             />
           ) : level.kind === "record" ? (

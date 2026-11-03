@@ -254,7 +254,8 @@
 }
 
 /*
- * The record cards (FRONTEND-019): one column on a phone, two from 40 rem.
+ * The record cards (FRONTEND-019, FRONTEND-030): one column on a phone, two
+ * from 40 rem, three from 64 rem (the records home's wide column).
  * A card's one control is its View all link, whose ::after is stretched over
  * the card, so the whole card is the hit area and one tab stop; nothing in
  * the card sits above it. The card shows the hover and focus state; the
@@ -271,6 +272,12 @@
 @media (min-width: 40rem) {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -327,6 +334,18 @@
   min-height: calc(
     2 * var(--space-4) + 3 * var(--space-1) + 4 * var(--line-height-body) * 1em
   );
+}
+
+/*
+ * A card's holder (FRONTEND-030): as tall as its three lines (the value, the
+ * holder, when) while it loads and after, so an answer that lands moves
+ * nothing.
+ */
+.holder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: calc(3 * var(--line-height-body) * 1em + 2 * var(--space-1));
 }
 
 /* A record's list's place while it loads: a long table's worth of room. */
