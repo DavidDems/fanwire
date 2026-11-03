@@ -208,3 +208,44 @@ export const MISSING = /\bnull\b|\bundefined\b|\bNaN\b/;
 export function norm(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
+
+/**
+ * What a screen reader reads of `root`'s content (`EVENTS-011`), roughly as
+ * the accessible-name walk does it: a subtree marked `aria-hidden="true"` is
+ * skipped, an element with an `aria-label` reads as that label instead of
+ * its content, and the rest is its text. jsdom applies no styles, so text
+ * hidden only visually (a visually-hidden class) is read, as it is in a
+ * browser.
+ */
+export function accessibleText(root: Element): string {
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    if (!(node instanceof Element)) return "";
+    if (node.getAttribute("aria-hidden") === "true") return "";
+    const label = node.getAttribute("aria-label");
+    if (label !== null && label.trim() !== "" && node !== root)
+      return ` ${label} `;
+    return Array.from(node.childNodes).map(walk).join("");
+  }
+  const label = root.getAttribute("aria-label");
+  return norm(label !== null && label.trim() !== "" ? label : walk(root));
+}
+
+/**
+ * The innermost element under `root` whose whole text is `text` (whitespace
+ * collapsed): the element that carries a figure's own style.
+ */
+export function elementWithText(
+  root: Element,
+  text: string,
+): HTMLElement | null {
+  const matches = Array.from(root.querySelectorAll<HTMLElement>("*")).filter(
+    (element) => norm(element.textContent) === text,
+  );
+  return (
+    matches.find(
+      (element) =>
+        !matches.some((other) => other !== element && element.contains(other)),
+    ) ?? null
+  );
+}
