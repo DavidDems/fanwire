@@ -5,7 +5,7 @@ import {
   recordQuery,
   type RecordEntryOut,
   type RecordListOut,
-  type RecordsSummaryOut,
+  type RecordsCatalogOut,
 } from "../../api/records";
 import { formatGameDate } from "../../features/games/format";
 import { EmptyState } from "../ui/EmptyState";
@@ -21,13 +21,13 @@ import type { StatsLevel, StatsNavAdapter } from "./types";
 type RecordLevelData = Extract<StatsLevel, { kind: "record" }>;
 
 /**
- * A record's title for its level: from the summary when it is already cached
+ * A record's title for its level: from the catalog when it is already cached
  * (read without asking), else from the record's list (the read its view
  * makes), so it is never empty once a card opened it.
  */
 export function RecordTitle({ id }: { id: string }) {
   const cached = useQueryClient()
-    .getQueryData<RecordsSummaryOut>(RECORDS_KEY)
+    .getQueryData<RecordsCatalogOut>(RECORDS_KEY)
     ?.records.find((record) => record.id === id)?.title;
   const list = useQuery(recordQuery(id));
   return (

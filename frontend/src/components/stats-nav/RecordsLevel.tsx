@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  recordHoldersQuery,
   recordsQuery,
+  type RecordCatalogItemOut,
   type RecordGroup,
-  type RecordSummaryOut,
+  type RecordHolderOut,
 } from "../../api/records";
 import { formatGameDate } from "../../features/games/format";
 import { CourtScoreboard } from "../visuals/CourtScoreboard";
@@ -25,9 +27,37 @@ const GROUPS: { id: RecordGroup; label: string }[] = [
 ];
 
 /**
+ * The cards this screen shows, in the order it has always shown them (each
+ * group keeps its records' order here). TEMPORARY until `FRONTEND-030`: the
+ * library's grid, search and featured page replace this fixed list, and only
+ * then does the screen choose records from the catalog (`featured_rank`).
+ */
+const SCREEN_RECORDS: readonly string[] = [
+  "team-championships",
+  "team-best-season",
+  "team-worst-season",
+  "team-most-points-game",
+  "team-largest-win",
+  "player-championships",
+  "player-points-game",
+  "player-rebounds-game",
+  "player-assists-game",
+  "player-threes-game",
+  "player-career-points",
+  "player-career-triple-doubles",
+];
+
+/** A card's record: its catalog entry and its holder. */
+type CardRecord = RecordCatalogItemOut & { holder: RecordHolderOut | null };
+
+/**
  * The records level: a Team / Player bar over that group's record cards, in
  * the API's order, and one line naming the data window. The bar's tab
  * replaces the level (`onGroup`); a card's View all opens its record.
+ *
+ * The cards are `SCREEN_RECORDS` (`EVENTS-012`): the catalog, then one
+ * holders read for all twelve (both groups, ids sorted), so switching the
+ * group asks nothing.
  */
 export function RecordsLevel({
   level,
@@ -41,8 +71,32 @@ export function RecordsLevel({
   onRecord: (id: string) => void;
 }) {
   const group = level.group ?? "team";
-  const summary = useQuery(recordsQuery());
-  const data = summary.data;
+  const catalog = useQuery(recordsQuery());
+  const byId = new Map(
+    (catalog.data?.records ?? []).map((record) => [record.id, record]),
+  );
+  const featured = SCREEN_RECORDS.flatMap((id) => {
+    const record = byId.get(id);
+    return record === undefined ? [] : [record];
+  });
+  const ids = featured.map((record) => record.id);
+  const holders = useQuery({
+    ...recordHoldersQuery(ids),
+    enabled: ids.length > 0,
+  });
+  const asking = ids.length > 0;
+  const pending = catalog.isPending || (asking && holders.isPending);
+  const failed = catalog.isError || (asking && holders.isError);
+  const data =
+    catalog.data === undefined || (asking && holders.data === undefined)
+      ? undefined
+      : {
+          ...catalog.data,
+          records: featured.map((record): CardRecord => ({
+            ...record,
+            holder: holders.data?.holders[record.id] ?? null,
+          })),
+        };
 
   return (
     <SegmentedTabs
@@ -51,7 +105,7 @@ export function RecordsLevel({
       value={group}
       onChange={onGroup as (id: string) => void}
     >
-      {summary.isPending ? (
+      {pending ? (
         <div className={styles.section}>
           <StatusLine>Loading the records…</StatusLine>
           <div aria-hidden="true" className={styles.cards}>
@@ -62,7 +116,7 @@ export function RecordsLevel({
             ))}
           </div>
         </div>
-      ) : summary.isError ? (
+      ) : failed ? (
         <InlineAlert>
           We could not load the records just now. Please try again.
         </InlineAlert>
@@ -103,7 +157,7 @@ function RecordCard({
   adapter,
   onOpen,
 }: {
-  record: RecordSummaryOut;
+  record: CardRecord;
   adapter: StatsNavAdapter;
   onOpen: () => void;
 }) {

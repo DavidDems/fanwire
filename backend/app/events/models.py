@@ -1,5 +1,6 @@
 """SQLAlchemy 2.0 declarative models for events/: Team, Game, Player and
-PlayerGameStats (the box score).
+PlayerGameStats (the box score), and the records library's two aggregate
+tables, PlayerSeasonTotals and TeamGameTotals (EVENTS-012).
 
 Schema and rationale: wiki/CodeContext/Modules/0x02-events.md.
 Every table uses a bigint identity primary key, never UUID, per
@@ -231,6 +232,32 @@ Index(
     PlayerGameStats.game_id,
     postgresql_where=PlayerGameStats.played & TRIPLE_DOUBLE,
 )
+# Whole minutes on the court (integer division): the one spelling shared by
+# player-minutes-game (app.events.records) and the index below that serves it.
+MINUTES_PLAYED: ColumnElement[int | None] = PlayerGameStats.seconds_played // _inline(60)
+
+# EVENTS-012: the single-game player lists measured over 300 ms on the perf
+# profile, each served the way the four above are; the migration
+# (a8d3e5f1c2b7) creates the same eight.
+for _stat in (
+    "plus_minus",
+    "free_throws_made",
+    "blocks",
+    "defensive_rebounds",
+    "steals",
+    "offensive_rebounds",
+    "field_goals_made",
+):
+    Index(
+        f"ix_player_game_stats_{_stat}_played",
+        getattr(PlayerGameStats, _stat),
+        postgresql_where=PlayerGameStats.played,
+    )
+Index(
+    "ix_player_game_stats_minutes_played",
+    MINUTES_PLAYED,
+    postgresql_where=PlayerGameStats.played,
+)
 Index("ix_games_margin", func.abs(Game.home_score - Game.away_score))
 Index(
     "ix_games_nba_finals",
@@ -238,3 +265,79 @@ Index(
     postgresql_where=(Game.game_type == "playoffs") & (Game.label == FINALS_LABEL),
 )
 Index("ix_games_season", Game.season)
+
+
+# EVENTS-012's two aggregate tables, the records library's season, career and
+# team-game reads (app.events.records). Derived data only: written by one
+# function, app.events.record_totals.rebuild_record_totals, which replaces
+# both tables' contents from games and player_game_stats in the caller's
+# transaction, and called by every path that writes games or box scores.
+# No foreign keys (a cache of other rows, and nothing may block deleting a
+# team or game) and no index but the primary key: each read scans one table
+# of a few thousand to ~60,000 narrow rows.
+
+
+class PlayerSeasonTotals(Base):
+    """One row per player, season and game type (`regular` or `playoffs`)
+    with at least one played line: the sums of those lines. A player traded
+    mid-season has one row, summed across teams; `team_id` is the team of
+    their last played game of that season and type (by date, then game)."""
+
+    __tablename__ = "player_season_totals"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    player_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    season: Mapped[str] = mapped_column(Text, nullable=False)
+    game_type: Mapped[str] = mapped_column(Text, nullable=False)
+    team_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    games: Mapped[int] = mapped_column(Integer, nullable=False)
+    seconds_played: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    rebounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    offensive_rebounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    defensive_rebounds: Mapped[int] = mapped_column(Integer, nullable=False)
+    assists: Mapped[int] = mapped_column(Integer, nullable=False)
+    steals: Mapped[int] = mapped_column(Integer, nullable=False)
+    blocks: Mapped[int] = mapped_column(Integer, nullable=False)
+    turnovers: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_goals_made: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_goals_attempted: Mapped[int] = mapped_column(Integer, nullable=False)
+    three_pointers_made: Mapped[int] = mapped_column(Integer, nullable=False)
+    three_pointers_attempted: Mapped[int] = mapped_column(Integer, nullable=False)
+    free_throws_made: Mapped[int] = mapped_column(Integer, nullable=False)
+    free_throws_attempted: Mapped[int] = mapped_column(Integer, nullable=False)
+    double_doubles: Mapped[int] = mapped_column(Integer, nullable=False)
+    triple_doubles: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TeamGameTotals(Base):
+    """One row per team per completed `regular` or `playoffs` game: its
+    score, its opponent's, the result, `streak` (how many games in a row,
+    this one included, the team has had this result within the season and
+    game type, by date) and the sums of its box-score lines, null when the
+    game has no box score for the team."""
+
+    __tablename__ = "team_game_totals"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    game_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    team_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    opponent_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    season: Mapped[str] = mapped_column(Text, nullable=False)
+    date: Mapped[datetime] = mapped_column(nullable=False)
+    game_type: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    opponent_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    won: Mapped[bool] = mapped_column(nullable=False)
+    streak: Mapped[int] = mapped_column(Integer, nullable=False)
+    field_goals_made: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    field_goals_attempted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    three_pointers_made: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    three_pointers_attempted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    free_throws_made: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    free_throws_attempted: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rebounds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assists: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    steals: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    blocks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    turnovers: Mapped[int | None] = mapped_column(Integer, nullable=True)

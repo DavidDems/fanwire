@@ -70,7 +70,7 @@ const FRONTEND_DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
  *   default  -> frontend bucket (OAC), SPA fallback at the edge
  *   /api/events/records* -> HTTP API, as /api/* but GET/HEAD only and
  *               cached for up to 5 minutes (the origin's Cache-Control),
- *               keyed on limit and offset only: no header (Authorization
+ *               keyed on ids, limit and offset only: no header (Authorization
  *               among them) and no cookie, because the records routes are
  *               public and never read the caller. Ordered before /api/*,
  *               since CloudFront takes the first matching pattern.
@@ -135,8 +135,10 @@ export class CdnStack extends cdk.Stack {
 
     // The records routes (EVENTS-010) send `Cache-Control: public,
     // max-age=300`; this policy honours it (min/default 0, so nothing is
-    // cached without it) and keys only on the two paging parameters.
-    const recordsQueryStrings = ['limit', 'offset'];
+    // cached without it) and keys only on the two paging parameters and the
+    // holders route's `ids` (EVENTS-012: without it, the first holders answer
+    // would be served for every later ids value).
+    const recordsQueryStrings = ['ids', 'limit', 'offset'];
     const recordsCachePolicy = new cloudfront.CachePolicy(this, 'RecordsCachePolicy', {
       comment: 'fanwire: public records routes, honour the origin Cache-Control (max 300 s)',
       minTtl: cdk.Duration.seconds(0),
@@ -149,7 +151,7 @@ export class CdnStack extends cdk.Stack {
       enableAcceptEncodingBrotli: true,
     });
     const recordsOriginRequestPolicy = new cloudfront.OriginRequestPolicy(this, 'RecordsOriginRequestPolicy', {
-      comment: 'fanwire: public records routes, forward limit and offset only',
+      comment: 'fanwire: public records routes, forward ids, limit and offset only',
       queryStringBehavior: cloudfront.OriginRequestQueryStringBehavior.allowList(...recordsQueryStrings),
       headerBehavior: cloudfront.OriginRequestHeaderBehavior.none(),
       cookieBehavior: cloudfront.OriginRequestCookieBehavior.none(),

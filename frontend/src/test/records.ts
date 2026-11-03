@@ -1,4 +1,4 @@
-import type { RequestHandler } from "msw";
+import { HttpResponse, http, type RequestHandler } from "msw";
 
 import type { components } from "../api/schema";
 import {
@@ -9,6 +9,7 @@ import {
   SUNS,
   ref,
   stub,
+  type RecordedRequest,
   type Stub,
   type TeamRefOut,
 } from "./stats";
@@ -48,17 +49,74 @@ import {
  * `pct`; `player-threes-game` is `made_total`, its entries carrying `made`,
  * `attempted` and `pct`; every other record is a `count`, with all five null.
  * `value` keeps its meaning (a season's win percentage).
+ *
+ * `EVENTS-012`: the API splits the old summary in two. `GET /events/records`
+ * is the catalog (each record's `category`, `keywords` and `featured_rank`,
+ * no holder) and `GET /events/records/holders?ids=a,b` the holders of up to
+ * 24 records. The kit keeps one picture of the screen's data,
+ * `testRecordsSummary()` (every record with its holder, as before), and both
+ * stubs answer from it, so a test that shapes the summary shapes both reads.
+ * The holders stub answers a 422 for no ids, more than 24, a duplicate or an
+ * id the summary does not hold, as the API does.
  */
 
-export type RecordsSummaryOut = components["schemas"]["RecordsSummaryOut"];
-export type RecordSummaryOut = components["schemas"]["RecordSummaryOut"];
 export type RecordHolderOut = components["schemas"]["RecordHolderOut"];
 export type RecordListOut = components["schemas"]["RecordListOut"];
 export type RecordEntryOut = components["schemas"]["RecordEntryOut"];
 export type RecordGameOut = components["schemas"]["RecordGameOut"];
 export type RecordPlayerOut = components["schemas"]["RecordPlayerOut"];
-export type RecordGroup = RecordSummaryOut["group"];
-export type RecordValueKind = RecordSummaryOut["value_kind"];
+export type RecordGroup = RecordListOut["group"];
+export type RecordValueKind = RecordListOut["value_kind"];
+
+/** The seven categories of `EVENTS-012`. */
+export type RecordCategory =
+  | "team-franchise"
+  | "team-season"
+  | "team-game"
+  | "player-game"
+  | "player-season"
+  | "player-career"
+  | "player-playoffs";
+
+/** One record of the catalog, `GET /events/records` (`EVENTS-012`). */
+export interface RecordCatalogRecord {
+  id: string;
+  group: RecordGroup;
+  category: RecordCategory;
+  title: string;
+  unit: string;
+  rule: string;
+  value_kind: RecordValueKind;
+  keywords: string[];
+  featured_rank: number | null;
+}
+
+/** `GET /events/records`: the catalog and the data window, no holder. */
+export interface RecordCatalogOut {
+  since_season: string | null;
+  through_season: string | null;
+  records: RecordCatalogRecord[];
+}
+
+/** `GET /events/records/holders?ids=`: one holder (or null) per asked id. */
+export interface RecordHoldersOut {
+  holders: Record<string, RecordHolderOut | null>;
+}
+
+/** The screen's picture of one record: its catalog entry and its holder. */
+export type RecordSummaryOut = RecordCatalogRecord & {
+  holder: RecordHolderOut | null;
+};
+
+/** The screen's data: both reads in one, as the kit's tests shape them. */
+export interface RecordsSummaryOut {
+  since_season: string | null;
+  through_season: string | null;
+  records: RecordSummaryOut[];
+}
+
+/** The most ids one holders read may ask for. */
+export const HOLDERS_CAP = 24;
 
 /** `RecordDefinition.value_kind`'s five kinds (`EVENTS-011`). */
 export const VALUE_KINDS: readonly RecordValueKind[] = [
@@ -83,17 +141,81 @@ const FINALS =
   "Champion: the team that wins four of a season's playoff games labelled NBA Finals," +
   " as GET /events/seasons/{season}/champion decides";
 
-export interface RecordDefinition {
-  id: string;
-  group: RecordGroup;
-  title: string;
-  unit: string;
-  rule: string;
-  value_kind: RecordValueKind;
-}
+export type RecordDefinition = RecordCatalogRecord;
 
-/** `RECORDS`, in the API's order. */
-export const RECORD_DEFINITIONS: readonly RecordDefinition[] = [
+type BaseDefinition = Omit<
+  RecordDefinition,
+  "category" | "keywords" | "featured_rank"
+>;
+
+/** The catalog fields of the twelve (`EVENTS-012`), by id. */
+const CATALOG: Record<
+  string,
+  Pick<RecordDefinition, "category" | "keywords" | "featured_rank">
+> = {
+  "team-championships": {
+    category: "team-franchise",
+    keywords: ["championships", "titles", "rings"],
+    featured_rank: 3,
+  },
+  "team-best-season": {
+    category: "team-season",
+    keywords: ["best season", "record", "wins"],
+    featured_rank: 1,
+  },
+  "team-worst-season": {
+    category: "team-season",
+    keywords: ["worst season", "record", "losses"],
+    featured_rank: 8,
+  },
+  "team-most-points-game": {
+    category: "team-game",
+    keywords: ["points", "scoring", "game"],
+    featured_rank: 15,
+  },
+  "team-largest-win": {
+    category: "team-game",
+    keywords: ["margin", "blowout", "largest win"],
+    featured_rank: 16,
+  },
+  "player-championships": {
+    category: "player-playoffs",
+    keywords: ["championships", "titles", "rings"],
+    featured_rank: 14,
+  },
+  "player-points-game": {
+    category: "player-game",
+    keywords: ["points", "scoring", "game"],
+    featured_rank: 2,
+  },
+  "player-rebounds-game": {
+    category: "player-game",
+    keywords: ["rebounds", "boards", "game"],
+    featured_rank: 9,
+  },
+  "player-assists-game": {
+    category: "player-game",
+    keywords: ["assists", "dimes", "game"],
+    featured_rank: 10,
+  },
+  "player-threes-game": {
+    category: "player-game",
+    keywords: ["threes", "3pt", "3-pointers", "three-pointers"],
+    featured_rank: 11,
+  },
+  "player-career-points": {
+    category: "player-career",
+    keywords: ["points", "scoring", "career"],
+    featured_rank: 4,
+  },
+  "player-career-triple-doubles": {
+    category: "player-career",
+    keywords: ["triple-doubles", "career"],
+    featured_rank: 13,
+  },
+};
+
+const BASE_DEFINITIONS: BaseDefinition[] = [
   {
     id: "team-championships",
     group: "team",
@@ -195,6 +317,10 @@ export const RECORD_DEFINITIONS: readonly RecordDefinition[] = [
       " assists, steals and blocks.",
   },
 ];
+
+/** `RECORDS`, in the API's order. */
+export const RECORD_DEFINITIONS: readonly RecordDefinition[] =
+  BASE_DEFINITIONS.map((base) => ({ ...base, ...CATALOG[base.id] }));
 
 export function recordDefinition(id: string): RecordDefinition {
   const found = RECORD_DEFINITIONS.find((record) => record.id === id);
@@ -530,13 +656,92 @@ export function emptyRecordsSummary(): RecordsSummaryOut {
   });
 }
 
+// ------------------------------------------------- the two reads (EVENTS-012)
+
+/** `GET /events/records` for the screen's data: every record, no holder. */
+export function testRecordCatalog(
+  summary: RecordsSummaryOut = testRecordsSummary(),
+): RecordCatalogOut {
+  return {
+    since_season: summary.since_season,
+    through_season: summary.through_season,
+    records: summary.records.map((record) => {
+      const { holder, ...catalog } = record;
+      void holder;
+      return catalog;
+    }),
+  };
+}
+
+/** `GET /events/records/holders` for `ids`, from the screen's data. */
+export function testRecordHolders(
+  ids: readonly string[],
+  summary: RecordsSummaryOut = testRecordsSummary(),
+): RecordHoldersOut {
+  return {
+    holders: Object.fromEntries(
+      ids.map((id) => [
+        id,
+        summary.records.find((record) => record.id === id)?.holder ?? null,
+      ]),
+    ),
+  };
+}
+
+/** The ids a holders request asked for, in the order it sent them. */
+export function idsOf(query: URLSearchParams): string[] {
+  const raw = query.get("ids");
+  return raw === null || raw === "" ? [] : raw.split(",");
+}
+
 // ---------------------------------------------------------------- stubs
 
-/** `GET /events/records` → `summary`. */
+/** `GET /events/records` → the catalog of `summary`. */
 export function recordsSummaryStub(
   summary: RecordsSummaryOut = testRecordsSummary(),
 ): Stub {
-  return stub("*/events/records", () => summary);
+  return stub("*/events/records", () => testRecordCatalog(summary));
+}
+
+/**
+ * `GET /events/records/holders?ids=` → the holders of `summary`, or a 422
+ * for no ids, more than 24, a duplicate or an id `summary` does not hold.
+ * Install it before `recordListStub`, whose `:record_id` also matches
+ * `holders` (msw answers with the first handler that matches).
+ */
+export function recordHoldersStub(
+  summary: RecordsSummaryOut = testRecordsSummary(),
+): Stub {
+  const requests: RecordedRequest[] = [];
+  let failing = false;
+  return {
+    handler: http.get("*/events/records/holders", ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      requests.push({ path: {}, query });
+      if (failing)
+        return HttpResponse.json(
+          { detail: "Internal Server Error" },
+          { status: 500 },
+        );
+      const ids = idsOf(query);
+      const known = new Set(summary.records.map((record) => record.id));
+      if (
+        ids.length === 0 ||
+        ids.length > HOLDERS_CAP ||
+        new Set(ids).size !== ids.length ||
+        ids.some((id) => !known.has(id))
+      )
+        return HttpResponse.json(
+          { detail: "ids must be 1 to 24 distinct known record ids" },
+          { status: 422 },
+        );
+      return HttpResponse.json(testRecordHolders(ids, summary));
+    }),
+    requests,
+    fail(): void {
+      failing = true;
+    },
+  };
 }
 
 /**
@@ -555,7 +760,11 @@ export function recordListStub(
   );
 }
 
-/** Both records reads answered quietly, for the shell's sweeps (`arrangeVisitor`). */
+/** The records reads answered quietly, for the shell's sweeps (`arrangeVisitor`). */
 export function recordsDefaults(): RequestHandler[] {
-  return [recordsSummaryStub().handler, recordListStub().handler];
+  return [
+    recordsSummaryStub().handler,
+    recordHoldersStub().handler,
+    recordListStub().handler,
+  ];
 }

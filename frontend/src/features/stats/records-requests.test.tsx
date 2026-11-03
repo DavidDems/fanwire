@@ -6,17 +6,21 @@
  * `staleTime: Infinity` (`api/records.ts`) or the season reads' five minutes,
  * not from the client.
  *
- * The counts, exactly:
+ * The counts, exactly (`EVENTS-012` splits the summary into the catalog and
+ * one holders read, `GET /events/records/holders?ids=`, its ids sorted,
+ * distinct and at most 24):
  *
- * - a cold `/stats/records` makes **1**: `GET /events/records`;
- * - switching Team and Player makes 0;
+ * - a cold `/stats/records` makes **2**: `GET /events/records`, then one
+ *   holders read covering every team card;
+ * - switching Team and Player makes at most 1, a holders read, and switching
+ *   back makes 0;
  * - opening a card makes exactly 1, `GET /events/records/<id>?limit=100`;
  * - Back makes 0, and opening the same card again makes 0;
  * - a cold `/stats/records?record=<id>` makes 1 (its list), and Back from it
- *   makes 1 (the summary);
+ *   makes 2 (the catalog and the holders);
  * - a cold `/stats/records?view=seasonal` makes **4**: seasons and the three
  *   boards (whose rule line shares the points read), no teams; Historical
- *   from it makes 1 (the summary);
+ *   from it makes 2 (the catalog and the holders);
  * - no records request carries `offset`.
  *
  * The Seasons tab's counts (4, and 2 back from a team) are
@@ -26,7 +30,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { recordDefinition } from "../../test/records";
+import { HOLDERS_CAP, recordDefinition, recordsOf } from "../../test/records";
 import {
   backButton,
   findCard,
@@ -82,6 +86,22 @@ async function quietAfter(mark: number): Promise<string[]> {
 }
 
 const SUMMARY = /^GET \S*\/events\/records$/;
+const HOLDERS = /^GET \S*\/events\/records\/holders\?ids=([^&]+)$/;
+
+/** A holders request's ids, checked sorted, distinct and at most 24. */
+function holderIds(request: string): string[] {
+  const match = HOLDERS.exec(request);
+  expect(match, request).not.toBeNull();
+  const ids = decodeURIComponent(match?.[1] ?? "").split(",");
+  expect(ids).toEqual([...ids].sort());
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids.length).toBeLessThanOrEqual(HOLDERS_CAP);
+  return ids;
+}
+
+function groupIds(group: "team" | "player"): string[] {
+  return recordsOf(group).map((record) => record.id);
+}
 
 function listRequest(id: string): RegExp {
   return new RegExp(`^GET \\S*/events/records/${id}\\?limit=100$`);
@@ -96,16 +116,19 @@ async function listShown(id: string): Promise<void> {
 }
 
 describe("requests per screen on Records (Baseline c)", () => {
-  it("a cold /stats/records makes 1: GET /events/records", async () => {
+  it("a cold /stats/records makes 2: the catalog, then one holders read", async () => {
     openRecords();
     await findCards("team");
 
     const requests = await quietAfter(0);
-    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
+    expect(holderIds(requests[1])).toEqual(
+      expect.arrayContaining(groupIds("team")),
+    );
   });
 
-  it("switching Team and Player makes 0", async () => {
+  it("switching Team and Player makes at most 1, a holders read, and back makes 0", async () => {
     openRecords();
     const user = userEvent.setup();
     await findCards("team");
@@ -113,10 +136,16 @@ describe("requests per screen on Records (Baseline c)", () => {
 
     await user.click(tab(groupBar(), "Player"));
     await findCards("player");
+    const toPlayer = await quietAfter(mark);
+    expect(toPlayer.length, toPlayer.join("\n")).toBeLessThanOrEqual(1);
+    const asked = [...holderIds(sent[1]), ...toPlayer.flatMap(holderIds)];
+    expect(asked).toEqual(expect.arrayContaining(groupIds("player")));
+    const back = sent.length;
+
     await user.click(tab(groupBar(), "Team"));
     await findCards("team");
 
-    const requests = await quietAfter(mark);
+    const requests = await quietAfter(back);
     expect(requests, requests.join("\n")).toEqual([]);
   });
 
@@ -149,7 +178,7 @@ describe("requests per screen on Records (Baseline c)", () => {
     expect(requests, requests.join("\n")).toEqual([]);
   });
 
-  it("a cold /stats/records?record=<id> makes 1, and Back from it makes 1 (the summary)", async () => {
+  it("a cold /stats/records?record=<id> makes 1, and Back from it makes 2 (the catalog and the holders)", async () => {
     openRecords("/stats/records?record=team-best-season");
     const user = userEvent.setup();
     await listShown("team-best-season");
@@ -163,11 +192,12 @@ describe("requests per screen on Records (Baseline c)", () => {
     await findCards("team");
 
     requests = await quietAfter(mark);
-    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
+    holderIds(requests[1]);
   });
 
-  it("a cold /stats/records?view=seasonal makes 4 (seasons and the three boards, no teams), and Historical from it makes 1", async () => {
+  it("a cold /stats/records?view=seasonal makes 4 (seasons and the three boards, no teams), and Historical from it makes 2", async () => {
     openRecords("/stats/records?view=seasonal");
     const user = userEvent.setup();
     const leaders = await screen.findByRole("region", { name: "Leaders" });
@@ -188,7 +218,8 @@ describe("requests per screen on Records (Baseline c)", () => {
     await findCards("team");
 
     requests = await quietAfter(mark);
-    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
+    holderIds(requests[1]);
   });
 });
