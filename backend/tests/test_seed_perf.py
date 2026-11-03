@@ -235,3 +235,23 @@ def test_runs_in_development_too(_postgres_server):
 
         assert result.returncode == 0, result.stderr
         assert _counts(url)["users"] >= 300
+
+
+# --- EVENTS-012: record totals ----------------------------------------------
+
+
+def test_the_seeded_games_have_their_record_totals(seeded):
+    """seed_perf writes games, so, like every path that does, it rebuilds the
+    record totals in its transaction: they are what a fresh rebuild gives."""
+    from tests.record_totals_support import rebuilt_snapshots, snapshots
+
+    engine = make_engine(seeded["url"])
+    try:
+        with engine.connect() as conn:
+            stored = snapshots(conn)
+        rebuilt = rebuilt_snapshots(engine)
+    finally:
+        engine.dispose()
+
+    assert stored["team_game_totals"], "seed_perf's games make team-game rows"
+    assert stored == rebuilt

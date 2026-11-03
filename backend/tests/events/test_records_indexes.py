@@ -4,9 +4,9 @@ The migration test (tests/test_migrations_records_indexes.py) proves the
 indexes exist; this proves they are used. For each of the seven indexed
 records, and for the data window every records call runs first (the
 eighth index, ix_games_season: min and max of games.season), the exact
-statements the app sends (records_summary's holder statement and
-record_list's page statement, and each one's window statement, with their
-bound parameters) are captured, then explained on the same connection, after ANALYZE, with
+statements the app sends (the holder statement of GET
+/events/records/holders, EVENTS-012, and record_list's page statement, and the
+window statement of the catalog and of a list, with their bound parameters) are captured, then explained on the same connection, after ANALYZE, with
 the planner told to avoid sequential scans, bitmap scans and explicit sorts
 (_PLANNER_SETTINGS). Those are cost penalties, not bans: what is left
 cheapest is a plain index scan that answers the query's filter, and, for a
@@ -37,8 +37,8 @@ from sqlalchemy import Engine, event
 from sqlalchemy.orm import Session
 
 from app.db import Base, make_session_factory
-from app.events.records import RECORDS, record_list, records_summary
-from tests.events.players_support import make_players_engine
+from app.events.records import record_list
+from tests.events.players_support import make_client, make_players_engine
 from tests.events.records_support import build_fixture
 
 # record id -> the index that must serve it
@@ -129,14 +129,24 @@ def test_the_list_statement_uses_the_records_index(engine, session, record_id, i
     assert index in plan, f"{record_id}'s list does not use {index}:\n{plan}"
 
 
+@pytest.fixture()
+def client(engine):
+    return make_client(make_session_factory(engine))
+
+
+def _get(client, url: str, **params: Any) -> None:
+    response = client.get(url, params=params)
+    assert response.status_code == 200, response.text
+
+
 @pytest.mark.parametrize(("record_id", "index"), RECORD_INDEXES)
-def test_the_summary_holder_statement_uses_the_records_index(engine, session, record_id, index):
+def test_the_holder_statement_uses_the_records_index(engine, session, client, record_id, index):
+    _get(client, "/events/records/holders", ids=record_id)  # built and warm
     with executed(engine) as log:
-        records_summary(session)
-    # The data window, then one holder statement per record in RECORDS order.
-    assert len(log.statements) == 1 + len(RECORDS), [s for s, _ in log.statements]
-    position = [record.id for record in RECORDS].index(record_id)
-    statement, parameters = log.statements[1 + position]
+        _get(client, "/events/records/holders", ids=record_id)
+    # At most 1 + len(ids) statements; the holder's is the last.
+    assert 1 <= len(log.statements) <= 2, [s for s, _ in log.statements]
+    statement, parameters = log.statements[-1]
 
     plan = _plan(session, statement, parameters)
 
@@ -144,17 +154,11 @@ def test_the_summary_holder_statement_uses_the_records_index(engine, session, re
 
 
 @pytest.mark.parametrize(
-    "call",
-    [
-        pytest.param(
-            lambda s: record_list(s, "player-points-game", limit=100, offset=0), id="list"
-        ),
-        pytest.param(records_summary, id="summary"),
-    ],
+    "url", ["/events/records/player-points-game", "/events/records"], ids=["list", "catalog"]
 )
-def test_the_window_statement_uses_the_season_index(engine, session, call):
+def test_the_window_statement_uses_the_season_index(engine, session, client, url):
     with executed(engine) as log:
-        call(session)
+        _get(client, url, **({"limit": 100} if url != "/events/records" else {}))
     # The data window is the first statement of every records call.
     assert log.statements, "no statement was sent"
     statement, parameters = log.statements[0]
