@@ -549,8 +549,67 @@ against pure green gives ΔE2000 86.6, matching published reference values.
   **Never use** jerseys, numbers on a jersey, crests or shields, a
   league-style silhouette (a player in a vertical bar like the NBA logo), any
   team's colour pair (purple and teal is the Hornets), or real players'
-  likenesses. That last one is also a publicity-rights problem and excluded by
-  Unsplash's licence.
+  likenesses **in fanwire's own brand**. That last one is also a
+  publicity-rights problem and excluded by Unsplash's licence. Team identity
+  inside the app is the separate case below.
+- **fanwire never promotes with NBA marks**
+  ([ADR 0006](../../GeneralContext/Decisions/0006-no-nba-marks-in-promotion.md)).
+  No team or league name, abbreviation, logo, colour pair, player name or
+  player image in ads, social posts, app-store listings or screenshots, or
+  promo graphics. The risk is implied affiliation: passing off (Trademarks Act
+  s.7(b)) and depreciation of goodwill (s.22), both of which bite on use *in
+  advertising*.
+- **Stats and team names in content are fine.** Game statistics are facts,
+  not copyright works (*NBA v. Motorola*, 2d Cir. 1997,
+  https://law.justia.com/cases/federal/appellate-courts/F3/105/841/598844/);
+  Canadian copyright does not protect facts either. Naming a team to say
+  something about it is not "use" of the mark under s.4, which ss.20 and 22
+  require (*Clairol* through *Veuve Clicquot*, SCC 2006,
+  https://www.smartbiggar.ca/insights/publication/barbie-and-veuve-clicquot----supreme-court-of-canada-clarifies-protection-for-famous-trademarks-in-canada).
+  So users may name teams and players in posts. The terms of service should
+  instead forbid: uploading media without rights (game footage, NBA photos,
+  logos); implying an account is official or affiliated; scraping or reselling
+  the site's stats. They should add a takedown route (Canada's notice-and-notice,
+  Copyright Act s.41.25, plus a DMCA-style address for US rights holders) and
+  the line *"Not affiliated with or endorsed by the NBA, its teams or
+  players."* The dataset's own nba.com-terms risk is already accepted
+  (`wiki/GeneralContext/Prompts/06-nba-data.md`, decision 1).
+- **Team icons (`FRONTEND-031`) are low-to-moderate risk.** Colours can be a
+  mark once fans link them to a team: *LSU v. Smack Apparel* (5th Cir. 2008,
+  https://www.ca5.uscourts.gov/opinions%5Cpub%5C07/07-30580-CV0.wpd.pdf) found
+  infringement from school colours plus school context, without a logo. That
+  was merchandise, though, where the colours sold the shirt and the court
+  rejected nominative fair use because the use went beyond description. An
+  in-app badge that names whose stats a row shows is descriptive. Keep it so:
+  the abbreviation as plain text in fanwire's font, never the team's typeface
+  or letterforms; data views only, never promotion; and check all 30 icons
+  against the real logos, since some teams use a letter in a roundel (the
+  Nets' black-and-white "B") and an icon must not read as one.
+- **No player headshots without a licence.** Three separate rights apply:
+  1. **Copyright in the photo.** Official and media-day headshots belong to
+     NBA Entertainment (Getty credits them "Copyright NBAE" and needs NBAE's
+     written approval to license them, https://www.gettyimages.com/collection-restrictions);
+     nba.com's terms list photographs as NBA Properties' and the teams'
+     (https://www.nba.com/terms). Hotlinking `cdn.nba.com` infringes and
+     breaches those terms. Any other photo belongs to its photographer.
+  2. **The player's personality.** Ontario's tort (*Krouse v. Chrysler*, 1973;
+     *Athans v. Canadian Adventure Camps*, 1977,
+     https://www.yorku.ca/osgoode/iposgoode/?p=4195), the BC, Saskatchewan,
+     Manitoba and Newfoundland privacy acts and Quebec's Civil Code protect a
+     likeness against commercial use. *Gould Estate v. Stoddart* (Ont. CA
+     1998, https://en.wikipedia.org/wiki/Gould_Estate_v_Stoddart_Publishing_Co_Ltd)
+     separates using a person as the subject of content (allowed) from selling
+     by association (not).
+  3. **Group licensing.** The players' union, through Think450, controls use
+     of three or more players together
+     (https://www.mondaq.com/unitedstates/sport/677046/national-basketball-players-association-launches-think450-to-handle-marketing-and-licensing-of-nba-players);
+     a stats site of hundreds of faces is that use.
+
+  A team-jersey headshot also shows the logos §10 already excludes. The
+  options, in order: keep initials avatars; pay for a licensed feed
+  (SportsDataIO, Sportradar, Getty), which clears the rights; or use
+  Wikimedia Commons photos under their stated CC licence with attribution,
+  checking each file and preferring shots without prominent jersey marks.
 - **The AI output may resemble an existing logo.** OpenAI warns that output
   *"may not be unique"*. Before adopting a symbol:
   1. **Google Lens** (upload at https://images.google.com, then crop the
