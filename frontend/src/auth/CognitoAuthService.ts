@@ -16,6 +16,10 @@ import type {
   CredentialsInput,
 } from "./AuthService";
 
+const NO_SIGNED_IN_ACCOUNT = "There is no signed-in account.";
+const NO_VALID_SESSION = "There is no valid session.";
+const NOT_AUTHORIZED = "NotAuthorizedException";
+
 /**
  * The one implementation of `AuthService`, and the one module in `src/` that
  * knows which identity provider the app runs on. `src/auth/sdk-isolation.test.ts`
@@ -233,19 +237,19 @@ export class CognitoAuthService implements AuthService {
     const user = this.pool.getCurrentUser();
     if (user === null) {
       return Promise.reject(
-        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+        new AuthError(NOT_AUTHORIZED, NO_SIGNED_IN_ACCOUNT),
       );
     }
 
     return new Promise((resolve, reject) => {
       user.getSession((error: Error | null, session: CognitoUserSession | null) => {
         if (error || !session || !session.isValid()) {
-          reject(toAuthError(error ?? new Error("There is no valid session.")));
+          reject(toAuthError(error ?? new Error(NO_VALID_SESSION)));
           return;
         }
         const email = session.getIdToken().payload.email;
         if (typeof email !== "string" || email.length === 0) {
-          reject(new AuthError("NotAuthorizedException", "The signed-in account has no email."));
+          reject(new AuthError(NOT_AUTHORIZED, "The signed-in account has no email."));
           return;
         }
 
@@ -258,14 +262,14 @@ export class CognitoAuthService implements AuthService {
               reject(
                 new AuthError(
                   "NewPasswordRequiredException",
-                  "This account has to set a new password before it can sign in.",
+                  "Set a new password before continuing.",
                 ),
               ),
             mfaRequired: () =>
               reject(
                 new AuthError(
                   "MfaRequiredException",
-                  "This account needs a multi-factor code, which this app cannot collect yet.",
+                  "Multi-factor sign-in is not supported.",
                 ),
               ),
           },
@@ -293,7 +297,7 @@ export class CognitoAuthService implements AuthService {
     const user = this.pool.getCurrentUser();
     if (user === null) {
       return Promise.reject(
-        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+        new AuthError(NOT_AUTHORIZED, NO_SIGNED_IN_ACCOUNT),
       );
     }
     return new Promise((resolve, reject) => {
@@ -309,7 +313,7 @@ export class CognitoAuthService implements AuthService {
     const user = this.pool.getCurrentUser();
     if (user === null) {
       return Promise.reject(
-        new AuthError("NotAuthorizedException", "There is no signed-in account."),
+        new AuthError(NOT_AUTHORIZED, NO_SIGNED_IN_ACCOUNT),
       );
     }
     return new Promise((resolve, reject) => {
@@ -320,7 +324,7 @@ export class CognitoAuthService implements AuthService {
           user.getSession(
             (sessionError: Error | null, session: CognitoUserSession | null) => {
               if (sessionError || !session) {
-                reject(toAuthError(sessionError ?? new Error("There is no valid session.")));
+                reject(toAuthError(sessionError ?? new Error(NO_VALID_SESSION)));
                 return;
               }
               user.refreshSession(

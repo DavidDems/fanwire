@@ -98,7 +98,7 @@
   margin-left: auto;
 }
 
-.accountMenuButton {
+.header .accountMenuButton {
   min-width: var(--target-min);
   min-height: var(--target-min);
   padding: 0;

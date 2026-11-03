@@ -121,7 +121,8 @@ export function AppLayout() {
   const { status } = useAuth();
   const account = useAccount();
   const signOut = useSignOut();
-  const ownUserId = account.status === "active" ? account.profile.id : null;
+  const accountIsActive = account.status === "active";
+  const ownUserId = accountIsActive ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
   const mainRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
@@ -164,10 +165,9 @@ export function AppLayout() {
             />
           </ul>
         </nav>
-        {ownUserId === null || account.status !== "active" ? null : (
+        {!accountIsActive ? null : (
           <Menu
             label="Account menu"
-            buttonSize="md"
             buttonClassName={styles.accountMenuButton}
             icon={
               <Avatar
@@ -177,17 +177,13 @@ export function AppLayout() {
                 pictureKey={account.profile.profile_picture_key}
               />
             }
-            items={[
-              {
-                label: "Profile",
-                onSelect: () => navigate(`/profile/${ownUserId}`),
-              },
-              { label: "History", onSelect: () => navigate("/history") },
-              {
-                label: "Account settings",
-                onSelect: () => navigate("/settings"),
-              },
-            ]}
+            items={(
+              [
+                ["Profile", `/profile/${account.profile.id}`],
+                ["History", "/history"],
+                ["Account settings", "/settings"],
+              ] as const
+            ).map(([label, to]) => ({ label, onSelect: () => navigate(to) }))}
           />
         )}
         {status === "anonymous" && !onSignInPage ? (

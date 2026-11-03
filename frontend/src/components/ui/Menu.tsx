@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { buttonClass, type ButtonSize } from "./Button";
+import { buttonClass } from "./Button";
 import styles from "./Menu.module.css";
 
 export interface MenuItem {
@@ -26,8 +26,6 @@ export interface MenuProps {
   items: MenuItem[];
   /** Shown in the button in place of the label, which stays its name. */
   icon?: ReactNode;
-  /** Override the menu button's default compact target size. */
-  buttonSize?: ButtonSize;
   /** Extra class for a caller with a larger target requirement. */
   buttonClassName?: string;
 }
@@ -66,8 +64,7 @@ export function Menu({
   label,
   items,
   icon,
-  buttonSize = "sm",
-  buttonClassName,
+  buttonClassName = "",
 }: MenuProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -205,7 +202,7 @@ export function Menu({
       <button
         ref={buttonRef}
         type="button"
-        className={`${buttonClass("ghost", buttonSize)} ${styles.button}${buttonClassName ? ` ${buttonClassName}` : ""}`}
+        className={`${buttonClass("ghost", "sm")} ${styles.button} ${buttonClassName}`}
         aria-label={icon === undefined ? undefined : label}
         aria-haspopup="menu"
         aria-expanded={open}
