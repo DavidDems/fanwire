@@ -16,7 +16,10 @@
  *   `FRONTEND-030` Top records is the default, so Team is written).
  * - **Back** and the breadcrumb's first item return to Historical on the
  *   list's group's tab, Player selected for a player record, even from a cold
- *   `?record=`; an unknown id's Back returns to Top records.
+ *   `?record=`; an unknown id's Back returns to Top records. Since
+ *   `FRONTEND-030` the in-page Back from a card returns to exactly the tab
+ *   and query the card was opened from (as the browser's Back does); only
+ *   a cold `?record=` falls back to its group's tab with no query.
  * - **The rule** states the record's minimum where it has one
  *   (`FRONTEND-030`): a shooting percentage's attempts, an average's games.
  * - **Headings.** The record level's `h2` is the record's title: from the
@@ -68,6 +71,7 @@ import {
   crumbs,
   findCard,
   findCards,
+  findRecordCard,
   focusedHeading,
   groupBar,
   isCurrent,
@@ -76,7 +80,9 @@ import {
   panelOf,
   params,
   queryTablistHolding,
+  searchBox,
   selectedTab,
+  shownIds,
   tab,
   viewAll,
   viewBar,
@@ -264,20 +270,68 @@ describe("Back, the breadcrumb and the browser's Back", () => {
     });
   });
 
-  it("Back from a team record returns to ?group=team, Team selected", async () => {
-    const { router } = openRecords();
+  // FRONTEND-030 (the browser rows' defect): the in-page Back returns to
+  // exactly where the card was opened from, its bar and its query, as the
+  // browser's Back does; never to the record's own group with q dropped.
+  it.each([
+    ["Top records", "/stats/records", "team-most-points-game", "top"],
+    ["Team", "/stats/records?group=team", "team-best-season", "team"],
+    [
+      "Top records with a query",
+      "/stats/records?q=career+points",
+      "player-career-points",
+      "top",
+    ],
+    [
+      "Team with a query",
+      "/stats/records?group=team&q=best+season",
+      "team-best-season",
+      "team",
+    ],
+    [
+      "Player with a query",
+      "/stats/records?group=player&q=three+percentage+season",
+      "player-three-pct-season",
+      "player",
+    ],
+  ] as const)(
+    "Back from a card opened on %s returns to that tab and query",
+    async (_origin, from, id, bar) => {
+      const { router } = openRecords(from);
+      const origin = new URL(from, "http://x.test").searchParams;
+      const user = userEvent.setup();
+      await user.click(viewAll(await findRecordCard(id)));
+      await recordLevelShown(id);
+      expect(params(router).get("record")).toBe(id);
+
+      await user.click(backButton() as HTMLElement);
+
+      await waitFor(() => expect(params(router).has("record")).toBe(false));
+      expect(router.state.location.pathname).toBe("/stats/records");
+      expect(params(router).get("group")).toBe(origin.get("group"));
+      expect(params(router).get("q")).toBe(origin.get("q"));
+      await findCards(bar);
+      expect(selectedTab(groupBar())).toBe(
+        bar === "top" ? "Top records" : bar === "team" ? "Team" : "Player",
+      );
+      expect(searchBox()).toHaveValue(origin.get("q") ?? "");
+      expect(shownIds()).toContain(id);
+    },
+  );
+
+  it("Back from a cold team record (no origin) falls back to ?group=team, no q", async () => {
+    const { router } = openRecords("/stats/records?record=team-best-season");
     const user = userEvent.setup();
-    await openFromCard(user, "team", "team-most-points-game");
-    await recordLevelShown("team-most-points-game");
+    await recordLevelShown("team-best-season");
 
     await user.click(backButton() as HTMLElement);
 
     await waitFor(() =>
       expect(router.state.location.search).toBe("?group=team"),
     );
-    expect(router.state.location.pathname).toBe("/stats/records");
     await findCards("team");
     expect(selectedTab(groupBar())).toBe("Team");
+    expect(searchBox()).toHaveValue("");
   });
 
   it("the breadcrumb's first item links to its group's tab and returns there", async () => {
@@ -369,8 +423,10 @@ describe("a cold ?record= (a reload or a shared link)", () => {
 
     await waitFor(() => expect(params(router).has("record")).toBe(false));
     expect(params(router).get("group")).toBe("player");
+    expect(params(router).has("q")).toBe(false);
     await findCards("player");
     expect(selectedTab(groupBar())).toBe("Player");
+    expect(searchBox()).toHaveValue("");
   });
 
   it("an unknown id shows the API's not-found in place, with Back to the cards", async () => {
