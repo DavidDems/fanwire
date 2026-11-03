@@ -1,8 +1,9 @@
 """EVENTS-010: each records index serves its record as the app runs it.
+EVENTS-012 adds eight single-game player lists, each with its own index.
 
-The migration test (tests/test_migrations_records_indexes.py) proves the
-indexes exist; this proves they are used. For each of the seven indexed
-records, and for the data window every records call runs first (the
+The migration tests (tests/test_migrations_records_indexes.py and
+tests/test_migrations_player_game_indexes.py) prove the indexes exist; this
+proves they are used. For each indexed record, and for the data window every records call runs first (the
 eighth index, ix_games_season: min and max of games.season), the exact
 statements the app sends (the holder statement of GET
 /events/records/holders, EVENTS-012, and record_list's page statement, and the
@@ -50,6 +51,17 @@ RECORD_INDEXES: tuple[tuple[str, str], ...] = (
     ("player-career-triple-doubles", "ix_player_game_stats_triple_doubles"),
     ("team-largest-win", "ix_games_margin"),
     ("player-championships", "ix_games_nba_finals"),
+    # EVENTS-012: the single-game player lists measured over 300 ms on the
+    # perf profile (a parallel seq scan of player_game_stats and a sort that
+    # spills), each served by its own partial index over played lines.
+    ("player-plus-minus-game", "ix_player_game_stats_plus_minus_played"),
+    ("player-free-throws-game", "ix_player_game_stats_free_throws_made_played"),
+    ("player-blocks-game", "ix_player_game_stats_blocks_played"),
+    ("player-defensive-rebounds-game", "ix_player_game_stats_defensive_rebounds_played"),
+    ("player-steals-game", "ix_player_game_stats_steals_played"),
+    ("player-minutes-game", "ix_player_game_stats_minutes_played"),
+    ("player-offensive-rebounds-game", "ix_player_game_stats_offensive_rebounds_played"),
+    ("player-field-goals-game", "ix_player_game_stats_field_goals_made_played"),
 )
 
 # The index that must serve the data window (records._window), the first
