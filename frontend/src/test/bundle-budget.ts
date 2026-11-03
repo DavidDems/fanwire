@@ -45,46 +45,46 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main b1dfa99, with
- * EVENTS-011 and POSTS-008 folded in (USERS-004 and FRONTEND-023, 024, 026
- * and 027 were folded at 4795f19). One tree, so every number is its single
- * measurement. The entry, its stylesheet, and every lazy output → gzip bytes.
- * Measure with the test's build, not `npm run build`: under Vitest the build
- * inlines `test.env`'s `VITE_*` values, which makes the entry about 0.2 kB
- * larger raw.
+ * The base, measured by this test's own build on origin/main 4d714ef, with
+ * EVENTS-012 folded in (EVENTS-011 and POSTS-008 were folded at b1dfa99;
+ * USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19). One tree, so every
+ * number is its single measurement. The entry, its stylesheet, and every lazy
+ * output → gzip bytes. Measure with the test's build, not `npm run build`:
+ * under Vitest the build inlines `test.env`'s `VITE_*` values, which makes the
+ * entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 148_566,
+  entryJsGzip: 148_564,
   entryJsRaw: 467_943,
   entryCssGzip: 5_808,
   lazy: {
     "AuthPage.module": 158,
-    ComposePage: 3_870,
-    ConfirmPage: 1_052,
-    errors: 241,
-    ForgotPasswordPage: 1_082,
+    ComposePage: 3_872,
+    ConfirmPage: 1_053,
+    errors: 242,
+    ForgotPasswordPage: 1_081,
     format: 430,
     GamePage: 4_048,
-    HistoryPage: 1_046,
+    HistoryPage: 1_047,
     NotificationsPage: 1_741,
-    PeriodScores: 469,
-    PlayerPage: 3_834,
-    PlayerResults: 823,
+    PeriodScores: 470,
+    PlayerPage: 3_833,
+    PlayerResults: 824,
     PlayersTab: 578,
-    ProfilePage: 3_123,
+    ProfilePage: 3_120,
     ProfileSetupPage: 1_411,
-    RecordsTab: 3_541,
-    SeasonsTab: 1_661,
-    SegmentedTabs: 584,
+    RecordsTab: 3_848,
+    SeasonsTab: 1_662,
+    SegmentedTabs: 583,
     SignInPage: 985,
-    SignUpPage: 874,
-    stats: 760,
+    SignUpPage: 873,
+    stats: 761,
     "Stats.module": 375,
     "StatsNav.module": 457,
-    StatsNavigator: 3_668,
-    StatsPage: 400,
-    StatsPicker: 2_202,
-    VisuallyHidden: 140,
+    StatsNavigator: 3_670,
+    StatsPage: 399,
+    StatsPicker: 2_205,
+    VisuallyHidden: 141,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 411,
     "css:GamePage.css": 1_081,
