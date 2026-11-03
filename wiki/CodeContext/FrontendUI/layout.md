@@ -39,24 +39,22 @@ phone (< 640 px)                          ≥ 640 px
 - **Header** (`<header>`, sticky top, `--color-surface`, `--shadow-1` in
   light / `--color-border` bottom edge in dark, `--z-sticky`):
   - **Left: the brand, as one link to `/`** whose accessible name is exactly
-    `fanwire`. It holds the symbol at 28 px (`src/assets/brand/symbol.svg`,
-    `alt=""`, decorative because the link is named by the wordmark) and the
-    wordmark at 20 px high, about 93 px wide (aspect 4.66:1):
+    `fanwire`. It holds **the cursive wordmark alone**, no symbol (the human's
+    decision of 2026-11-03), 28 px high and about 105 px wide (aspect 3.76:1):
     ```html
     <picture>
       <source srcset="{wordmarkDark}" media="(prefers-color-scheme: dark)">
-      <img src="{wordmarkLight}" alt="fanwire" width="93" height="20">
+      <img src="{wordmarkLight}" alt="fanwire" width="105" height="28">
     </picture>
     ```
-    The SVGs' own `role`/`aria-label` are ignored inside `<img>`. The `alt` is
-    what names the link.
-  - **Below 360 px, the symbol alone.** The wordmark's `<picture>` gets a
-    visually-hidden treatment (not `display: none`, which would also remove
-    the name), so the link is still named `fanwire`.
-  - **The files are bundled, not served:** `UI-003` copies `brand/out/`'s two
-    wordmarks and `favicon.svg` (as `symbol.svg`) into `src/assets/brand/`, so
-    Vite fingerprints them. `brand/` itself never reaches the bundle or the test
-    container.
+    The `alt` is what names the link.
+  - **Never hidden.** From 40em until 44em, where the nav joins the header, it
+    drops to 18 px high (about 68 px wide): at 28 px, a 640 px window with a
+    17 px scrollbar wraps a member's "Your profile". Measured 2026-11-03.
+  - **The files are bundled, not served:** `src/assets/brand/wordmark-light.png`
+    (Jet Black) and `wordmark-dark.png` (Pale Sky) are transparent 316×84 PNGs
+    (3× the 28 px height), copies of `brand/out/`, so Vite fingerprints them.
+    `brand/` itself never reaches the bundle or the test container.
   - **Right: "Sign in"** (a link styled as a secondary button) **for an
     anonymous visitor only**. A signed-in visitor has nothing here on phones,
     because everything is in the bottom bar.

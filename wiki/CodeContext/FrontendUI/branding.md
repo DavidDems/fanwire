@@ -24,7 +24,7 @@ them before acting on them after a few months.
 
 | | Decision |
 |---|---|
-| **Mark** | **Symbol plus wordmark.** The symbol is a lowercase **`f` drawn as one continuous wire line**. The wordmark is lowercase `fanwire` **typeset in a free OFL font**, not generated. The symbol alone is the favicon and app icon. |
+| **Mark** | **Symbol plus wordmark.** The symbol is a lowercase **`f` drawn as one continuous wire line**. The wordmark is lowercase `fanwire` **typeset in a free OFL font**, not generated. The symbol alone is the favicon and app icon. **Superseded in the header on 2026-11-03:** the header shows a slightly cursive `fanwire` wordmark (the human's PNG, recoloured to transparent `brand/out/wordmark-light.png` and `wordmark-dark.png`) and no symbol. The favicon, app icons and OG card are unchanged. |
 | **Palette** | **Keep** Jet Black `#022b3a`, Teal `#1f7a8c` and Pale Sky `#bfdbf7`, and **add** `--color-accent-on-dark` `#279ab1` for links and focus rings on dark surfaces. |
 | **Mark colours** | **Jet Black and Pale Sky, not teal.** The icon is a Pale Sky wire `f` on a Jet Black tile (10.42:1). Teal stays a UI accent. |
 | **Jurisdiction** | Canada (the human's answer). It shapes §4.3. |

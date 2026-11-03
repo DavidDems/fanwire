@@ -72,42 +72,24 @@
   }
 }
 
-/* Brand: the symbol, plus the wordmark from 22.5em (360 px). */
+/* Brand: the cursive wordmark alone, at every width; 28 px tall, 18 px from 40em to 44em. */
 .brand {
   display: inline-flex;
   flex-shrink: 0;
   align-items: center;
-  gap: var(--space-2);
   min-height: var(--target-min);
   border-radius: var(--radius-sm);
   text-decoration: none;
 }
 
-.brand img {
+.brand img,
+.wordmark {
   display: block;
 }
 
-/* Hidden visually, never removed: its alt is what names the brand link. */
-.wordmark {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-@media (min-width: 22.5em) {
-  .wordmark {
-    position: static;
-    display: block;
-    width: auto;
-    height: auto;
-    margin: 0;
-    overflow: visible;
-    clip: auto;
-  }
+.wordmark img {
+  width: auto;
+  height: 1.75rem;
 }
 
 /* Sign in and Sign out sit at the right edge of the header. */
@@ -196,14 +178,9 @@
     scroll-padding-bottom: 0;
   }
 
-  /* The nav joins the header and leaves Sign out no room: the symbol alone. */
-  .wordmark {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+  /* The nav joins the header: the wordmark shrinks so Sign out keeps its line. */
+  .wordmark img {
+    height: 1.125rem;
   }
 
   .nav {
@@ -239,15 +216,10 @@
   }
 }
 
-/* From 44em (704 px): room for the wordmark again, even beside a scrollbar. */
+/* From 44em (704 px): room for the full-size wordmark again. */
 @media (min-width: 44em) {
-  .wordmark {
-    position: static;
-    width: auto;
-    height: auto;
-    margin: 0;
-    overflow: visible;
-    clip: auto;
+  .wordmark img {
+    height: 1.75rem;
   }
 }
 
