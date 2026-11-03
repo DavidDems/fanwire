@@ -37,6 +37,7 @@ const LAZY_PAGES = [
   "features/players/PlayerPage.tsx",
   "features/compose/ComposePage.tsx",
   "features/notifications/NotificationsPage.tsx",
+  "features/history/HistoryPage.tsx",
   "features/profile/ProfilePage.tsx",
   "auth/SignInPage.tsx",
   "auth/SignUpPage.tsx",

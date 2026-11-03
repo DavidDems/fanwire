@@ -156,6 +156,7 @@ class Post(Base):
         # app.posts.moderation.PostCountRateLimiter counts one author's
         # recent posts: an index range scan, not a table scan.
         Index("ix_posts_author_id_created_at", "author_id", "created_at"),
+        Index("ix_posts_author_id_id", "author_id", sql_text("id DESC")),
         # app.posts.service.query_feed_posts matches a team's game ids
         # against both game columns (POSTS-006); most posts have neither.
         Index(
@@ -199,6 +200,12 @@ class PostLike(Base):
         # Composite PK doubles as the "one like per user per post"
         # uniqueness constraint — same pattern as app.users.models.Follow.
         PrimaryKeyConstraint("user_id", "post_id"),
+        Index(
+            "ix_post_likes_user_created_post",
+            "user_id",
+            sql_text("created_at DESC"),
+            sql_text("post_id DESC"),
+        ),
     )
 
 
