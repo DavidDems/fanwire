@@ -320,7 +320,13 @@ describe("Back, the breadcrumb and the browser's Back", () => {
 
     await router.navigate(-1);
 
-    await findCards("player");
+    // The cards come back through the lazy route and a fresh render: under
+    // the full run this measured 1.5-1.8 s, past findBy's 1 s default.
+    await screen.findByRole(
+      "list",
+      { name: /^player records$/i },
+      { timeout: 3500 },
+    );
     expect(params(router).get("group")).toBe("player");
     expect(params(router).has("record")).toBe(false);
   });
