@@ -13,6 +13,13 @@ function before(first: HTMLElement, second: HTMLElement): boolean {
   );
 }
 
+async function initialRefreshCount(auth: FakeAuthService): Promise<number> {
+  await waitFor(() => {
+    expect(auth.callsTo("refreshSession").length).toBeGreaterThan(0);
+  });
+  return auth.callsTo("refreshSession").length;
+}
+
 describe("Account settings", () => {
   it("shows verification, notifications and deactivation in that order", async () => {
     renderSettingsApp("active", new FakeAuthService({ session: testSession() }));
@@ -38,6 +45,7 @@ describe("Account settings", () => {
       emailVerified: false,
     });
     renderSettingsApp("active", auth);
+    const refreshCount = await initialRefreshCount(auth);
 
     await user.click(
       await screen.findByRole("button", { name: "Verify this account" }),
@@ -54,7 +62,7 @@ describe("Account settings", () => {
 
     await waitFor(() => {
       expect(auth.callsTo("confirmEmailVerification")).toEqual(["482913"]);
-      expect(auth.callsTo("refreshSession")).toHaveLength(1);
+      expect(auth.callsTo("refreshSession")).toHaveLength(refreshCount + 1);
     });
     const verified = await screen.findByRole("button", { name: "Verified" });
     expect(verified).toHaveAccessibleName("Verified");
@@ -69,6 +77,7 @@ describe("Account settings", () => {
       emailVerified: false,
     }).failWith("confirmEmailVerification", "CodeMismatchException");
     renderSettingsApp("active", auth);
+    const refreshCount = await initialRefreshCount(auth);
 
     await user.click(
       await screen.findByRole("button", { name: "Verify this account" }),
@@ -80,7 +89,7 @@ describe("Account settings", () => {
     await user.click(screen.getByRole("button", { name: /^confirm$/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/code/i);
-    expect(auth.callsTo("refreshSession")).toHaveLength(0);
+    expect(auth.callsTo("refreshSession")).toHaveLength(refreshCount);
   });
 
   it("shows an expired verification code as a field error", async () => {
@@ -90,6 +99,7 @@ describe("Account settings", () => {
       emailVerified: false,
     }).failWith("confirmEmailVerification", "ExpiredCodeException");
     renderSettingsApp("active", auth);
+    const refreshCount = await initialRefreshCount(auth);
 
     await user.click(
       await screen.findByRole("button", { name: "Verify this account" }),
@@ -102,7 +112,7 @@ describe("Account settings", () => {
 
     expect(code).toHaveAttribute("aria-invalid", "true");
     expect(await screen.findByRole("alert")).toHaveTextContent(/expired/i);
-    expect(auth.callsTo("refreshSession")).toHaveLength(0);
+    expect(auth.callsTo("refreshSession")).toHaveLength(refreshCount);
   });
 
   it("keeps the enabled notifications policy checked and disabled", async () => {
