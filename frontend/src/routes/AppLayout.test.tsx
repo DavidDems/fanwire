@@ -235,7 +235,7 @@ function tabbables(): Element[] {
 /**
  * A dynamic import Vite does not resolve at transform time.
  *
- * A literal `import("../assets/brand/symbol.svg")` is resolved when this file
+ * A literal `import("../assets/brand/wordmark-light.png")` is resolved when this file
  * is transformed, so a file the implementation has not added yet would fail
  * the whole file to load and hide every other test's red. A computed
  * specifier is resolved only when the test that needs it runs.
@@ -341,14 +341,12 @@ describe("the brand link (criterion 4)", () => {
     },
   );
 
-  it('holds the symbol as a decorative <img alt="">', async () => {
+  it("holds no symbol: the wordmark is the brand link's only image", async () => {
     await renderVisit(visit("/", "anonymous"));
-    const { symbols } = brandParts();
+    const { brand, symbols } = brandParts();
 
-    expect(symbols, "one <img> outside the <picture>: the symbol").toHaveLength(
-      1,
-    );
-    expect(symbols[0]).toHaveAttribute("alt", "");
+    expect(symbols, "an <img> outside the <picture>").toHaveLength(0);
+    expect(brand.querySelectorAll("img")).toHaveLength(1);
   });
 
   it('holds the wordmark as a <picture> with a dark <source> and an <img alt="fanwire">', async () => {
@@ -369,14 +367,14 @@ describe("the brand link (criterion 4)", () => {
     // Imported here, not at the top, so a missing file fails this test alone.
     // Whatever the bundler makes of an import — a path or a data: URI — is
     // what the shell's own import of the same file renders.
-    const names = ["symbol.svg", "wordmark-light.svg", "wordmark-dark.svg"];
+    const names = ["wordmark-light.png", "wordmark-dark.png"];
     for (const name of names) {
       expect(
         existsSync(join(SRC_DIR, "assets", "brand", name)),
         `src/assets/brand/${name} must exist`,
       ).toBe(true);
     }
-    const [symbolUrl, lightUrl, darkUrl] = await Promise.all(
+    const [lightUrl, darkUrl] = await Promise.all(
       names.map(
         async (name) =>
           (await importLate<string>(`../assets/brand/${name}`)).default,
@@ -384,9 +382,8 @@ describe("the brand link (criterion 4)", () => {
     );
 
     await renderVisit(visit("/", "anonymous"));
-    const { darkSource, wordmark, symbols } = brandParts();
+    const { darkSource, wordmark } = brandParts();
 
-    expect(symbols[0]?.getAttribute("src")).toBe(symbolUrl);
     expect(wordmark?.getAttribute("src")).toBe(lightUrl);
     expect((darkSource?.getAttribute("srcset") ?? "").trim()).toMatch(
       new RegExp(`^${darkUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`),
