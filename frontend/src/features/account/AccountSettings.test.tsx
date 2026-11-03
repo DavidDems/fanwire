@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { renderSettingsApp } from "../../test/account";
 import { FakeAuthService, testSession } from "../../test/auth";
+import { server } from "../../test/server";
 
 function before(first: HTMLElement, second: HTMLElement): boolean {
   return Boolean(

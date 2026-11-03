@@ -12,7 +12,7 @@ import {
 
 async function openConfirm(auth = new FakeAuthService({ session: testSession() })) {
   const user = userEvent.setup();
-  renderSettingsApp("active", auth);
+  const { account } = renderSettingsApp("active", auth);
   await screen.findByRole("heading", { name: "Account settings" });
   await user.click(screen.getByRole("button", { name: "Deactivate account" }));
   const dialog = await screen.findByRole("alertdialog", { name: /deactivate/i });
@@ -20,7 +20,7 @@ async function openConfirm(auth = new FakeAuthService({ session: testSession() }
   const deactivate = within(dialog).getByRole("button", {
     name: /^deactivate(?: account)?$/i,
   });
-  return { user, dialog, password, deactivate, auth };
+  return { user, dialog, password, deactivate, auth, account };
 }
 
 describe("deactivating an account", () => {

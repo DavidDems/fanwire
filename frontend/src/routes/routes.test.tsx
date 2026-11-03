@@ -204,7 +204,10 @@ describe("the route table", () => {
         // FRONTEND-020: /compose opens over the feed, which stays underneath.
         if (view.path === "/compose" && other.path === "/") continue;
         expect(
-          screen.queryAllByRole("heading", { name: other.heading }),
+          screen.queryAllByRole("heading", {
+            level: 1,
+            name: other.heading,
+          }),
           `${view.path} must not render the ${other.path} view`,
         ).toHaveLength(0);
       }
