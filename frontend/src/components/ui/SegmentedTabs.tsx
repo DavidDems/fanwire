@@ -17,8 +17,17 @@ export interface SegmentedTabsProps {
   /** The selected tab's id. The parent owns it. */
   value: string;
   onChange: (id: string) => void;
-  /** The selected tab's panel. */
-  children?: ReactNode;
+  /**
+   * The selected tab's panel. As a function it is handed the tablist and
+   * places it itself, inside the panel (the records tab puts its view bar
+   * in another bar's row).
+   */
+  children?: ReactNode | ((bar: ReactNode) => ReactNode);
+  /**
+   * Something to set after the tablist, in one row, at the row's end (the
+   * records tab's view bar). The row wraps when the two do not fit.
+   */
+  end?: ReactNode;
 }
 
 /**
@@ -35,6 +44,7 @@ export function SegmentedTabs({
   value,
   onChange,
   children,
+  end,
 }: SegmentedTabsProps) {
   const base = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -56,46 +66,73 @@ export function SegmentedTabs({
     refs.current[target]?.focus();
   }
 
+  const tablist = (
+    <div
+      role="tablist"
+      aria-label={label}
+      className={styles.tablist}
+      onKeyDown={handleKeyDown}
+    >
+      {tabs.map((tab, index) => {
+        const isSelected = tab.id === value;
+        return (
+          <button
+            key={tab.id}
+            ref={(element) => {
+              refs.current[index] = element;
+            }}
+            type="button"
+            role="tab"
+            id={tabId(tab.id)}
+            aria-selected={isSelected}
+            aria-controls={panelId}
+            tabIndex={isSelected ? 0 : -1}
+            className={styles.tab}
+            onClick={() => {
+              onChange(tab.id);
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const bar =
+    end === undefined ? tablist : <SegmentedRow start={tablist} end={end} />;
+  const placed = typeof children === "function";
+
   return (
     <div className={styles.segmented}>
-      <div
-        role="tablist"
-        aria-label={label}
-        className={styles.tablist}
-        onKeyDown={handleKeyDown}
-      >
-        {tabs.map((tab, index) => {
-          const isSelected = tab.id === value;
-          return (
-            <button
-              key={tab.id}
-              ref={(element) => {
-                refs.current[index] = element;
-              }}
-              type="button"
-              role="tab"
-              id={tabId(tab.id)}
-              aria-selected={isSelected}
-              aria-controls={panelId}
-              tabIndex={isSelected ? 0 : -1}
-              className={styles.tab}
-              onClick={() => {
-                onChange(tab.id);
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {placed ? null : bar}
       <div
         role="tabpanel"
         id={panelId}
         aria-labelledby={tabId(value)}
         tabIndex={0}
       >
-        {children}
+        {placed ? children(bar) : children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The row `end` lays out, for a caller that sets a bar beside other things
+ * (the records tab's season picker): `start` at the row's start, `end` at
+ * its end, wrapping to a line of its own when the two do not fit.
+ */
+export function SegmentedRow({
+  start,
+  end,
+}: {
+  start?: ReactNode;
+  end: ReactNode;
+}) {
+  return (
+    <div className={styles.row}>
+      {start}
+      <div className={styles.end}>{end}</div>
     </div>
   );
 }

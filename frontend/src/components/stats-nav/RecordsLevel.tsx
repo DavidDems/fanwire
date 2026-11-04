@@ -1,5 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   recordHoldersQuery,
@@ -72,11 +73,14 @@ export function RecordsLevel({
   adapter,
   onLevel,
   onRecord,
+  barEnd,
 }: {
   level: RecordsLevelData;
   adapter: StatsNavAdapter;
   onLevel: (bar: RecordsBar, q: string) => void;
   onRecord: (id: string) => void;
+  /** Set at the end of the group bar's row (the records tab's view bar). */
+  barEnd?: ReactNode;
 }) {
   const bar = level.group ?? "top";
   const searchId = useId();
@@ -155,6 +159,7 @@ export function RecordsLevel({
         tabs={BARS}
         value={bar}
         onChange={(id) => onLevel(id as RecordsBar, text)}
+        end={barEnd}
       >
         <div className={styles.section}>
           <p aria-live="polite" className="visually-hidden">

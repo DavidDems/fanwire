@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -23,7 +24,7 @@ import {
 } from "../../components/stats-nav/RecordLevel";
 import { RecordsLevel } from "../../components/stats-nav/RecordsLevel";
 import type { RecordsBar } from "../../components/stats-nav/types";
-import { SegmentedTabs } from "../../components/ui/SegmentedTabs";
+import { SegmentedRow, SegmentedTabs } from "../../components/ui/SegmentedTabs";
 import { Leaders } from "./Leaders";
 import { ROUTE_LINKS } from "./links";
 import styles from "./Stats.module.css";
@@ -55,8 +56,12 @@ function href(stack: StatsLevel[]): string {
 }
 
 /**
- * `/stats/records`: a Historical / Seasonal bar over the records navigator
- * or the season's leaders.
+ * `/stats/records`: a Historical / Seasonal bar switching the records
+ * navigator or the season's leaders. The bar sits inside what it switches
+ * (2026-11-04): at the end of the Top records / Team / Player bar's row, of
+ * the season picker's row, or, on a record's level, in a row of its own
+ * above the navigator. The records home shows no one-item breadcrumb, as it
+ * only repeated the heading.
  *
  * **The URL is the state, and this is the navigator's route adapter.**
  * `?view=seasonal` is Seasonal (Historical is the default and is not
@@ -92,29 +97,33 @@ export function RecordsTab() {
           })
         }
       >
-        <div className={styles.tab}>
-          {seasonal ? (
-            <Seasonal
-              picked={params.get("season")}
-              onPick={(season) =>
-                setParams((current) => {
-                  const next = new URLSearchParams(current);
-                  next.set("season", season);
-                  return next;
-                })
-              }
-            />
-          ) : (
-            <Historical
-              recordId={params.get("record") || null}
-              group={bar(params.get("group"))}
-              q={params.get("q") ?? ""}
-              go={(stack, replace, state) =>
-                setParams(search(stack), { replace, state })
-              }
-            />
-          )}
-        </div>
+        {(viewBar) => (
+          <div className={styles.tab}>
+            {seasonal ? (
+              <Seasonal
+                viewBar={viewBar}
+                picked={params.get("season")}
+                onPick={(season) =>
+                  setParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.set("season", season);
+                    return next;
+                  })
+                }
+              />
+            ) : (
+              <Historical
+                viewBar={viewBar}
+                recordId={params.get("record") || null}
+                group={bar(params.get("group"))}
+                q={params.get("q") ?? ""}
+                go={(stack, replace, state) =>
+                  setParams(search(stack), { replace, state })
+                }
+              />
+            )}
+          </div>
+        )}
       </SegmentedTabs>
     </div>
   );
@@ -139,11 +148,14 @@ function bar(group: string | null): RecordsBar {
 }
 
 function Historical({
+  viewBar,
   recordId,
   group,
   q,
   go,
 }: {
+  /** The Historical / Seasonal bar, placed here (see `RecordsTab`). */
+  viewBar: ReactNode;
   recordId: string | null;
   group: RecordsBar;
   q: string;
@@ -190,44 +202,54 @@ function Historical({
   };
 
   return (
-    <StatsNavigator
-      stack={stack}
-      adapter={adapter}
-      levelViews={{
-        name: (level) =>
-          level.kind === "records" ? (
-            groupTitle(level.group)
-          ) : level.kind === "record" ? (
-            <RecordTitle id={level.id} />
-          ) : null,
-        view: (level, { open, replace }) =>
-          level.kind === "records" ? (
-            <RecordsLevel
-              level={level}
-              adapter={adapter}
-              onLevel={(group, q) => replace({ kind: "records", group, q })}
-              onRecord={(id) => open({ kind: "record", id })}
-            />
-          ) : level.kind === "record" ? (
-            <RecordLevel level={level} adapter={adapter} />
-          ) : null,
-      }}
-      open={(level) =>
-        go([...stack, level], false, {
-          recordsFrom: search(stack).toString(),
-        })
-      }
-      replace={(level) => go([...stack.slice(0, -1), level], true)}
-      pop={(toDepth) => go(stack.slice(0, toDepth), false)}
-      back={opened ? () => void navigate(-1) : undefined}
-    />
+    <>
+      {/* A record's level has no group bar: the view bar keeps its own row
+          above the navigator. */}
+      {recordId === null ? null : <SegmentedRow end={viewBar} />}
+      <StatsNavigator
+        stack={stack}
+        rootCrumb={false}
+        adapter={adapter}
+        levelViews={{
+          name: (level) =>
+            level.kind === "records" ? (
+              groupTitle(level.group)
+            ) : level.kind === "record" ? (
+              <RecordTitle id={level.id} />
+            ) : null,
+          view: (level, { open, replace }) =>
+            level.kind === "records" ? (
+              <RecordsLevel
+                level={level}
+                adapter={adapter}
+                barEnd={viewBar}
+                onLevel={(group, q) => replace({ kind: "records", group, q })}
+                onRecord={(id) => open({ kind: "record", id })}
+              />
+            ) : level.kind === "record" ? (
+              <RecordLevel level={level} adapter={adapter} />
+            ) : null,
+        }}
+        open={(level) =>
+          go([...stack, level], false, {
+            recordsFrom: search(stack).toString(),
+          })
+        }
+        replace={(level) => go([...stack.slice(0, -1), level], true)}
+        pop={(toDepth) => go(stack.slice(0, toDepth), false)}
+        back={opened ? () => void navigate(-1) : undefined}
+      />
+    </>
   );
 }
 
 function Seasonal({
+  viewBar,
   picked,
   onPick,
 }: {
+  /** The Historical / Seasonal bar, at the end of the picker's row. */
+  viewBar: ReactNode;
   picked: string | null;
   onPick: (season: string) => void;
 }) {
@@ -236,13 +258,18 @@ function Seasonal({
 
   return (
     <>
-      <div className={styles.controls}>
-        <SeasonSelect
-          season={season}
-          options={seasons.data ?? []}
-          onPick={onPick}
-        />
-      </div>
+      <SegmentedRow
+        start={
+          <div className={styles.controls}>
+            <SeasonSelect
+              season={season}
+              options={seasons.data ?? []}
+              onPick={onPick}
+            />
+          </div>
+        }
+        end={viewBar}
+      />
       {season === null ? (
         <NoSeason seasons={seasons} />
       ) : (
