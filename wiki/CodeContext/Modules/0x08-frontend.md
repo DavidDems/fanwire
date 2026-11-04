@@ -1308,7 +1308,7 @@ picker (`FRONTEND-021`).
   - a breadcrumb, `nav` "Stats path", whose items return to their level,
     with the last one `aria-current="location"`. `rootCrumb={false}` hides
     it while the stack is one level deep, where it only repeats the `h2`
-    (the records home, 2026-11-04);
+    (the records home and the Seasons tab's season level, 2026-11-04);
   - Back, shown only when the stack is deeper than one;
   - the top level's `h2` (`tabIndex -1`) and view.
 - **The levels are data** (`types.ts`): `{ kind: "season", season, conf }`
