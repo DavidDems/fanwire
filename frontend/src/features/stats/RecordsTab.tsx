@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   RECORDS_KEY,
@@ -67,7 +67,9 @@ function href(stack: StatsLevel[]): string {
  * Seasonal, `?season=` is the picked season (the newest by default). An
  * unknown value shows the default. The bars replace the history entry, and
  * switching the view drops the other view's parameters; opening and popping
- * a level push the address of the new stack.
+ * a level push the address of the new stack. A record opened from a card
+ * carries its origin in the history state, and its Back is the history's
+ * Back, to the tab and query it came from (FRONTEND-030).
  *
  * A record level's group is its list's (or the cached catalog's, which says
  * the same), so `?record=` never carries `group`; until the read lands,
@@ -107,12 +109,27 @@ export function RecordsTab() {
               recordId={params.get("record") || null}
               group={bar(params.get("group"))}
               q={params.get("q") ?? ""}
-              go={(stack, replace) => setParams(search(stack), { replace })}
+              go={(stack, replace, state) =>
+                setParams(search(stack), { replace, state })
+              }
             />
           )}
         </div>
       </SegmentedTabs>
     </div>
+  );
+}
+
+/** The history state of a record opened from its card: where it came from. */
+interface Opened {
+  recordsFrom: string;
+}
+
+function isOpened(state: unknown): state is Opened {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    typeof (state as Partial<Opened>).recordsFrom === "string"
   );
 }
 
@@ -130,8 +147,15 @@ function Historical({
   recordId: string | null;
   group: RecordsBar;
   q: string;
-  go: (stack: StatsLevel[], replace: boolean) => void;
+  go: (stack: StatsLevel[], replace: boolean, state?: Opened) => void;
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A record opened from a card knows the address it came from (its tab and
+  // query), so Back returns there, as the browser's Back does; a cold
+  // `?record=` has none and falls back to its group's tab.
+  const opened = recordId !== null && isOpened(location.state);
+
   const cached = useQueryClient()
     .getQueryData<RecordsCatalogOut>(RECORDS_KEY)
     ?.records.find((record) => record.id === recordId)?.group;
@@ -188,9 +212,14 @@ function Historical({
             <RecordLevel level={level} adapter={adapter} />
           ) : null,
       }}
-      open={(level) => go([...stack, level], false)}
+      open={(level) =>
+        go([...stack, level], false, {
+          recordsFrom: search(stack).toString(),
+        })
+      }
       replace={(level) => go([...stack.slice(0, -1), level], true)}
       pop={(toDepth) => go(stack.slice(0, toDepth), false)}
+      back={opened ? () => void navigate(-1) : undefined}
     />
   );
 }
