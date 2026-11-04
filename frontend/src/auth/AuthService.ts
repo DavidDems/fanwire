@@ -67,6 +67,14 @@ export interface AuthService {
   refreshSession(): Promise<AuthSession | null>;
   /** The current ID token, or `null` for an anonymous request. */
   getIdToken(): Promise<string | null>;
+  /** Sign in again as the current account using its own email and this password. */
+  reauthenticate(password: string): Promise<void>;
+  /** Whether the current session's ID token says its email is verified. */
+  emailVerified(): Promise<boolean>;
+  /** Send a new verification code to the signed-in account's email. */
+  requestEmailVerification(): Promise<void>;
+  /** Confirm the signed-in account's email verification code. */
+  confirmEmailVerification(code: string): Promise<void>;
 }
 
 /**

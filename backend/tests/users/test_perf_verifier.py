@@ -87,6 +87,7 @@ def _id_claims(sub: str = "perf-user-1", **overrides) -> dict:
         "iss": users_dependencies.PERF_ISSUER,
         "exp": now + timedelta(hours=2),
         "iat": now,
+        "auth_time": int(now.timestamp()),
     }
     claims.update(overrides)
     return claims
