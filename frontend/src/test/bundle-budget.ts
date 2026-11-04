@@ -45,46 +45,46 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main 4d714ef, with
- * EVENTS-012 folded in (EVENTS-011 and POSTS-008 were folded at b1dfa99;
- * USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19). One tree, so every
- * number is its single measurement. The entry, its stylesheet, and every lazy
- * output → gzip bytes. Measure with the test's build, not `npm run build`:
- * under Vitest the build inlines `test.env`'s `VITE_*` values, which makes the
- * entry about 0.2 kB larger raw.
+ * The base, measured by this test's own build on origin/main 9d0012f, with
+ * FRONTEND-030 folded in (EVENTS-012 was folded at 4d714ef; EVENTS-011 and
+ * POSTS-008 at b1dfa99; USERS-004 and FRONTEND-023, 024, 026 and 027 at
+ * 4795f19). One tree, so every number is its single measurement. The entry,
+ * its stylesheet, and every lazy output → gzip bytes. Measure with the test's
+ * build, not `npm run build`: under Vitest the build inlines `test.env`'s
+ * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 148_564,
-  entryJsRaw: 467_943,
-  entryCssGzip: 5_808,
+  entryJsGzip: 148_665,
+  entryJsRaw: 468_154,
+  entryCssGzip: 5_831,
   lazy: {
     "AuthPage.module": 158,
-    ComposePage: 3_872,
+    ComposePage: 3_883,
     ConfirmPage: 1_053,
-    errors: 242,
-    ForgotPasswordPage: 1_081,
+    errors: 240,
+    ForgotPasswordPage: 1_084,
     format: 430,
-    GamePage: 4_048,
-    HistoryPage: 1_047,
+    GamePage: 4_049,
+    HistoryPage: 1_046,
     NotificationsPage: 1_741,
     PeriodScores: 470,
     PlayerPage: 3_833,
-    PlayerResults: 824,
-    PlayersTab: 578,
-    ProfilePage: 3_120,
-    ProfileSetupPage: 1_411,
-    RecordsTab: 3_848,
-    SeasonsTab: 1_662,
-    SegmentedTabs: 583,
-    SignInPage: 985,
-    SignUpPage: 873,
+    PlayerResults: 822,
+    PlayersTab: 577,
+    ProfilePage: 3_121,
+    ProfileSetupPage: 1_412,
+    RecordsTab: 6_270,
+    SeasonsTab: 1_663,
+    SegmentedTabs: 585,
+    SignInPage: 986,
+    SignUpPage: 875,
     stats: 761,
-    "Stats.module": 375,
-    "StatsNav.module": 457,
-    StatsNavigator: 3_670,
-    StatsPage: 399,
-    StatsPicker: 2_205,
-    VisuallyHidden: 141,
+    "Stats.module": 373,
+    "StatsNav.module": 472,
+    StatsNavigator: 3_681,
+    StatsPage: 400,
+    StatsPicker: 2_206,
+    VisuallyHidden: 139,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 411,
     "css:GamePage.css": 1_081,
@@ -93,8 +93,8 @@ export const BASE = {
     "css:PlayerPage.css": 879,
     "css:ProfilePage.css": 813,
     "css:SegmentedTabs.css": 364,
-    "css:Stats.css": 469,
-    "css:StatsNav.css": 1_311,
+    "css:Stats.css": 490,
+    "css:StatsNav.css": 1_427,
     "css:StatsPage.css": 398,
     "css:StatsPicker.css": 466,
   } as Record<string, number>,
