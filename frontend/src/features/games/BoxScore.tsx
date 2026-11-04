@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
+import { TeamIcon } from "../../components/ui/TeamIcon";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import {
   useComposeLinkState,
@@ -87,7 +88,9 @@ export function BoxScore({ team, boxScore, gameId, canPost }: BoxScoreProps) {
 
   return (
     <section className={styles.team} aria-labelledby={headingId}>
-      <h2 id={headingId}>{team.name}</h2>
+      <h2 id={headingId}>
+        <TeamIcon abbreviation={team.abbreviation} size="sm" /> {team.name}
+      </h2>
 
       {players.length === 0 ? (
         <EmptyState>No box score is available for {team.name}.</EmptyState>

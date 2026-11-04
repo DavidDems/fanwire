@@ -12,6 +12,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
+import { TeamIcon } from "../ui/TeamIcon";
 import { playerName } from "./recordLabels";
 import { RecordValue } from "./RecordValue";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
@@ -177,10 +178,11 @@ function Holder({
   const { team } = entry;
   if (team === null) return <>–</>;
   return (
-    <>
+    <span className={styles.team}>
+      <TeamIcon abbreviation={team.abbreviation} size="sm" />
       {adapter.teamLink === undefined
         ? team.name
         : adapter.teamLink(team.id, entry.season, team.name)}
-    </>
+    </span>
   );
 }

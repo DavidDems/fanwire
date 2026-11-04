@@ -16,6 +16,7 @@ import { SearchInput } from "../ui/SearchInput";
 import { SegmentedTabs } from "../ui/SegmentedTabs";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
+import { TeamIcon } from "../ui/TeamIcon";
 import { LevelLink } from "./LevelLink";
 import { CATEGORY_LABELS, groupTitle, playerName } from "./recordLabels";
 import { PAGE_SIZE, barRecords, queryTerms } from "./recordSearch";
@@ -345,6 +346,11 @@ function Holder({
         />
       </p>
       <p>
+        {holder.player === null && holder.team !== null ? (
+          <>
+            <TeamIcon abbreviation={holder.team.abbreviation} size="sm" />{" "}
+          </>
+        ) : null}
         {name}
         {others > 0 ? ` and ${others} other${others === 1 ? "" : "s"}` : ""}
       </p>

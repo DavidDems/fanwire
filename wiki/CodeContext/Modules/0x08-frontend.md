@@ -102,6 +102,26 @@ that here as usual.
   commit, with the reason.** This thread's later specs carry it forward
   (brief 20, R1).
 
+### Team icons (`FRONTEND-031`)
+
+- **`components/ui/TeamIcon`** takes `abbreviation` (the stored one, BOS),
+  `size` (`sm` 32 px, `lg` 64 px) and an optional `label`: with it the icon is
+  `role="img"` named by it, without it `aria-hidden` (the team is adjacent
+  text). It draws the abbreviation in black on the inner colour inside the
+  outer ring, text and CSS only. An unknown or null abbreviation gets the
+  neutral form, no team colours.
+- **`lib/teamColors.ts`** is the data: `INNER_COLORS` (8) and `OUTER_COLORS`
+  (5) as ordered `{key, name}` lists, `TEAM_COLORS` (one pair per team) and
+  `teamColors()` (the pair, or null). Keys name the `--team-inner-*` /
+  `--team-outer-*` tokens in `tokens.css`, fixed across themes. `USERS-005`'s
+  avatar picker reads the two lists, so they stay exported and in order.
+- **Where:** standings (`SeasonLevel`), `TeamLevel` and the team level's
+  heading in `StatsNavigator`, `TeamSearch`, the `GamePage` header,
+  `BoxScore` headings, team records only in `RecordLevel`/`RecordsLevel`,
+  the feed's `GamePreview` and `PlayerGamePreview`, `StatsPicker` rows, and
+  `PlayerPage`'s "Team" fact (the last team of the newest season line).
+  Dense opponent cells stay text. Nothing reads `TeamOut.logo_url`.
+
 ## Auth (`FRONTEND-002`)
 
 `AuthService` is an interface; `CognitoAuthService` is one implementation of it
