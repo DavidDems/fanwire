@@ -308,7 +308,8 @@ describe("the team level from a standings row", () => {
     expect(selectedTab()).toBe("West");
     expect(shown).toHaveLength(1);
     expect(backButton()).toBeNull();
-    expect(crumbs()).toHaveLength(1);
+    // The season level shows its heading alone (no one-item breadcrumb).
+    expect(screen.queryByRole("navigation", { name: "Stats path" })).toBeNull();
     await waitFor(() => {
       const heading = focusedHeading();
       expect(heading, "focus is on no heading").not.toBeNull();
