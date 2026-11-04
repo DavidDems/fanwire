@@ -1,0 +1,95 @@
+/*
+ * FRONTEND-031: a team's icon. The abbreviation in black on the inner
+ * colour, a ring of the outer colour, and a 1 px --color-border hairline
+ * outside the ring, so a dark ring still reads as one on the dark surface.
+ * Unknown teams keep the neutral form: surface-muted, border, text.
+ */
+.icon {
+  --team-fill: var(--color-surface-muted);
+  --team-ring: var(--color-border);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--team-ring);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
+  background-color: var(--team-fill);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.team {
+  color: var(--team-outer-black);
+}
+
+.sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.6875rem;
+}
+
+.lg {
+  width: 4rem;
+  height: 4rem;
+  border-width: 3px;
+  font-size: 1.375rem;
+}
+
+.in-gold {
+  --team-fill: var(--team-inner-gold);
+}
+.in-orange {
+  --team-fill: var(--team-inner-orange);
+}
+.in-red {
+  --team-fill: var(--team-inner-red);
+}
+.in-green {
+  --team-fill: var(--team-inner-green);
+}
+.in-sky {
+  --team-fill: var(--team-inner-sky);
+}
+.in-lavender {
+  --team-fill: var(--team-inner-lavender);
+}
+.in-silver {
+  --team-fill: var(--team-inner-silver);
+}
+.in-teal {
+  --team-fill: var(--team-inner-teal);
+}
+
+.out-blue {
+  --team-ring: var(--team-outer-blue);
+}
+.out-crimson {
+  --team-ring: var(--team-outer-crimson);
+}
+.out-black {
+  --team-ring: var(--team-outer-black);
+}
+.out-purple {
+  --team-ring: var(--team-outer-purple);
+}
+.out-forest {
+  --team-ring: var(--team-outer-forest);
+}
+
+/* A20: forced colours drop the fill and the shadow; the ring stays a line. */
+@media (forced-colors: active) {
+  .icon {
+    border: 2px solid CanvasText;
+  }
+
+  .lg {
+    border-width: 3px;
+  }
+}

@@ -12,6 +12,7 @@ import { InlineAlert } from "../ui/InlineAlert";
 import { SegmentedTabs } from "../ui/SegmentedTabs";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
+import { TeamIcon } from "../ui/TeamIcon";
 import { formatPercentage } from "../../features/games/format";
 import { LevelLink } from "./LevelLink";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
@@ -172,17 +173,23 @@ function StandingsTables({
               {rows.map(({ row, division }) => (
                 <tr key={row.team.id}>
                   <th scope="row" className={styles.name}>
-                    <LevelLink
-                      level={{
-                        kind: "team",
-                        season: level.season,
-                        teamId: row.team.id,
-                      }}
-                      adapter={adapter}
-                      onGo={() => onTeam(row.team.id)}
-                    >
-                      {row.team.name}
-                    </LevelLink>
+                    <span className={styles.team}>
+                      <TeamIcon
+                        abbreviation={row.team.abbreviation}
+                        size="sm"
+                      />
+                      <LevelLink
+                        level={{
+                          kind: "team",
+                          season: level.season,
+                          teamId: row.team.id,
+                        }}
+                        adapter={adapter}
+                        onGo={() => onTeam(row.team.id)}
+                      >
+                        {row.team.name}
+                      </LevelLink>
+                    </span>
                   </th>
                   <td>{row.wins}</td>
                   <td>{row.losses}</td>

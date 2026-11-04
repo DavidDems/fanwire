@@ -1,6 +1,7 @@
 import { useId, useState, type KeyboardEvent } from "react";
 
 import { Field, describeField } from "../../components/FormField";
+import { TeamIcon } from "../../components/ui/TeamIcon";
 import type { TeamOut } from "../../api/stats";
 import styles from "./Stats.module.css";
 
@@ -146,7 +147,11 @@ export function TeamSearch({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(team)}
             >
-              {team.name}{" "}
+              {/* The icon with the name, at the start; the abbreviation at the end. */}
+              <span>
+                <TeamIcon abbreviation={team.abbreviation} size="sm" />{" "}
+                {team.name}
+              </span>{" "}
               <span className={styles.muted}>{team.abbreviation}</span>
             </li>
           ))}

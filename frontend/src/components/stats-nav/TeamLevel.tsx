@@ -16,6 +16,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
+import { TeamIcon } from "../ui/TeamIcon";
 import { formatGameDate } from "../../features/games/format";
 import { formatGameType, formatRecord } from "./labels";
 import { LevelLink } from "./LevelLink";
@@ -42,6 +43,30 @@ export function TeamName({
     ?.find((team) => team.id === teamId)?.name;
   const teamSeason = useQuery(teamSeasonQuery(teamId, season));
   return <>{cached ?? teamSeason.data?.team.name ?? "Team"}</>;
+}
+
+/**
+ * The team's icon for its level's heading, beside its name (so hidden):
+ * the abbreviation from the same reads as `TeamName`, the neutral form
+ * until one has it.
+ */
+export function TeamNameIcon({
+  teamId,
+  season,
+}: {
+  teamId: number;
+  season: string;
+}) {
+  const cached = useQueryClient()
+    .getQueryData<TeamOut[]>(TEAMS_KEY)
+    ?.find((team) => team.id === teamId)?.abbreviation;
+  const teamSeason = useQuery(teamSeasonQuery(teamId, season));
+  return (
+    <TeamIcon
+      abbreviation={cached ?? teamSeason.data?.team.abbreviation}
+      size="sm"
+    />
+  );
 }
 
 /**
