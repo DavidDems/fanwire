@@ -194,7 +194,7 @@ constants (§9), not tokens.
 |---|---|---|
 | `--font-sans` | see `typography.md` | System stack |
 | `--font-mono` | `ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace` | Not used in v1 UI; listed so no unit invents one |
-| `--font-size-xs` | `0.75rem` (12 px) | Badges only; the floor |
+| `--font-size-xs` | `0.75rem` (12 px) | Badges only; the floor (one exception: `TeamIcon` `sm`, `components.md` §4) |
 | `--font-size-sm` | `0.875rem` (14 px) | Metadata, hints, counts |
 | `--font-size-md` | `1rem` (16 px) | Body, inputs (16 px stops iOS zoom-on-focus) |
 | `--font-size-lg` | `1.125rem` (18 px) | Card headings, `h2` |
@@ -204,7 +204,7 @@ constants (§9), not tokens.
 | `--line-height-body` | `1.5` | Body text |
 | `--font-weight-regular` | `400` | |
 | `--font-weight-semibold` | `600` | Headings, usernames, buttons |
-| `--font-weight-bold` | `700` | Score figures only |
+| `--font-weight-bold` | `700` | Score figures, `TeamIcon` abbreviation |
 | `--space-1` … `--space-8` | `0.25rem`, `0.5rem`, `0.75rem`, `1rem`, `1.5rem`, `2rem`, `3rem`, `4rem` | 4, 8, 12, 16, 24, 32, 48, 64 px |
 | `--radius-sm` | `4px` | Badges, small previews |
 | `--radius-md` | `8px` | Cards, buttons |
@@ -240,3 +240,15 @@ Write them as `@media (min-width: 40em)` (mobile-first), never `max-width`.
 | `--z-dropdown` | `20` | Mention suggestions |
 | `--z-toast` | `30` | Reserved; no toast in v1 (`components.md`) |
 | `--z-skip-link` | `40` | The skip link when focused |
+
+## 10. Team colours (`FRONTEND-031`)
+
+Declared on `:root` outside any theme block: a team's colours are the same in
+both themes. `TeamIcon.module.css` reads them by name (`components.md` §4,
+Team identity); the palette order and the 30-team mapping live in
+`frontend/src/lib/teamColors.ts`.
+
+| Token | Keys and values |
+|---|---|
+| `--team-inner-<key>` (fill, black text) | gold `#ffd23f`, orange `#f58a1f`, red `#fa7b82`, green `#7cc24b`, sky `#4fa8f7`, lavender `#a98de6`, silver `#d3d8dc`, teal `#26d0c0` |
+| `--team-outer-<key>` (ring) | blue `#0a4a9a`, crimson `#9b0f26`, black `#0a0a0a`, purple `#6a1b8f`, forest `#0b5d2e` |
