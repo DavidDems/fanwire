@@ -122,6 +122,7 @@ export function SeasonsTab() {
         <StatsNavigator
           stack={stack}
           adapter={adapter}
+          rootCrumb={false}
           open={(level) => setParams(search([...stack, level]))}
           replace={(level) =>
             setParams(search([...stack.slice(0, -1), level]), {
