@@ -148,7 +148,9 @@ describe("the URL decides the tab", () => {
     expect(tabNav().contains(tablists[0])).toBe(false);
   });
 
-  it("on Records the tablists are the Historical / Seasonal and Top records / Team / Player bars, outside the route tabs", async () => {
+  // Since 2026-11-04 the view bar shares the group bar's row, after it
+  // (RecordsTabLayout.test.tsx), so the group bar comes first.
+  it("on Records the tablists are the Top records / Team / Player and Historical / Seasonal bars, outside the route tabs", async () => {
     renderAppAt("/stats/records", "anonymous");
     await recordsTabShown();
     await screen.findByRole("tab", { name: "Player" });
@@ -163,8 +165,8 @@ describe("the URL decides the tab", () => {
           .map((t) => t.textContent?.trim()),
       ),
     ).toEqual([
-      ["Historical", "Seasonal"],
       ["Top records", "Team", "Player"],
+      ["Historical", "Seasonal"],
     ]);
     for (const list of tablists) expect(tabNav().contains(list)).toBe(false);
   });
