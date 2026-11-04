@@ -1,22 +1,36 @@
 import type {
+  RecordCategory,
   RecordEntryOut,
-  RecordGroup,
   RecordValueKind,
 } from "../../api/records";
 import { formatAverage, formatPercentage } from "../../features/games/format";
+import type { RecordsBar } from "./types";
 
 /** Text forms the records levels share (FRONTEND-019, EVENTS-011). */
 
 type PlayerOut = NonNullable<RecordEntryOut["player"]>;
 
-/** A records level's name: its group's, or "Records" before it is known. */
-export function groupTitle(group: RecordGroup | null): string {
+/** A records level's name: its bar's, or "Records" before it is known. */
+export function groupTitle(group: RecordsBar | null): string {
   return group === null
     ? "Records"
-    : group === "team"
-      ? "Team records"
-      : "Player records";
+    : group === "top"
+      ? "Top records"
+      : group === "team"
+        ? "Team records"
+        : "Player records";
 }
+
+/** A card's category line (FRONTEND-030): "Team franchise", "Player playoffs". */
+export const CATEGORY_LABELS: Record<RecordCategory, string> = {
+  "team-franchise": "Team franchise",
+  "team-season": "Team season",
+  "team-game": "Team game",
+  "player-game": "Player game",
+  "player-season": "Player season",
+  "player-career": "Player career",
+  "player-playoffs": "Player playoffs",
+};
 
 /** A shooting fraction (0 to 1) as a percentage, one place: `57.1%`. */
 export function formatShootingShare(value: number): string {
