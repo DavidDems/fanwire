@@ -134,6 +134,22 @@ is `hand`.
 | 9 | `USERS-008` | Delete my data (after a Director PR for the role boundary) |
 | 10 | `FRONTEND-032` | The Invite button |
 
+## Deferred account security and recovery (after Launch adjustments)
+
+These are future hand-run units, outside the ten-unit launch sequence. `USERS-007`
+does not implement password recovery or new-device verification.
+
+| Order | Task | What |
+|---|---|---|
+| 1 | `AUTH-001` | Secure password-reset link for verified and unverified accounts; independent of device work. |
+| 2 | `AUTH-002` | Per-user remembered-device registry; requires a separate Director policy/scope prerequisite for its migration path. |
+| 3 | `AUTH-003` | Dismissible verification prompt for unverified users and pre-session email step-up for verified users on new devices; depends on `AUTH-002`. |
+
+The reset flow requires a separately approved Cognito plan/password-history and
+email-sender/IAM design. New-device email codes are lower assurance and require
+an architecture that withholds usable tokens until the challenge succeeds. See
+each task brief for security constraints and approval gates.
+
 ## Frontend
 
 | Item | Mode | Task | Where it came from | Notes |
