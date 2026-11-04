@@ -15,13 +15,14 @@ import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { Button, buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
+import { Avatar } from "../components/ui/Avatar";
+import { Menu } from "../components/ui/Menu";
 import {
   BellIcon,
   ChartColumnIcon,
   CirclePlusIcon,
   HouseIcon,
   SearchIcon,
-  UserIcon,
   type IconProps,
 } from "../components/ui/icons";
 import styles from "./AppLayout.module.css";
@@ -93,16 +94,9 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * never changes shape between breakpoints, because jsdom applies no media
  * queries and a second nav would double every nav link the tests look for.
  *
- * "Your profile" is built from the signed-in user's id, because `/profile/:userId`
- * has no fixed address for "me" and without this link there is no way to reach
- * the own-profile variant from inside the app. It is rendered only for a visitor
- * who has a profile: an anonymous one has no id to link to, and a signed-in one
- * whose `GET /users/me` is a 404 has no profile row yet — the state
- * `RequireNewProfile` exists for, and `/profile/undefined` is the bug it
- * prevents — nor for a deactivated account, whose profile is hidden. Both come
- * from `useAccount()`, which reads the one shared profile query gated on the
- * session exactly as the guards are, so the shell asks the API nothing until
- * somebody signs in.
+ * The account menu is rendered only for an active profile. Its own-profile
+ * destination uses the id from the one shared account query; anonymous,
+ * profile-less and deactivated visitors have no menu or undefined profile URL.
  *
  * **The column** is `--content-max` wide on every route but `/stats/records`,
  * where it is `--content-max-wide` (`FRONTEND-030`), chosen here from the
@@ -131,7 +125,8 @@ export function AppLayout() {
   const { status } = useAuth();
   const account = useAccount();
   const signOut = useSignOut();
-  const ownUserId = account.status === "active" ? account.profile.id : null;
+  const accountIsActive = account.status === "active";
+  const ownUserId = accountIsActive ? account.profile.id : null;
   const onSignInPage = useMatch("/sign-in") !== null;
   // The records home's cards sit three to a row in a wider column (FRONTEND-030).
   const wide = useMatch("/stats/records") !== null;
@@ -174,15 +169,29 @@ export function AppLayout() {
               Icon={ChartColumnIcon}
               alsoCurrentOn={["/players/*"]}
             />
-            {ownUserId === null ? null : (
-              <NavItem
-                to={`/profile/${ownUserId}`}
-                label="Your profile"
-                Icon={UserIcon}
-              />
-            )}
           </ul>
         </nav>
+        {!accountIsActive ? null : (
+          <Menu
+            label="Account menu"
+            buttonClassName={styles.accountMenuButton}
+            icon={
+              <Avatar
+                username={account.profile.username}
+                size="sm"
+                avatarKey={account.profile.profile_avatar_key}
+                pictureKey={account.profile.profile_picture_key}
+              />
+            }
+            items={(
+              [
+                ["Profile", `/profile/${account.profile.id}`],
+                ["History", "/history"],
+                ["Account settings", "/settings"],
+              ] as const
+            ).map(([label, to]) => ({ label, onSelect: () => navigate(to) }))}
+          />
+        )}
         {status === "anonymous" && !onSignInPage ? (
           <Link
             to="/sign-in"

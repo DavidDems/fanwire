@@ -121,7 +121,7 @@ def _repost(session, author: Person, original_id: int, text: str | None = None) 
 
 def _as(app, person: Person) -> None:
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub=person.sub)
+        VerifiedIdentity(sub=person.sub, auth_time=int(datetime.now(UTC).timestamp()))
     )
 
 

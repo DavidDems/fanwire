@@ -95,13 +95,12 @@ export function linksTo(
 }
 
 /**
- * Resolve once the shell shows a signed-in member ("Your profile" in the
- * primary nav): by then `useAuth()` says `authenticated`, so an absent link is
- * absent because of the rule, not because the session had not loaded yet.
+ * Resolve once the shell offers the signed-in account menu: by then
+ * `useAuth()` says `authenticated`, so an absent account control is absent
+ * because of the rule, not because the session had not loaded yet.
  */
 export async function signedInShown(): Promise<void> {
-  const nav = await screen.findByRole("navigation", { name: "Primary" });
-  await within(nav).findByRole("link", { name: /^your profile$/i });
+  await screen.findByRole("button", { name: "Account menu" });
 }
 
 /**

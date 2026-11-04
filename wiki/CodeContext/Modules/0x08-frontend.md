@@ -26,8 +26,9 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query, and `account.ts` (`useAccount()`, the one account-state hook, and the deactivate / recover / sign-out actions, `FRONTEND-012`) |
-| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; it adds the active-profile Account menu described below; Sign in shows for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
+| `src/features/account/` | `AccountSettings.tsx` at `/settings` (`RequireAuth`): email verification, the disabled notifications setting and password-reauthenticated deactivation (`USERS-006`) |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
 | `src/features/thread/` | `/posts/:postId` — the thread modal: the root, the reply composer, the direct replies (`FRONTEND-010`) |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
@@ -150,7 +151,8 @@ differs, code does not, and `App` is the single place that chooses it.
   its invalidation before navigating: `staleTime` is 30s, so the 404 that sent
   the user to the form is otherwise still cached and still believed, and the
   guard bounces them straight back. A guard never requests it without a session.
-- **Protected routes are `/compose` and `/notifications`.** `/`, `/search` and
+- **Protected routes include `/compose`, `/notifications`, `/history` and
+  `/settings`.** `/`, `/search` and
   `/profile/:userId` stay public — the guest feed and profile views are read
   paths ([[0x01-users]]), and a guard on either is a regression. `/create-profile`
   is behind `RequireNewProfile`, which is what stops it being reachable by
@@ -176,9 +178,9 @@ differs, code does not, and `App` is the single place that chooses it.
 ## Profile and follow (`FRONTEND-003`)
 
 `/profile/:userId` is **one public route with two variants**, chosen by
-comparing the id in the path to the signed-in user's. There is no `/settings`
-route: settings are a section of a page the user already has an address for, and
-a second route would be a second place to decide who is allowed to see it.
+comparing the id in the path to the signed-in user's. The own-profile form edits
+profile fields; account lifecycle controls live on the separate, guarded
+`/settings` page.
 
 - **Date of birth is private, and the component tree is what guarantees it.**
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
@@ -1473,10 +1475,18 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   `RequireAuth` shows `RecoveryScreen` in the route's place (what recovery
   restores, and that individually deleted posts stay deleted), so recovering
   renders the route asked for; `RequireNewProfile` sends it to `/`.
-- **Deactivate** is the own-profile settings card's last section, "Account"
-  (outside the form): a confirm, then `DELETE /users/me`; on 204 the profile
-  entry is read again and every other cache entry is reset. The session stays.
-  **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
+- **The account menu** in `AppLayout` is for active profiles only. Its Avatar
+  button opens `Menu` with Profile (`/profile/<own id>`), History (`/history`)
+  and Account settings (`/settings`).
+- **Account settings** (`features/account/AccountSettings.tsx`) is a
+  `RequireAuth` page ordered Verify this account, Notifications, Deactivate
+  account. Code confirmation refreshes the session before reading verified
+  state; Verified is disabled. Notifications stays checked and disabled, with
+  no request. Deactivation reauthenticates the current password before
+  `DELETE /users/me`; a wrong password makes no request. The server recent-auth
+  rule is in [[0x01-users]]. On 204, caches reset and focus moves to the
+  deactivated banner; the session stays signed in for recovery.
+- **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
   every query is invalidated. **Sign out** from the banner also leaves the
   cache empty of that account, as the header's does (next entry).
 - **The header's Sign out** (`FRONTEND-027`): a secondary `Button` in

@@ -89,6 +89,16 @@ beforeEach(() => {
 });
 
 describe("the settings form", () => {
+  it("keeps the profile form but has no Account section or deactivation action", async () => {
+    renderSettings();
+
+    expect(await description()).toHaveValue(OWN_DESCRIPTION);
+    expect(screen.queryByRole("heading", { name: /^account$/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /deactivate account/i }),
+    ).toBeNull();
+  });
+
   it("prefills from the caller's own profile", async () => {
     renderSettings();
 

@@ -92,6 +92,7 @@ def main(argv: list[str]) -> int:
                 "aud": PERF_AUDIENCE,
                 "iss": PERF_ISSUER,
                 "iat": now,
+                "auth_time": int(now.timestamp()),
                 "exp": now + TOKEN_LIFETIME,
             },
             private_key,

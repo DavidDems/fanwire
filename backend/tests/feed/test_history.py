@@ -18,6 +18,8 @@ from app.users.auth import FakeTokenVerifier, VerifiedIdentity
 from app.users.dependencies import get_token_verifier
 from app.users.models import User
 
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+
 
 @pytest.fixture()
 def engine(postgres_url):
@@ -59,7 +61,7 @@ def client_for(factory, viewer):
 
     app.dependency_overrides[get_session] = session_override
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub=viewer.cognito_sub)
+        VerifiedIdentity(sub=viewer.cognito_sub, auth_time=RECENT_AUTH_TIME)
     )
     return TestClient(app, headers={"Authorization": "Bearer history-test-token"})
 

@@ -33,6 +33,10 @@ const SURFACE = [
   "confirmForgotPassword",
   "refreshSession",
   "getIdToken",
+  "reauthenticate",
+  "emailVerified",
+  "requestEmailVerification",
+  "confirmEmailVerification",
 ] as const;
 
 describe("the AuthService interface", () => {

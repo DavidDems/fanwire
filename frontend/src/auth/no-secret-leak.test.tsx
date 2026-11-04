@@ -16,7 +16,7 @@
  * `config`, not from a literal here, so this keeps testing the real thing if
  * `vite.config.ts`'s `test.env` ever changes.
  */
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { Route, Routes } from "react-router-dom";
@@ -38,11 +38,14 @@ import { ForgotPasswordPage } from "./ForgotPasswordPage";
 import { ProfileSetupPage } from "./ProfileSetupPage";
 import { SignInPage } from "./SignInPage";
 import { SignUpPage } from "./SignUpPage";
+import { AccountSettings } from "../features/account/AccountSettings";
+import { meStub } from "../test/users";
 
 const NEVER_PRINTED: ReadonlyArray<readonly [string, string]> = [
   ["the Cognito user pool id", config.cognitoUserPoolId],
   ["the Cognito app client id", config.cognitoClientId],
   ["the id token", TEST_ID_TOKEN],
+  ["the password entered for deactivation", TEST_PASSWORD],
 ];
 
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
@@ -160,6 +163,32 @@ describe("the auth pages print neither the pool ids nor a token", () => {
     renderPage(<ProfileSetupPage />, new FakeAuthService({ session: testSession() }));
 
     await screen.findByRole("option", { name: "Toronto Raptors" });
+
+    expectNothingLeaked();
+  });
+
+  it("does not leak the deactivation password when reauthentication fails", async () => {
+    const user = userEvent.setup();
+    server.use(meStub().handler);
+    const auth = new FakeAuthService({ session: testSession() }).failWith(
+      "reauthenticate",
+      "NotAuthorizedException",
+      "Incorrect password.",
+    );
+    renderPage(<AccountSettings />, auth);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Deactivate account" }),
+    );
+    const dialog = await screen.findByRole("alertdialog", {
+      name: /deactivate/i,
+    });
+    await user.type(
+      within(dialog).getByLabelText(/password/i),
+      TEST_PASSWORD,
+    );
+    await user.click(within(dialog).getByRole("button", { name: /^deactivate$/i }));
+    await within(dialog).findByRole("alert");
 
     expectNothingLeaked();
   });
