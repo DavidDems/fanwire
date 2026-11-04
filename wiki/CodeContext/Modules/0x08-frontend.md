@@ -1306,7 +1306,9 @@ picker (`FRONTEND-021`).
 - **Its home is `src/components/stats-nav/`**, outside `features/`, so
   compose may use it. `StatsNavigator` renders a **stack of levels**:
   - a breadcrumb, `nav` "Stats path", whose items return to their level,
-    with the last one `aria-current="location"`;
+    with the last one `aria-current="location"`. `rootCrumb={false}` hides
+    it while the stack is one level deep, where it only repeats the `h2`
+    (the records home, 2026-11-04);
   - Back, shown only when the stack is deeper than one;
   - the top level's `h2` (`tabIndex -1`) and view.
 - **The levels are data** (`types.ts`): `{ kind: "season", season, conf }`
@@ -1370,6 +1372,12 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
   and its in-page Back is the history's Back, to that tab and query; a cold
   `?record=` falls back to its group's tab with no query. The breadcrumb's
   first item stays the record's group tab.
+- **Where the view bar sits** (by hand, 2026-11-04): inside the panel it
+  switches. `SegmentedTabs` hands it to function children, and it goes to
+  the end of the Top records / Team / Player bar's row (`end`), of the
+  season picker's row on Seasonal (`SegmentedRow`), or into a row of its own
+  above the navigator on a record's level. The row wraps on a phone, the
+  view bar on its own line at the end. `RecordsTabLayout.test.tsx` pins it.
 - **Two navigator levels**, `{ kind: "records", group, q }` (`group` a
   `RecordsBar`, `"top"` or a group) and
   `{ kind: "record", id }` (`types.ts`), so the breadcrumb, Back and the
