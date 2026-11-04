@@ -43,6 +43,11 @@ export interface StatsNavigatorProps {
    */
   back?(): void;
   adapter: StatsNavAdapter;
+  /**
+   * False hides the breadcrumb while the stack is one level deep, where it
+   * only repeats the heading (the records home). Deeper stacks keep it.
+   */
+  rootCrumb?: boolean;
 }
 
 /**
@@ -86,6 +91,7 @@ export function StatsNavigator({
   adapter,
   levelViews,
   selectMode = false,
+  rootCrumb = true,
 }: StatsNavigatorProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
@@ -141,41 +147,45 @@ export function StatsNavigator({
 
   return (
     <>
-      <div className={styles.bar}>
-        <nav aria-label="Stats path">
-          <ol>
-            {stack.map((level, index) => (
-              <li key={index}>
-                {index === stack.length - 1 ? (
-                  <span aria-current="location">
-                    {levelName(level, levelViews)}
-                  </span>
-                ) : (
-                  <LevelLink
-                    level={level}
-                    adapter={adapter}
-                    onGo={() => move(() => pop(index + 1))}
-                  >
-                    {levelName(level, levelViews)}
-                  </LevelLink>
-                )}
-              </li>
-            ))}
-          </ol>
-        </nav>
-        {stack.length > 1 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              move(() => (back === undefined ? pop(stack.length - 1) : back()))
-            }
-          >
-            Back
-          </Button>
-        ) : null}
-      </div>
+      {!rootCrumb && stack.length === 1 ? null : (
+        <div className={styles.bar}>
+          <nav aria-label="Stats path">
+            <ol>
+              {stack.map((level, index) => (
+                <li key={index}>
+                  {index === stack.length - 1 ? (
+                    <span aria-current="location">
+                      {levelName(level, levelViews)}
+                    </span>
+                  ) : (
+                    <LevelLink
+                      level={level}
+                      adapter={adapter}
+                      onGo={() => move(() => pop(index + 1))}
+                    >
+                      {levelName(level, levelViews)}
+                    </LevelLink>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
+          {stack.length > 1 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                move(() =>
+                  back === undefined ? pop(stack.length - 1) : back(),
+                )
+              }
+            >
+              Back
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       <h2 ref={heading} tabIndex={-1}>
         {top.kind === "season" ? (

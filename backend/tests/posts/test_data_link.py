@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -63,6 +63,9 @@ MISSING = 987_654_321  # no game, box-score line or player has this id
 class _PassThrough(ModerationCheck):
     def check(self, context: ModerationContext) -> None:
         pass
+
+
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
 
 
 @pytest.fixture()
@@ -170,7 +173,7 @@ def targets(session_factory, app) -> Targets:
             regular_only_player=regular_only.id,
         )
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub=found.author_sub)
+        VerifiedIdentity(sub=found.author_sub, auth_time=RECENT_AUTH_TIME)
     )
     return found
 

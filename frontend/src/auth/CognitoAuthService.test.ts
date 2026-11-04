@@ -34,6 +34,10 @@ const SURFACE = [
   "confirmForgotPassword",
   "refreshSession",
   "getIdToken",
+  "reauthenticate",
+  "emailVerified",
+  "requestEmailVerification",
+  "confirmEmailVerification",
 ] as const;
 
 /** Every URL the suite saw while the callback ran. */
