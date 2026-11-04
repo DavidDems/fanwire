@@ -148,7 +148,7 @@ describe("the URL decides the tab", () => {
     expect(tabNav().contains(tablists[0])).toBe(false);
   });
 
-  it("on Records the tablists are the Historical / Seasonal and Team / Player bars, outside the route tabs", async () => {
+  it("on Records the tablists are the Historical / Seasonal and Top records / Team / Player bars, outside the route tabs", async () => {
     renderAppAt("/stats/records", "anonymous");
     await recordsTabShown();
     await screen.findByRole("tab", { name: "Player" });
@@ -164,7 +164,7 @@ describe("the URL decides the tab", () => {
       ),
     ).toEqual([
       ["Historical", "Seasonal"],
-      ["Team", "Player"],
+      ["Top records", "Team", "Player"],
     ]);
     for (const list of tablists) expect(tabNav().contains(list)).toBe(false);
   });

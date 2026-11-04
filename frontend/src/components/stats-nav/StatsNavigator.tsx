@@ -36,6 +36,12 @@ export interface StatsNavigatorProps {
   replace(level: StatsLevel): void;
   /** Keep the first `toDepth` levels. */
   pop(toDepth: number): void;
+  /**
+   * The Back control, when the caller knows better than the stack where it
+   * returns (Records: the tab and query a card was opened from). Without it,
+   * Back pops one level.
+   */
+  back?(): void;
   adapter: StatsNavAdapter;
 }
 
@@ -76,6 +82,7 @@ export function StatsNavigator({
   open,
   replace,
   pop,
+  back,
   adapter,
   levelViews,
   selectMode = false,
@@ -161,7 +168,9 @@ export function StatsNavigator({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => move(() => pop(stack.length - 1))}
+            onClick={() =>
+              move(() => (back === undefined ? pop(stack.length - 1) : back()))
+            }
           >
             Back
           </Button>

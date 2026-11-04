@@ -1336,24 +1336,51 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
 
   | Address | Shows |
   |---|---|
-  | `/stats/records` | Historical, Team cards |
-  | `?group=player` | Historical, Player cards |
+  | `/stats/records` | Historical, Top records (`FRONTEND-030`) |
+  | `?group=team`, `?group=player` | Historical, that group's library |
+  | `?q=<query>` (with or without `group`) | that bar's search |
   | `?record=<id>` | that record's ranked list |
   | `?view=seasonal[&season=<s>]` | the season's leaders (newest by default) |
 
-  Defaults are never written, and an unknown value is the default. Both bars
-  replace the history entry; switching the view drops `group`, `record` and
-  `season`. Opening and popping a level push.
-- **Two navigator levels**, `{ kind: "records", group }` and
+  Defaults are never written (Team is, since Top records became the
+  default), and an unknown value is the default. Both bars and typing in the
+  search replace the history entry; the group bar keeps `q`; switching the
+  view drops `group`, `q`, `record` and `season`. Opening and popping a level
+  push. A record opened from a card carries its origin in the history state,
+  and its in-page Back is the history's Back, to that tab and query; a cold
+  `?record=` falls back to its group's tab with no query. The breadcrumb's
+  first item stays the record's group tab.
+- **Two navigator levels**, `{ kind: "records", group, q }` (`group` a
+  `RecordsBar`, `"top"` or a group) and
   `{ kind: "record", id }` (`types.ts`), so the breadcrumb, Back and the
   focus rule are the navigator's. Every use of a level narrows by `kind`.
-  - `RecordsLevel`: a "Record group" bar (Team / Player), the data window
-    ("Since 2003-04, through 2026-27") and the cards. A card's one control is
+  - `RecordsLevel` (the records home, `FRONTEND-030`): a "Search records"
+    box, a "Record group" bar (Top records / Team / Player), the data window
+    ("Since 2003-04, through 2026-27") and the cards, in a list named by the
+    bar. Top records with no query is the catalog's records with a
+    `featured_rank`, in that order; Team and Player are the group's whole
+    library in catalog order. A query (`recordSearch.ts`) needs every
+    whitespace-separated term, case-insensitive, somewhere in the title,
+    category, group, unit or keywords, and searches the whole library on Top
+    records and the group's on a group, in the browser over the cached
+    catalog. 24 cards a page, Load more adds 24 (focus moves to the first new
+    card); each page's holders are one read with its ids sorted, asked once
+    the box has rested 300 ms, so a page already read asks nothing. The box
+    keeps its own text (a keystroke never waits on the router). A card shows
+    its title and category line ("Team franchise", "Player playoffs") from
+    the catalog at once; its `.holder` area is a fixed four lines' room (in em),
+    the value and when clamped to one line and the name to two (clipped on
+    screen only), so a landing holder moves nothing. At 200% text the bars
+    wrap and View all wraps under the title. A failed page is one alert, its cards keeping
+    titles and links. No match is an `EmptyState` naming the query with
+    "Clear search". The match count is a visually hidden polite live region,
+    present from the start, and says the settled query's count only. A card's
+    one control is
     "View all" (named "View all: <title>", a real `?record=` link), its
     `::after` stretched over the card so the whole card is the hit area; the
     holder is plain text. A card with no qualifying holder keeps "Nothing
     qualifies yet." and adds the shared decorative court / scoreboard art.
-    While the summary loads, skeleton cards hold the place.
+    While the catalog loads, skeleton cards hold the place.
   - `RecordLevel`: the rule, "Since <season>" and the whole list (up to 100)
     in one `ScrollTable`, with the API's ranks as given; a column the record
     has no value for is left out. A season record notes that it ranks the
@@ -1368,7 +1395,9 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     count alone when `pct` is null; a card puts its unit after the count
     (`14 threes (58.3%)`). The parenthesis is `.share`, `--color-text-muted`
     (4.5:1 on the card's surface and hover surface in both themes). A
-    `count` is the value alone, as before.
+    `count` is the value alone, as before. `shot_pct` (`FRONTEND-030`) is
+    `45.4%` then a muted `(402/886)`, with no unit on the card; `average` is
+    one decimal, a card adding its unit (`31.0 points per game`).
   - **The record level's group is its list's.** `?record=` never carries
     `group`; until the list or cached summary arrives, the id's prefix
     supplies the group (`FRONTEND-021`, R30). Unknown prefixes retain the
@@ -1378,15 +1407,23 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
   a team is plain text. `ROUTE_LINKS` gives it through `teamHref`.
 - **`SeasonSelect`** (`components/stats-nav/`) is the season picker and its
   loading, error and empty states, shared by Seasons, Seasonal and the picker.
-- **The reads are `src/api/records.ts`**: `recordsQuery()` and
-  `recordQuery(id)`, both `staleTime: Infinity` (the routes are cached five
+- **The wide column** (`FRONTEND-030`): `AppLayout` gives `main` the
+  `.wide` class, `max-width: var(--content-max-wide)` (64rem, `tokens.css`),
+  when the route matches `/stats/records`, so the cards sit one to a row
+  below 40rem, two from 40rem and three from 64rem (`StatsNav.module.css`'s
+  `.cards`). Every other route keeps `--content-max`.
+- **The reads are `src/api/records.ts`**: `recordsQuery()`,
+  `recordHoldersQuery(ids)` (keyed by the sorted ids) and
+  `recordQuery(id)`, all `staleTime: Infinity` (the routes are cached five
   minutes at the edge, R7). A list is one call at `limit=100`; nothing sends
   `offset`; a 404 is `null`. Stats and records share `api/ok.ts` since
   `FRONTEND-021` (R29).
-- **Requests per screen**, pinned in `records-requests.test.tsx`: a cold
-  `/stats/records` makes 1; Team and Player make 0; opening a card makes 1,
-  and Back and reopening it make 0; a cold `?record=` makes 1 and Back from
-  it 1; a cold Seasonal makes 4 (seasons and the three boards).
+- **Requests per screen**, pinned in `records-requests.test.tsx`
+  (`FRONTEND-030`): a cold `/stats/records` makes 2 (the catalog, then the
+  sixteen's holders); Team and Player make 1 each (the first page's holders)
+  and returning makes 0; Load more makes 1; opening a card makes 1, and Back
+  and reopening it make 0; a cold `?record=` makes 1 and Back from it 2; a
+  cold Seasonal makes 4 (seasons and the three boards).
 - **Measured** (2026-10-26, `vite preview` against the full load in
   `fanwire_perf`, 360 wide, CPU 4x, five runs): the longest task on a cold
   Records is a median of 108 ms (worst 127); opening the 100-row

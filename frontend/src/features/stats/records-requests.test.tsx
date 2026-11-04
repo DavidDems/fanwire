@@ -11,32 +11,43 @@
  * distinct and at most 24):
  *
  * - a cold `/stats/records` makes **2**: `GET /events/records`, then one
- *   holders read covering every team card;
- * - switching Team and Player makes at most 1, a holders read, and switching
- *   back makes 0;
+ *   holders read for the sixteen Top records, their ids sorted
+ *   (`FRONTEND-030`: Top records is the default);
+ * - switching to Team makes 1 and to Player 1, each a holders read for that
+ *   group's first page of 24, and switching back to either, or to Top
+ *   records, makes 0;
+ * - Load more makes exactly 1, a holders read for the next 24, sorted;
  * - opening a card makes exactly 1, `GET /events/records/<id>?limit=100`;
  * - Back makes 0, and opening the same card again makes 0;
  * - a cold `/stats/records?record=<id>` makes 1 (its list), and Back from it
- *   makes 2 (the catalog and the holders);
+ *   makes 2 (the catalog and the holders of its group's first page);
  * - a cold `/stats/records?view=seasonal` makes **4**: seasons and the three
  *   boards (whose rule line shares the points read), no teams; Historical
- *   from it makes 2 (the catalog and the holders);
+ *   from it makes 2 (the catalog and the Top records' holders);
  * - no records request carries `offset`.
  *
  * The Seasons tab's counts (4, and 2 back from a team) are
  * `stats-requests.test.tsx`'s.
  */
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { HOLDERS_CAP, recordDefinition, recordsOf } from "../../test/records";
+import {
+  FEATURED_IDS,
+  HOLDERS_CAP,
+  PAGE_SIZE,
+  recordDefinition,
+  recordsOf,
+} from "../../test/records";
 import {
   backButton,
   findCard,
   findCards,
   groupBar,
+  loadMore,
   openRecords,
+  shownIds,
   tab,
   viewAll,
   viewBar,
@@ -103,6 +114,20 @@ function groupIds(group: "team" | "player"): string[] {
   return recordsOf(group).map((record) => record.id);
 }
 
+function sorted(ids: readonly string[]): string[] {
+  return [...ids].sort();
+}
+
+/** A group's first page of cards, as one holders read asks for it. */
+function firstPage(group: "team" | "player"): string[] {
+  return sorted(groupIds(group).slice(0, PAGE_SIZE));
+}
+
+/** Wait until `count` cards are shown. */
+async function waitForCount(count: number): Promise<void> {
+  await waitFor(() => expect(shownIds()).toHaveLength(count));
+}
+
 function listRequest(id: string): RegExp {
   return new RegExp(`^GET \\S*/events/records/${id}\\?limit=100$`);
 }
@@ -115,38 +140,60 @@ async function listShown(id: string): Promise<void> {
   await screen.findByRole("table");
 }
 
-describe("requests per screen on Records (Baseline c)", () => {
-  it("a cold /stats/records makes 2: the catalog, then one holders read", async () => {
+describe("requests per screen on Records (Baseline c; FRONTEND-030's counts)", () => {
+  it("a cold /stats/records makes 2: the catalog, then one holders read for the sixteen", async () => {
     openRecords();
-    await findCards("team");
+    await findCards("top");
 
     const requests = await quietAfter(0);
     expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
-    expect(holderIds(requests[1])).toEqual(
-      expect.arrayContaining(groupIds("team")),
-    );
+    expect(holderIds(requests[1])).toEqual(sorted(FEATURED_IDS));
   });
 
-  it("switching Team and Player makes at most 1, a holders read, and back makes 0", async () => {
+  it("switching to Team and to Player makes 1 each, its first page; back to either, or to Top records, makes 0", async () => {
     openRecords();
     const user = userEvent.setup();
-    await findCards("team");
-    const mark = (await quietAfter(0)).length;
-
-    await user.click(tab(groupBar(), "Player"));
-    await findCards("player");
-    const toPlayer = await quietAfter(mark);
-    expect(toPlayer.length, toPlayer.join("\n")).toBeLessThanOrEqual(1);
-    const asked = [...holderIds(sent[1]), ...toPlayer.flatMap(holderIds)];
-    expect(asked).toEqual(expect.arrayContaining(groupIds("player")));
-    const back = sent.length;
+    await findCards("top");
+    let mark = (await quietAfter(0)).length;
 
     await user.click(tab(groupBar(), "Team"));
     await findCards("team");
+    let requests = await quietAfter(mark);
+    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(holderIds(requests[0])).toEqual(firstPage("team"));
+    mark = sent.length;
 
-    const requests = await quietAfter(back);
+    await user.click(tab(groupBar(), "Player"));
+    await findCards("player");
+    requests = await quietAfter(mark);
+    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(holderIds(requests[0])).toEqual(firstPage("player"));
+    mark = sent.length;
+
+    await user.click(tab(groupBar(), "Team"));
+    await findCards("team");
+    await user.click(tab(groupBar(), "Top records"));
+    await findCards("top");
+
+    requests = await quietAfter(mark);
     expect(requests, requests.join("\n")).toEqual([]);
+  });
+
+  it("Load more makes exactly 1, the next 24 ids sorted", async () => {
+    openRecords("/stats/records?group=player");
+    const user = userEvent.setup();
+    await findCards("player");
+    const mark = (await quietAfter(0)).length;
+
+    await user.click(loadMore() as HTMLElement);
+    await waitForCount(2 * PAGE_SIZE);
+
+    const requests = await quietAfter(mark);
+    expect(requests, requests.join("\n")).toHaveLength(1);
+    expect(holderIds(requests[0])).toEqual(
+      sorted(groupIds("player").slice(PAGE_SIZE, 2 * PAGE_SIZE)),
+    );
   });
 
   it("opening a card makes exactly 1, its list at limit=100; Back makes 0; the same card again makes 0", async () => {
@@ -194,7 +241,7 @@ describe("requests per screen on Records (Baseline c)", () => {
     requests = await quietAfter(mark);
     expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
-    holderIds(requests[1]);
+    expect(holderIds(requests[1])).toEqual(firstPage("team"));
   });
 
   it("a cold /stats/records?view=seasonal makes 4 (seasons and the three boards, no teams), and Historical from it makes 2", async () => {
@@ -215,11 +262,11 @@ describe("requests per screen on Records (Baseline c)", () => {
     const mark = sent.length;
 
     await user.click(tab(viewBar(), "Historical"));
-    await findCards("team");
+    await findCards("top");
 
     requests = await quietAfter(mark);
     expect(requests, requests.join("\n")).toHaveLength(2);
     expect(requests[0]).toMatch(SUMMARY);
-    holderIds(requests[1]);
+    expect(holderIds(requests[1])).toEqual(sorted(FEATURED_IDS));
   });
 });

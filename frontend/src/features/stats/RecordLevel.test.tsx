@@ -12,10 +12,16 @@
  *   <title>" or "Player records › <title>" by the list's group, the title
  *   item `aria-current="location"`; until the list lands, its first item
  *   reads "Records". The first item is a link to its group's tab
- *   (`/stats/records`, or `/stats/records?group=player`).
+ *   (`/stats/records?group=team`, or `/stats/records?group=player`: since
+ *   `FRONTEND-030` Top records is the default, so Team is written).
  * - **Back** and the breadcrumb's first item return to Historical on the
  *   list's group's tab, Player selected for a player record, even from a cold
- *   `?record=`.
+ *   `?record=`; an unknown id's Back returns to Top records. Since
+ *   `FRONTEND-030` the in-page Back from a card returns to exactly the tab
+ *   and query the card was opened from (as the browser's Back does); only
+ *   a cold `?record=` falls back to its group's tab with no query.
+ * - **The rule** states the record's minimum where it has one
+ *   (`FRONTEND-030`): a shooting percentage's attempts, an average's games.
  * - **Headings.** The record level's `h2` is the record's title: from the
  *   cached summary when a card opened it (so it is never empty while the list
  *   loads), and from the list on a cold load.
@@ -65,6 +71,7 @@ import {
   crumbs,
   findCard,
   findCards,
+  findRecordCard,
   focusedHeading,
   groupBar,
   isCurrent,
@@ -73,7 +80,9 @@ import {
   panelOf,
   params,
   queryTablistHolding,
+  searchBox,
   selectedTab,
+  shownIds,
   tab,
   viewAll,
   viewBar,
@@ -186,7 +195,8 @@ describe("opening a record from its card", () => {
   });
 
   it("names the record in its heading from the cached summary while the list loads", async () => {
-    openRecords("/stats/records?group=player", {
+    // On Top records: the career records are past the Player tab's first 24.
+    openRecords("/stats/records", {
       handlers: [
         http.get("*/events/records/:record_id", async () => {
           await delay("infinite");
@@ -260,17 +270,68 @@ describe("Back, the breadcrumb and the browser's Back", () => {
     });
   });
 
-  it("Back from a team record returns to /stats/records, Team selected", async () => {
-    const { router } = openRecords();
+  // FRONTEND-030 (the browser rows' defect): the in-page Back returns to
+  // exactly where the card was opened from, its bar and its query, as the
+  // browser's Back does; never to the record's own group with q dropped.
+  it.each([
+    ["Top records", "/stats/records", "team-most-points-game", "top"],
+    ["Team", "/stats/records?group=team", "team-best-season", "team"],
+    [
+      "Top records with a query",
+      "/stats/records?q=career+points",
+      "player-career-points",
+      "top",
+    ],
+    [
+      "Team with a query",
+      "/stats/records?group=team&q=best+season",
+      "team-best-season",
+      "team",
+    ],
+    [
+      "Player with a query",
+      "/stats/records?group=player&q=three+percentage+season",
+      "player-three-pct-season",
+      "player",
+    ],
+  ] as const)(
+    "Back from a card opened on %s returns to that tab and query",
+    async (_origin, from, id, bar) => {
+      const { router } = openRecords(from);
+      const origin = new URL(from, "http://x.test").searchParams;
+      const user = userEvent.setup();
+      await user.click(viewAll(await findRecordCard(id)));
+      await recordLevelShown(id);
+      expect(params(router).get("record")).toBe(id);
+
+      await user.click(backButton() as HTMLElement);
+
+      await waitFor(() => expect(params(router).has("record")).toBe(false));
+      expect(router.state.location.pathname).toBe("/stats/records");
+      expect(params(router).get("group")).toBe(origin.get("group"));
+      expect(params(router).get("q")).toBe(origin.get("q"));
+      await findCards(bar);
+      expect(selectedTab(groupBar())).toBe(
+        bar === "top" ? "Top records" : bar === "team" ? "Team" : "Player",
+      );
+      expect(searchBox()).toHaveValue(origin.get("q") ?? "");
+      expect(shownIds()).toContain(id);
+    },
+  );
+
+  it("Back from a cold team record (no origin) falls back to ?group=team, no q", async () => {
+    const { router } = openRecords("/stats/records?record=team-best-season");
     const user = userEvent.setup();
-    await openFromCard(user, "team", "team-most-points-game");
-    await recordLevelShown("team-most-points-game");
+    await recordLevelShown("team-best-season");
 
     await user.click(backButton() as HTMLElement);
 
-    await waitFor(() => expect(router.state.location.search).toBe(""));
-    expect(router.state.location.pathname).toBe("/stats/records");
+    await waitFor(() =>
+      expect(router.state.location.search).toBe("?group=team"),
+    );
     await findCards("team");
+    expect(selectedTab(groupBar())).toBe("Team");
+    expect(searchBox()).toHaveValue("");
   });
 
   it("the breadcrumb's first item links to its group's tab and returns there", async () => {
@@ -292,14 +353,17 @@ describe("Back, the breadcrumb and the browser's Back", () => {
     );
   });
 
-  it("the breadcrumb's first item of a team record links to /stats/records", async () => {
+  it("the breadcrumb's first item of a team record links to /stats/records?group=team", async () => {
     openRecords();
     const user = userEvent.setup();
     await openFromCard(user, "team", "team-championships");
     await recordLevelShown("team-championships");
     await waitFor(() => expect(crumbTexts()[0]).toBe("Team records"));
 
-    expect(controlIn(crumbs()[0])).toHaveAttribute("href", "/stats/records");
+    expect(controlIn(crumbs()[0])).toHaveAttribute(
+      "href",
+      "/stats/records?group=team",
+    );
   });
 
   it("the browser's Back returns to the cards on the same group tab", async () => {
@@ -310,7 +374,13 @@ describe("Back, the breadcrumb and the browser's Back", () => {
 
     await router.navigate(-1);
 
-    await findCards("player");
+    // The cards come back through the lazy route and a fresh render: under
+    // the full run this measured 1.5-1.8 s, past findBy's 1 s default.
+    await screen.findByRole(
+      "list",
+      { name: /^player records$/i },
+      { timeout: 3500 },
+    );
     expect(params(router).get("group")).toBe("player");
     expect(params(router).has("record")).toBe(false);
   });
@@ -353,8 +423,10 @@ describe("a cold ?record= (a reload or a shared link)", () => {
 
     await waitFor(() => expect(params(router).has("record")).toBe(false));
     expect(params(router).get("group")).toBe("player");
+    expect(params(router).has("q")).toBe(false);
     await findCards("player");
     expect(selectedTab(groupBar())).toBe("Player");
+    expect(searchBox()).toHaveValue("");
   });
 
   it("an unknown id shows the API's not-found in place, with Back to the cards", async () => {
@@ -373,7 +445,7 @@ describe("a cold ?record= (a reload or a shared link)", () => {
     await user.click(backButton() as HTMLElement);
 
     await waitFor(() => expect(params(router).has("record")).toBe(false));
-    await findCards("team");
+    await findCards("top");
   });
 
   it("switching the view drops record", async () => {
@@ -390,6 +462,24 @@ describe("a cold ?record= (a reload or a shared link)", () => {
 });
 
 describe("the list", () => {
+  it.each([
+    ["player-three-pct-season", "At least 200 attempts"],
+    ["player-three-pct-game", "At least 8 attempts"],
+    ["player-career-three-pct", "At least 1,000 attempts"],
+    ["player-ppg-season", "At least 58 games played"],
+  ])("states %s's minimum in its rule: %s", async (id, minimum) => {
+    openRecords(`/stats/records?record=${id}`);
+
+    await screen.findByRole("heading", {
+      level: 2,
+      name: recordDefinition(id).title,
+    });
+    expect(recordDefinition(id).rule).toContain(minimum);
+    await waitFor(() =>
+      expect(norm(screen.getByRole("main").textContent)).toContain(minimum),
+    );
+  });
+
   it("shows the rule and Since <since_season>", async () => {
     openRecords("/stats/records?record=player-points-game");
 

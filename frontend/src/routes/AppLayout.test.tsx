@@ -730,3 +730,129 @@ describe("the nav carries the shell module's fixed-to-bottom class (criterion 8)
     ).toBe(true);
   });
 });
+
+/**
+ * FRONTEND-030: the content column. `main`'s width is `--content-max`
+ * (40rem) on every route but `/stats/records`, where it is
+ * `--content-max-wide` (64rem), so the records home's cards fit three to a
+ * row. AppLayout chooses it from the route; the shell's module holds both
+ * rules (`shell-css.test.ts`).
+ *
+ * jsdom computes no styles, so `main`'s max-width is resolved here from the
+ * shell's module: every rule (outside a max-width query) whose selector
+ * matches the rendered `main`, once its module class names are mapped to the
+ * generated ones, the most specific and then the last winning, as the
+ * cascade does; an inline `max-width` beats them all.
+ */
+describe("the content column: wide on the records home only (FRONTEND-030)", () => {
+  function specificity(selector: string): number {
+    const ids = (selector.match(/#[\w-]+/g) ?? []).length;
+    const classes = (selector.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? [])
+      .length;
+    const elements = (
+      selector.replace(/[.#:[][^\s>+~]*/g, " ").match(/\b[a-z][\w-]*/gi) ?? []
+    ).length;
+    return ids * 10_000 + classes * 100 + elements;
+  }
+
+  async function mainMaxWidth(): Promise<string | undefined> {
+    const { default: styles } = await importLate<Record<string, string>>(
+      "./AppLayout.module.css",
+    );
+    const main = screen.getByRole("main");
+    const inline = main.style.getPropertyValue("max-width");
+    if (inline !== "") return inline.replace(/\s+/g, "");
+
+    let winner: { value: string; weight: number } | undefined;
+    const css = parseCss(readSrcFile("routes/AppLayout.module.css"));
+    const walk = (blocks: ReturnType<typeof parseCss>, applies: boolean) => {
+      for (const block of blocks) {
+        if (/^@/.test(block.prelude)) {
+          const media = /^@media\b/i.test(block.prelude);
+          const narrowOnly =
+            /max-width|\bwidth\s*<|>\s*=?\s*width\b|prefers-|print/i.test(
+              block.prelude,
+            );
+          walk(block.children, applies && media && !narrowOnly);
+          continue;
+        }
+        if (applies) {
+          const value = block.declarations
+            .filter((d) => d.property === "max-width")
+            .map((d) => d.value.replace(/\s+/g, ""))
+            .pop();
+          if (value !== undefined) {
+            for (const selector of selectors(block)) {
+              const generated = selector
+                .replace(/:global\(([^)]*)\)/g, "$1")
+                .replace(/\.(-?[_a-zA-Z][\w-]*)/g, (_, name: string) =>
+                  styles[name] === undefined ? `.${name}` : `.${styles[name]}`,
+                );
+              let matches = false;
+              try {
+                matches = main.matches(generated);
+              } catch {
+                matches = false;
+              }
+              const weight = specificity(selector);
+              if (matches && (winner === undefined || weight >= winner.weight))
+                winner = { value, weight };
+            }
+          }
+        }
+        walk(block.children, applies);
+      }
+    };
+    walk(css, true);
+    return winner?.value;
+  }
+
+  it("AppLayout chooses the column from the route", () => {
+    expect(readSrcFile("routes/AppLayout.tsx")).toMatch(
+      /["'`]\/stats\/records/,
+    );
+  });
+
+  it.each([
+    "/stats/records",
+    "/stats/records?group=team",
+    "/stats/records?q=3pt",
+    "/stats/records?record=team-best-season",
+  ])("%s: main is var(--content-max-wide)", async (path) => {
+    renderAppAt(path, "anonymous");
+    await screen.findByRole("heading", { name: /^stats$/i });
+
+    expect(await mainMaxWidth()).toBe("var(--content-max-wide)");
+  });
+
+  it.each([
+    ["/", "anonymous"],
+    ["/search", "anonymous"],
+    ["/stats/seasons", "anonymous"],
+    ["/stats/players", "anonymous"],
+    [PLAYER_PATH, "anonymous"],
+    ["/sign-in", "anonymous"],
+    ["/no-such-page-exists", "anonymous"],
+    ["/notifications", "member"],
+    [OWN_PROFILE_PATH, "member"],
+  ] as [string, Visitor][])(
+    "%s (%s): main keeps var(--content-max)",
+    async (path, as) => {
+      await renderVisit(visit(path, as));
+
+      expect(await mainMaxWidth()).toBe("var(--content-max)");
+    },
+  );
+
+  it("leaving /stats/records for another stats tab narrows main again", async () => {
+    const { router } = renderAppAt("/stats/records", "anonymous");
+    await screen.findByRole("heading", { name: /^stats$/i });
+    expect(await mainMaxWidth()).toBe("var(--content-max-wide)");
+
+    await router.navigate("/stats/seasons");
+
+    await waitFor(async () =>
+      expect(await mainMaxWidth()).toBe("var(--content-max)"),
+    );
+  });
+});

@@ -13,6 +13,13 @@
  *   percentage, `(57.1%)`, muted the same way; a null `pct` (nothing
  *   attempted) shows the count alone.
  * - **count**: the value alone, as before.
+ * - **shot_pct** (`FRONTEND-030`, `player-three-pct-season`): the
+ *   percentage, one place, `45.4%`, then the made and attempted counts,
+ *   `(402/886)`, muted the same way, on the card and in the list.
+ * - **average** (`FRONTEND-030`, `player-ppg-season`): one decimal, `31.0`,
+ *   and on the card its unit, `31.0 points per game`.
+ * - A `made_total` season record (`player-threes-season`) keeps EVENTS-011's
+ *   form: `402`, then a muted `(45.4%)`.
  * - **One phrase to a screen reader.** The accessible text of a win_loss
  *   cell is exactly "73 wins, 9 losses, .890", and a card reads the same
  *   phrase, never the dash and the parenthesis apart.
@@ -22,7 +29,7 @@
  *   both themes (`accessibility.md`; jsdom computes no CSS, so the rule is
  *   read from the stylesheet, `verification.md` §2a).
  */
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -39,6 +46,7 @@ import {
   accessibleText,
   elementWithText,
   findCard,
+  findRecordCard,
   norm,
   openRecords,
 } from "../../test/records-screen";
@@ -309,6 +317,46 @@ describe("a made_total card", () => {
   });
 });
 
+describe("a shot_pct card (FRONTEND-030)", () => {
+  it("shows the percentage, 45.4%, then a muted (402/886)", async () => {
+    openRecords();
+
+    const card = await findRecordCard("player-three-pct-season");
+    await waitFor(() => expect(norm(card.textContent)).toContain("45.4%"));
+    const text = norm(card.textContent);
+    expect(text).not.toMatch(MISSING);
+    expect(text).not.toContain("(45.4%)");
+    expect(text).not.toMatch(/0\.454/);
+    expectMuted(elementWithText(card, "(402/886)"), "(402/886)");
+    expect(text.indexOf("45.4%")).toBeLessThan(text.indexOf("(402/886)"));
+  });
+});
+
+describe("an average card (FRONTEND-030)", () => {
+  it("shows one decimal and its unit: 31.0 points per game", async () => {
+    openRecords();
+
+    const card = await findRecordCard("player-ppg-season");
+    await waitFor(() =>
+      expect(norm(card.textContent)).toContain("31.0 points per game"),
+    );
+    expect(norm(card.textContent)).not.toMatch(MISSING);
+  });
+});
+
+describe("a made_total season card (FRONTEND-030)", () => {
+  it("keeps EVENTS-011's form: 402, then a muted (45.4%)", async () => {
+    openRecords();
+
+    const card = await findRecordCard("player-threes-season");
+    await waitFor(() =>
+      expect(norm(card.textContent)).toMatch(/(?<![\d.,])402(?![\d.,/])/),
+    );
+    expectMuted(elementWithText(card, "(45.4%)"), "(45.4%)");
+    expect(norm(card.textContent)).not.toContain("(402/886)");
+  });
+});
+
 describe("a count card", () => {
   it("shows its value alone, with no parenthesised percentage", async () => {
     openRecords();
@@ -432,5 +480,29 @@ describe("a count list", () => {
       "168",
       "157",
     ]);
+  });
+});
+
+describe("a shot_pct list (FRONTEND-030)", () => {
+  it("shows each line's percentage with its muted made and attempted", async () => {
+    openRecords("/stats/records?record=player-three-pct-season");
+
+    const table = await listShown("player-three-pct-season");
+    const [first, second] = valueCells(table);
+    expect(norm(first.textContent)).toMatch(/^45\.4%/);
+    expectMuted(elementWithText(first, "(402/886)"), "(402/886)");
+    expect(norm(second.textContent)).toMatch(/^44\.4%/);
+    expectMuted(elementWithText(second, "(250/563)"), "(250/563)");
+  });
+});
+
+describe("an average list (FRONTEND-030)", () => {
+  it("shows each line's mean to one decimal", async () => {
+    openRecords("/stats/records?record=player-ppg-season");
+
+    const table = await listShown("player-ppg-season");
+    expect(
+      valueCells(table).map((cell) => norm(cell.textContent).split(" ")[0]),
+    ).toEqual(["31.0", "30.4"]);
   });
 });

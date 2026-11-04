@@ -87,6 +87,7 @@
   --focus-ring: 2px solid var(--color-focus);
   --target-min: 2.75rem;
   --content-max: 40rem;
+  --content-max-wide: 64rem; /* FRONTEND-030: the records home, three cards a row */
 
   /* §8 Motion and state. */
   --duration-fast: 120ms;
