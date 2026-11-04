@@ -9,7 +9,7 @@ type: decision
 Email verification is optional for ordinary platform use. A user supplies an
 email at sign-up, but may not own or verify it. The 2026-11-02 choice that
 unverified users could not recover passwords remains historical and unchanged
-([human-decisions.md, §10, “Sign-up without email verification”](../Architecture/human-decisions.md#L237-L239)).
+([human-decisions.md:237-239](../Architecture/human-decisions.md#L237-L239)).
 This ADR supersedes only that no-recovery consequence; it does not revise the
 other accepted sign-up risks or decisions. Cognito's native recovery sends
 codes only to verified recovery destinations, so it cannot alone meet the
