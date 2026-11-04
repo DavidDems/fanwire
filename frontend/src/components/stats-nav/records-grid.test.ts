@@ -1,7 +1,7 @@
 /**
  * FRONTEND-030: the record cards' grid, pinned from disk, because jsdom
- * applies no media queries and computes no styles (`verification.md` §1,
- * §2a). The measurements at 320, 360, 800 and 1280 CSS px, with and without
+ * applies no media queries and computes no styles (`verification.md` §1
+ * and `verification.md` §2a). The measurements at 320, 360, 800 and 1280 CSS px, with and without
  * a classic scrollbar, are the browser rows'.
  *
  * `StatsNav.module.css`'s `.cards` (the list every records bar shows) is:
