@@ -25,6 +25,7 @@
     "backend/app/users/**",
     "backend/tests/**",
     "backend/openapi.json",
+    "backend/scripts/mint_perf_tokens.py",
     "frontend/src/api/schema.d.ts",
     "frontend/src/auth/**",
     "frontend/src/components/ui/Dialog.tsx",
@@ -42,6 +43,7 @@
     "frontend/src/test/auth.tsx",
     "frontend/src/test/account.ts",
     "frontend/src/test/profile.ts",
+    "frontend/src/test/post-about.ts",
     "frontend/src/test/bundle-budgets/USERS-006.ts",
     "wiki/CodeContext/Modules/0x01-users.md",
     "wiki/CodeContext/Modules/0x08-frontend.md"
