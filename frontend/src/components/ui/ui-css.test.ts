@@ -432,3 +432,130 @@ describe("no runtime styling work (UI-010 Baseline d)", () => {
     expect(banned(readFileSync(full, "utf8"))).toEqual([]);
   });
 });
+
+/**
+ * FRONTEND-031: `TeamIcon.module.css`, statically. Its colours are the
+ * palette tokens read by name (`styles/tokens.test.ts` pins their values),
+ * the neutral form's are the semantic tokens, it loads nothing, and in
+ * forced-colors mode (A20) the ring is a real line, since forced colours
+ * remove every box-shadow and replace every fill. That the rendered icon
+ * resolves to the right colours is `TeamIcon.test.tsx`'s.
+ */
+describe("TeamIcon.module.css (FRONTEND-031)", () => {
+  const FILE = join(UI_DIR, "TeamIcon.module.css");
+  const INNER_KEYS = [
+    "gold",
+    "orange",
+    "red",
+    "green",
+    "sky",
+    "lavender",
+    "silver",
+    "teal",
+  ];
+  const OUTER_KEYS = ["blue", "crimson", "black", "purple", "forest"];
+
+  function css(): string {
+    expect(existsSync(FILE), `${FILE} must exist`).toBe(true);
+    return stripComments(readFileSync(FILE, "utf8"));
+  }
+
+  function reads(token: string): RegExp {
+    return new RegExp(String.raw`var\(\s*${token}\s*[,)]`);
+  }
+
+  it.each([
+    ...INNER_KEYS.map((key) => `--team-inner-${key}`),
+    ...OUTER_KEYS.map((key) => `--team-outer-${key}`),
+  ])("reads %s by name", (token) => {
+    expect(css()).toMatch(reads(token));
+  });
+
+  it.each(["--color-surface-muted", "--color-border", "--color-text"])(
+    "reads %s for the neutral form",
+    (token) => {
+      expect(css()).toMatch(reads(token));
+    },
+  );
+
+  it("loads nothing: no url(), @import or image", () => {
+    expect(css()).not.toMatch(/url\(|@import|image-set\(/i);
+  });
+
+  it("keeps the ring a solid line in forced-colors mode (A20)", () => {
+    const text = css();
+    const forced = [
+      ...text.matchAll(/@media[^{]*forced-colors\s*:\s*active[^{]*\{/gi),
+    ];
+    expect(
+      forced.length,
+      "no @media (forced-colors: active) block",
+    ).toBeGreaterThan(0);
+    const start = forced[0].index ?? 0;
+    // The block's body: from its brace to the matching close.
+    let depth = 0;
+    let end = start;
+    for (let i = text.indexOf("{", start); i < text.length; i += 1) {
+      if (text[i] === "{") depth += 1;
+      if (text[i] === "}") depth -= 1;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+    const body = text.slice(start, end);
+    const lines = declarations(body).filter(
+      ({ property, value }) =>
+        /^(border|outline)(-(top|right|bottom|left|block|inline))?$/.test(
+          property,
+        ) && /\bsolid\b/.test(value),
+    );
+    expect(lines, "no solid border or outline under forced colors").not.toEqual(
+      [],
+    );
+    expect(body).not.toMatch(/forced-color-adjust\s*:\s*none/);
+  });
+});
+
+/**
+ * FRONTEND-031: "Nothing reads TeamOut.logo_url." Every source file under
+ * `src/` but the generated schema, the tests and the test kit (whose
+ * `TeamOut` fixtures must carry the field to type-check).
+ */
+describe("nothing reads logo_url (FRONTEND-031)", () => {
+  const SRC = findSrcDir();
+
+  function sourceFiles(directory: string): string[] {
+    return readdirSync(directory).flatMap((entry) => {
+      const full = join(directory, entry);
+      if (statSync(full).isDirectory()) return sourceFiles(full);
+      return /\.(tsx?|css)$/.test(entry) ? [full] : [];
+    });
+  }
+
+  function scanned(): string[] {
+    return sourceFiles(SRC)
+      .map((file) => relative(SRC, file).split(sep).join("/"))
+      .filter(
+        (path) =>
+          path !== "api/schema.d.ts" &&
+          !path.startsWith("test/") &&
+          !/\.test\.tsx?$/.test(path),
+      );
+  }
+
+  it("scans the source tree, not nothing", () => {
+    expect(scanned()).toEqual(
+      expect.arrayContaining(["api/stats.ts", "components/ui/Avatar.tsx"]),
+    );
+  });
+
+  it("finds logo_url in no source file outside the generated schema", () => {
+    const offenders = scanned().filter((path) =>
+      /logo_?url|logoUrl/i.test(
+        readFileSync(join(SRC, ...path.split("/")), "utf8"),
+      ),
+    );
+    expect(offenders).toEqual([]);
+  });
+});

@@ -13,7 +13,7 @@ require a verified Cognito token; profile-page reads (GET /users/{id}) are
 public.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -29,6 +29,8 @@ from app.users.dependencies import get_current_identity, get_current_user, get_t
 from app.users.models import User
 from app.users.routes import router
 from app.users.service import create_user, follow, soft_delete_user
+
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
 
 
 @pytest.fixture()
@@ -90,7 +92,7 @@ def _with_captured_event_bus(app) -> InMemoryEventPublisher:
 
 
 def test_create_profile_succeeds(app, client):
-    _as_identity(app, VerifiedIdentity(sub="sub-new"))
+    _as_identity(app, VerifiedIdentity(sub="sub-new", auth_time=RECENT_AUTH_TIME))
 
     response = client.post(
         "/users",
@@ -113,7 +115,7 @@ def test_create_profile_duplicate_cognito_sub_returns_409(app, client, session_f
     with session_factory() as session:
         _create(session, "sub-dup", "existing_user")
 
-    _as_identity(app, VerifiedIdentity(sub="sub-dup"))
+    _as_identity(app, VerifiedIdentity(sub="sub-dup", auth_time=RECENT_AUTH_TIME))
 
     response = client.post(
         "/users",
@@ -127,7 +129,7 @@ def test_create_profile_duplicate_username_returns_409(app, client, session_fact
     with session_factory() as session:
         _create(session, "sub-existing", "taken_username")
 
-    _as_identity(app, VerifiedIdentity(sub="sub-fresh"))
+    _as_identity(app, VerifiedIdentity(sub="sub-fresh", auth_time=RECENT_AUTH_TIME))
 
     response = client.post(
         "/users",
@@ -217,7 +219,7 @@ def test_get_me_returns_full_profile_including_date_of_birth(app, client, sessio
 
 
 def test_get_me_returns_404_when_token_valid_but_no_profile(app, client):
-    _as_identity(app, VerifiedIdentity(sub="sub-no-profile-me"))
+    _as_identity(app, VerifiedIdentity(sub="sub-no-profile-me", auth_time=RECENT_AUTH_TIME))
 
     response = client.get("/users/me")
 
@@ -425,7 +427,7 @@ def test_delete_me_soft_deletes_caller_and_then_404s(app, client, session_factor
     # Authenticated through the real token chain rather than by overriding
     # get_current_user: USERS-003 moves DELETE /users/me to get_own_account.
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="sub-self-delete")
+        VerifiedIdentity(sub="sub-self-delete", auth_time=int(datetime.now(UTC).timestamp()))
     )
 
     response = client.delete("/users/me", headers={"Authorization": "Bearer good-token"})

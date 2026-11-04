@@ -128,14 +128,17 @@ def test_each_token_is_an_rs256_perf_id_token_for_its_user(minted):
         assert claims["aud"] == _audience()
         assert claims["token_use"] == "id"
         assert claims["exp"] - claims["iat"] >= 2 * 60 * 60
+        assert isinstance(claims["auth_time"], int)
+        assert abs(claims["auth_time"] - claims["iat"]) <= 5
 
 
 def test_cognito_token_verifier_accepts_every_minted_token(minted):
     verifier = CognitoTokenVerifier(minted["jwks"], audience=_audience(), issuer=_issuer())
 
-    subs = [verifier.verify(token).sub for token in minted["tokens"]]
+    identities = [verifier.verify(token) for token in minted["tokens"]]
 
-    assert subs == [f"perf-user-{n}" for n in range(1, 6)]
+    assert [identity.sub for identity in identities] == [f"perf-user-{n}" for n in range(1, 6)]
+    assert all(identity.auth_time is not None for identity in identities)
 
 
 def test_never_prints_a_token_or_the_private_key(minted):

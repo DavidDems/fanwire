@@ -8,6 +8,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { TeamIcon } from "../../components/ui/TeamIcon";
 import {
   useComposeLinkState,
   useInFlowLinkState,
@@ -117,6 +118,21 @@ function formatDraft(player: PlayerDetailOut): string | null {
   return parts.join(", ");
 }
 
+/**
+ * The player's current team: the last one played for in the newest season
+ * line (each line lists its teams in the order first played), or null.
+ */
+function latestTeam(player: PlayerDetailOut): string | null {
+  const newest = player.seasons.reduce<
+    PlayerDetailOut["seasons"][number] | null
+  >(
+    (latest, line) =>
+      latest === null || line.season > latest.season ? line : latest,
+    null,
+  );
+  return newest?.teams[newest.teams.length - 1] ?? null;
+}
+
 function Player({ player }: { player: PlayerDetailOut }) {
   // Every attribute the API may not know is left out rather than printed.
   const facts: [string, string | null][] = [
@@ -148,13 +164,22 @@ function Player({ player }: { player: PlayerDetailOut }) {
   // deactivated one browses as a guest, and a guest is offered none.
   const canPost = offersMemberLinks(useAccount());
   const name = fullName(player);
+  const team = latestTeam(player);
 
   return (
     <section className={styles.page}>
       <h1 className={styles.heading}>{name}</h1>
 
-      {known.length === 0 ? null : (
+      {known.length === 0 && team === null ? null : (
         <dl className={styles.facts}>
+          {team === null ? null : (
+            <div>
+              <dt>Team</dt>
+              <dd>
+                <TeamIcon abbreviation={team} size="sm" /> {team}
+              </dd>
+            </div>
+          )}
           {known.map(([label, value]) => (
             <div key={label}>
               <dt>{label}</dt>

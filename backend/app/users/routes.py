@@ -51,6 +51,8 @@ here, not in app.users.service.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -186,11 +188,30 @@ def get_my_following(
     return followed_user_ids(session, current_user.id)
 
 
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Recent authentication is required to deactivate an account.",
+            "content": {
+                "application/json": {"example": {"detail": "recent_auth_required"}}
+            },
+        }
+    },
+)
 def delete_me(
+    identity: VerifiedIdentity = Depends(get_current_identity),
     own_account: User = Depends(get_own_account),
     session: Session = Depends(get_session),
 ) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    auth_age = None if identity.auth_time is None else now - identity.auth_time
+    if auth_age is None or auth_age < 0 or auth_age > 5 * 60:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="recent_auth_required",
+        )
     soft_delete_user(session, own_account.id)
 
 

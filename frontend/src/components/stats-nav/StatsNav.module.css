@@ -376,3 +376,10 @@
 .listHold {
   min-height: calc(24 * var(--font-size-sm) * var(--line-height-body));
 }
+
+/* FRONTEND-031: a team's icon beside its name, in a row or a heading. */
+.team {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}

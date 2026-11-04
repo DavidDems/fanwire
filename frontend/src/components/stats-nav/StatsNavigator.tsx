@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import { LevelLink } from "./LevelLink";
 import { SeasonLevel } from "./SeasonLevel";
 import styles from "./StatsNav.module.css";
-import { TeamLevel, TeamName } from "./TeamLevel";
+import { TeamLevel, TeamName, TeamNameIcon } from "./TeamLevel";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
 export type {
@@ -182,6 +182,7 @@ export function StatsNavigator({
           `${top.season} season`
         ) : top.kind === "team" ? (
           <>
+            <TeamNameIcon teamId={top.teamId} season={top.season} />{" "}
             {levelName(top, levelViews)}, {top.season}
           </>
         ) : (

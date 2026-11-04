@@ -25,6 +25,7 @@ import { InlineAlert } from "../../components/ui/InlineAlert";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { SegmentedTabs } from "../../components/ui/SegmentedTabs";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { TeamIcon } from "../../components/ui/TeamIcon";
 import {
   careerLine,
   describeCareer,
@@ -296,7 +297,10 @@ function GameChoice({ id, selection, choose }: ChoiceProps) {
                   {playerName(entry.line)}
                 </Radio>
               </th>
-              <td>{entry.team.abbreviation}</td>
+              <td>
+                <TeamIcon abbreviation={entry.team.abbreviation} size="sm" />{" "}
+                {entry.team.abbreviation}
+              </td>
               <td>
                 {Math.floor(entry.line.seconds_played / 60)}:
                 {String(entry.line.seconds_played % 60).padStart(2, "0")}

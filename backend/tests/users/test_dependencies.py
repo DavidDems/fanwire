@@ -9,7 +9,7 @@ dependency works against a throwaway route defined in this test module,
 per the task's instructions not to touch app.main this phase.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -29,6 +29,8 @@ from app.users.dependencies import (
 from app.users.models import User
 from app.users.service import create_user, soft_delete_user
 
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+
 
 def _make_app():
     app = FastAPI()
@@ -42,7 +44,9 @@ def _make_app():
 
 def test_get_current_identity_accepts_a_valid_bearer_token():
     app = _make_app()
-    identity = VerifiedIdentity(sub="cognito-sub-123", email="alice@example.com")
+    identity = VerifiedIdentity(
+        sub="cognito-sub-123", email="alice@example.com", auth_time=RECENT_AUTH_TIME
+    )
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(identity)
     client = TestClient(app)
 
@@ -65,7 +69,7 @@ def test_get_current_identity_rejects_an_invalid_token():
 def test_get_current_identity_rejects_a_missing_authorization_header():
     app = _make_app()
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="irrelevant")
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -77,7 +81,7 @@ def test_get_current_identity_rejects_a_missing_authorization_header():
 def test_get_current_identity_rejects_a_malformed_authorization_header():
     app = _make_app()
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="irrelevant")
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -169,7 +173,7 @@ def test_get_current_user_resolves_to_the_matching_active_user(session_factory):
         )
         user_id = user.id
 
-    identity = VerifiedIdentity(sub="sub-resolve-me")
+    identity = VerifiedIdentity(sub="sub-resolve-me", auth_time=RECENT_AUTH_TIME)
     app = _make_current_user_app(identity=identity, session_factory=session_factory)
     client = TestClient(app)
 
@@ -180,7 +184,7 @@ def test_get_current_user_resolves_to_the_matching_active_user(session_factory):
 
 
 def test_get_current_user_404s_when_no_user_row_matches_the_sub(session_factory):
-    identity = VerifiedIdentity(sub="sub-with-no-profile")
+    identity = VerifiedIdentity(sub="sub-with-no-profile", auth_time=RECENT_AUTH_TIME)
     app = _make_current_user_app(identity=identity, session_factory=session_factory)
     client = TestClient(app)
 
@@ -201,7 +205,7 @@ def test_get_current_user_403s_when_the_matching_row_is_soft_deleted(session_fac
         )
         soft_delete_user(session, user.id)
 
-    identity = VerifiedIdentity(sub="sub-soft-deleted")
+    identity = VerifiedIdentity(sub="sub-soft-deleted", auth_time=RECENT_AUTH_TIME)
     app = _make_current_user_app(identity=identity, session_factory=session_factory)
     client = TestClient(app)
 
@@ -212,7 +216,7 @@ def test_get_current_user_403s_when_the_matching_row_is_soft_deleted(session_fac
 
 
 def test_get_current_user_404_detail_is_unchanged_when_no_row_matches(session_factory):
-    identity = VerifiedIdentity(sub="sub-with-no-profile-detail")
+    identity = VerifiedIdentity(sub="sub-with-no-profile-detail", auth_time=RECENT_AUTH_TIME)
     app = _make_current_user_app(identity=identity, session_factory=session_factory)
     client = TestClient(app)
 
@@ -252,7 +256,7 @@ def _make_optional_current_user_app(*, session_factory):
 def test_get_optional_current_user_returns_none_without_authorization_header(session_factory):
     app = _make_optional_current_user_app(session_factory=session_factory)
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="irrelevant")
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -275,7 +279,7 @@ def test_get_optional_current_user_401s_on_an_invalid_token(session_factory):
 def test_get_optional_current_user_401s_on_a_malformed_header(session_factory):
     app = _make_optional_current_user_app(session_factory=session_factory)
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="irrelevant")
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -287,7 +291,7 @@ def test_get_optional_current_user_401s_on_a_malformed_header(session_factory):
 def test_get_optional_current_user_returns_none_when_token_valid_but_no_profile(session_factory):
     app = _make_optional_current_user_app(session_factory=session_factory)
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="sub-optional-no-profile")
+        VerifiedIdentity(sub="sub-optional-no-profile", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -309,7 +313,7 @@ def test_get_optional_current_user_resolves_the_active_user(session_factory):
 
     app = _make_optional_current_user_app(session_factory=session_factory)
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="sub-optional-with-profile")
+        VerifiedIdentity(sub="sub-optional-with-profile", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -334,7 +338,7 @@ def test_get_optional_current_user_returns_none_for_a_deactivated_callers_valid_
 
     app = _make_optional_current_user_app(session_factory=session_factory)
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="sub-optional-deactivated")
+        VerifiedIdentity(sub="sub-optional-deactivated", auth_time=RECENT_AUTH_TIME)
     )
     client = TestClient(app)
 
@@ -388,7 +392,9 @@ def test_get_own_account_returns_an_active_callers_row(session_factory):
 
     app = _make_own_account_app(
         session_factory=session_factory,
-        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-active")),
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-active", auth_time=RECENT_AUTH_TIME)
+        ),
     )
     client = TestClient(app)
 
@@ -411,7 +417,9 @@ def test_get_own_account_returns_a_deactivated_callers_row(session_factory):
 
     app = _make_own_account_app(
         session_factory=session_factory,
-        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-deactivated")),
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-deactivated", auth_time=RECENT_AUTH_TIME)
+        ),
     )
     client = TestClient(app)
 
@@ -424,7 +432,9 @@ def test_get_own_account_returns_a_deactivated_callers_row(session_factory):
 def test_get_own_account_404s_when_no_user_row_matches_the_sub(session_factory):
     app = _make_own_account_app(
         session_factory=session_factory,
-        verifier=FakeTokenVerifier(VerifiedIdentity(sub="sub-own-no-profile")),
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-no-profile", auth_time=RECENT_AUTH_TIME)
+        ),
     )
     client = TestClient(app)
 
@@ -436,10 +446,14 @@ def test_get_own_account_404s_when_no_user_row_matches_the_sub(session_factory):
 @pytest.mark.parametrize(
     ("headers", "verifier"),
     [
-        pytest.param({}, FakeTokenVerifier(VerifiedIdentity(sub="irrelevant")), id="missing"),
+        pytest.param(
+            {},
+            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)),
+            id="missing",
+        ),
         pytest.param(
             {"Authorization": "good-token-no-scheme"},
-            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant")),
+            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)),
             id="malformed",
         ),
         pytest.param({"Authorization": "Bearer bad-token"}, FakeTokenVerifier(None), id="rejected"),

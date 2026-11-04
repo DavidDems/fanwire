@@ -1,6 +1,6 @@
 """USERS-004 profile avatar contract, persistence and exclusivity tests."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -15,6 +15,8 @@ from app.users.dependencies import get_current_identity, get_current_user
 from app.users.models import User
 from app.users.routes import router
 from app.users.service import create_user, get_public_profiles
+
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
 
 AVATAR_KEYS = (
     "court-lines",
@@ -76,7 +78,9 @@ def test_patch_accepts_each_stable_avatar_key(client, session_factory, avatar_ke
     assert response.status_code == 200
     assert response.json()["profile_avatar_key"] == avatar_key
     with session_factory() as session:
-        assert session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == avatar_key
+        assert (
+            session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == avatar_key
+        )
 
 
 def test_invalid_avatar_key_is_rejected_without_changing_profile(client, session_factory):
@@ -98,7 +102,9 @@ def test_avatar_key_default_and_public_and_me_serialization(client, session_fact
     with session_factory() as session:
         user = _create(session, "default-avatar")
         user_id = user.id
-    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(sub="sub-default-avatar")
+    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
+        sub="sub-default-avatar", auth_time=RECENT_AUTH_TIME
+    )
     app.dependency_overrides[get_current_user] = lambda: user
 
     own = http.get("/users/me")
@@ -160,6 +166,7 @@ def test_attaching_processed_picture_clears_preset(client, session_factory):
         session.commit()
         user_id = user.id
         media_id = media.id
+
     def get_current_user_override():
         with session_factory() as session:
             yield session.get(User, user_id)

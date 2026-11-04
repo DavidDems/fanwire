@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 
 import type { components } from "../../../api/schema";
+import { TeamIcon } from "../../../components/ui/TeamIcon";
 import { useDetailLinkState } from "../../../routes/modal-flow";
 import { formatDate, gameLabel } from "./format";
 import styles from "./Previews.module.css";
@@ -39,8 +40,10 @@ export function GamePreview({ preview }: { preview: GameFinalPreviewView }) {
       {label === "" ? null : <p className={styles.kicker}>{label}</p>}
       <p className={styles.headline}>
         <Link to={`/games/${preview.game_id}`} state={state}>
-          {away.name} <span className={styles.score}>{awayScore}</span> at{" "}
-          {home.name} <span className={styles.score}>{homeScore}</span>
+          <TeamIcon abbreviation={away.abbreviation} size="sm" /> {away.name}{" "}
+          <span className={styles.score}>{awayScore}</span> at{" "}
+          <TeamIcon abbreviation={home.abbreviation} size="sm" /> {home.name}{" "}
+          <span className={styles.score}>{homeScore}</span>
         </Link>
       </p>
       <p className={styles.meta}>

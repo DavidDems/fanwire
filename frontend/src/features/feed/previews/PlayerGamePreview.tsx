@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { components } from "../../../api/schema";
+import { TeamIcon } from "../../../components/ui/TeamIcon";
 import { useDetailLinkState } from "../../../routes/modal-flow";
 import { Figures } from "./Figures";
 import {
@@ -50,6 +51,7 @@ export function PlayerGamePreview({
         </Link>
       </p>
       <p className={styles.meta}>
+        <TeamIcon abbreviation={preview.team.abbreviation} size="sm" />{" "}
         {preview.team.name} ·{" "}
         {/* The result in a letter and a word, never by colour alone. */}
         {result === null ? null : (

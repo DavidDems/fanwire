@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { TeamIcon } from "../../components/ui/TeamIcon";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import { offersMemberLinks, useAccount } from "../../auth/account";
 import { useComposeLinkState } from "../../routes/modal-flow";
@@ -106,11 +107,13 @@ function Game({ game }: { game: GameDetailOut }) {
         {label === "" ? null : <p className={styles.label}>{label}</p>}
         <h1 className={styles.heading}>
           <span className={styles.side}>
+            <TeamIcon abbreviation={away.abbreviation} size="sm" />{" "}
             <span>{away.name}</span>{" "}
             <span className={styles.score}>{awayScore}</span>
           </span>{" "}
           <span className={styles.at}>at</span>{" "}
           <span className={styles.side}>
+            <TeamIcon abbreviation={home.abbreviation} size="sm" />{" "}
             <span>{home.name}</span>{" "}
             <span className={styles.score}>{homeScore}</span>
           </span>
