@@ -461,7 +461,7 @@ describe("TeamIcon.module.css (FRONTEND-031)", () => {
   }
 
   function reads(token: string): RegExp {
-    return new RegExp(`var\(\s*${token}\s*[,)]`);
+    return new RegExp(String.raw`var\(\s*${token}\s*[,)]`);
   }
 
   it.each([
