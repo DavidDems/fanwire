@@ -1344,7 +1344,10 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
   default), and an unknown value is the default. Both bars and typing in the
   search replace the history entry; the group bar keeps `q`; switching the
   view drops `group`, `q`, `record` and `season`. Opening and popping a level
-  push, so Back from a record restores the query.
+  push. A record opened from a card carries its origin in the history state,
+  and its in-page Back is the history's Back, to that tab and query; a cold
+  `?record=` falls back to its group's tab with no query. The breadcrumb's
+  first item stays the record's group tab.
 - **Two navigator levels**, `{ kind: "records", group, q }` (`group` a
   `RecordsBar`, `"top"` or a group) and
   `{ kind: "record", id }` (`types.ts`), so the breadcrumb, Back and the
@@ -1363,8 +1366,10 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     the box has rested 300 ms, so a page already read asks nothing. The box
     keeps its own text (a keystroke never waits on the router). A card shows
     its title and category line ("Team franchise", "Player playoffs") from
-    the catalog at once; its `.holder` area keeps three lines' room while the
-    holder loads and after. A failed page is one alert, its cards keeping
+    the catalog at once; its `.holder` area is a fixed four lines' room (in em),
+    the value and when clamped to one line and the name to two (clipped on
+    screen only), so a landing holder moves nothing. At 200% text the bars
+    wrap and View all wraps under the title. A failed page is one alert, its cards keeping
     titles and links. No match is an `EmptyState` naming the query with
     "Clear search". The match count is a visually hidden polite live region,
     present from the start, and says the settled query's count only. A card's
