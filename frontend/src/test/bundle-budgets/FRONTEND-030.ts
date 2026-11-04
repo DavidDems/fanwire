@@ -12,11 +12,8 @@ import type { UnitBudget } from "../bundle-budget";
  * - `StatsNav.module` (base 457) and `css:StatsNav.css` (base 1,311): the
  *   grid's 64rem column rule, the card's category line and held holder area,
  *   the shot_pct share, the Load more row, the empty state and the count.
- *
- * `RecordsTab` (the search, the paging and the featured page) is not
- * declared here: `EVENTS-012.ts` already declares it, and `combine` refuses
- * two files declaring one output. Its ceiling for this unit is the
- * Director's to fold (the test worker's report gives the number asked for).
+ * - `RecordsTab` (base 3,848, measured 6,272): the search, the paging, the
+ *   featured page and the live region that announces the result count.
  */
 export default {
   unit: "FRONTEND-030",
@@ -24,6 +21,7 @@ export default {
   entryJsRawGrowth: 400,
   entryCssGzipGrowth: 60,
   changed: {
+    RecordsTab: 6_700,
     "StatsNav.module": 650,
     "css:StatsNav.css": 1_700,
   },
