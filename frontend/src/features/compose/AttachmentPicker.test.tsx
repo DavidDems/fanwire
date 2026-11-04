@@ -1,7 +1,7 @@
 /** FRONTEND-021: navigator selections replace FRONTEND-013's panel. */
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "../../api/schema";
 import {
   BARNES_LINE_ID,
@@ -28,7 +28,36 @@ import { server } from "../../test/server";
 import { ComposePage } from "./ComposePage";
 import { InlineComposer } from "./InlineComposer";
 import { Dialog } from "../../components/ui/Dialog";
-import { tableProblems } from "../../test/tables";
+import { bodyRows, columnHeaders, tableProblems } from "../../test/tables";
+
+/**
+ * FRONTEND-031: `TeamIcon` is replaced by a stand-in that renders no text
+ * and keeps the real interface (see
+ * `components/stats-nav/team-icons.test.tsx`), so the picker's rows can be
+ * checked for where an icon is placed without changing any text this file
+ * reads.
+ */
+vi.mock("../../components/ui/TeamIcon", async () => {
+  const { createElement } = await import("react");
+  return {
+    TeamIcon: ({
+      abbreviation,
+      size,
+      label,
+    }: {
+      abbreviation: string | null | undefined;
+      size: string;
+      label?: string;
+    }) =>
+      createElement("span", {
+        "data-team-icon": abbreviation ?? "",
+        "data-size": size,
+        ...(label === undefined
+          ? { "aria-hidden": "true" }
+          : { role: "img", "aria-label": label }),
+      }),
+  };
+});
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
 let bodies: CreatePostRequest[] = [];
@@ -514,5 +543,55 @@ describe("the attachment's summary (criterion 5)", () => {
 
     expect(screen.queryByRole("button", { name: /undo mention/i })).toBeNull();
     expect(undoButton()).toBeInTheDocument();
+  });
+});
+
+describe("the picker's rows show team icons (FRONTEND-031)", () => {
+  it("puts each standings team's icon beside its name", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    const dialog = await pickerShown();
+    const raptors = await within(dialog).findByRole("button", {
+      name: /^Toronto Raptors$/,
+    });
+    const header = raptors.closest("th");
+    expect(header).not.toBeNull();
+    const icons = [...(header as Element).querySelectorAll("[data-team-icon]")];
+    expect(icons.map((icon) => icon.getAttribute("data-team-icon"))).toEqual([
+      "TOR",
+    ]);
+    expect(icons[0]).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("puts each box-score line's team icon beside its abbreviation", async () => {
+    const { user } = renderComposer();
+    await openPicker(user);
+    const dialog = await openGame(user);
+    const table = within(dialog)
+      .getAllByRole("table")
+      .find((element) =>
+        /box score/i.test(element.querySelector("caption")?.textContent ?? ""),
+      ) as HTMLTableElement;
+    expect(table, "the game's box score").toBeDefined();
+    const team = columnHeaders(table).findIndex((label) => label === "Team");
+    expect(team).toBeGreaterThan(-1);
+
+    const rows = bodyRows(table);
+    expect(rows.length).toBeGreaterThan(0);
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const cell = row.cells[team];
+      const abbreviation = (cell.textContent ?? "").trim();
+      expect(abbreviation, "the cell still shows the abbreviation").toMatch(
+        /^[A-Z]{3}$/,
+      );
+      seen.add(abbreviation);
+      const icons = [...cell.querySelectorAll("[data-team-icon]")];
+      expect(icons.map((icon) => icon.getAttribute("data-team-icon"))).toEqual([
+        abbreviation,
+      ]);
+      expect(icons[0]).toHaveAttribute("aria-hidden", "true");
+    }
+    expect([...seen].sort()).toEqual(["PHX", "TOR"]);
   });
 });
