@@ -215,6 +215,7 @@ constants (§9), not tokens.
 | `--focus-ring` | `2px solid var(--color-focus)`, offset `2px` | Via `:focus-visible` only |
 | `--target-min` | `2.75rem` (44 px) | Primary controls and nav items on touch |
 | `--content-max` | `40rem` (640 px) | The content column |
+| `--content-max-wide` (`FRONTEND-030`) | `64rem` (1024 px) | The content column on `/stats/records` only, chosen by `AppLayout` from the route (`layout.md` §2) |
 | `--duration-fast` | `120ms` | Hover, press |
 | `--duration-base` | `200ms` | Disclosure, score highlight |
 | `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | All transitions |
