@@ -16,7 +16,7 @@ account status, not the spam scorer or the post rate limit.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -80,9 +80,11 @@ def client(app):
     return TestClient(app)
 
 
-def _sign_in(app, sub: str) -> None:
+def _sign_in(app, sub: str, auth_time: int | None = None) -> None:
+    if auth_time is None:
+        auth_time = int(datetime.now(UTC).timestamp())
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub=sub)
+        VerifiedIdentity(sub=sub, auth_time=auth_time)
     )
 
 
@@ -317,6 +319,41 @@ def test_delete_me_twice_answers_204_both_times_and_keeps_the_first_deleted_at(
 
     assert second.status_code == 204
     assert _deleted_at(session_factory, user_id) == first_deleted_at
+
+
+def test_delete_me_declares_recent_authentication_failure_in_openapi():
+    responses = main_app.openapi()["paths"]["/users/me"]["delete"]["responses"]
+
+    assert "403" in responses
+    assert "recent_auth_required" in str(responses["403"])
+
+
+def test_delete_me_rejects_auth_older_than_five_minutes(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-delete-stale", "delete_stale")
+        user_id = user.id
+    stale_auth_time = int((datetime.now(UTC) - timedelta(minutes=6)).timestamp())
+    _sign_in(app, "sub-delete-stale", auth_time=stale_auth_time)
+
+    response = client.delete("/users/me", headers=TOKEN)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "recent_auth_required"}
+    assert _deleted_at(session_factory, user_id) is None
+
+
+def test_recovery_does_not_require_recent_authentication(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-recover-stale", "recover_stale")
+        soft_delete_user(session, user.id)
+        user_id = user.id
+    stale_auth_time = int((datetime.now(UTC) - timedelta(hours=1)).timestamp())
+    _sign_in(app, "sub-recover-stale", auth_time=stale_auth_time)
+
+    response = client.post("/users/me/recover", headers=TOKEN)
+
+    assert response.status_code == 200
+    assert _deleted_at(session_factory, user_id) is None
 
 
 # --- one unchanged token across deactivate and recover -------------------

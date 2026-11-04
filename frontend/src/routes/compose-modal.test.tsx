@@ -182,7 +182,7 @@ function primaryNav(): HTMLElement {
 }
 
 async function memberShown(): Promise<void> {
-  await within(primaryNav()).findByRole("link", { name: "Your profile" });
+  await screen.findByRole("button", { name: "Account menu" });
 }
 
 function pressClose(
@@ -729,7 +729,7 @@ describe("the + button", () => {
     expect(queryPlus()).toBeNull();
   });
 
-  it("replaces the Compose nav item, and nothing else in the nav changes", async () => {
+  it("keeps the nav links and shows the account menu outside the nav", async () => {
     renderAppAt("/", "member", [pagedFeed().handler]);
     await memberShown();
 
@@ -741,8 +741,8 @@ describe("the + button", () => {
       "Notifications",
       "Search",
       "Stats",
-      "Your profile",
     ]);
+    expect(screen.getByRole("button", { name: "Account menu" })).toBeInTheDocument();
     expect(
       within(primaryNav()).queryByRole("link", { name: /compose/i }),
     ).toBeNull();

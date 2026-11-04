@@ -131,7 +131,7 @@ describe("the deactivated banner (criterion 10)", () => {
   it("is not shown to an active member", async () => {
     const account = accountServer("active");
     renderAppAt("/", "member", [...account.handlers]);
-    await screen.findByRole("link", { name: /^your profile$/i });
+    await screen.findByRole("button", { name: "Account menu" });
 
     expect(queryDeactivatedBanner()).toBeNull();
   });
@@ -296,7 +296,7 @@ describe("recovering the account (criterion 12)", () => {
       within(banner).getByRole("button", { name: "Recover account" }),
     );
     await waitFor(() => expect(queryDeactivatedBanner()).toBeNull());
-    await screen.findByRole("link", { name: /^your profile$/i });
+    await screen.findByRole("button", { name: "Account menu" });
 
     await user.click(
       within(cardUnderneath(THEIR_TEXT)).getByRole("button", { name: "Like" }),

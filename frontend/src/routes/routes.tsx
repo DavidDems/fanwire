@@ -29,6 +29,11 @@ const HistoryPage = lazy(() =>
     default: m.HistoryPage,
   })),
 );
+const AccountSettings = lazy(() =>
+  import("../features/account/AccountSettings").then((m) => ({
+    default: m.AccountSettings,
+  })),
+);
 const ProfilePage = lazy(() =>
   import("../features/profile/ProfilePage").then((m) => ({
     default: m.ProfilePage,
@@ -109,6 +114,14 @@ const pages: RouteObject[] = [
     element: (
       <RequireAuth>
         <HistoryPage />
+      </RequireAuth>
+    ),
+  },
+  {
+    path: "settings",
+    element: (
+      <RequireAuth>
+        <AccountSettings />
       </RequireAuth>
     ),
   },

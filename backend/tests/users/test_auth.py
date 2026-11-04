@@ -32,6 +32,7 @@ from app.users.jwks import JWKSProvider
 AUDIENCE = "test-app-client-id"
 ISSUER = "https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_test"
 KID = "test-kid"
+AUTH_TIME = 1_784_000_000
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +57,7 @@ def rsa_keys():
     return {"private_pem": private_pem, "public_der": public_der, "jwks": {"keys": [jwk_dict]}}
 
 
-def _make_token(rsa_keys, **claim_overrides):
+def _make_token(rsa_keys, *, without_auth_time=False, **claim_overrides):
     """Builds a claim set shaped like a real Cognito **ID** token —
     `token_use: "id"` plus `aud` — since that's the only token shape the
     SPA is contractually allowed to send (wiki/GeneralContext/Architecture/
@@ -71,7 +72,10 @@ def _make_token(rsa_keys, **claim_overrides):
         "iss": ISSUER,
         "exp": now + timedelta(minutes=5),
         "iat": now,
+        "auth_time": AUTH_TIME,
     }
+    if without_auth_time:
+        claims.pop("auth_time")
     claims.update(claim_overrides)
     return jwt.encode(claims, rsa_keys["private_pem"], algorithm="RS256", headers={"kid": KID})
 
@@ -92,6 +96,7 @@ def _make_access_token(rsa_keys, **claim_overrides):
         "iss": ISSUER,
         "exp": now + timedelta(minutes=5),
         "iat": now,
+        "auth_time": AUTH_TIME,
     }
     claims.update(claim_overrides)
     return jwt.encode(claims, rsa_keys["private_pem"], algorithm="RS256", headers={"kid": KID})
@@ -99,11 +104,21 @@ def _make_access_token(rsa_keys, **claim_overrides):
 
 def test_verify_accepts_a_valid_token(rsa_keys):
     verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
-    token = _make_token(rsa_keys)
+    token = _make_token(rsa_keys, auth_time=AUTH_TIME)
 
     identity = verifier.verify(token)
 
-    assert identity == VerifiedIdentity(sub="cognito-sub-123", email="alice@example.com")
+    assert identity.sub == "cognito-sub-123"
+    assert identity.email == "alice@example.com"
+    assert identity.auth_time == AUTH_TIME
+
+
+def test_verify_rejects_a_token_without_auth_time(rsa_keys):
+    verifier = CognitoTokenVerifier(jwks=rsa_keys["jwks"], audience=AUDIENCE, issuer=ISSUER)
+    token = _make_token(rsa_keys, without_auth_time=True)
+
+    with pytest.raises(InvalidTokenError):
+        verifier.verify(token)
 
 
 def test_verify_rejects_wrong_audience(rsa_keys):
@@ -169,6 +184,7 @@ def test_verify_rejects_token_with_no_token_use_claim(rsa_keys):
         "iss": ISSUER,
         "exp": now + timedelta(minutes=5),
         "iat": now,
+        "auth_time": int(now.timestamp()),
     }
     token = jwt.encode(claims, rsa_keys["private_pem"], algorithm="RS256", headers={"kid": KID})
 
@@ -182,7 +198,9 @@ def test_verify_accepts_a_valid_id_token_with_explicit_token_use(rsa_keys):
 
     identity = verifier.verify(token)
 
-    assert identity == VerifiedIdentity(sub="cognito-sub-123", email="alice@example.com")
+    assert identity == VerifiedIdentity(
+        sub="cognito-sub-123", email="alice@example.com", auth_time=AUTH_TIME
+    )
 
 
 def test_refreshing_verifier_accepts_a_valid_token(rsa_keys):
@@ -196,7 +214,9 @@ def test_refreshing_verifier_accepts_a_valid_token(rsa_keys):
 
     identity = verifier.verify(token)
 
-    assert identity == VerifiedIdentity(sub="cognito-sub-123", email="alice@example.com")
+    assert identity == VerifiedIdentity(
+        sub="cognito-sub-123", email="alice@example.com", auth_time=AUTH_TIME
+    )
 
 
 def test_refreshing_verifier_rejects_an_invalid_token(rsa_keys):
@@ -213,7 +233,7 @@ def test_refreshing_verifier_rejects_an_invalid_token(rsa_keys):
 
 
 def test_fake_verifier_returns_preset_identity_regardless_of_token():
-    identity = VerifiedIdentity(sub="fake-sub", email="fake@example.com")
+    identity = VerifiedIdentity(sub="fake-sub", email="fake@example.com", auth_time=AUTH_TIME)
     verifier = FakeTokenVerifier(identity)
 
     assert verifier.verify("any-token-value") == identity

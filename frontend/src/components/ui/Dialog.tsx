@@ -234,8 +234,12 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
   /** While the request is in flight: the action is disabled, so one press is one request. */
   pending?: boolean;
+  /** The action also needs valid input before it can be confirmed. */
+  confirmDisabled?: boolean;
   /** A failure, shown inside the confirm, which stays open. */
   failure?: string | null;
+  /** Optional id for a failure described by an input inside the dialog. */
+  failureId?: string;
   /** For an action that removes something: the action button says so. */
   destructive?: boolean;
 }
@@ -287,7 +291,9 @@ function ConfirmBody({
   onConfirm,
   onCancel,
   pending = false,
+  confirmDisabled = false,
   failure = null,
+  failureId,
   destructive = false,
 }: Omit<ConfirmDialogProps, "open" | "title"> & { descriptionId: string }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -301,7 +307,7 @@ function ConfirmBody({
       <div id={descriptionId} className={styles.question}>
         {children}
       </div>
-      {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
+      {failure === null ? null : <InlineAlert id={failureId}>{failure}</InlineAlert>}
       <div className={styles.answers}>
         {/* Native buttons styled as `Button`s: `Button` passes no ref. */}
         <button
@@ -316,7 +322,7 @@ function ConfirmBody({
           type="button"
           className={`${buttonClass("primary", "md")}${destructive ? ` ${styles.destructive}` : ""}`}
           onClick={onConfirm}
-          disabled={pending}
+          disabled={pending || confirmDisabled}
         >
           {confirmLabel}
         </button>

@@ -39,6 +39,8 @@ export interface FakeAuthServiceOptions {
   session?: AuthSession | null;
   /** What `signUp` reports back; Cognito with email verification says `false`. */
   userConfirmed?: boolean;
+  /** Whether the current ID token has the verified email attribute. */
+  emailVerified?: boolean;
 }
 
 interface RecordedCall {
@@ -56,6 +58,7 @@ interface RecordedCall {
 export class FakeAuthService implements AuthService {
   session: AuthSession | null;
   userConfirmed: boolean;
+  verified: boolean;
 
   /** Every call this double has seen, in order. */
   readonly calls: RecordedCall[] = [];
@@ -67,6 +70,7 @@ export class FakeAuthService implements AuthService {
   constructor(options: FakeAuthServiceOptions = {}) {
     this.session = options.session ?? null;
     this.userConfirmed = options.userConfirmed ?? false;
+    this.verified = options.emailVerified ?? true;
   }
 
   /** Make `method` reject with a Cognito failure carrying `code`. */
@@ -160,6 +164,27 @@ export class FakeAuthService implements AuthService {
   async getIdToken(): Promise<string | null> {
     await this.enter("getIdToken", undefined);
     return this.session?.idToken ?? null;
+  }
+
+  async reauthenticate(password: string): Promise<void> {
+    const email = this.session?.email;
+    await this.enter("reauthenticate", password);
+    if (email === undefined) throw new Error("No active session");
+    this.session = testSession({ email });
+  }
+
+  async emailVerified(): Promise<boolean> {
+    this.calls.push({ method: "emailVerified", input: undefined });
+    return this.verified;
+  }
+
+  async requestEmailVerification(): Promise<void> {
+    await this.enter("requestEmailVerification", undefined);
+  }
+
+  async confirmEmailVerification(code: string): Promise<void> {
+    await this.enter("confirmEmailVerification", code);
+    this.verified = true;
   }
 }
 
