@@ -30,13 +30,16 @@ the request when no valid session is available. In
 can move to code entry. Convert SDK/session errors into rejected auth errors
 without leaving the Promise pending.
 
-Add focused tests in `CognitoAuthService.test.ts` that mock the Cognito SDK
-boundary, never contact a real pool, and cover: valid session restoration and
-request on the same user; missing or invalid session without a verification
-request; Promise completion through `inputVerificationCode`; and rejection on
-SDK errors. Do not include real credentials, token values or verification codes
-in fixtures or diagnostics. This client/test addition does not alter any other
-USERS-007 paths, criteria, gates or sequencing.
+Add focused tests in `CognitoAuthService.test.ts` using the real
+`amazon-cognito-identity-js` SDK and the in-process MSW server to intercept
+Cognito HTTP. They must never contact a real Cognito pool or network and must
+not mock the SDK module (the pinned `auth/sdk-isolation.test.ts` forbids that).
+Use only synthetic localStorage session/token fixtures; include no real
+credentials or secrets. Cover valid session restoration and request on the same
+user; missing or invalid session with no verification request; Promise
+completion through `inputVerificationCode`; and rejection on session or SDK
+errors. This client/test addition does not alter any other USERS-007 paths,
+criteria, gates or sequencing.
 
 ## Automatic profile creation after sign-in
 
