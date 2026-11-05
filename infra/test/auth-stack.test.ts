@@ -113,7 +113,9 @@ describe('Auth stack (Cognito)', () => {
     expect(statementResources.length).toBeGreaterThan(0);
     expect(statementResources.every((resource) => {
       const serialized = JSON.stringify(resource);
-      return serialized.includes(logGroup[0]) && !serialized.includes('"*"');
+      return serialized.includes(logGroup[0]) &&
+        (serialized.match(/\*/g) ?? []).length === 1 &&
+        /:log-stream:\*"\]\]\}$/.test(serialized);
     })).toBe(true);
 
     const managedPolicies = (role?.Properties?.ManagedPolicyArns as unknown[] | undefined) ?? [];
