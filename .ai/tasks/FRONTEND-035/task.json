@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-035",
+  "objective": "The primary nav becomes an icon bar on phones and a left sidebar from 640 px, with Sign out moved into it; Search moves to the header on phones, and the account avatar sits at the header's right end.",
+  "acceptance_criteria": [
+    "Start gate: FRONTEND-032 and FRONTEND-033 have merged to main, and no other open PR writes src/routes/AppLayout*. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "The nav is rendered once, as <nav aria-label=\"Primary\">, a sibling after the header and before main, no longer inside the header. Its items in DOM order: Home (/, renamed from Feed), Stats, Search, Notifications, then Sign out. Each link keeps its href and aria-current rule (Stats is still current on /players/*), and each item has an aria-hidden icon.",
+    "Sign out is a button, the nav list's last item, shown under the same rule as the header button it replaces: a restored session whose account is not deactivated. Pressing it signs out and moves focus to main, as today. The header has no Sign out button any more.",
+    "Below 40em (phones): the nav is the bar fixed to the bottom, showing Home, Stats, Notifications and Sign out as icons only. Labels are visually hidden with the shared visually-hidden class, so each accessible name is the label. The nav's Search item is display: none. Each cell is at least --target-min tall, and main's bottom padding still clears the bar and the floating buttons (floating-clearance.test.ts).",
+    "Below 40em the header holds, at its end, a Search icon link to /search (accessible name Search, aria-current on /search) immediately left of the Account menu button, or of Sign in for an anonymous visitor. From 40em this header link is display: none. These two Search links are the one deliberate exception to layout.md §1 (decisions.md, 2026-11-05): at any width exactly one is rendered visibly, and tests scope Search queries with within() to the header or the nav.",
+    "Header at every width: the brand link at the start; at the end the Account menu button for an active account, or Sign in for an anonymous visitor not on /sign-in. The menu keeps its name, items and behaviour.",
+    "From 40em: the nav is a sticky left sidebar under the header, var(--sidebar-width-compact) wide (4.5rem), icon only, listing Home, Stats, Search, Notifications and Sign out in that order. Each item is at least --target-min square, with a visible focus ring.",
+    "From 78em the sidebar is var(--sidebar-width) wide (12rem), each item an icon then its visible label at --font-size-md on one row, at least --target-min tall. From 72em to 78em it stays icon only, even where FRONTEND-036's rail is shown.",
+    "The current item, in the bar and the sidebar: weight 600, --color-text, and a 3px --color-action bar (on the top edge in the phone bar, on the inline-start edge in the sidebar), drawn as a border so forced-colors mode keeps it. Non-current items are --color-text-muted. Sign out never carries aria-current.",
+    "From 40em the sidebar and main sit together as one group centred in the viewport, with --space-5 between them. main keeps --content-max, and /stats/records keeps --content-max-wide.",
+    "tokens.css adds --sidebar-width-compact: 4.5rem, --sidebar-width: 12rem and --rail-width: 18rem (the last for FRONTEND-036), and tokens.test.ts pins them.",
+    "A LogOutIcon is added to components/ui/icons from Lucide, the existing set, under its licence and in the same way as the other icons.",
+    "No horizontal overflow: scrollWidth equals clientWidth at 320, 360, 640, 1024, 1152, 1248, 1280 and 1920 CSS px, each with a classic 17px scrollbar, signed in and anonymous, on /, /stats/records and /notifications.",
+    "The skip link is still the first focusable element and moves focus to main. Tab order: brand, header Search (phones only), Account menu or Sign in, then the nav items in order, then main.",
+    "Browser rows at 360, 1024, 1280 and 1920, light and dark, signed in and anonymous, reported with measurements or NOT DONE: the phone bar's four icons; the header's Search beside the avatar on phones; the sidebar at each width; Sign out from the bar and from the sidebar; the current item on /stats, a player page and /search; keyboard through header and nav; 200% text size at 360 and 1280; the compose dialog open.",
+    "frontend/src/test/bundle-budgets/FRONTEND-035.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file, or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the shell's new shape."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/routes/floating-clearance.test.ts",
+    "frontend/src/routes/routes.test.tsx",
+    "frontend/src/routes/auth-flow.test.tsx",
+    "frontend/src/routes/sidebar-nav.test.tsx",
+    "frontend/src/components/ui/icons/**",
+    "frontend/src/styles/tokens.css",
+    "frontend/src/styles/tokens.test.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-035.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/features/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

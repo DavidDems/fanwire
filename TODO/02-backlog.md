@@ -137,6 +137,27 @@ current queue and order for Track D. Every unit is `hand`.
 | 12 | `FEED-001` | Keep public guest-feed posts visible to new signed-in accounts |
 | 13 | `FRONTEND-033` | Profile-route loading feedback and measured navigation delay |
 
+## UI track (2026-11-05)
+
+The human's look-and-feel changes (`FrontendUI/decisions.md`, 2026-11-05). Specs
+are in `.ai/tasks/`; the live brief, order, gates and manual steps are
+`wiki/GeneralContext/Prompts/23-ui-track.md`. Every unit is `hand`. Gates on
+Track D: `POSTS-009` after `FEED-001` (same feed query), `FRONTEND-035` after
+`FRONTEND-032` and `FRONTEND-033` (same shell and route tests). The stats
+picker's usability is a later spec.
+
+| Order | Task | What |
+|---|---|---|
+| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) |
+| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread |
+| 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones |
+| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results |
+| 5 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) |
+
+`FRONTEND-034` and `FRONTEND-035` share no file and can swap order;
+`FRONTEND-036` needs `FRONTEND-035`, and `EVENTS-013` needs `FRONTEND-036`.
+`EVENTS-013`'s browser rows read best after the human's game-data refresh.
+
 ## Deferred new-device security (outside Track D)
 
 `AUTH-001` is now part of Track D, immediately after `USERS-007`. `USERS-007`
