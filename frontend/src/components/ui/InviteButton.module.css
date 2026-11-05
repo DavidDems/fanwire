@@ -1,0 +1,78 @@
+/*
+ * InviteButton (FRONTEND-032): fixed immediately left of the floating compose
+ * button (FloatingButton.module.css), on its baseline at every width: the same
+ * bottom, and a right offset of the +'s own right offset, its 3.5rem and a
+ * var(--space-3) gap. The box shrinks to its content and is capped so it ends
+ * left of the + at 320 px, so neither the button nor the address shown when the
+ * clipboard refuses can overlap compose; the address stacks above the button.
+ * Button secondary's classes give the colours, edge and focus ring. Values come
+ * from tokens.css by name only.
+ */
+
+.invite {
+  position: fixed;
+  right: calc(var(--space-4) + 3.5rem + var(--space-3));
+  bottom: calc(
+    var(--space-8) + var(--space-4) + env(safe-area-inset-bottom, 0px)
+  );
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-inline-size: calc(
+    100vw - var(--space-4) - var(--space-4) - 3.5rem - var(--space-3)
+  );
+}
+
+/*
+ * As tall as the + beside it, a pill to its circle, raised as it is; Button
+ * md's own padding. Two classes, so it wins over Button's min-height whatever
+ * order the stylesheets load in.
+ */
+.invite .control {
+  min-height: 3.5rem;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-2);
+}
+
+/* "Invite" and "Copied" in the same width, so the button does not jump. */
+.label {
+  min-inline-size: 3.75em;
+  text-align: center;
+}
+
+/* The address for copying by hand: a raised card above the button. */
+.manual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  inline-size: 16rem;
+  max-inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-2);
+}
+
+.manualLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.address {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 40em) {
+  .invite {
+    right: calc(var(--space-5) + 3.5rem + var(--space-3));
+    bottom: var(--space-5);
+    max-inline-size: calc(
+      100vw - var(--space-5) - var(--space-5) - 3.5rem - var(--space-3)
+    );
+  }
+}
