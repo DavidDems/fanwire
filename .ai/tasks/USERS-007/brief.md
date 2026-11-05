@@ -14,6 +14,45 @@ on the dev pool, with a human-provided address:
    `VerifyUserAttribute` flips it to true.
 If step 2 fails, stop and report: the design needs another route.
 
+## Cognito verification client scope
+
+This amendment adds only the frontend Cognito client and its focused test file
+to the unit. Keep the proof-first gate above unchanged: implementation still
+cannot start until the dev-pool sign-in-with-unverified-email and later
+verification proof is completed and recorded.
+
+`CognitoAuthService.requestEmailVerification()` must restore and validate the
+current SDK user's session before requesting `GetUserAttributeVerificationCode`,
+then make the request on that same hydrated SDK user instance. Do not attempt
+the request when no valid session is available. In
+`amazon-cognito-identity-js`, the successful callback is
+`inputVerificationCode`; resolve the method's Promise there so Account Settings
+can move to code entry. Convert SDK/session errors into rejected auth errors
+without leaving the Promise pending.
+
+Add focused tests in `CognitoAuthService.test.ts` using the real
+`amazon-cognito-identity-js` SDK and the in-process MSW server to intercept
+Cognito HTTP. They must never contact a real Cognito pool or network and must
+not mock the SDK module (the pinned `auth/sdk-isolation.test.ts` forbids that).
+Use only synthetic localStorage session/token fixtures; include no real
+credentials or secrets. Cover valid session restoration and request on the same
+user; missing or invalid session with no verification request; Promise
+completion through `inputVerificationCode`; and rejection on session or SDK
+errors. This client/test addition does not alter any other USERS-007 paths,
+criteria, gates or sequencing.
+
+## Automatic profile creation after sign-in
+
+When a successful sign-in lands on the public feed (`/`), an authenticated
+account whose existing `GET /users/me` lookup returns 404 must automatically
+continue to `/create-profile`. Keep the feed public for anonymous visitors:
+they still see the guest feed and do not make a profile lookup. The existing
+404 already distinguishes an authenticated identity without a profile, so do
+not add a database column, schema change or boolean. Implement this routing
+behavior in `AppLayout.tsx` and cover the actual route flow in
+`auth-flow.test.tsx`, including the anonymous feed case. This is the only
+additional implementation path for the redirect.
+
 ## What this gives up, recorded so it is a choice
 
 - **An unverified account cannot reset its password.** Forgetting the password
