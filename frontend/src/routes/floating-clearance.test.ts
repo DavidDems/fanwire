@@ -11,17 +11,21 @@
  * width, for the last card to scroll out from under it. Lengths are read from
  * the two CSS modules with the tokens resolved and `env()` taken as 0.
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { lengthInRem, shorthandParts } from "../test/compose-modal";
 import {
+  SRC_DIR,
   isAtRule,
   parseCss,
   readSrcFile,
   selectors,
   type CssBlock,
 } from "../test/css";
-import { declared } from "../test/module-css";
+import { declared, lastCompoundClasses } from "../test/module-css";
 
 const FROM_40EM = /^@media\b.*\(\s*min-width\s*:\s*40em\s*\)/i;
 
@@ -130,5 +134,187 @@ describe("main's bottom padding clears the floating +", () => {
       .join(" ");
 
     expect(declaredPadding).toMatch(/env\(\s*safe-area-inset-bottom/);
+  });
+});
+
+/**
+ * FRONTEND-032: the Invite button sits immediately left of the +, on its
+ * baseline and fixed like it: either fixed itself (`InviteButton.module.css`,
+ * the same `bottom` as the + and a `right` offset past the + plus a gap) or
+ * in one fixed flex container with the + (in `InviteButton.module.css` or the
+ * shell's module, with a `gap`). Whichever it is, the rule is a top-level
+ * `position: fixed` rule other than the bottom nav's (`bottom: 0`).
+ *
+ * Pinned here: its bottom edge is the +'s at each width, so it clears the
+ * bottom nav on phones exactly as the + does; its right offset (when it has
+ * one) puts it wholly left of the +, with room between; and `main`'s bottom
+ * padding reaches past its top edge as well as the +'s. Its height is taken as
+ * the larger of what its rules declare and the +'s 3.5rem, since the two share
+ * a baseline and the taller one sets the line.
+ */
+const INVITE_CSS = "components/ui/InviteButton.module.css";
+
+/** The class names on top-level fixed rules not pinned to the very bottom. */
+function floatingClasses(blocks: CssBlock[]): string[] {
+  return blocks
+    .filter(
+      (block) =>
+        !isAtRule(block) &&
+        (declared(block, "position") ?? "").trim() === "fixed" &&
+        declared(block, "bottom") !== undefined &&
+        lengthInRem(declared(block, "bottom") ?? "") !== 0,
+    )
+    .flatMap((block) => selectors(block).flatMap(lastCompoundClasses));
+}
+
+interface Placed {
+  file: string;
+  className: string;
+  rules: { phone: CssBlock[]; wide: CssBlock[] };
+}
+
+/** The Invite's fixed rule (or its container's), wherever it lives. */
+function inviteRules(): Placed[] {
+  const found: Placed[] = [];
+  for (const file of [INVITE_CSS, "routes/AppLayout.module.css"]) {
+    if (!existsSync(join(SRC_DIR, ...file.split("/")))) continue;
+    const blocks = parseCss(readSrcFile(file));
+    for (const className of new Set(floatingClasses(blocks))) {
+      found.push({ file, className, rules: rulesFor(blocks, className) });
+    }
+  }
+  return found;
+}
+
+/** The last value `rules` declare for any of `properties`, in rem. */
+function lastLength(rules: CssBlock[], properties: string[]): number | null {
+  let found: number | null = null;
+  for (const rule of rules) {
+    for (const { property, value } of rule.declarations) {
+      if (properties.includes(property)) found = lengthInRem(value);
+    }
+  }
+  return found;
+}
+
+function inviteBottom(placed: Placed, wide: boolean): number | null {
+  const phone = lastLength(placed.rules.phone, ["bottom", "inset-block-end"]);
+  if (!wide) return phone;
+  return lastLength(placed.rules.wide, ["bottom", "inset-block-end"]) ?? phone;
+}
+
+function inviteHeight(placed: Placed, wide: boolean): number {
+  const rules = wide
+    ? [...placed.rules.phone, ...placed.rules.wide]
+    : placed.rules.phone;
+  const own = lastLength(rules, ["height", "min-height", "block-size"]) ?? 0;
+  return Math.max(own, fabHeight);
+}
+
+function composeBottom(wide: boolean): number {
+  const phone = floatingTop(fab.phone, null) - fabHeight;
+  return wide ? floatingTop(fab.wide, phone) - fabHeight : phone;
+}
+
+function composeRight(wide: boolean): number | null {
+  const phone = lastLength(fab.phone, ["right", "inset-inline-end"]);
+  if (!wide) return phone;
+  return lastLength(fab.wide, ["right", "inset-inline-end"]) ?? phone;
+}
+
+describe("the Invite button beside the + (FRONTEND-032)", () => {
+  it("has a fixed rule of its own, or of a container it shares with the +", () => {
+    const placed = inviteRules();
+
+    expect(
+      placed.map(({ file, className }) => `${file} .${className}`),
+      `a top-level position: fixed rule (not the nav's) in ${INVITE_CSS} or the shell's module`,
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    ["on phones", false],
+    ["from 40em", true],
+  ] as const)("%s, sits on the +'s baseline", (_label, wide) => {
+    const placed = inviteRules();
+    expect(placed).not.toEqual([]);
+
+    for (const rule of placed) {
+      const bottom = inviteBottom(rule, wide);
+      expect(bottom, `.${rule.className}'s bottom`).not.toBeNull();
+      expect(bottom ?? 0).toBeCloseTo(composeBottom(wide), 5);
+    }
+  });
+
+  it("on phones, clears the bottom nav as the + does (and keeps the safe area)", () => {
+    const placed = inviteRules();
+    expect(placed).not.toEqual([]);
+
+    for (const rule of placed) {
+      // The nav is under var(--space-8) tall, plus the safe area.
+      expect(inviteBottom(rule, false) ?? 0).toBeGreaterThanOrEqual(
+        lengthInRem("var(--space-8)") ?? Infinity,
+      );
+      const bottom = rule.rules.phone
+        .map((block) => declared(block, "bottom") ?? "")
+        .join(" ");
+      expect(bottom).toMatch(/env\(\s*safe-area-inset-bottom/);
+    }
+  });
+
+  it.each([
+    ["on phones", false],
+    ["from 40em", true],
+  ] as const)(
+    "%s, sits wholly left of the +, with room between",
+    (_label, wide) => {
+      const placed = inviteRules();
+      expect(placed).not.toEqual([]);
+
+      for (const rule of placed) {
+        const all = wide
+          ? [...rule.rules.phone, ...rule.rules.wide]
+          : rule.rules.phone;
+        const right = lastLength(all, ["right", "inset-inline-end"]);
+        const plusRight = composeRight(wide);
+        expect(plusRight, "the +'s right offset").not.toBeNull();
+        if (right !== null && right > (plusRight ?? 0)) {
+          // Positioned itself: past the + and a gap.
+          expect(right).toBeGreaterThan((plusRight ?? 0) + fabHeight);
+        } else {
+          // A container holding both: they are spaced by its gap.
+          const gap = lastLength(all, ["gap", "column-gap"]);
+          expect(
+            gap,
+            `.${rule.className} is neither offset past the + nor a container with a gap`,
+          ).not.toBeNull();
+          expect(gap ?? 0).toBeGreaterThan(0);
+        }
+      }
+    },
+  );
+
+  it("main's bottom padding clears the Invite button as well as the +, at each width", () => {
+    const placed = inviteRules();
+    expect(placed).not.toEqual([]);
+    const phonePadding = bottomPadding(shell.phone) ?? 0;
+    const widePadding = bottomPadding([...shell.phone, ...shell.wide]) ?? 0;
+
+    for (const rule of placed) {
+      const phoneTop =
+        (inviteBottom(rule, false) ?? Infinity) + inviteHeight(rule, false);
+      const wideTop =
+        (inviteBottom(rule, true) ?? Infinity) + inviteHeight(rule, true);
+
+      expect(
+        phonePadding,
+        "phone: main's bottom padding",
+      ).toBeGreaterThanOrEqual(phoneTop);
+      expect(widePadding, "40em: main's bottom padding").toBeGreaterThanOrEqual(
+        wideTop,
+      );
+    }
+    // And the + still, as above.
+    expect(phonePadding).toBeGreaterThanOrEqual(floatingTop(fab.phone, null));
   });
 });
