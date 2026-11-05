@@ -115,11 +115,11 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **Local notifications**: the dev stack never creates any, because without `POST_EVENT_BUS_NAME` events go to `InMemoryEventPublisher` and nothing consumes them | `hand` | — | `UI-005`–`UI-007` browser pass | Dev tooling. Until then, `FrontendUI/verification.md` §3a says how to insert rows |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (#161), `0x03-posts.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
 
-## Launch adjustments (2026-11-02)
+## Launch adjustments (Track D sequence)
 
-Before the site is shared publicly. Specs are on `main`; the live brief, order and
-manual steps are `wiki/GeneralContext/Prompts/22-launch-adjustments.md`. Every unit
-is `hand`.
+The original launch brief and manual steps are in
+`wiki/GeneralContext/Prompts/22-launch-adjustments.md`; the table below is the
+current queue and order for Track D. Every unit is `hand`.
 
 | Order | Task | What |
 |---|---|---|
@@ -131,24 +131,28 @@ is `hand`.
 | 6 | `POSTS-008` | The History page |
 | 7 | `USERS-006` | Account menu and Account settings, password-checked deactivate |
 | 8 | `USERS-007` | Sign-up without email verification |
-| 9 | `USERS-008` | Delete my data (after a Director PR for the role boundary) |
-| 10 | `FRONTEND-032` | The Invite button |
+| 9 | `AUTH-001` | Secure one-time password-reset link for verified and unverified accounts; signup password confirmation; account-details entry in settings |
+| 10 | `USERS-008` | Delete my data (after a Director PR for the role boundary) |
+| 11 | `FRONTEND-032` | The Invite button |
+| 12 | `FEED-001` | Keep public guest-feed posts visible to new signed-in accounts |
+| 13 | `FRONTEND-033` | Profile-route loading feedback and measured navigation delay |
 
-## Deferred account security and recovery (after Launch adjustments)
+## Deferred new-device security (outside Track D)
 
-These are future hand-run units, outside the ten-unit launch sequence. `USERS-007`
-does not implement password recovery or new-device verification.
+`AUTH-001` is now part of Track D, immediately after `USERS-007`. `USERS-007`
+does not implement password recovery. New-device registry and identity checks
+remain future hand-run units in the backlog, outside Track D. They are not part
+of the Track D completion count.
 
 | Order | Task | What |
 |---|---|---|
-| 1 | `AUTH-001` | Secure password-reset link for verified and unverified accounts; independent of device work. |
-| 2 | `AUTH-002` | Per-user remembered-device registry; requires a separate Director policy/scope prerequisite for its migration path. |
-| 3 | `AUTH-003` | Dismissible verification prompt for unverified users and pre-session email step-up for verified users on new devices; depends on `AUTH-002`. |
+| 1 | `AUTH-002` | Per-user remembered-device registry; requires a separate Director policy/scope prerequisite for its migration path. Outside Track D. |
+| 2 | `AUTH-003` | Dismissible verification prompt for unverified users and pre-session email step-up for verified users on new devices; depends on `AUTH-002`. Outside Track D. |
 
-The reset flow requires a separately approved Cognito plan/password-history and
-email-sender/IAM design. New-device email codes are lower assurance and require
-an architecture that withholds usable tokens until the challenge succeeds. See
-each task brief for security constraints and approval gates.
+Password recovery requires a separately approved Cognito plan/password-history
+and email-sender/IAM design. New-device email codes are lower assurance and
+require an architecture that withholds usable tokens until the challenge
+succeeds. See each task brief for security constraints and approval gates.
 
 ## Frontend
 
