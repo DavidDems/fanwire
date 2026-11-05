@@ -323,30 +323,36 @@ export class CognitoAuthService implements AuthService {
       );
     }
     return new Promise((resolve, reject) => {
-      user.verifyAttribute("email", code, {
-        onSuccess: () => {
-          // VerifyAttribute does not return a new token. Force the one refresh
-          // needed for email_verified to appear in the next ID token.
-          user.getSession(
-            (sessionError: Error | null, session: CognitoUserSession | null) => {
-              if (sessionError || !session) {
-                reject(toAuthError(sessionError ?? new Error(NO_VALID_SESSION)));
-                return;
-              }
-              user.refreshSession(
-                session.getRefreshToken(),
-                (refreshError: Error | null, refreshed: CognitoUserSession | null) => {
-                  if (refreshError || !refreshed) {
-                    reject(toAuthError(refreshError ?? new Error("Session refresh failed.")));
-                    return;
-                  }
-                  resolve();
-                },
-              );
-            },
-          );
-        },
-        onFailure: (error) => reject(toAuthError(error)),
+      user.getSession((sessionError: Error | null, session: CognitoUserSession | null) => {
+        if (sessionError || !session || !session.isValid()) {
+          reject(toAuthError(sessionError ?? new Error(NO_VALID_SESSION)));
+          return;
+        }
+        user.verifyAttribute("email", code, {
+          onSuccess: () => {
+            // VerifyAttribute does not return a new token. Force the one refresh
+            // needed for email_verified to appear in the next ID token.
+            user.getSession(
+              (refreshSessionError: Error | null, currentSession: CognitoUserSession | null) => {
+                if (refreshSessionError || !currentSession || !currentSession.isValid()) {
+                  reject(toAuthError(refreshSessionError ?? new Error(NO_VALID_SESSION)));
+                  return;
+                }
+                user.refreshSession(
+                  currentSession.getRefreshToken(),
+                  (refreshError: Error | null, refreshed: CognitoUserSession | null) => {
+                    if (refreshError || !refreshed) {
+                      reject(toAuthError(refreshError ?? new Error("Session refresh failed.")));
+                      return;
+                    }
+                    resolve();
+                  },
+                );
+              },
+            );
+          },
+          onFailure: (error) => reject(toAuthError(error)),
+        });
       });
     });
   }
