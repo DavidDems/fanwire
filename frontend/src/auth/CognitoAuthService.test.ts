@@ -69,11 +69,11 @@ const CLIENT_ID = config.cognitoClientId;
 const COGNITO_URL = `https://cognito-idp.${config.cognitoRegion}.amazonaws.com/`;
 const CACHE_PREFIX = `CognitoIdentityServiceProvider.${CLIENT_ID}`;
 
-function syntheticJwt(tokenUse: "id" | "access", expired = false): string {
+function syntheticJwt(tokenUse: "id" | "access", expired = false, emailVerified = false): string {
   const now = Math.floor(Date.now() / 1000);
   const exp = expired ? now - 3600 : now + 3600;
   const payload = tokenUse === "id"
-    ? { sub: "synthetic-subject", email: "synthetic@example.invalid", email_verified: false, exp, iat: now, token_use: "id" }
+    ? { sub: "synthetic-subject", email: "synthetic@example.invalid", email_verified: emailVerified, exp, iat: now, token_use: "id" }
     : { sub: "synthetic-subject", exp, iat: now, token_use: "access", username: USERNAME };
   const encode = (value: unknown) => btoa(JSON.stringify(value)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   return `${encode({ alg: "none", typ: "JWT" })}.${encode(payload)}.synthetic-signature`;
@@ -191,5 +191,72 @@ describe("CognitoAuthService", () => {
     await expect(new CognitoAuthService().requestEmailVerification()).rejects.toMatchObject({
       code: "LimitExceededException",
     });
+  });
+
+  it("restores the session, verifies the supplied email code, then refreshes verification state", async () => {
+    storeSyntheticSession();
+    const calls: Array<{ target: string; body: Record<string, unknown> }> = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      const target = request.headers.get("x-amz-target") ?? "";
+      const body = await request.json() as Record<string, unknown>;
+      calls.push({ target, body });
+      if (target.endsWith(".VerifyUserAttribute")) return HttpResponse.json({});
+      if (target.endsWith(".InitiateAuth")) {
+        return HttpResponse.json({ AuthenticationResult: {
+          IdToken: syntheticJwt("id", false, true),
+          AccessToken: syntheticJwt("access"),
+          RefreshToken: "synthetic-refreshed-token",
+          ExpiresIn: 3600,
+          TokenType: "Bearer",
+        } });
+      }
+      return HttpResponse.json({ __type: "NotAuthorizedException" }, { status: 400 });
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .resolves.toBeUndefined();
+
+    expect(calls[0]).toMatchObject({
+      target: "AWSCognitoIdentityProviderService.VerifyUserAttribute",
+      body: { AttributeName: "email", Code: "654321" },
+    });
+    expect(calls[1]?.target).toBe("AWSCognitoIdentityProviderService.InitiateAuth");
+    await expect(new CognitoAuthService().emailVerified()).resolves.toBe(true);
+  });
+
+  it("does not request VerifyUserAttribute when no current session exists", async () => {
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({});
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toBeDefined();
+    expect(targets).not.toContain("AWSCognitoIdentityProviderService.VerifyUserAttribute");
+  });
+
+  it("does not request VerifyUserAttribute when the stored session is invalid", async () => {
+    window.localStorage.setItem(`${CACHE_PREFIX}.LastAuthUser`, USERNAME);
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({});
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toBeDefined();
+    expect(targets).not.toContain("AWSCognitoIdentityProviderService.VerifyUserAttribute");
+  });
+
+  it("rejects a mismatched email verification code", async () => {
+    storeSyntheticSession();
+    server.use(http.post(COGNITO_URL, () => HttpResponse.json(
+      { __type: "CodeMismatchException", message: "Invalid verification code" },
+      { status: 400 },
+    )));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toMatchObject({ code: "CodeMismatchException" });
   });
 });
