@@ -77,6 +77,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 Live:
 
 - **`23-ui-track.md`** (2026-11-05): five units run autonomously by a Director with subagents: reply cards show their parent, liked replies in the feed, the icon nav and left sidebar, the home page's right rail, recent games. Order, gates on Track D, and the migrations it may run itself are in the brief.
+- **`FRONTEND-037` follow-up** (2026-11-05): compact game-result presentation across Recent Games, Stats seasons, the compose picker and game detail. It starts after `EVENTS-013` adds Recent Games; see the follow-up note and order in [`23-ui-track.md`](Prompts/23-ui-track.md).
 - **`22-launch-adjustments.md`** (2026-11-02): ten hand-run units before the site is shared publicly: records library and search, team icons, avatar colours, History, the account menu and Account settings, sign-up without verification, delete my data, Invite. Order and manual steps are in the brief.
 
 - **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).

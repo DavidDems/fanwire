@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-037",
+  "objective": "Make season game results, attached-game navigation and game detail pages compact, scannable and consistent, while preserving every current game and player statistic.",
+  "acceptance_criteria": [
+    "Test-first: commit failing tests alone before implementation; the implementation commit does not edit tests. Tests cover the season team view, game links, selected-season navigation and game detail tabs.",
+    "Dependency and merge order: the UI-track PR #329 that adds the Recent Games section must reach main first. Create this task branch from main after that merge. Reuse the section's game-result card where its contract fits; this task updates that card to the compact form described here and adapts the Stats and compose contexts. Do not build a second Recent Games section.",
+    "In Stats > Seasons > a team, retain the existing team heading and the line 'Record 68-14 · Home 36-6 · Away 32-8' (with actual values). Do not repeat the overall record in the chart.",
+    "Replace the point-margin chart and its unlinked point-margin table with an accessible bar chart of cumulative team wins/losses across that season's games, in chronological order. Each bar represents the team's record after that game; the chart's horizontal axis uses month names only, with no day numbers. Provide an equivalent accessible text/table description of the values, use no color-only meaning, and handle empty and one-game seasons.",
+    "Show team season games in a two-column grid at large viewport widths. Populate row-major in newest-first order: newest top left, next top right, then continue left to right down the grid. At narrow widths use one column without changing order. Remove the date column and do not show game dates in these rows.",
+    "Each season game card uses the team names without city names, always shows the currently selected team first, and includes the opponent, W/L, final score, and game type/label. Use an explicit W or L and a light/dark text contrast for win versus loss; color is supplemental and must meet the existing token and contrast rules. Do not use the away/home split as a substitute for the overall record.",
+    "The complete season game card is one link to that game's existing detail route, has a visible hover and keyboard-focus treatment, and exposes an accessible name containing matchup and result. A click anywhere on the card opens the game; nested interactive links are not introduced.",
+    "In the compose stats-link picker, game choices use the same game-result card treatment and information as the Stats team view. The entire matchup (for example, 'Celtics at Pacers') is the game link and navigates to the same game detail address previously reached through the date. The whole row is clickable and has a visible hover and focus treatment. Existing selectable player lines and selection semantics continue to work.",
+    "On the game detail page, each team in the matchup heading is a separate link to that team's Stats > Seasons page, carrying the season that was selected when the game was opened. Navigating from one team's page to the opponent keeps the same season selected; the season changes only when the user changes the season control. A direct game URL with no season context uses the currently selected/default season.",
+    "Replace the spelled-out final-score sentence with two team tabs. Each tab shows the team's short name and score (for example, 'Celtics 128' and 'Pacers 81'); selecting a tab selects that team's player list and corresponding result context. The winning team is the initially selected, left-hand tab. For a tie or a game without a final result, use the home team as the deterministic initial selection. Selection is communicated semantically and visually; the selected tab has the only selected-state lighting difference. Do not visually distinguish winning and losing teams on the game detail tabs.",
+    "Preserve the complete box-score statistics, line score, game date, venue and accessible game context on the detail page. The date is available on the game detail page, not repeated in the season rows or compact recent-result card. Each team heading link retains the season context without changing the game's canonical identity.",
+    "The compact Recent Games card displays the two short team names and overall team records in small parentheses, with no city names. Scores and winner/loser status are scannable; mute the losing team's card text, while keeping all result information readable and accessible without color. Do not show home/away records in this card. The Stats team view retains its distinct W/L contrast treatment rather than muting the losing side.",
+    "At 320, 360, 768 and 1280 CSS px, the changed views have no document-level horizontal overflow. The grid switches to one column at narrow sizes and two columns at large sizes. All links and tabs work by keyboard, have visible focus, meet existing minimum target and contrast rules, and respect reduced motion.",
+    "No API or dependency change, and no game data is dropped. Preserve request counts and existing season, game and player query/cache behavior. If season context must be passed between routes, encode it in the URL or existing router state with a stable fallback for copied/direct game URLs.",
+    "No new dependency, remote asset, third-party request or raster image. Any new/enlarged lazy output and entry growth are declared in frontend/src/test/bundle-budgets/FRONTEND-037.ts in the test commit; keep the entry increase within 1 KiB raw and 512 bytes gzip, each changed/added async output within 8 KiB gzip total, and no built file at or above 500,000 raw bytes. Include measured before/after bundle sizes in the PR.",
+    "Browser evidence in the PR covers the Stats team page, picker, Recent Games card and game detail at 320/360/1280 CSS px in light and dark Chromium, keyboard use, a winning and losing game, a game with overtime if available, and season preservation while switching between teams. Clearly label synthetic fixture data.",
+    "Update wiki/CodeContext/Modules/0x08-frontend.md for changed Stats, picker, Recent Games and game detail behavior."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/stats/**",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/api/stats.ts",
+    "frontend/src/routes/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/direction.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
