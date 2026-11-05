@@ -4,6 +4,66 @@ type: prompt
 
 # 23 — UI track: sidebar, search rail, reply context and recent games
 
+## Update (2026-11-05, Director session)
+
+**Progress.** Gate units unstarted at session start, so this session runs them.
+- `FEED-001`: PR #332 open, no migration. Root cause: a signed-in viewer gets
+  `FollowsAndPreferredTeamStrategy` (followed + self + preferred team), so an
+  account that follows nobody saw an empty feed (reproduced on localhost).
+- `FRONTEND-032`: PR #331 open, CI green, no migration.
+- `FRONTEND-033`: PR #333 open, no migration. Before timings (localhost, throttled
+  400 ms / 1.6 Mbps / CPU 4x): URL at ~25 ms, old page visible ~500 ms while
+  the lazy chunk loads, "Loading this profile…" ~430 ms, content ~960 ms.
+  Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
+  ~57 ms throttled, 3 stale frames instead of 31.
+- Next: `POSTS-009` after #332 merges; `FRONTEND-035` after #331 and 033 merge.
+
+**Design-choice log** (unit, choice, why):
+- `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
+  one who follows anyone keeps today's feed. Why: the smallest change that
+  meets "same eligible posts as the guest feed" without changing the
+  established follows feed.
+- `FRONTEND-032`: Invite is fixed on its own (compose's bottom; right = the
+  +'s offset + 3.5rem + `--space-3`), not in a shared container. Why: compose's
+  markup and its dialog-anchor and clearance tests stay untouched.
+- `FRONTEND-032`: a pill as tall as the + (3.5rem, `--radius-full`,
+  `--shadow-2`) carrying Button secondary md's classes. Why: the two sit on one
+  line top and bottom, and colours, edge, focus ring and forced colours are
+  exactly Button secondary's.
+- `FRONTEND-032`: "Link copied" is a visually hidden status; the label itself
+  reads "Copied". Why: a visible second message would repeat the label.
+- `FRONTEND-032`: the clipboard fallback is a raised card above the button
+  with a read-only field, focused and selected, "Copy this link"; no timer, it
+  goes on the next successful copy or Escape. Why: copying by hand needs time,
+  and the card can't reach the + at 320 px.
+- `FRONTEND-032`: the label keeps one width for "Invite" and "Copied", and the
+  pill was narrowed (inline padding `--space-3`) after the 200 % row at 360 px
+  clipped it by 30 px. Why: no jump on copy, and it must fit at large text.
+- `FEED-001`: the fallback lives inside `FollowsAndPreferredTeamStrategy` and
+  ignores the preferred team when there are no follows. Why: the guest
+  selection already includes team posts, and `strategy_for` stays unchanged
+  (an existing test pins its return type).
+- `FRONTEND-033`: the profile route gets its own Suspense with a
+  `ProfileLoading` fallback (header-card skeleton + "Loading this profile…"),
+  and `ProfilePage` shows the same while data loads. Why: a newly mounted
+  boundary shows its fallback even inside the router's transition, and one
+  look covers both waits.
+- `FRONTEND-033`: the skeleton copies the header card's grid with no
+  description lines and no reserved Follow row; the status sits under the card.
+  Why: nothing promised that may not come, and the own profile has no Follow.
+  At 360 a public card still grows 98 → 154 px as Follow wraps.
+- `FRONTEND-033`: a new Retry button under the profile's error alert. Why: the
+  criterion asks for error/retry, and the page had no retry.
+- Follow-up (test flake, 2026-11-05): `ComposeRoute.test.tsx` "renders the
+  real composer…" fails in the local frontend container on `main` itself
+  (c4f5a2a) while CI passes it: `getByRole('textbox')` right after
+  `findByRole('heading')` races the lazy composer. Should be `findByRole`.
+  Two delete-focus tests flaked once under the same load.
+- `FEED-001` follow-up (not built): an account whose only follows are
+  deactivated still counts as following someone, so its feed stays thin.
+
+**Spec amendments:** none.
+
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
 and their deploys. Self-contained: read this file, then what it names.
