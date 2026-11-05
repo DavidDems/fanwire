@@ -26,20 +26,46 @@
 }
 
 /*
- * As tall as the + beside it, a pill to its circle, raised as it is; Button
- * md's own padding. Two classes, so it wins over Button's min-height whatever
- * order the stylesheets load in.
+ * As tall as the + beside it, a pill to its circle, raised as it is. Narrower
+ * side padding than Button md, so it fits left of the + at 360 px with 200%
+ * text. Two classes, so it wins over Button's whatever order the stylesheets
+ * load in.
  */
 .invite .control {
   min-height: 3.5rem;
+  padding-inline: var(--space-3);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-2);
 }
 
-/* "Invite" and "Copied" in the same width, so the button does not jump. */
+/*
+ * "Invite" and "Copied" in the same width, so the button does not jump: both
+ * words are drawn hidden in the word's own grid cell, which is then exactly as
+ * wide as the wider. Generated content, so it is not in the text, and hidden,
+ * so it is not in the name.
+ */
 .label {
-  min-inline-size: 3.75em;
-  text-align: center;
+  display: inline-grid;
+  justify-items: center;
+}
+
+.word,
+.label::before,
+.label::after {
+  grid-area: 1 / 1;
+}
+
+.label::before,
+.label::after {
+  visibility: hidden;
+}
+
+.label::before {
+  content: "Invite";
+}
+
+.label::after {
+  content: "Copied";
 }
 
 /* The address for copying by hand: a raised card above the button. */

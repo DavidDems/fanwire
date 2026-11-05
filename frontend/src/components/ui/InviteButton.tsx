@@ -79,7 +79,9 @@ export function InviteButton() {
       >
         <LinkIcon />
         <span className={styles.label}>
-          {outcome === "copied" ? "Copied" : "Invite"}
+          <span className={styles.word}>
+            {outcome === "copied" ? "Copied" : "Invite"}
+          </span>
         </span>
       </button>
       <span role="status" className="visually-hidden">
