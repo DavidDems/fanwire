@@ -70,6 +70,29 @@ describe("Account settings", () => {
     expect(verified.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   });
 
+  it("keeps verification retryable when requesting a code fails", async () => {
+    const user = userEvent.setup();
+    const auth = new FakeAuthService({
+      session: testSession(),
+      emailVerified: false,
+    }).failWith("requestEmailVerification", "LimitExceededException");
+    renderSettingsApp("active", auth);
+    await initialRefreshCount(auth);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Verify this account" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not send a verification code/i,
+    );
+    expect(screen.queryByRole("textbox", { name: /verification code/i })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Verify this account" }),
+    ).toBeEnabled();
+    expect(auth.callsTo("requestEmailVerification")).toEqual([undefined]);
+  });
+
   it("shows a mismatched verification code on its field", async () => {
     const user = userEvent.setup();
     const auth = new FakeAuthService({

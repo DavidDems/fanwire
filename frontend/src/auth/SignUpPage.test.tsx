@@ -69,6 +69,14 @@ describe("SignUpPage", () => {
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
   });
 
+  it("explains that sign-in is immediate and email verification can happen later", () => {
+    renderSignUp(new FakeAuthService());
+
+    expect(screen.getByText(/you can sign in now/i)).toBeInTheDocument();
+    expect(screen.getByText(/verify your account later/i)).toBeInTheDocument();
+    expect(screen.queryByText(/code/i)).toBeNull();
+  });
+
   it("signs up through the injected service", async () => {
     const user = userEvent.setup();
     const service = new FakeAuthService();
