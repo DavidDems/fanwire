@@ -6,7 +6,7 @@ import styles from "./StatsNav.module.css";
 
 type Figures = Pick<
   RecordEntryOut,
-  "value" | "wins" | "losses" | "made" | "pct"
+  "value" | "wins" | "losses" | "made" | "attempted" | "pct"
 >;
 
 const EN_DASH = "–";
@@ -19,11 +19,13 @@ const EN_DASH = "–";
  *   one phrase, "73 wins, 9 losses, .890", never the dash and parenthesis.
  * - **made_total**: `12`, then the percentage, `(57.1%)`, muted; the count
  *   alone when nothing was attempted (a null `pct`).
+ * - **shot_pct** (FRONTEND-030): the percentage, `45.4%`, then the made and
+ *   attempted counts, `(402/886)`, muted; the percentage alone without them.
  * - anything else: the value alone, formatted by its kind.
  *
  * `strong` sets the figure in bold, as a card does; `unit`, when given,
- * follows the figure (a card's `168 points`). A win_loss value takes no unit:
- * `73–9` is the record.
+ * follows the figure (a card's `168 points`). A win_loss or shot_pct value
+ * takes no unit: `73–9` and `45.4%` say what they are.
  */
 export function RecordValue({
   entry,
@@ -37,7 +39,7 @@ export function RecordValue({
   strong?: boolean;
 }) {
   const bold = (text: string) => (strong ? <strong>{text}</strong> : text);
-  const { wins, losses, made, pct } = entry;
+  const { wins, losses, made, attempted, pct } = entry;
 
   if (kind === "win_loss" && wins !== null && losses !== null && pct !== null) {
     const share = formatPercentage(pct);
@@ -66,6 +68,13 @@ export function RecordValue({
         <>
           {" "}
           <span className={styles.share}>({formatShootingShare(pct)})</span>
+        </>
+      ) : kind === "shot_pct" && made !== null && attempted !== null ? (
+        <>
+          {" "}
+          <span className={styles.share}>
+            ({made.toLocaleString("en-US")}/{attempted.toLocaleString("en-US")})
+          </span>
         </>
       ) : null}
     </>

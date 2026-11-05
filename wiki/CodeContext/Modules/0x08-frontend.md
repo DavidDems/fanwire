@@ -26,8 +26,9 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query, and `account.ts` (`useAccount()`, the one account-state hook, and the deactivate / recover / sign-out actions, `FRONTEND-012`) |
-| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; Sign in shows in the header for an anonymous visitor, except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; it adds the active-profile Account menu described below; Sign in shows for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
+| `src/features/account/` | `AccountSettings.tsx` at `/settings` (`RequireAuth`): email verification, the disabled notifications setting and password-reauthenticated deactivation (`USERS-006`) |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
 | `src/features/thread/` | `/posts/:postId` — the thread modal: the root, the reply composer, the direct replies (`FRONTEND-010`) |
 | `src/features/notifications/` | `/notifications` — the list, the optimistic clear and the email preference |
@@ -101,6 +102,26 @@ that here as usual.
   commit, with the reason.** This thread's later specs carry it forward
   (brief 20, R1).
 
+### Team icons (`FRONTEND-031`)
+
+- **`components/ui/TeamIcon`** takes `abbreviation` (the stored one, BOS),
+  `size` (`sm` 32 px, `lg` 64 px) and an optional `label`: with it the icon is
+  `role="img"` named by it, without it `aria-hidden` (the team is adjacent
+  text). It draws the abbreviation in black on the inner colour inside the
+  outer ring, text and CSS only. An unknown or null abbreviation gets the
+  neutral form, no team colours.
+- **`lib/teamColors.ts`** is the data: `INNER_COLORS` (8) and `OUTER_COLORS`
+  (5) as ordered `{key, name}` lists, `TEAM_COLORS` (one pair per team) and
+  `teamColors()` (the pair, or null). Keys name the `--team-inner-*` /
+  `--team-outer-*` tokens in `tokens.css`, fixed across themes. `USERS-005`'s
+  avatar picker reads the two lists, so they stay exported and in order.
+- **Where:** standings (`SeasonLevel`), `TeamLevel` and the team level's
+  heading in `StatsNavigator`, `TeamSearch`, the `GamePage` header,
+  `BoxScore` headings, team records only in `RecordLevel`/`RecordsLevel`,
+  the feed's `GamePreview` and `PlayerGamePreview`, `StatsPicker` rows, and
+  `PlayerPage`'s "Team" fact (the last team of the newest season line).
+  Dense opponent cells stay text. Nothing reads `TeamOut.logo_url`.
+
 ## Auth (`FRONTEND-002`)
 
 `AuthService` is an interface; `CognitoAuthService` is one implementation of it
@@ -130,7 +151,8 @@ differs, code does not, and `App` is the single place that chooses it.
   its invalidation before navigating: `staleTime` is 30s, so the 404 that sent
   the user to the form is otherwise still cached and still believed, and the
   guard bounces them straight back. A guard never requests it without a session.
-- **Protected routes are `/compose` and `/notifications`.** `/`, `/search` and
+- **Protected routes include `/compose`, `/notifications`, `/history` and
+  `/settings`.** `/`, `/search` and
   `/profile/:userId` stay public — the guest feed and profile views are read
   paths ([[0x01-users]]), and a guard on either is a regression. `/create-profile`
   is behind `RequireNewProfile`, which is what stops it being reachable by
@@ -156,9 +178,9 @@ differs, code does not, and `App` is the single place that chooses it.
 ## Profile and follow (`FRONTEND-003`)
 
 `/profile/:userId` is **one public route with two variants**, chosen by
-comparing the id in the path to the signed-in user's. There is no `/settings`
-route: settings are a section of a page the user already has an address for, and
-a second route would be a second place to decide who is allowed to see it.
+comparing the id in the path to the signed-in user's. The own-profile form edits
+profile fields; account lifecycle controls live on the separate, guarded
+`/settings` page.
 
 - **Date of birth is private, and the component tree is what guarantees it.**
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
@@ -367,7 +389,14 @@ inconvenient:
   **ID token** as `Authorization: Bearer`; the backend rejects access tokens
   ([[0x01-users]]).
 - **A 404 from `GET /users/me`** means "authenticated, no profile yet" and routes
-  to profile creation. It is a state, not an error.
+  to profile creation. It is a state, not an error. When such an authenticated
+  user lands on `/`, `AppLayout` redirects to `/create-profile`; an anonymous
+  visitor still sees the guest feed without a profile lookup.
+- Email verification is optional for sign-in and core account use. The account
+  settings action restores and validates the current Cognito SDK session before
+  requesting a verification code, and completes only after the SDK reports its
+  successful code-entry callback. Cognito's signup delivery and verified-state
+  result remain a dev-pool acceptance check.
 - **Date of birth is private**: the user's own profile and settings only, never a
   public profile view.
 - **Configuration is read in exactly one module** (`src/config.ts`), which
@@ -1284,7 +1313,9 @@ picker (`FRONTEND-021`).
 - **Its home is `src/components/stats-nav/`**, outside `features/`, so
   compose may use it. `StatsNavigator` renders a **stack of levels**:
   - a breadcrumb, `nav` "Stats path", whose items return to their level,
-    with the last one `aria-current="location"`;
+    with the last one `aria-current="location"`. `rootCrumb={false}` hides
+    it while the stack is one level deep, where it only repeats the `h2`
+    (the records home and the Seasons tab's season level, 2026-11-04);
   - Back, shown only when the stack is deeper than one;
   - the top level's `h2` (`tabIndex -1`) and view.
 - **The levels are data** (`types.ts`): `{ kind: "season", season, conf }`
@@ -1334,24 +1365,57 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
 
   | Address | Shows |
   |---|---|
-  | `/stats/records` | Historical, Team cards |
-  | `?group=player` | Historical, Player cards |
+  | `/stats/records` | Historical, Top records (`FRONTEND-030`) |
+  | `?group=team`, `?group=player` | Historical, that group's library |
+  | `?q=<query>` (with or without `group`) | that bar's search |
   | `?record=<id>` | that record's ranked list |
   | `?view=seasonal[&season=<s>]` | the season's leaders (newest by default) |
 
-  Defaults are never written, and an unknown value is the default. Both bars
-  replace the history entry; switching the view drops `group`, `record` and
-  `season`. Opening and popping a level push.
-- **Two navigator levels**, `{ kind: "records", group }` and
+  Defaults are never written (Team is, since Top records became the
+  default), and an unknown value is the default. Both bars and typing in the
+  search replace the history entry; the group bar keeps `q`; switching the
+  view drops `group`, `q`, `record` and `season`. Opening and popping a level
+  push. A record opened from a card carries its origin in the history state,
+  and its in-page Back is the history's Back, to that tab and query; a cold
+  `?record=` falls back to its group's tab with no query. The breadcrumb's
+  first item stays the record's group tab.
+- **Where the view bar sits** (by hand, 2026-11-04): inside the panel it
+  switches. `SegmentedTabs` hands it to function children, and it goes to
+  the end of the Top records / Team / Player bar's row (`end`), of the
+  season picker's row on Seasonal (`SegmentedRow`), or into a row of its own
+  above the navigator on a record's level. The row wraps on a phone, the
+  view bar on its own line at the end. `RecordsTabLayout.test.tsx` pins it.
+- **Two navigator levels**, `{ kind: "records", group, q }` (`group` a
+  `RecordsBar`, `"top"` or a group) and
   `{ kind: "record", id }` (`types.ts`), so the breadcrumb, Back and the
   focus rule are the navigator's. Every use of a level narrows by `kind`.
-  - `RecordsLevel`: a "Record group" bar (Team / Player), the data window
-    ("Since 2003-04, through 2026-27") and the cards. A card's one control is
+  - `RecordsLevel` (the records home, `FRONTEND-030`): a "Search records"
+    box, a "Record group" bar (Top records / Team / Player), the data window
+    ("Since 2003-04, through 2026-27") and the cards, in a list named by the
+    bar. Top records with no query is the catalog's records with a
+    `featured_rank`, in that order; Team and Player are the group's whole
+    library in catalog order. A query (`recordSearch.ts`) needs every
+    whitespace-separated term, case-insensitive, somewhere in the title,
+    category, group, unit or keywords, and searches the whole library on Top
+    records and the group's on a group, in the browser over the cached
+    catalog. 24 cards a page, Load more adds 24 (focus moves to the first new
+    card); each page's holders are one read with its ids sorted, asked once
+    the box has rested 300 ms, so a page already read asks nothing. The box
+    keeps its own text (a keystroke never waits on the router). A card shows
+    its title and category line ("Team franchise", "Player playoffs") from
+    the catalog at once; its `.holder` area is a fixed four lines' room (in em),
+    the value and when clamped to one line and the name to two (clipped on
+    screen only), so a landing holder moves nothing. At 200% text the bars
+    wrap and View all wraps under the title. A failed page is one alert, its cards keeping
+    titles and links. No match is an `EmptyState` naming the query with
+    "Clear search". The match count is a visually hidden polite live region,
+    present from the start, and says the settled query's count only. A card's
+    one control is
     "View all" (named "View all: <title>", a real `?record=` link), its
     `::after` stretched over the card so the whole card is the hit area; the
     holder is plain text. A card with no qualifying holder keeps "Nothing
     qualifies yet." and adds the shared decorative court / scoreboard art.
-    While the summary loads, skeleton cards hold the place.
+    While the catalog loads, skeleton cards hold the place.
   - `RecordLevel`: the rule, "Since <season>" and the whole list (up to 100)
     in one `ScrollTable`, with the API's ranks as given; a column the record
     has no value for is left out. A season record notes that it ranks the
@@ -1366,7 +1430,9 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
     count alone when `pct` is null; a card puts its unit after the count
     (`14 threes (58.3%)`). The parenthesis is `.share`, `--color-text-muted`
     (4.5:1 on the card's surface and hover surface in both themes). A
-    `count` is the value alone, as before.
+    `count` is the value alone, as before. `shot_pct` (`FRONTEND-030`) is
+    `45.4%` then a muted `(402/886)`, with no unit on the card; `average` is
+    one decimal, a card adding its unit (`31.0 points per game`).
   - **The record level's group is its list's.** `?record=` never carries
     `group`; until the list or cached summary arrives, the id's prefix
     supplies the group (`FRONTEND-021`, R30). Unknown prefixes retain the
@@ -1376,15 +1442,23 @@ Brief 20, stage 3, on `EVENTS-010`'s records API ([[0x02-events]] "Records").
   a team is plain text. `ROUTE_LINKS` gives it through `teamHref`.
 - **`SeasonSelect`** (`components/stats-nav/`) is the season picker and its
   loading, error and empty states, shared by Seasons, Seasonal and the picker.
-- **The reads are `src/api/records.ts`**: `recordsQuery()` and
-  `recordQuery(id)`, both `staleTime: Infinity` (the routes are cached five
+- **The wide column** (`FRONTEND-030`): `AppLayout` gives `main` the
+  `.wide` class, `max-width: var(--content-max-wide)` (64rem, `tokens.css`),
+  when the route matches `/stats/records`, so the cards sit one to a row
+  below 40rem, two from 40rem and three from 64rem (`StatsNav.module.css`'s
+  `.cards`). Every other route keeps `--content-max`.
+- **The reads are `src/api/records.ts`**: `recordsQuery()`,
+  `recordHoldersQuery(ids)` (keyed by the sorted ids) and
+  `recordQuery(id)`, all `staleTime: Infinity` (the routes are cached five
   minutes at the edge, R7). A list is one call at `limit=100`; nothing sends
   `offset`; a 404 is `null`. Stats and records share `api/ok.ts` since
   `FRONTEND-021` (R29).
-- **Requests per screen**, pinned in `records-requests.test.tsx`: a cold
-  `/stats/records` makes 1; Team and Player make 0; opening a card makes 1,
-  and Back and reopening it make 0; a cold `?record=` makes 1 and Back from
-  it 1; a cold Seasonal makes 4 (seasons and the three boards).
+- **Requests per screen**, pinned in `records-requests.test.tsx`
+  (`FRONTEND-030`): a cold `/stats/records` makes 2 (the catalog, then the
+  sixteen's holders); Team and Player make 1 each (the first page's holders)
+  and returning makes 0; Load more makes 1; opening a card makes 1, and Back
+  and reopening it make 0; a cold `?record=` makes 1 and Back from it 2; a
+  cold Seasonal makes 4 (seasons and the three boards).
 - **Measured** (2026-10-26, `vite preview` against the full load in
   `fanwire_perf`, 360 wide, CPU 4x, five runs): the longest task on a cold
   Records is a median of 108 ms (worst 127); opening the 100-row
@@ -1416,10 +1490,18 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   `RequireAuth` shows `RecoveryScreen` in the route's place (what recovery
   restores, and that individually deleted posts stay deleted), so recovering
   renders the route asked for; `RequireNewProfile` sends it to `/`.
-- **Deactivate** is the own-profile settings card's last section, "Account"
-  (outside the form): a confirm, then `DELETE /users/me`; on 204 the profile
-  entry is read again and every other cache entry is reset. The session stays.
-  **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
+- **The account menu** in `AppLayout` is for active profiles only. Its Avatar
+  button opens `Menu` with Profile (`/profile/<own id>`), History (`/history`)
+  and Account settings (`/settings`).
+- **Account settings** (`features/account/AccountSettings.tsx`) is a
+  `RequireAuth` page ordered Verify this account, Notifications, Deactivate
+  account. Code confirmation refreshes the session before reading verified
+  state; Verified is disabled. Notifications stays checked and disabled, with
+  no request. Deactivation reauthenticates the current password before
+  `DELETE /users/me`; a wrong password makes no request. The server recent-auth
+  rule is in [[0x01-users]]. On 204, caches reset and focus moves to the
+  deactivated banner; the session stays signed in for recovery.
+- **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
   every query is invalidated. **Sign out** from the banner also leaves the
   cache empty of that account, as the header's does (next entry).
 - **The header's Sign out** (`FRONTEND-027`): a secondary `Button` in

@@ -11,16 +11,18 @@
  *   shows Historical. Its panel holds what it switches (the records navigator,
  *   or the Seasonal leaders). The bar **replaces** the history entry, and
  *   switching the view drops `group`, `record` and `season` from the address.
- * - **The group bar.** Inside Historical, a second `SegmentedTabs` bar, Team
- *   and Player, Team the default. Player is `?group=player`; Team is never
- *   written, and an unknown `?group=` shows Team. It too replaces the history
- *   entry. Its panel holds the group's cards.
- * - **The records level's heading** is an `h2`, "Team records" or "Player
- *   records".
+ * - **The group bar.** Inside Historical, a second `SegmentedTabs` bar, Top
+ *   records, Team and Player, Top records the default (`FRONTEND-030`; it
+ *   was Team). Player is `?group=player` and Team `?group=team`, written
+ *   explicitly; Top records is never written, and an unknown `?group=` shows
+ *   Top records. It too replaces the history entry. Its panel holds the
+ *   cards. `RecordsHome.test.tsx` pins Top records and the search.
+ * - **The records level's heading** is an `h2`, "Top records", "Team
+ *   records" or "Player records".
  * - **One data-window line**: "Since <since_season>, through
  *   <through_season>" from `GET /events/records`; with no window, no line.
- * - **The cards**: a list named by its group ("Team records"), one list item
- *   per record of that group, in the API's order. Each card:
+ * - **The cards**: a list named by its bar ("Team records"), one list item
+ *   per record, a group's first 24 in the API's order. Each card:
  *   - its title as an `h3`;
  *   - exactly one interactive element, a "View all" link whose accessible
  *     name includes the title, at `/stats/records?record=<id>`;
@@ -54,7 +56,8 @@ import {
   HEAT,
   LEBRON,
   NUGGETS_GAME,
-  RECORD_DEFINITIONS,
+  FEATURED_IDS,
+  PAGE_SIZE,
   SINCE_SEASON,
   THROUGH_SEASON,
   WARRIORS,
@@ -65,13 +68,16 @@ import {
 } from "../../test/records";
 import {
   MISSING,
+  cardId,
   findCard,
   findCards,
+  findRecordCard,
   groupBar,
   norm,
   openRecords,
   panelOf,
   params,
+  queryCardList,
   queryTablistHolding,
   selectedTab,
   tab,
@@ -98,7 +104,7 @@ describe("the view bar: Historical / Seasonal", () => {
   it("opens on Historical, with ?view= not written", async () => {
     const { router } = openRecords();
 
-    await findCards("team");
+    await findCards("top");
     expect(tabNames(viewBar())).toEqual(["Historical", "Seasonal"]);
     expect(selectedTab(viewBar())).toBe("Historical");
     expect(params(router).has("view")).toBe(false);
@@ -107,14 +113,14 @@ describe("the view bar: Historical / Seasonal", () => {
   it("shows Historical for an unknown ?view=", async () => {
     openRecords("/stats/records?view=sideways");
 
-    await findCards("team");
+    await findCards("top");
     expect(selectedTab(viewBar())).toBe("Historical");
   });
 
   it("holds the group bar and the cards in its panel", async () => {
     openRecords();
 
-    const cards = await findCards("team");
+    const cards = await findCards("top");
     const panel = panelOf(viewBar());
     expect(panel.contains(groupBar())).toBe(true);
     expect(panel.contains(cards[0])).toBe(true);
@@ -124,14 +130,14 @@ describe("the view bar: Historical / Seasonal", () => {
   it("Seasonal is written as ?view=seasonal and replaces the history entry", async () => {
     const { router } = openRecords();
     const user = userEvent.setup();
-    await findCards("team");
+    await findCards("top");
 
     await user.click(tab(viewBar(), "Seasonal"));
 
     await waitFor(() => expect(params(router).get("view")).toBe("seasonal"));
     expect(router.state.historyAction).toBe("REPLACE");
     expect(selectedTab(viewBar())).toBe("Seasonal");
-    expect(screen.queryByRole("list", { name: /team records/i })).toBeNull();
+    expect(queryCardList()).toBeNull();
   });
 
   it("switching the view drops group, and Historical is not written", async () => {
@@ -147,9 +153,9 @@ describe("the view bar: Historical / Seasonal", () => {
     await waitFor(() => expect(params(router).has("view")).toBe(false));
     expect(router.state.historyAction).toBe("REPLACE");
     expect(router.state.location.search).toBe("");
-    // Back on Historical, on its default group.
-    await findCards("team");
-    expect(selectedTab(groupBar())).toBe("Team");
+    // Back on Historical, on its default, Top records.
+    await findCards("top");
+    expect(selectedTab(groupBar())).toBe("Top records");
   });
 
   it("switching the view from Seasonal drops season", async () => {
@@ -163,13 +169,13 @@ describe("the view bar: Historical / Seasonal", () => {
 
     await waitFor(() => expect(params(router).has("view")).toBe(false));
     expect(params(router).has("season")).toBe(false);
-    await findCards("team");
+    await findCards("top");
   });
 
   it("moves between its tabs with the arrow keys (one tab stop)", async () => {
     const { router } = openRecords();
     const user = userEvent.setup();
-    await findCards("team");
+    await findCards("top");
 
     tab(viewBar(), "Historical").focus();
     await user.keyboard("{ArrowRight}");
@@ -183,12 +189,15 @@ describe("the view bar: Historical / Seasonal", () => {
   });
 });
 
-describe("the group bar: Team / Player", () => {
+describe("the group bar: Top records / Team / Player", () => {
   it("keeps focus on the selected group tab while using the arrow keys", async () => {
     openRecords();
     const user = userEvent.setup();
-    await findCards("team");
-    tab(groupBar(), "Team").focus();
+    await findCards("top");
+    tab(groupBar(), "Top records").focus();
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => expect(tab(groupBar(), "Team")).toHaveFocus());
+    expect(selectedTab(groupBar())).toBe("Team");
     await user.keyboard("{ArrowRight}");
     await waitFor(() => expect(tab(groupBar(), "Player")).toHaveFocus());
     expect(selectedTab(groupBar())).toBe("Player");
@@ -196,22 +205,23 @@ describe("the group bar: Team / Player", () => {
     await waitFor(() => expect(tab(groupBar(), "Team")).toHaveFocus());
     expect(selectedTab(groupBar())).toBe("Team");
   });
-  it("opens on Team, with ?group= not written, and the h2 Team records", async () => {
+
+  it("opens on Top records, with ?group= not written, and the h2 Top records", async () => {
     const { router } = openRecords();
 
-    await findCards("team");
-    expect(tabNames(groupBar())).toEqual(["Team", "Player"]);
-    expect(selectedTab(groupBar())).toBe("Team");
+    await findCards("top");
+    expect(tabNames(groupBar())).toEqual(["Top records", "Team", "Player"]);
+    expect(selectedTab(groupBar())).toBe("Top records");
     expect(params(router).has("group")).toBe(false);
     expect(
-      screen.getByRole("heading", { level: 2, name: "Team records" }),
+      screen.getByRole("heading", { level: 2, name: "Top records" }),
     ).toBeVisible();
   });
 
   it("Player is written as ?group=player, replaces the history entry, and shows the player cards", async () => {
     const { router } = openRecords();
     const user = userEvent.setup();
-    await findCards("team");
+    await findCards("top");
 
     await user.click(tab(groupBar(), "Player"));
 
@@ -219,22 +229,25 @@ describe("the group bar: Team / Player", () => {
     expect(router.state.historyAction).toBe("REPLACE");
     expect(selectedTab(groupBar())).toBe("Player");
     await findCards("player");
-    expect(screen.queryByRole("list", { name: /team records/i })).toBeNull();
+    expect(screen.queryByRole("list", { name: /^top records$/i })).toBeNull();
     expect(
       screen.getByRole("heading", { level: 2, name: "Player records" }),
     ).toBeVisible();
   });
 
-  it("Team drops ?group=", async () => {
+  it("Team writes ?group=team, explicitly (it is no longer the default)", async () => {
     const { router } = openRecords("/stats/records?group=player");
     const user = userEvent.setup();
     await findCards("player");
 
     await user.click(tab(groupBar(), "Team"));
 
-    await waitFor(() => expect(params(router).has("group")).toBe(false));
+    await waitFor(() => expect(params(router).get("group")).toBe("team"));
     expect(router.state.historyAction).toBe("REPLACE");
     await findCards("team");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Team records" }),
+    ).toBeVisible();
   });
 
   it("opens on ?group=player (a reload or a shared link)", async () => {
@@ -244,11 +257,11 @@ describe("the group bar: Team / Player", () => {
     expect(selectedTab(groupBar())).toBe("Player");
   });
 
-  it("shows Team for an unknown ?group=", async () => {
+  it("shows Top records for an unknown ?group=", async () => {
     openRecords("/stats/records?group=coaches");
 
-    await findCards("team");
-    expect(selectedTab(groupBar())).toBe("Team");
+    await findCards("top");
+    expect(selectedTab(groupBar())).toBe("Top records");
   });
 
   it("holds the cards in its own panel", async () => {
@@ -270,7 +283,7 @@ describe("the data window", () => {
   it("names the window once: Since <since>, through <through>", async () => {
     openRecords();
 
-    await findCards("team");
+    await findCards("top");
     const panel = panelOf(viewBar());
     const line = `Since ${SINCE_SEASON}, through ${THROUGH_SEASON}`;
     expect(norm(panel.textContent)).toContain(line);
@@ -280,7 +293,7 @@ describe("the data window", () => {
   it("shows no window line when the API has no window", async () => {
     openRecords("/stats/records", { summary: emptyRecordsSummary() });
 
-    await findCards("team");
+    await findCards("top");
     expect(norm(panelOf(viewBar()).textContent)).not.toMatch(/\bsince\b/i);
     expect(screen.getByRole("main").textContent).not.toMatch(MISSING);
   });
@@ -288,29 +301,29 @@ describe("the data window", () => {
 
 describe("the cards", () => {
   it.each(["team", "player"] as const)(
-    "lists the %s records in the API's order, one card each, titled by an h3",
+    "lists the %s records' first 24 in the API's order, one card each, titled by an h3",
     async (group) => {
-      openRecords(
-        group === "player" ? "/stats/records?group=player" : undefined,
-      );
+      openRecords(`/stats/records?group=${group}`);
 
       const cards = await findCards(group);
       expect(
         cards.map((card) =>
           within(card).getByRole("heading", { level: 3 }).textContent?.trim(),
         ),
-      ).toEqual(recordsOf(group).map((record) => record.title));
+      ).toEqual(
+        recordsOf(group)
+          .slice(0, PAGE_SIZE)
+          .map((record) => record.title),
+      );
     },
   );
 
-  it.each(RECORD_DEFINITIONS.map((record) => [record.id, record] as const))(
+  it.each(FEATURED_IDS.map((id) => [id, recordDefinition(id)] as const))(
     "%s: exactly one interactive element, View all, named with the title, at its address",
-    async (_id, record) => {
-      openRecords(
-        record.group === "player" ? "/stats/records?group=player" : undefined,
-      );
+    async (id, record) => {
+      openRecords();
 
-      const card = await findCard(record.group, record.title);
+      const card = await findRecordCard(id);
       expect(card.querySelectorAll(FOCUSABLE)).toHaveLength(1);
       expect(within(card).getAllByRole("link")).toHaveLength(1);
       expect(within(card).queryAllByRole("button")).toEqual([]);
@@ -327,17 +340,11 @@ describe("the cards", () => {
 
   it("never shows a record's rule on its card", async () => {
     openRecords();
-    const cards = await findCards("team");
+    const cards = await findCards("top");
 
-    for (const record of recordsOf("team")) {
-      const card = cards.find(
-        (item) =>
-          within(item).queryByRole("heading", {
-            level: 3,
-            name: record.title,
-          }) !== null,
-      );
-      expect(norm(card?.textContent)).not.toContain(record.rule);
+    for (const card of cards) {
+      const record = recordDefinition(cardId(card));
+      expect(norm(card.textContent)).not.toContain(record.rule);
     }
   });
 
@@ -430,13 +437,12 @@ describe("the cards", () => {
   it.each(["team", "player"] as const)(
     "every empty %s record card says nothing qualifies and has decorative artwork",
     async (group) => {
-      openRecords(
-        group === "player" ? "/stats/records?group=player" : "/stats/records",
-        { summary: emptyRecordsSummary() },
-      );
+      openRecords(`/stats/records?group=${group}`, {
+        summary: emptyRecordsSummary(),
+      });
 
       const cards = await findCards(group);
-      expect(cards).toHaveLength(recordsOf(group).length);
+      expect(cards).toHaveLength(PAGE_SIZE);
       for (const card of cards) {
         expect(rowText(card)).toMatch(/qualif/i);
         const artwork = card.querySelector("svg[aria-hidden='true']");
@@ -472,7 +478,8 @@ describe("the cards", () => {
   });
 
   it("a player's career record: the name and the value with its unit", async () => {
-    openRecords("/stats/records?group=player");
+    // On Top records: the career records are past the Player tab's first 24.
+    openRecords();
 
     const card = await findCard(
       "player",
@@ -498,7 +505,7 @@ describe("the cards", () => {
         within(panelOf(viewBar())).getAllByRole("status").length,
       ).toBeGreaterThan(0),
     );
-    expect(screen.queryByRole("list", { name: /team records/i })).toBeNull();
+    expect(queryCardList()).toBeNull();
     expect(screen.getByRole("main").textContent).not.toMatch(MISSING);
   });
 
@@ -520,7 +527,7 @@ describe("nothing prints null, undefined or NaN", () => {
     async (path) => {
       openRecords(path);
 
-      await findCards(path.includes("player") ? "player" : "team");
+      await findCards(path.includes("player") ? "player" : "top");
       expect(screen.getByRole("main").textContent).not.toMatch(MISSING);
     },
   );

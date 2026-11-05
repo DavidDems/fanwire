@@ -8,17 +8,24 @@ export type Conference = "all" | "east" | "west";
 export type { RecordGroup };
 
 /**
+ * A records level's bar (FRONTEND-030): the featured Top records, or one
+ * group's whole library.
+ */
+export type RecordsBar = "top" | RecordGroup;
+
+/**
  * One level of the stats navigator, as data. Each use narrows by `kind`;
  * callers supply the records and select-mode game/player views.
  *
- * The records levels (FRONTEND-019) carry no season: `records` is a group's
+ * The records levels (FRONTEND-019) carry no season: `records` is a bar's
  * record cards (`group` is null only while an unknown id's group has not
- * arrived), and `record` is one record's list.
+ * arrived) and its search `q` (FRONTEND-030, empty or absent for none), and
+ * `record` is one record's list.
  */
 export type StatsLevel =
   | { kind: "season"; season: string; conf: Conference }
   | { kind: "team"; season: string; teamId: number }
-  | { kind: "records"; group: RecordGroup | null }
+  | { kind: "records"; group: RecordsBar | null; q?: string }
   | { kind: "record"; id: string }
   | { kind: "game"; gameId: number }
   | { kind: "players" }

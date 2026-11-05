@@ -216,6 +216,85 @@ describe("SegmentedTabs", () => {
   );
 });
 
+/**
+ * Placement (the records tab's one row of bars, 2026-11-04): `end` puts
+ * something after the tablist in one row, at the row's end; `children` as a
+ * function is handed the tablist, to place inside the panel it switches.
+ * Neither changes how a tab looks or behaves.
+ */
+describe("SegmentedTabs placement", () => {
+  it("puts `end` after the tablist, in one row outside the panel", () => {
+    render(
+      <SegmentedTabs
+        label="Conference"
+        tabs={TABS}
+        value="all"
+        onChange={() => {}}
+        end={<button type="button">Beside</button>}
+      >
+        <p>panel</p>
+      </SegmentedTabs>,
+    );
+
+    const beside = screen.getByRole("button", { name: "Beside" });
+    expect(
+      tablist().compareDocumentPosition(beside) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const row = tablist().parentElement;
+    expect(row?.contains(beside)).toBe(true);
+    expect(screen.getByRole("tabpanel").contains(beside)).toBe(false);
+  });
+
+  it("without `end`, renders no row: the tablist is the bar's first child", () => {
+    const { container } = render(<Controlled />);
+
+    expect(tablist().parentElement?.parentElement).toBe(container);
+  });
+
+  it("hands the tablist to function children, which place it inside the panel", async () => {
+    function Placed() {
+      const [value, setValue] = useState("all");
+      return (
+        <SegmentedTabs
+          label="Conference"
+          tabs={TABS}
+          value={value}
+          onChange={setValue}
+        >
+          {(bar) => (
+            <div>
+              <h2>{`heading for ${value}`}</h2>
+              {bar}
+            </div>
+          )}
+        </SegmentedTabs>
+      );
+    }
+    render(<Placed />);
+
+    const panel = screen.getByRole("tabpanel", { name: "All" });
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    expect(panel.contains(tablist())).toBe(true);
+    const heading = screen.getByRole("heading", { name: "heading for all" });
+    expect(
+      heading.compareDocumentPosition(tablist()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    for (const name of ["All", "East", "West"])
+      expect(tab(name)).toHaveAttribute("aria-controls", panel.id);
+
+    const user = userEvent.setup();
+    tab("All").focus();
+    await user.keyboard("{ArrowRight}");
+    expect(tab("East")).toHaveAttribute("aria-selected", "true");
+    expect(tab("East")).toHaveFocus();
+    expect(screen.getByRole("tabpanel", { name: "East" })).toHaveTextContent(
+      "heading for east",
+    );
+  });
+});
+
 describe("SegmentedTabs.module.css", () => {
   const FILE = join(SRC_DIR, "components", "ui", "SegmentedTabs.module.css");
   const SELECTED = /\[aria-selected=(["']?)true\1\]/;
@@ -309,5 +388,19 @@ describe("SegmentedTabs.module.css", () => {
       expect(value(rule, "flex-wrap")).not.toBe("wrap");
       expect(value(rule, "flex-flow")).not.toMatch(/\bwrap\b/);
     }
+  });
+
+  it("lays the bar and `end` in a row that wraps, `end` pushed to the row's end", () => {
+    const wrapping = rules().filter(
+      (rule) =>
+        value(rule, "display") === "flex" &&
+        (value(rule, "flex-wrap") === "wrap" ||
+          /\bwrap\b/.test(value(rule, "flex-flow"))),
+    );
+    expect(wrapping.length, "a flex row with flex-wrap: wrap").toBe(1);
+    expect(
+      rules().some((rule) => value(rule, "margin-inline-start") === "auto"),
+      "the end pushed to the row's end (margin-inline-start: auto)",
+    ).toBe(true);
   });
 });

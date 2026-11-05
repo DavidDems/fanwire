@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-033",
+  "objective": "Show immediate, accessible progress while a profile route loads and remove the unexplained delay between URL navigation and visible profile content.",
+  "acceptance_criteria": [
+    "Before implementation, measure a cold and a warm navigation to a profile route, identify whether route chunk loading, profile data or another step accounts for the delay, and record the evidence in the PR.",
+    "When the requested profile is not yet ready, the route immediately shows a visible, accessible loading state rather than leaving the previous page visible with no feedback. The loading state is announced appropriately to assistive technology and does not move focus unexpectedly.",
+    "When profile data becomes ready, the loading state is replaced by the correct own or public profile. A route transition never displays stale content from the previously viewed page as if it belonged to the requested profile.",
+    "A failed profile load replaces the progress state with the existing error/retry treatment; loading does not remain indefinitely. Repeated navigation and browser back/forward continue to show the requested profile.",
+    "Use the existing loading/skeleton patterns and design tokens. Respect reduced-motion preferences, keyboard use and screen-reader status; no raw colour or pixel font sizes in module CSS.",
+    "Tests cover a deferred profile response, immediate loading feedback, correct replacement on success, error/retry and navigation between two profile routes without stale content.",
+    "Browser rows at 360 and 1280 CSS px, light and dark, reported with evidence or NOT DONE: cold profile navigation with delayed data, warm navigation, back/forward, and 200% text size. Include before/after time from URL navigation to meaningful profile content; there is no numeric performance SLO in this spec.",
+    "No new dependency or API change. Existing profile data, access and caching behavior remain unchanged.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the profile loading behavior if it changes."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/profile/**",
+    "frontend/src/routes/routes.tsx",
+    "frontend/src/routes/routes.test.tsx",
+    "frontend/src/routes/lazy-routes.test.ts",
+    "frontend/src/components/ui/Skeleton.tsx",
+    "frontend/src/components/ui/Skeleton.module.css",
+    "frontend/src/components/ui/Skeleton.test.tsx",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/src/auth/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

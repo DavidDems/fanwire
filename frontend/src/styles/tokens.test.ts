@@ -11,11 +11,18 @@
  * in the test container, so they are hard-coded here; if tokens.md changes,
  * this file changes with it.
  */
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
+  type CssBlock,
   DARK_SCHEME,
+  SRC_DIR,
+  allBlocks,
   contrastRatio,
+  isAtRule,
   mediaBlocks,
   mediaRootCustomProperties,
   normaliseHex,
@@ -24,6 +31,7 @@ import {
   readSrcFile,
   resolveToken,
   rootCustomProperties,
+  selectors,
 } from "../test/css";
 
 interface Themes {
@@ -126,6 +134,8 @@ const TYPE_SPACE_SHAPE: Record<string, string> = {
   "--focus-ring": "2px solid var(--color-focus)",
   "--target-min": "2.75rem",
   "--content-max": "40rem",
+  // FRONTEND-030: the records home's column, for three cards to a row.
+  "--content-max-wide": "64rem",
   "--duration-fast": "120ms",
   "--duration-base": "200ms",
   "--ease-out": "cubic-bezier(0.2, 0, 0, 1)",
@@ -494,5 +504,146 @@ describe("the soft-filled field (UI-010)", () => {
       expect(field).not.toBe(colour("--color-bg", theme));
       expect(field).not.toBe(colour("--color-surface", theme));
     }
+  });
+});
+
+/**
+ * FRONTEND-031: the team icon palette (`.ai/tasks/FRONTEND-031/brief.md`,
+ * "The palette"), copied here because the brief is not in the test
+ * container. Each colour is a token on `:root`, `--team-inner-<key>` or
+ * `--team-outer-<key>`, outside any theme block: a team's colours do not
+ * change with the page. Module CSS reads them by name
+ * (`components/ui/ui-css.test.ts`), and no other file holds a hex.
+ */
+const TEAM_INNER: Record<string, string> = {
+  gold: "#ffd23f",
+  orange: "#f58a1f",
+  red: "#fa7b82",
+  green: "#7cc24b",
+  sky: "#4fa8f7",
+  lavender: "#a98de6",
+  silver: "#d3d8dc",
+  teal: "#26d0c0",
+};
+const TEAM_OUTER: Record<string, string> = {
+  blue: "#0a4a9a",
+  crimson: "#9b0f26",
+  black: "#0a0a0a",
+  purple: "#6a1b8f",
+  forest: "#0b5d2e",
+};
+const TEAM_TOKENS: [string, string][] = [
+  ...Object.entries(TEAM_INNER).map(([key, hex]): [string, string] => [
+    `--team-inner-${key}`,
+    hex,
+  ]),
+  ...Object.entries(TEAM_OUTER).map(([key, hex]): [string, string] => [
+    `--team-outer-${key}`,
+    hex,
+  ]),
+];
+
+describe("the team icon tokens (FRONTEND-031)", () => {
+  it.each(TEAM_TOKENS)("declares %s on :root as %s", (name, hex) => {
+    const declared = themes().light.get(name);
+    expect(declared, `${name} is not declared on :root`).toBeDefined();
+    expect(normaliseHex(declared ?? "")).toBe(hex);
+  });
+
+  it("declares them in no theme block, so they keep their value in dark", () => {
+    const blocks = parseCss(readSrcFile("styles/tokens.css"));
+    const offenders = blocks
+      .flatMap((block) =>
+        // Every block but a top-level `:root` rule: an at-rule (a theme's
+        // media query) and anything inside it, or another selector.
+        targetsRootOnly(block) ? [] : allBlocks([block]),
+      )
+      .flatMap((block) =>
+        block.declarations
+          .filter(({ property }) => property.startsWith("--team-"))
+          .map(({ property }) => `${block.prelude}: ${property}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it.each(TEAM_TOKENS)("resolves %s to %s in dark too", (name, hex) => {
+    expect(colour(name, "dark")).toBe(hex);
+  });
+
+  it("declares a token for nothing outside the palette", () => {
+    const expected = new Set(TEAM_TOKENS.map(([name]) => name));
+    const extra = [...themes().light.keys()].filter(
+      (name) => /^--team-(inner|outer)-/.test(name) && !expected.has(name),
+    );
+    expect(extra).toEqual([]);
+  });
+});
+
+/** A top-level rule whose only selector is `:root`. */
+function targetsRootOnly(block: CssBlock): boolean {
+  return !isAtRule(block) && selectors(block).every((s) => s === ":root");
+}
+
+/**
+ * FRONTEND-031: "Hex values appear only in tokens.css." Every source file
+ * under `src/` (`.ts`, `.tsx`, `.css`) except `tokens.css`, the tests and
+ * the test kit (whose fixtures pin values), and the generated API schema.
+ */
+describe("hex colours appear only in tokens.css (FRONTEND-031)", () => {
+  const HEX_COLOUR = /#(?:[0-9a-f]{3}|[0-9a-f]{6})(?![\w-])/i;
+  const PALETTE = Object.values({ ...TEAM_INNER, ...TEAM_OUTER });
+
+  function sourceFiles(directory: string): string[] {
+    return readdirSync(directory).flatMap((entry) => {
+      const full = join(directory, entry);
+      if (statSync(full).isDirectory()) return sourceFiles(full);
+      return /\.(tsx?|css)$/.test(entry) ? [full] : [];
+    });
+  }
+
+  function scanned(): string[] {
+    return sourceFiles(SRC_DIR).filter((file) => {
+      const path = relative(SRC_DIR, file).split(sep).join("/");
+      return !(
+        path === "styles/tokens.css" ||
+        path === "api/schema.d.ts" ||
+        path.startsWith("test/") ||
+        /\.test\.tsx?$/.test(path)
+      );
+    });
+  }
+
+  it("the scan matches a hex colour and nothing else", () => {
+    expect(HEX_COLOUR.test("color: #FFD23F;")).toBe(true);
+    expect(HEX_COLOUR.test('"#0a0"')).toBe(true);
+    expect(HEX_COLOUR.test('href="#game-501"')).toBe(false);
+    expect(HEX_COLOUR.test("`#GameId${id}`")).toBe(false);
+  });
+
+  it("scans the source tree, not nothing", () => {
+    const files = scanned().map((file) =>
+      relative(SRC_DIR, file).split(sep).join("/"),
+    );
+    expect(files).toContain("components/ui/Avatar.tsx");
+    expect(files).toContain("styles/base.css");
+    expect(files).not.toContain("styles/tokens.css");
+  });
+
+  it("no source file outside tokens.css holds a hex colour", () => {
+    const offenders = scanned().flatMap((file) =>
+      readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => HEX_COLOUR.test(line))
+        .map((line) => `${relative(SRC_DIR, file)}: ${line.trim()}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it("no source file outside tokens.css names a palette colour", () => {
+    const offenders = scanned().filter((file) => {
+      const text = readFileSync(file, "utf8").toLowerCase();
+      return PALETTE.some((hex) => text.includes(hex));
+    });
+    expect(offenders.map((file) => relative(SRC_DIR, file))).toEqual([]);
   });
 });

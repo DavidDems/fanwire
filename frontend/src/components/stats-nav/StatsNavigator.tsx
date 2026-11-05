@@ -4,7 +4,7 @@ import { Button } from "../ui/Button";
 import { LevelLink } from "./LevelLink";
 import { SeasonLevel } from "./SeasonLevel";
 import styles from "./StatsNav.module.css";
-import { TeamLevel, TeamName } from "./TeamLevel";
+import { TeamLevel, TeamName, TeamNameIcon } from "./TeamLevel";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
 export type {
@@ -36,7 +36,19 @@ export interface StatsNavigatorProps {
   replace(level: StatsLevel): void;
   /** Keep the first `toDepth` levels. */
   pop(toDepth: number): void;
+  /**
+   * The Back control, when the caller knows better than the stack where it
+   * returns (Records: the tab and query a card was opened from). Without it,
+   * Back pops one level.
+   */
+  back?(): void;
   adapter: StatsNavAdapter;
+  /**
+   * False hides the breadcrumb while the stack is one level deep, where it
+   * only repeats the heading (the records home, the Seasons tab's season
+   * level). Deeper stacks keep it.
+   */
+  rootCrumb?: boolean;
 }
 
 /**
@@ -76,9 +88,11 @@ export function StatsNavigator({
   open,
   replace,
   pop,
+  back,
   adapter,
   levelViews,
   selectMode = false,
+  rootCrumb = true,
 }: StatsNavigatorProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
@@ -134,45 +148,52 @@ export function StatsNavigator({
 
   return (
     <>
-      <div className={styles.bar}>
-        <nav aria-label="Stats path">
-          <ol>
-            {stack.map((level, index) => (
-              <li key={index}>
-                {index === stack.length - 1 ? (
-                  <span aria-current="location">
-                    {levelName(level, levelViews)}
-                  </span>
-                ) : (
-                  <LevelLink
-                    level={level}
-                    adapter={adapter}
-                    onGo={() => move(() => pop(index + 1))}
-                  >
-                    {levelName(level, levelViews)}
-                  </LevelLink>
-                )}
-              </li>
-            ))}
-          </ol>
-        </nav>
-        {stack.length > 1 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => move(() => pop(stack.length - 1))}
-          >
-            Back
-          </Button>
-        ) : null}
-      </div>
+      {!rootCrumb && stack.length === 1 ? null : (
+        <div className={styles.bar}>
+          <nav aria-label="Stats path">
+            <ol>
+              {stack.map((level, index) => (
+                <li key={index}>
+                  {index === stack.length - 1 ? (
+                    <span aria-current="location">
+                      {levelName(level, levelViews)}
+                    </span>
+                  ) : (
+                    <LevelLink
+                      level={level}
+                      adapter={adapter}
+                      onGo={() => move(() => pop(index + 1))}
+                    >
+                      {levelName(level, levelViews)}
+                    </LevelLink>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
+          {stack.length > 1 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                move(() =>
+                  back === undefined ? pop(stack.length - 1) : back(),
+                )
+              }
+            >
+              Back
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       <h2 ref={heading} tabIndex={-1}>
         {top.kind === "season" ? (
           `${top.season} season`
         ) : top.kind === "team" ? (
           <>
+            <TeamNameIcon teamId={top.teamId} season={top.season} />{" "}
             {levelName(top, levelViews)}, {top.season}
           </>
         ) : (

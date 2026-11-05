@@ -26,6 +26,14 @@
   margin: 0;
 }
 
+/*
+ * The tab's in-page bars (Records view, Record group) wrap rather than
+ * overflow when their tabs outgrow the column (a phone at 200% text).
+ */
+.tab [role="tablist"] {
+  flex-wrap: wrap;
+}
+
 .controls select,
 .controls input {
   width: 100%;

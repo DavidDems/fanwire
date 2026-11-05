@@ -427,7 +427,7 @@ def test_delete_me_soft_deletes_caller_and_then_404s(app, client, session_factor
     # Authenticated through the real token chain rather than by overriding
     # get_current_user: USERS-003 moves DELETE /users/me to get_own_account.
     app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
-        VerifiedIdentity(sub="sub-self-delete", auth_time=RECENT_AUTH_TIME)
+        VerifiedIdentity(sub="sub-self-delete", auth_time=int(datetime.now(UTC).timestamp()))
     )
 
     response = client.delete("/users/me", headers={"Authorization": "Bearer good-token"})

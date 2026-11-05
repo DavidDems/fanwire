@@ -87,6 +87,7 @@
   --focus-ring: 2px solid var(--color-focus);
   --target-min: 2.75rem;
   --content-max: 40rem;
+  --content-max-wide: 64rem; /* FRONTEND-030: the records home, three cards a row */
 
   /* §8 Motion and state. */
   --duration-fast: 120ms;
@@ -100,6 +101,24 @@
   --z-dropdown: 20;
   --z-toast: 30;
   --z-skip-link: 40;
+
+  /* FRONTEND-031: the team icon palette. Fixed: a team's colours do not
+     change with the theme, so none of these is redeclared below. Every
+     inner colour takes black text (4.5:1 or more); the outer colours are
+     rings. */
+  --team-inner-gold: #ffd23f;
+  --team-inner-orange: #f58a1f;
+  --team-inner-red: #fa7b82;
+  --team-inner-green: #7cc24b;
+  --team-inner-sky: #4fa8f7;
+  --team-inner-lavender: #a98de6;
+  --team-inner-silver: #d3d8dc;
+  --team-inner-teal: #26d0c0;
+  --team-outer-blue: #0a4a9a;
+  --team-outer-crimson: #9b0f26;
+  --team-outer-black: #0a0a0a;
+  --team-outer-purple: #6a1b8f;
+  --team-outer-forest: #0b5d2e;
 }
 
 @media (prefers-color-scheme: dark) {

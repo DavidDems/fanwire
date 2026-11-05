@@ -98,6 +98,34 @@ describe("an anonymous visitor asking for a protected route", () => {
 });
 
 describe("a confirmed account with no profile yet", () => {
+  it("automatically sends a signed-in no-profile visitor from the public feed to profile creation", async () => {
+    profileCreatedOnDemand();
+    server.use(teamsAre(), emptyFeed());
+
+    renderApp("/", new FakeAuthService({ session: testSession() }));
+
+    expect(
+      await screen.findByRole("heading", { name: /create your profile/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^feed$/i })).toBeNull();
+  });
+
+  it("keeps the public feed available to anonymous visitors without looking up a profile", async () => {
+    const profileLookups: string[] = [];
+    server.use(
+      http.get("*/users/me", ({ request }) => {
+        profileLookups.push(request.url);
+        return HttpResponse.json({ detail: "Not Found" }, { status: 404 });
+      }),
+      emptyFeed(),
+    );
+
+    renderApp("/", new FakeAuthService());
+
+    expect(await screen.findByRole("heading", { name: /^feed$/i })).toBeInTheDocument();
+    expect(profileLookups).toEqual([]);
+  });
+
   it("is routed to profile creation, creates one, and can then reach the protected route", async () => {
     const user = userEvent.setup();
     profileCreatedOnDemand();

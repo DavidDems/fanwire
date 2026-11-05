@@ -116,7 +116,27 @@ def cognito_pool_with_verified_user():
         cognito.admin_create_user(
             UserPoolId=pool_id,
             Username=sub,  # see module comment above -- Username IS the sub for this pool shape
-            UserAttributes=[{"Name": "email", "Value": "recipient@example.com"}],
+            UserAttributes=[
+                {"Name": "email", "Value": "recipient@example.com"},
+                {"Name": "email_verified", "Value": "true"},
+            ],
+        )
+        yield cognito, pool_id
+
+
+@pytest.fixture()
+def cognito_pool_with_unverified_user():
+    with mock_aws():
+        cognito = boto3.client("cognito-idp", region_name="us-east-1")
+        pool_id = cognito.create_user_pool(PoolName="fanwire-test")['UserPool']['Id']
+        sub = "11111111-1111-1111-1111-111111111111"
+        cognito.admin_create_user(
+            UserPoolId=pool_id,
+            Username=sub,
+            UserAttributes=[
+                {"Name": "email", "Value": "recipient@example.com"},
+                {"Name": "email_verified", "Value": "false"},
+            ],
         )
         yield cognito, pool_id
 
@@ -152,6 +172,28 @@ def test_ses_email_sender_resolves_recipient_email_via_cognito_and_sends(
     assert len(sent) == 1
     assert sent[0].source == "notifications@fanwire.example"
     assert sent[0].destinations["ToAddresses"] == ["recipient@example.com"]
+
+
+def test_ses_email_sender_skips_unverified_cognito_email_without_logging_address(
+    session_factory, cognito_pool_with_unverified_user, caplog
+):
+    from app.notifications.email import SesEmailSender
+
+    cognito_client, pool_id = cognito_pool_with_unverified_user
+    ses_client = boto3.client("ses", region_name="us-east-1")
+
+    with session_factory() as session:
+        notification, recipient = _notification(session)
+        sender = SesEmailSender(
+            cognito_client,
+            ses_client,
+            user_pool_id=pool_id,
+            from_address="notifications@fanwire.example",
+        )
+        sender.send(recipient_cognito_sub=recipient.cognito_sub, notification=notification)
+
+    assert _sent_ses_messages() == []
+    assert "recipient@example.com" not in caplog.text
 
 
 def test_ses_email_sender_skips_sending_when_no_from_address_configured(

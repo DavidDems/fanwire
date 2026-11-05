@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import { expect } from "vitest";
 import type { RequestHandler } from "msw";
 
 import { teamsAre } from "./auth";
@@ -28,7 +29,7 @@ import {
  * recorded, and the readers its tests share.
  *
  * The bars are found by the tabs they hold ("Historical" / "Seasonal",
- * "Team" / "Player"), not by their names, and a bar's panel by its tabs'
+ * "Top records" / "Team" / "Player"), not by their names, and a bar's panel by its tabs'
  * `aria-controls`, which is how `SegmentedTabs` ties them (UI-010).
  */
 
@@ -50,7 +51,10 @@ export interface OpenRecordsOptions {
   summary?: RecordsSummaryOut;
   list?: (id: string) => RecordListOut | null;
   rules?: Record<string, string>;
-  /** Installed after the stubs, so they win (a delayed read, say). */
+  /**
+   * Installed ahead of the stubs, so they win (a delayed read, say).
+   * FRONTEND-030: they were after them, where msw never reached them.
+   */
   handlers?: RequestHandler[];
 }
 
@@ -70,10 +74,12 @@ export function openRecords(
     standings: standingsStub(),
     teamSeason: teamSeasonStub(),
   };
+  // msw answers with the first handler that matches, and one `server.use`
+  // keeps its list's order, so the test's own handlers go first to win.
   const rendered = renderAppAt(path, "anonymous", [
+    ...(options.handlers ?? []),
     teamsAre(statsTeams()),
     ...Object.values(stubs).map((stub) => stub.handler),
-    ...(options.handlers ?? []),
   ]);
   return { ...rendered, stubs };
 }
@@ -131,7 +137,7 @@ export function viewBar(): HTMLElement {
   return tablistHolding("Historical");
 }
 
-/** The Team / Player bar. */
+/** The Top records / Team / Player bar. */
 export function groupBar(): HTMLElement {
   return tablistHolding("Player");
 }
@@ -180,33 +186,96 @@ export function focusedHeading(): HTMLElement | null {
   return active;
 }
 
-/** The group's list of cards: a list named by its group ("Team records"). */
-export async function findCards(
-  group: "team" | "player",
-): Promise<HTMLElement[]> {
-  const list = await screen.findByRole("list", {
-    name: new RegExp(`${group} records`, "i"),
+/**
+ * The records level's bar (`FRONTEND-030`): Top records, Team or Player. Its
+ * list of cards is named by it: "Top records", "Team records" or "Player
+ * records", with or without a query.
+ */
+export type RecordsBar = "top" | "team" | "player";
+
+const LIST_NAME = /^(top|team|player) records$/i;
+
+/** The list of cards a bar shows, once it is on screen. */
+export async function findCardList(bar: RecordsBar): Promise<HTMLElement> {
+  return screen.findByRole("list", {
+    name: new RegExp(`^${bar} records$`, "i"),
   });
-  return within(list).getAllByRole("listitem");
 }
 
-/** The card whose h3 is `title`, in the cards shown. */
+/** The one list of record cards shown, whichever bar it is under, or null. */
+export function queryCardList(): HTMLElement | null {
+  const lists = screen.queryAllByRole("list", { name: LIST_NAME });
+  if (lists.length > 1)
+    throw new Error(`expected one list of cards, found ${lists.length}`);
+  return lists[0] ?? null;
+}
+
+/** A bar's cards: the list items of its list. */
+export async function findCards(bar: RecordsBar): Promise<HTMLElement[]> {
+  const list = await findCardList(bar);
+  return within(list).queryAllByRole("listitem");
+}
+
+/** The cards shown now, under any bar (none when no list is shown). */
+export function shownCards(): HTMLElement[] {
+  const list = queryCardList();
+  return list === null ? [] : within(list).queryAllByRole("listitem");
+}
+
+/** The record a card opens: the id in its View all link's `?record=`. */
+export function cardId(card: HTMLElement): string {
+  const href = viewAll(card).getAttribute("href") ?? "";
+  return new URL(href, "http://x.test").searchParams.get("record") ?? "";
+}
+
+/** The ids of the cards shown, in their order. */
+export function shownIds(): string[] {
+  return shownCards().map(cardId);
+}
+
+/**
+ * The card whose h3 is `title` and which opens a record of `group`, in the
+ * cards shown (titles repeat across the groups: "Most championships").
+ */
 export async function findCard(
   group: "team" | "player",
   title: string,
 ): Promise<HTMLElement> {
-  const cards = await findCards(group);
-  const card = cards.find(
+  await waitFor(() => expect(queryCardList()).not.toBeNull());
+  const card = shownCards().find(
     (item) =>
-      within(item).queryByRole("heading", { level: 3, name: title }) !== null,
+      within(item).queryByRole("heading", { level: 3, name: title }) !== null &&
+      cardId(item).startsWith(`${group}-`),
   );
   if (card === undefined) throw new Error(`no ${group} card titled ${title}`);
   return card;
 }
 
+/** The card that opens record `id`, in the cards shown. */
+export async function findRecordCard(id: string): Promise<HTMLElement> {
+  let found: HTMLElement | undefined;
+  await waitFor(() => {
+    found = shownCards().find((item) => cardId(item) === id);
+    expect(found, `no card for ${id}`).toBeDefined();
+  });
+  return found as HTMLElement;
+}
+
 /** A card's one link, "View all". */
 export function viewAll(card: HTMLElement): HTMLElement {
   return within(card).getByRole("link", { name: /view all/i });
+}
+
+/** The records search box (`FRONTEND-030`), named by its visible label. */
+export function searchBox(): HTMLInputElement {
+  return screen.getByRole("searchbox", {
+    name: /records/i,
+  }) as HTMLInputElement;
+}
+
+/** The Load more button under the cards, or null when every match is shown. */
+export function loadMore(): HTMLElement | null {
+  return screen.queryByRole("button", { name: /load more/i });
 }
 
 /** Text that shows a value went missing on the way to the screen. */

@@ -30,21 +30,25 @@ from app.users.routes import router
 
 # The age gate is evaluated against today's date in UTC (handoff.md §10, D5:
 # ruff's DTZ011, once CI ran ruff), so this suite's "today" has to be the same
-# date. It used to be the server's local date, which a deployment in UTC (the
-# Lambdas) never told apart, and which a developer's machine west of UTC did,
-# for some hours every evening.
-RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+# date. Compute values at each test's point of use so a long suite that crosses
+# midnight cannot compare a prior day's age boundary with the current UTC date.
 
-TODAY = datetime.now(UTC).date()
+def _today_utc() -> date:
+    return datetime.now(UTC).date()
+
+
+def _recent_auth_time() -> int:
+    return int(datetime.now(UTC).timestamp())
 
 
 def _years_before_today(years: int) -> date:
+    today = _today_utc()
     try:
-        return TODAY.replace(year=TODAY.year - years)
+        return today.replace(year=today.year - years)
     except ValueError:
-        # TODAY is a Feb 29 that doesn't exist `years` back -- nudge to Mar 1
+        # Today is a Feb 29 that doesn't exist `years` back -- nudge to Mar 1
         # rather than let the whole test run depend on the calendar.
-        return TODAY.replace(month=3, day=1, year=TODAY.year - years)
+        return today.replace(month=3, day=1, year=today.year - years)
 
 
 @pytest.fixture()
@@ -80,7 +84,7 @@ def client(app):
 
 def _as_identity(app, sub: str) -> None:
     app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
-        sub=sub, auth_time=RECENT_AUTH_TIME
+        sub=sub, auth_time=_recent_auth_time()
     )
 
 
@@ -122,7 +126,7 @@ def test_create_profile_future_date_of_birth_returns_422_and_creates_no_profile(
     app, client, session_factory
 ):
     _as_identity(app, "sub-future-dob")
-    dob = TODAY + timedelta(days=1)
+    dob = _today_utc() + timedelta(days=1)
 
     response = client.post(
         "/users",
@@ -140,7 +144,7 @@ def test_create_profile_date_of_birth_today_returns_422_and_creates_no_profile(
 
     response = client.post(
         "/users",
-        json={"username": "today_dob", "date_of_birth": TODAY.isoformat()},
+        json={"username": "today_dob", "date_of_birth": _today_utc().isoformat()},
     )
 
     assert response.status_code == 422

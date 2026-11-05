@@ -218,6 +218,21 @@ describe("the conference bar", () => {
   });
 });
 
+// The human, 2026-11-04 (hand-made, no spec): the season level showed its
+// season twice, a one-item breadcrumb ("2024-25") over the "2024-25 season"
+// heading. It shows the heading alone; the team level keeps its breadcrumb.
+describe("the season level's title", () => {
+  it("shows the season once: its heading, and no one-item breadcrumb", async () => {
+    openSeasons("/stats/seasons?season=2023-24");
+
+    expect(
+      await screen.findByRole("heading", { name: "2023-24 season" }),
+    ).toBeInTheDocument();
+    await standingsCaptions();
+    expect(screen.queryByRole("navigation", { name: "Stats path" })).toBeNull();
+  });
+});
+
 describe("the team level from a standings row", () => {
   it("opens at ?team=, keeping ?season= and ?conf=, with the season › team breadcrumb", async () => {
     const { router, teamSeason } = openSeasons(
@@ -293,7 +308,8 @@ describe("the team level from a standings row", () => {
     expect(selectedTab()).toBe("West");
     expect(shown).toHaveLength(1);
     expect(backButton()).toBeNull();
-    expect(crumbs()).toHaveLength(1);
+    // The season level shows its heading alone (no one-item breadcrumb).
+    expect(screen.queryByRole("navigation", { name: "Stats path" })).toBeNull();
     await waitFor(() => {
       const heading = focusedHeading();
       expect(heading, "focus is on no heading").not.toBeNull();

@@ -95,7 +95,7 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `Dialog` | `open: boolean`, `onClose: () => void` (called once per way out; the dialog never closes itself, the caller turns `open` false or unmounts it), `title: string`, `children`, optional `onBack: () => void` (`FRONTEND-011`: a 44 px ghost icon button named "Back" leads the header while it is given; if it disappears while focused, focus moves to Close), optional `role?: "dialog" \| "alertdialog"` and `describedBy?: string` (`FRONTEND-012`) |
 | `ConfirmDialog` | exported from `Dialog.tsx` (`FRONTEND-012`): the title, the explanation, the action's label and tone, `onConfirm`, `onCancel`, and its in-flight and error state |
 | `SearchInput` | `id: string`, `label: string`, `error?: string`, and every other `<input>` prop passed through to the input (`type` is always `search`; no `className`) |
-| `SegmentedTabs` | `label: string` (the tablist's name), `tabs: { id: string; label: string }[]`, `value: string` (the selected id), `onChange: (id: string) => void`, `children` (the panel). Controlled: the caller holds `value` |
+| `SegmentedTabs` | `label: string` (the tablist's name), `tabs: { id: string; label: string }[]`, `value: string` (the selected id), `onChange: (id: string) => void`, `children` (the panel, or a function handed the bar to place), `end?` (set at the bar's row end; the row wraps). `SegmentedRow` (`start?`, `end`) is that row alone. Controlled: the caller holds `value` |
 | `FloatingButton` | `aria-label: string` (required, a type error without it), `children` (the icon), and either `to: string` or `onClick: () => void` |
 | `Menu` | `label: string` (the button's and the menu's name), `items: MenuItem[]` (`{ label, onSelect, disabled? }`), `icon?: ReactNode` (shown in place of the label, which stays the name) |
 | `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon`, `CircleCheckIcon`, `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), each taking `size?: number` (default 20) and `className?` |
@@ -207,7 +207,7 @@ both teams by abbreviation.
 
 ### Team identity
 
-- **Text only: the team name, or its abbreviation in an `outline` badge.** No
+- **Text first: the team name, or its abbreviation in an `outline` badge.** No
   logos in v1 (`decisions.md` 2026-10-06). `TeamOut.logo_url` points at
   API-SPORTS's media host. API-SPORTS says logos are provided *"solely for
   identification and descriptive purposes"*, that it owns no rights in them,
@@ -215,10 +215,35 @@ both teams by abbreviation.
   read via search 2026-10-06). The marks belong to the leagues and clubs, who
   police them (`branding.md` §10). Hotlinking would also be a third-party
   request on every view.
-- ~~**No team colours anywhere**~~ **Superseded 2026-11-02** (`decisions.md`,
-  "Team icons and avatar colours"): a team is shown with `TeamIcon`, its
-  abbreviation on the team's inner and outer colours (`FRONTEND-031`). Still no
-  logo, crest or image.
+- **A team's colours are shown only through `TeamIcon`** (`decisions.md`,
+  "Team icons and avatar colours"; `FRONTEND-031`). Still no logo, crest or image.
+
+**`TeamIcon` as built** (`components/ui/TeamIcon`; props in `0x08-frontend.md`
+→ Team icons):
+
+- **Drawing.** A circle: the abbreviation in black (`--team-outer-black`, bold)
+  on the team's inner fill, inside a ring of its outer colour, then a 1 px
+  `--color-border` hairline outside the ring so a dark ring still reads on the
+  dark surface. Text and CSS only: no image, no SVG. Colours are the
+  `--team-*` tokens (`tokens.md` §10).
+- **Sizes.** `sm` 32 px (2 px ring), `lg` 64 px (3 px ring).
+- **Type: an explicit exception.** The abbreviation is bold at `0.6875rem`
+  (11 px) at `sm` and `1.375rem` (22 px) at `lg`, raw values rather than
+  tokens. 11 px is below the 12 px `--font-size-xs` floor (`tokens.md` §8),
+  kept because three letters must fit inside the ring at `sm` (measured ink:
+  MEM 26.38 px, GSW 25.99 px, against a 26.83 px inner width; at 12 px MEM
+  would not fit). Pending the human's review (`FRONTEND-031`, PR #315).
+- **Unknown or null team:** the neutral form, `--color-surface-muted` fill,
+  `--color-border` ring, `--color-text` abbreviation (empty if null).
+- **Accessibility.** `aria-hidden` when the team's name is adjacent text (the
+  usual case); `role="img"` named by `label` only where the icon stands alone.
+  Under `forced-colors: active` fill and hairline drop and the ring stays as a
+  `CanvasText` line.
+- **It never replaces text.** The name or abbreviation is still shown beside
+  it; dense opponent cells stay text, no icon.
+- **Used in** standings, team and records levels, team search, the game
+  header and box score, feed game previews, stats picker rows and the player
+  page's team fact (full list: `0x08-frontend.md` → Team icons).
 
 ### Mentions in posts
 

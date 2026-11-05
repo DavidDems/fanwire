@@ -264,6 +264,20 @@ const ALLOW_LIST: AllowListEntry[] = [
       'index.html after a redeploy. Scoped to a statement holding exactly those two actions and nothing else.',
     matches: (f) => f.kind === 'resource' && f.value === '"*"' && exactActions(f.statement, DEPLOYMENT_INVALIDATION),
   },
+  {
+    id: 'pre-sign-up-log-streams',
+    reason:
+      'CloudWatch Logs scopes CreateLogStream and PutLogEvents to log-stream resources ' +
+      '(https://docs.aws.amazon.com/service-authorization/latest/reference/list_logs.html). ' +
+      'This permits exactly the PreSignUpLogGroup log streams (one trailing stream wildcard), never the group ARN or other resources.',
+    matches: (f) =>
+      f.kind === 'resource' &&
+      f.resourceType === 'AWS::IAM::Policy' &&
+      (f.value.match(/\*/g) ?? []).length === 1 &&
+      /:log-stream:\*"\]\]\}$/.test(f.value) &&
+      /"Fn::GetAtt":\["[A-Za-z0-9]*PreSignUpLogGroup[A-Za-z0-9]*","Arn"\]/.test(f.value) &&
+      exactActions(f.statement, ['logs:CreateLogStream', 'logs:PutLogEvents']),
+  },
 ];
 
 /** Recursively yields every policy-document-shaped object (anything with a Statement array). */
@@ -401,5 +415,50 @@ describe('allow-list hygiene', () => {
     const findings = findingsFor('Fake', 'P', fake);
     expect(findings.map((f) => f.kind).sort()).toEqual(['action', 'resource']);
     expect(findings.filter((f) => ALLOW_LIST.some((e) => e.matches(f)))).toEqual([]);
+  });
+
+  test('pre-sign-up log-stream exception rejects wider actions and resources', () => {
+    const exception = ALLOW_LIST.find((entry) => entry.id === 'pre-sign-up-log-streams');
+    if (!exception) throw new Error('pre-sign-up log-stream allow-list entry is missing');
+    const statement = (actions: string[]): Record<string, unknown> => ({
+      Effect: 'Allow',
+      Action: actions,
+      Resource: {
+        'Fn::Join': [
+          '',
+          [{ 'Fn::GetAtt': ['AuthPreSignUpLogGroupA1B2C3D4', 'Arn'] }, ':log-stream:*'],
+        ],
+      },
+    });
+    const finding = (policyStatement: Record<string, unknown>): Finding => ({
+      stack: 'Auth',
+      logicalId: 'PreSignUpRole',
+      resourceType: 'AWS::IAM::Policy',
+      kind: 'resource',
+      value: json((policyStatement.Resource as unknown)),
+      statement: policyStatement,
+    });
+
+    expect(exception.matches(finding(statement(['logs:CreateLogStream', 'logs:PutLogEvents'])))).toBe(true);
+    expect(exception.matches(finding(statement([
+      'logs:CreateLogStream',
+      'logs:PutLogEvents',
+      'logs:CreateLogGroup',
+    ])))).toBe(false);
+
+    const otherLogGroup = statement(['logs:CreateLogStream', 'logs:PutLogEvents']);
+    otherLogGroup.Resource = {
+      'Fn::Join': [
+        '',
+        [{ 'Fn::GetAtt': ['AuthOtherLogGroupA1B2C3D4', 'Arn'] }, ':log-stream:*'],
+      ],
+    };
+    expect(exception.matches(finding(otherLogGroup))).toBe(false);
+
+    const groupWide = statement(['logs:CreateLogStream', 'logs:PutLogEvents']);
+    groupWide.Resource = {
+      'Fn::Join': ['', [{ 'Fn::GetAtt': ['AuthPreSignUpLogGroupA1B2C3D4', 'Arn'] }, ':*']],
+    };
+    expect(exception.matches(finding(groupWide))).toBe(false);
   });
 });

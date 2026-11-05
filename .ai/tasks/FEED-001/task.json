@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "task_id": "FEED-001",
+  "objective": "Keep public guest-feed posts visible to newly signed-in users who have no follows, without suppressing older public posts based on account age.",
+  "acceptance_criteria": [
+    "Start gate: USERS-007 is merged and deployed. Reproduce and trace the difference between the signed-out guest feed, an existing account's feed, and a newly created signed-in account with no follows before implementation; report the actual root cause in the PR.",
+    "When public posts visible on the signed-out guest feed exist, a newly signed-in account with no follows sees those same eligible public posts in its home feed, subject to the same visibility and ordering rules. Account creation time alone never excludes a public post.",
+    "A newly signed-in account's own public post appears in that account's feed and in the signed-out guest feed. Existing signed-in accounts continue to see eligible public posts from other accounts under the established feed behavior.",
+    "Tests pin old public posts, a new account with no follows, and a post authored by that new account. Tests also pin that visibility/deactivated-account rules and stable pagination are not weakened.",
+    "Do not manufacture feed items for a truly empty public dataset. The empty state is shown only when there are no eligible posts; it must not be caused solely by the viewer having no follows or being a new account.",
+    "Respect the module boundary: feed reads posts only through the posts module's public interface; it does not reach into posts' concrete classes or tables.",
+    "Browser rows on localhost, reported with evidence or NOT DONE: guest feed with existing public posts; new signed-in account with no follows sees those posts; newly authored public post is visible to its author and the guest feed; pagination remains ordered.",
+    "No new dependency or migration unless the reproduced root cause proves one necessary; if a migration is needed, make its deploy and post-deploy migration gate explicit in the PR.",
+    "wiki/CodeContext/Modules/0x03-posts.md, 0x06-feed.md and 0x08-frontend.md record any changed feed contract."
+  ],
+  "allowed_paths": [
+    "backend/app/feed/**",
+    "backend/app/posts/service.py",
+    "backend/tests/feed/**",
+    "backend/tests/posts/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/test/feed.ts",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/app/users/**",
+    "frontend/src/auth/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "fastapi-module",
+    "backend-testing",
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

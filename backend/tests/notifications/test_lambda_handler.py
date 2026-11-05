@@ -119,7 +119,10 @@ def test_user_followed_record_sends_email_when_from_address_configured(
     cognito.admin_create_user(
         UserPoolId=pool_id,
         Username=followed_sub,
-        UserAttributes=[{"Name": "email", "Value": "followed@example.com"}],
+        UserAttributes=[
+            {"Name": "email", "Value": "followed@example.com"},
+            {"Name": "email_verified", "Value": "true"},
+        ],
     )
 
     from app.notifications.lambda_handler import handler

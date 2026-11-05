@@ -219,6 +219,46 @@ describe("the bottom bar and the header's room", () => {
   });
 });
 
+/**
+ * FRONTEND-030: the content column. `.main` keeps `--content-max` (the
+ * reading width every route has), and the shell's module has one more rule,
+ * for the records home, that sets `--content-max-wide`. Which routes carry it
+ * is `AppLayout.test.tsx`'s, which renders them.
+ */
+describe("the content column (FRONTEND-030)", () => {
+  function maxWidths(): { selector: string; value: string }[] {
+    return allBlocks(shellBlocks())
+      .filter((block) => !isAtRule(block))
+      .flatMap((block) => {
+        const value = declared(block, "max-width");
+        return value === undefined
+          ? []
+          : [...selectorSet(block)].map((selector) => ({ selector, value }));
+      });
+  }
+
+  it("keeps .main at var(--content-max)", () => {
+    const main = shellBlocks().find(
+      (block) => !isAtRule(block) && selectorSet(block).has(".main"),
+    );
+    expect(main, "no top-level .main rule").toBeDefined();
+    expect(declared(main as CssBlock, "max-width")).toBe("var(--content-max)");
+  });
+
+  it("has a rule that widens main to var(--content-max-wide)", () => {
+    const wide = maxWidths().filter(
+      ({ value }) => value === "var(--content-max-wide)",
+    );
+    expect(wide, "no rule sets max-width: var(--content-max-wide)").not.toEqual(
+      [],
+    );
+    // A width of its own, never a number written into the module.
+    expect(
+      maxWidths().filter(({ value }) => /\d+(rem|em|px)/.test(value)),
+    ).toEqual([]);
+  });
+});
+
 describe("every *.module.css under src/routes (criterion 9)", () => {
   const files = moduleCssFiles(ROUTES_DIR);
   const names = files.map((file) =>
