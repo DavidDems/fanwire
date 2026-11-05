@@ -15,6 +15,12 @@ custom one-time email link for both verified and unverified accounts. The link
 opens a new-password form with confirmation. Resetting a password never marks
 the email verified.
 
+The sign-up form also gains a Confirm password field to catch a typo before
+Cognito creates the account. This is a new AUTH-001 criterion; `USERS-007` is
+complete and remains unchanged. A mismatch is reported accessibly without a
+Cognito request; matching values submit once. Email verification remains
+optional after sign-up.
+
 The human's observed HTTP 400 is the reason this task cannot rely on native
 Cognito `ForgotPassword` for unverified accounts. Send the link only to the
 address associated with the matching Cognito account. Cognito remains the
@@ -62,6 +68,10 @@ the current password; enforce this at Cognito using the approved password
 history policy rather than reading or storing the existing plaintext password.
 Password and confirmation are never logged or placed in URLs, analytics or
 telemetry.
+
+Apply the same confirmation rule to sign-up: the Password and Confirm password
+values must match before the Cognito `SignUp` request. Keep the existing optional
+verification flow unchanged.
 
 ## Email module boundary
 

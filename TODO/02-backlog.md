@@ -131,7 +131,7 @@ current queue and order for Track D. Every unit is `hand`.
 | 6 | `POSTS-008` | The History page |
 | 7 | `USERS-006` | Account menu and Account settings, password-checked deactivate |
 | 8 | `USERS-007` | Sign-up without email verification |
-| 9 | `AUTH-001` | Secure one-time password-reset link for verified and unverified accounts; account-details entry in settings |
+| 9 | `AUTH-001` | Secure one-time password-reset link for verified and unverified accounts; signup password confirmation; account-details entry in settings |
 | 10 | `USERS-008` | Delete my data (after a Director PR for the role boundary) |
 | 11 | `FRONTEND-032` | The Invite button |
 | 12 | `FEED-001` | Keep public guest-feed posts visible to new signed-in accounts |
