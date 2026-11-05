@@ -41,6 +41,23 @@ completion through `inputVerificationCode`; and rejection on session or SDK
 errors. This client/test addition does not alter any other USERS-007 paths,
 criteria, gates or sequencing.
 
+## Dedicated pre-sign-up log stream policy scope
+
+The original task acceptance required `iam-policy.test.ts` to remain unchanged.
+AWS requires `logs:CreateLogStream` and `logs:PutLogEvents` to target log-stream
+resources whose names Lambda generates. The role therefore needs the narrow
+resource `${preSignUpLogGroup.logGroupArn}:log-stream:*` under its dedicated
+`PreSignUpLogGroup`; a group-wide `:*` is not permitted. The task may now edit
+`infra/test/iam-policy.test.ts` only to add one exact, exercised allow-list
+entry for that action set and that concrete log-group reference. The rationale
+must cite AWS's log-stream resource requirement, the matcher must reject any
+broader action or resource, and the existing allow-list hygiene test must prove
+the exception matches a synthesized policy. Keep the Lambda role log-only and
+keep `permissions-boundary.test.ts` unchanged and passing.
+
+PR #324 is merged to `main`. This scope amendment is PR #326 and must merge
+before dependent PR #325.
+
 ## Automatic profile creation after sign-in
 
 When a successful sign-in lands on the public feed (`/`), an authenticated
