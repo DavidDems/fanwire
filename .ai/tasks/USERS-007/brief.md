@@ -55,8 +55,10 @@ broader action or resource, and the existing allow-list hygiene test must prove
 the exception matches a synthesized policy. Keep the Lambda role log-only and
 keep `permissions-boundary.test.ts` unchanged and passing.
 
-PR #324 is merged to `main`. This scope amendment is PR #326 and must merge
-before dependent PR #325.
+This dedicated log-stream scope is part of the completed USERS-007 contract.
+Future password recovery is specified by AUTH-001 after this unit deploys;
+remembered-device and new-device checks remain outside Track D in AUTH-002 and
+AUTH-003.
 
 ## Automatic profile creation after sign-in
 
@@ -70,29 +72,24 @@ behavior in `AppLayout.tsx` and cover the actual route flow in
 `auth-flow.test.tsx`, including the anonymous feed case. This is the only
 additional implementation path for the redirect.
 
-## What this gives up, recorded so it is a choice
+## Historical rationale and current scope
 
-- **An unverified account cannot reset its password.** Forgetting the password
-  before verifying means losing the account.
-- **Anyone can register an address they do not own.** Its real owner then cannot
-  sign up with it, and cannot use forgot-password on it, because it is unverified.
-  No email is sent either, so the owner is not told. A clean-up job for old
-  unverified accounts is a sensible follow-up, not part of this unit.
+- Anyone can register an address they do not own. Password recovery is specified
+  separately by `AUTH-001` and must work for verified and unverified accounts;
+  it must not silently mark an address verified.
+- The site asks new users to verify from Account settings, but verification is
+  optional for signing in and using the platform.
 
-The human chose this on 2026-11-02 to make sign-up easy for friends and recruiters.
-The paragraph above records the historical rationale and risks as they stood
-when USERS-007 was specified; it does not require this unit to add reset-limit
-copy or document password-recovery behavior. The unit documents the optional
-sign-up rule and points to the deferred AUTH tasks below.
+The human chose optional verification so sign-up is easy for friends and
+recruiters. Password and Confirm password must match before the Cognito signup
+request; a typo should not lock the user into an unknown password.
 
-## Deferred account-security scope
+## Related account-security scope
 
-The 2026-11-02 decision above is preserved as historical context. The current
-product direction is to provide reset-link recovery for unverified email
-addresses and to challenge verified users on new devices. Those behaviors are
-deferred to `AUTH-001`, `AUTH-002` and `AUTH-003`; this unit must not edit or test
-forgot-password behavior or add device tracking/login challenges. The native
-Cognito recovery limitation remains until `AUTH-001` is completed.
+`AUTH-001` owns password recovery for verified and unverified addresses. This
+unit adds password confirmation to signup, but does not change the recovery
+flow. `AUTH-002` (remembered devices) and `AUTH-003` (new-device identity
+challenge) remain outside Track D and stay in the backlog.
 
 ## Why an inline function
 

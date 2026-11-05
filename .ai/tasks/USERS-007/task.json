@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task_id": "USERS-007",
-  "objective": "Signing up no longer requires an emailed code: a new account can sign in straight away and verifies later from Account settings. Password recovery and remembered-device security remain deferred to AUTH-001 through AUTH-003.",
+  "objective": "Signing up no longer requires an emailed code: a new account can sign in straight away and verifies later from Account settings, with matching password confirmation before signup.",
   "acceptance_criteria": [
     "Start gate: USERS-006 is live in production, and the brief's dev-pool proof is recorded in the PR body with its date. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
     "frontend/src/auth/CognitoAuthService.requestEmailVerification restores and validates the current SDK user's session before requesting GetUserAttributeVerificationCode, and uses that same hydrated user instance for the request. It makes no Cognito request without a valid session. Resolve the Promise from the SDK's successful inputVerificationCode callback so AccountSettings can reveal the code-entry form; reject on session-restore or request errors without hanging.",
@@ -10,15 +10,15 @@
     "infra/lib/auth-stack.ts adds a pre sign-up trigger on the user pool: an inline function in the auth stack, not the shared backend image and not in the VPC, that sets autoConfirmUser true and leaves autoVerifyEmail false, so a new account is confirmed with email_verified false and no code is sent at sign-up.",
     "The trigger's role has no permission beyond writing its own logs and carries the permissions boundary. permissions-boundary.test.ts passes unchanged. iam-policy.test.ts may change only to add one exact, exercised allow-list exception for the pre-sign-up log stream policy: the exact action set is logs:CreateLogStream and logs:PutLogEvents, and the resource is only the dedicated PreSignUpLogGroup ARN with a trailing :log-stream:* segment. The exception rationale cites AWS's requirement to authorize generated log streams at the log-stream resource level; its matcher rejects broader resources or actions, and allow-list hygiene still requires a synthesized match. auth-stack.ts must use `${preSignUpLogGroup.logGroupArn}:log-stream:*`, never group-wide :*. Its runtime is pinned, timeout is 5 seconds or less, and auth-stack.test.ts pins the trigger, runtime, non-verification behavior and exact log-stream scope.",
     "autoVerify stays { email: true }, so a code can still be requested for verification, and keepOriginal stays. deletionProtection stays. No pool replacement appears in the synthesised change.",
-    "SignUpPage needs no new step: userConfirmed true already goes to sign-in, and the test that pins this stays. Its copy no longer mentions a code. The page tells the user they can sign in now and verify later.",
+    "SignUpPage has labelled Password and Confirm password fields. A mismatch is shown accessibly and prevents any Cognito SignUp request; matching values submit once. On success, userConfirmed true goes to sign-in. Copy says the user can sign in now and verify later, and does not imply that signup verification is required.",
     "ConfirmPage and SignInPage keep handling an unconfirmed account, so anyone mid-flow when this ships is not stranded. Their existing tests pass unchanged.",
     "Notification email is never sent to an address that is not verified: app.notifications.email treats email_verified not true on the AdminGetUser answer as a skip, logged without the address. A test pins it.",
     "An existing confirmed account is unaffected and still signs in. Nothing is migrated.",
-    "Browser rows on localhost against the dev pool, reported with evidence or NOT DONE: sign up with a new human-provided test address, then sign in with no code; create the profile; Account settings shows the unverified state; the emailed verification code works and the state turns green. Forgot-password and device-recognition behavior are outside this task and are specified by AUTH-001 through AUTH-003.",
+    "Browser rows on localhost against the dev pool, reported with evidence or NOT DONE: mismatched signup passwords make no Cognito request; matching passwords allow sign-up with a new human-provided test address, followed by sign-in without a signup code; create the profile; Account settings shows the unverified state; the emailed verification code works and the state turns green. Password recovery is specified separately by AUTH-001; device registry and new-device verification remain outside Track D in AUTH-002/AUTH-003.",
     "frontend/src/test/bundle-budgets/USERS-007.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
     "No new dependency.",
-    "Merge order: PR #324 is merged to main. This scope amendment must merge before dependent PR #325.",
-    "wiki/CodeContext/Modules/0x01-users.md and 0x08-frontend.md record only the optional sign-up rule; the module documentation includes a pointer that password recovery and device checks are deferred to AUTH-001 through AUTH-003."
+    "Sequence: USERS-006 is the prerequisite for this unit. After USERS-007 is deployed, AUTH-001 may start as the Track D password-recovery unit. AUTH-002 and AUTH-003 remain separate backlog tasks outside Track D.",
+    "wiki/CodeContext/Modules/0x01-users.md and 0x08-frontend.md record the optional sign-up rule and password confirmation. Password recovery belongs to AUTH-001; device registry and new-device verification remain outside this unit and Track D in AUTH-002/AUTH-003."
   ],
   "allowed_paths": [
     "infra/lib/auth-stack.ts",
