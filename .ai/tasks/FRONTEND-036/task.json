@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-036",
+  "objective": "The search bar leaves the top of the feed at every width; from 1152 px the home page has a right column with the search bar, whose results show there beside the feed.",
+  "acceptance_criteria": [
+    "Start gate: FRONTEND-035 has merged to main. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "At every width, / no longer renders a search bar above the feed. The feed's h1 stays the page's only h1. /search is unchanged and is still how a phone or tablet reader searches (FRONTEND-035's Search links).",
+    "From 72em (1152 px) on /, HomeView renders a right column (the rail) beside the feed: the existing SearchBar, then, when ?q= is set, the rail results, then a slot that EVENTS-013 fills with recent games and that renders nothing in this unit. main on / is wide enough for the feed at --content-max plus --space-5 plus the rail at --rail-width; every other route keeps its own width. The rail is sticky under the header and scrolls on its own when taller than the viewport.",
+    "Below 72em the rail is not mounted at all, so a phone makes none of its requests. Mounting follows a small useMediaQuery('(min-width: 72em)') hook in src/routes, which listens for changes, so resizing across 72em mounts or unmounts it with no reload. Tests stub matchMedia and cover both sides and a change.",
+    "On /, submitting the rail's bar writes /?q=<trimmed text> as a new history entry and stays on /: the feed is not refetched, keeps its loaded pages and its scroll position. Back removes the search. On /search the bar still goes to /search?q= as today. An empty or whitespace-only submit does nothing on either.",
+    "If / is opened with ?q= below 72em, the feed shows alone and nothing is lost: widening shows the results.",
+    "The rail results are a section headed 'Results for <q>' (h2), with Accounts then Posts, each showing at most five from the first page of the existing accountsKey and postsKey queries, so opening /search?q= afterwards reuses the cache. Each section ends with a 'Show all' link to /search?q=<q> whose accessible name includes the section; there is no Load more in the rail.",
+    "An account row shows its Avatar and username as a link to the profile. A post row is compact: author, time, and text clamped to three lines, with the time as the link to /posts/<id> carrying the modal flow's state, so the thread opens over the home page. A row has no action controls.",
+    "A Clear search button removes q from the address with a new history entry and returns focus to the search box.",
+    "Loading shows the shared StatusLine; a failure shows InlineAlert with Retry for that section only; no match shows an EmptyState naming the query. The result count is announced once per search through a polite live region.",
+    "features/search imports only PostNode, feed/api and components/ui from outside itself, so search-isolation.test.ts stays green; routes/HomeView composes the features, and none imports another.",
+    "No horizontal overflow: scrollWidth equals clientWidth at 320, 360, 1024, 1152, 1248, 1280 and 1920 CSS px, each with a classic 17px scrollbar, with a 100-character query and long post text in the results.",
+    "Browser rows at 360, 1152, 1280 and 1920, light and dark, reported with measurements or NOT DONE: no bar above the feed at 360; the rail beside the feed; a search with both sections; no results; a post row opening its thread over home; Show all; Clear; back and forward; a resize across 1152 px; keyboard-only search; 200% text size at 1280.",
+    "frontend/src/test/bundle-budgets/FRONTEND-036.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file, or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md 'Search' records the rail, the /?q= address and the removed home bar."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/HomeView.tsx",
+    "frontend/src/routes/HomeView.module.css",
+    "frontend/src/routes/home-search.test.tsx",
+    "frontend/src/routes/home-rail.test.tsx",
+    "frontend/src/routes/useMediaQuery.ts",
+    "frontend/src/routes/useMediaQuery.test.ts",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/features/search/**",
+    "frontend/src/test/search.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-036.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x07-search.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
