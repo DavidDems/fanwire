@@ -41,6 +41,8 @@ No creational/structural/behavioral pattern owns `User` itself. The one real con
 ### Account verification and recovery requirement
 Email verification must not gate sign-in or core account use, including posting and account settings; users can verify later. Any future new-device or IP-based re-verification applies only to accounts whose email was already verified.
 
+New self-signups are auto-confirmed by Cognito's pre-sign-up trigger without setting `autoVerifyEmail`; signup-code delivery and the resulting `email_verified` value still require dev-pool proof. The local `User` row does not store Cognito verification state. The backend notification sender skips an address unless Cognito reports `email_verified` as `true`.
+
 The existing Forgot password flow uses Cognito's native recovery. The desired behavior is to let an account recover through the email it supplied even while that email remains unverified, without marking the email verified as a side effect. That support is not established by the existing flow: Cognito's native recovery requires a verified email or phone destination. Recovery for unverified addresses needs a separate design and security review before it can be claimed as supported ([Cognito sign-up and confirmation](https://docs.aws.amazon.com/cognito/latest/developerguide/signing-up-users-in-your-app.html), [Cognito password recovery](https://docs.aws.amazon.com/cognito/latest/developerguide/managing-users-passwords.html)).
 
 ### Security

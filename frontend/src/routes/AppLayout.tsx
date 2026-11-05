@@ -1,6 +1,7 @@
 import { createContext, useRef, type ComponentType } from "react";
 import {
   Link,
+  Navigate,
   NavLink,
   Outlet,
   matchPath,
@@ -124,6 +125,7 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
 export function AppLayout() {
   const { status } = useAuth();
   const account = useAccount();
+  const location = useLocation();
   const signOut = useSignOut();
   const accountIsActive = account.status === "active";
   const ownUserId = accountIsActive ? account.profile.id : null;
@@ -224,7 +226,11 @@ export function AppLayout() {
         className={wide ? `${styles.main} ${styles.wide}` : styles.main}
       >
         <ShellAccountStatus.Provider value={account.status}>
-          <Outlet />
+          {location.pathname === "/" && account.status === "no-profile" ? (
+            <Navigate to="/create-profile" replace />
+          ) : (
+            <Outlet />
+          )}
         </ShellAccountStatus.Provider>
       </main>
       {ownUserId === null ? null : (

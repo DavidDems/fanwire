@@ -1,12 +1,9 @@
 /**
  * FRONTEND-002 acceptance criterion 2 — the one implementation.
  *
- * What is *not* tested here: anything that would require the Cognito SDK to be
- * mocked. The library's own network is out of scope by decision
- * (`.ai/tasks/FRONTEND-002/brief.md`, "Verification") — msw covers the API, the
- * `AuthService` double covers the seam, and a real browser against the real dev
- * pool covers Cognito. A test that reached inside `CognitoUser` would pin the
- * mock and tell us nothing.
+ * SDK behavior uses the real pinned Cognito library with its HTTP intercepted
+ * by MSW. Synthetic localStorage tokens exercise session restoration without
+ * credentials, SDK mocks, or a real pool.
  *
  * What is left is worth pinning, because two later things depend on it:
  *
@@ -19,7 +16,9 @@
  *   failing for a reason nobody would look for.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { HttpResponse, http } from "msw";
 
+import { config } from "../config";
 import { server } from "../test/server";
 import type { AuthService } from "./AuthService";
 import { CognitoAuthService } from "./CognitoAuthService";
@@ -64,6 +63,30 @@ beforeEach(() => {
 afterEach(() => {
   window.localStorage.clear();
 });
+
+const USERNAME = "synthetic-user";
+const CLIENT_ID = config.cognitoClientId;
+const COGNITO_URL = `https://cognito-idp.${config.cognitoRegion}.amazonaws.com/`;
+const CACHE_PREFIX = `CognitoIdentityServiceProvider.${CLIENT_ID}`;
+
+function syntheticJwt(tokenUse: "id" | "access", expired = false, emailVerified = false): string {
+  const now = Math.floor(Date.now() / 1000);
+  const exp = expired ? now - 3600 : now + 3600;
+  const payload = tokenUse === "id"
+    ? { sub: "synthetic-subject", email: "synthetic@example.invalid", email_verified: emailVerified, exp, iat: now, token_use: "id" }
+    : { sub: "synthetic-subject", exp, iat: now, token_use: "access", username: USERNAME };
+  const encode = (value: unknown) => btoa(JSON.stringify(value)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode(payload)}.synthetic-signature`;
+}
+
+function storeSyntheticSession(expired = false): void {
+  const userPrefix = `${CACHE_PREFIX}.${USERNAME}`;
+  window.localStorage.setItem(`${CACHE_PREFIX}.LastAuthUser`, USERNAME);
+  window.localStorage.setItem(`${userPrefix}.idToken`, syntheticJwt("id", expired));
+  window.localStorage.setItem(`${userPrefix}.accessToken`, syntheticJwt("access", expired));
+  window.localStorage.setItem(`${userPrefix}.refreshToken`, "synthetic-refresh-token");
+  window.localStorage.setItem(`${userPrefix}.clockDrift`, "0");
+}
 
 describe("CognitoAuthService", () => {
   it("is constructed from configuration alone, with no arguments", () => {
@@ -112,5 +135,128 @@ describe("CognitoAuthService", () => {
     const service = new CognitoAuthService();
 
     expect(() => service.signOut()).not.toThrow();
+  });
+
+  it("restores the current SDK user session before requesting email verification", async () => {
+    storeSyntheticSession();
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({ CodeDeliveryDetails: { AttributeName: "email", DeliveryMedium: "EMAIL", Destination: "s***@example.invalid" } });
+    }));
+
+    await expect(new CognitoAuthService().requestEmailVerification()).resolves.toBeUndefined();
+    expect(targets).toEqual(["AWSCognitoIdentityProviderService.GetUserAttributeVerificationCode"]);
+  });
+
+  it("rejects without an API request when no valid current-user session can be restored", async () => {
+    window.localStorage.setItem(`${CACHE_PREFIX}.LastAuthUser`, USERNAME);
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({});
+    }));
+
+    await expect(new CognitoAuthService().requestEmailVerification()).rejects.toBeDefined();
+    expect(targets).toEqual([]);
+  });
+
+  it("rejects an expired session without requesting an email verification code", async () => {
+    storeSyntheticSession(true);
+    // Without a refresh token, the SDK rejects the expired cached session
+    // locally instead of trying its refresh-token HTTP flow.
+    window.localStorage.removeItem(`${CACHE_PREFIX}.${USERNAME}.refreshToken`);
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json(
+        { __type: "NotAuthorizedException", message: "Synthetic expired session" },
+        { status: 400 },
+      );
+    }));
+
+    await expect(new CognitoAuthService().requestEmailVerification()).rejects.toBeDefined();
+    expect(targets).not.toContain(
+      "AWSCognitoIdentityProviderService.GetUserAttributeVerificationCode",
+    );
+  });
+
+  it("rejects when Cognito returns an SDK API error", async () => {
+    storeSyntheticSession();
+    server.use(http.post(COGNITO_URL, () => HttpResponse.json(
+      { __type: "LimitExceededException", message: "Request limit exceeded" },
+      { status: 400 },
+    )));
+
+    await expect(new CognitoAuthService().requestEmailVerification()).rejects.toMatchObject({
+      code: "LimitExceededException",
+    });
+  });
+
+  it("restores the session, verifies the supplied email code, then refreshes verification state", async () => {
+    storeSyntheticSession();
+    const calls: Array<{ target: string; body: Record<string, unknown> }> = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      const target = request.headers.get("x-amz-target") ?? "";
+      const body = await request.json() as Record<string, unknown>;
+      calls.push({ target, body });
+      if (target.endsWith(".VerifyUserAttribute")) return HttpResponse.json({});
+      if (target.endsWith(".InitiateAuth")) {
+        return HttpResponse.json({ AuthenticationResult: {
+          IdToken: syntheticJwt("id", false, true),
+          AccessToken: syntheticJwt("access"),
+          RefreshToken: "synthetic-refreshed-token",
+          ExpiresIn: 3600,
+          TokenType: "Bearer",
+        } });
+      }
+      return HttpResponse.json({ __type: "NotAuthorizedException" }, { status: 400 });
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .resolves.toBeUndefined();
+
+    expect(calls[0]).toMatchObject({
+      target: "AWSCognitoIdentityProviderService.VerifyUserAttribute",
+      body: { AttributeName: "email", Code: "654321" },
+    });
+    expect(calls[1]?.target).toBe("AWSCognitoIdentityProviderService.InitiateAuth");
+    await expect(new CognitoAuthService().emailVerified()).resolves.toBe(true);
+  });
+
+  it("does not request VerifyUserAttribute when no current session exists", async () => {
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({});
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toBeDefined();
+    expect(targets).not.toContain("AWSCognitoIdentityProviderService.VerifyUserAttribute");
+  });
+
+  it("does not request VerifyUserAttribute when the stored session is invalid", async () => {
+    window.localStorage.setItem(`${CACHE_PREFIX}.LastAuthUser`, USERNAME);
+    const targets: string[] = [];
+    server.use(http.post(COGNITO_URL, async ({ request }) => {
+      targets.push(request.headers.get("x-amz-target") ?? "");
+      return HttpResponse.json({});
+    }));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toBeDefined();
+    expect(targets).not.toContain("AWSCognitoIdentityProviderService.VerifyUserAttribute");
+  });
+
+  it("rejects a mismatched email verification code", async () => {
+    storeSyntheticSession();
+    server.use(http.post(COGNITO_URL, () => HttpResponse.json(
+      { __type: "CodeMismatchException", message: "Invalid verification code" },
+      { status: 400 },
+    )));
+
+    await expect(new CognitoAuthService().confirmEmailVerification("654321"))
+      .rejects.toMatchObject({ code: "CodeMismatchException" });
   });
 });
