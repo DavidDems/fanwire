@@ -209,3 +209,28 @@ named on each line.
   outer, over the initials. The eight geometric presets are removed (`USERS-005`).
 - `components.md` and `tokens.md` are updated as built, by the Director PR after
   each unit.
+
+## Sidebar, search rail and reply context — decided 2026-11-05
+
+From the human's own reference images (a three-column home page and a reply
+card), not in the repository.
+
+- **The nav (`FRONTEND-035`).** Below 40em, a bottom bar of icons only: Home,
+  Stats, Notifications, Sign out. Search is an icon in the header, left of the
+  avatar. From 40em, an icon-only left sidebar: Home, Stats, Search,
+  Notifications, Sign out. Labels appear from 78em. "Feed" is renamed "Home".
+  Sign out leaves the header; the avatar sits at the header's right end.
+- **Two Search links, one visible at any width**: a deliberate exception to
+  `layout.md` §1, because one link cannot move between the header and a fixed
+  bottom bar by CSS. Tests scope them with `within()`.
+- **No search bar above the feed, at any width.** From 72em, `/` has a right
+  rail with the search bar, a preview of results beside the feed
+  (`FRONTEND-036`), and Recent games, best-ranked matchups first
+  (`EVENTS-013`). Below 72em there is no rail. This supersedes "one column at
+  every width" in `layout.md` §2.
+- **A reply's card shows its parent** inside it, smaller, under the reply, with
+  Show this thread (`POSTS-009`, `FRONTEND-034`), in the feed and in a thread
+  alike. The feed includes replies with at least one like, a placeholder until
+  there is data for real suggestions. No other change to post cards.
+- `layout.md` and `tokens.md` are updated as built, by the Director PR after
+  each unit.
