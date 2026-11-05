@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-034",
+  "objective": "A reply's card shows the post it answers, smaller, inside the card under the reply, with a Show this thread link, so opening a reply never loses its context.",
+  "acceptance_criteria": [
+    "Start gate: POSTS-009 has merged to main. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "A reply's card (is_reply true) renders, in this order: the reply's header, text, link preview and media at full size; then its parent in a compact bordered box; then the reply's own action row; then a Show this thread link. The action row acts on the reply, never the parent.",
+    "The parent box reuses the quote's compact original: a small avatar, the author's profile link, the time as a link to the parent's thread, the text clamped to four lines, and its link preview. It has no controls, no media and no menu. A click on the box's surface opens the parent's thread, not the reply's.",
+    "Show this thread is a link with that exact accessible name to /posts/<parent id>, carrying the modal flow's state like every other thread link on the card. It is its own tab stop after the More options menu.",
+    "replied_post null with replied_post_deleted true shows the muted Post deleted box; with replied_post_deleted false, This post is unavailable. Show this thread is still offered in both cases, since the thread's surviving replies stay readable.",
+    "Where the box applies: the feed, search results, History, a profile's replies, and the root of the thread modal when the opened post is a reply, which is the case the human reported. Inside the thread modal's Replies list each reply shows no box and no Show this thread, because its parent is the card above it; PostNode takes an explicit prop for this, passed through PreparedPostNode, defaulting to showing the box.",
+    "A plain repost of a reply shows the reposted line, then the reply's card with its parent box. A quote of a reply shows its original box only, as today.",
+    "A decorative thread line, a 2px --color-border rule, runs in the card's left gutter from under the reply's avatar to the Show this thread row. It is CSS only, never in the accessibility tree, and kept in forced-colors mode.",
+    "Keyboard order inside a reply card: author, time, parent's author, parent's time, the parent preview's link if any, Like, Reply and its count, Repost, More options, Show this thread.",
+    "At 320, 360 and 1280 CSS px no reply card overflows: scrollWidth equals clientWidth on the card, with a 500-character parent and a long unbroken word in each.",
+    "Browser rows at 360 and 1280, light and dark, on localhost test accounts, reported with measurements or NOT DONE: a reply in search results; a reply opened from a profile's replies, with its parent visible; the Replies list showing no box; a reply to a deleted parent; keyboard through one card; 200% text size.",
+    "frontend/src/test/bundle-budgets/FRONTEND-034.ts declares, in the test commit, every output the unit changes. Entry growth is at most 2 KiB raw and 1 KiB gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file, or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md 'The post card' records the reply layout."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/feed/PostNode.tsx",
+    "frontend/src/features/feed/PostNode.module.css",
+    "frontend/src/features/feed/PreparedPostNode.tsx",
+    "frontend/src/features/feed/reply-card.test.tsx",
+    "frontend/src/features/feed/feed-style.test.tsx",
+    "frontend/src/features/thread/ThreadModal.tsx",
+    "frontend/src/features/thread/ThreadModal.test.tsx",
+    "frontend/src/test/feed.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-034.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/tokens.css",
+    "frontend/src/api/schema.d.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

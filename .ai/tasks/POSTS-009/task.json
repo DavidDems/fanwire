@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-009",
+  "objective": "Every reply's post view carries the post it replies to, one level deep, so a reply card can show its parent without a request per card; and the feed includes replies that have at least one like.",
+  "acceptance_criteria": [
+    "Start gate: FEED-001 has merged to main, since both change the feed's post selection. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "Every PostView (GET /feed, GET /feed/thread/{id}, GET /feed/history, GET /search/posts) carries replied_post and replied_post_deleted. On a reply, replied_post is the PostView of its parent, with the parent's own counts and viewer flags; on every other post it is null and replied_post_deleted is false.",
+    "One level deep: a replied_post's own replied_post is always null, and so is its reposted_post unless the next criterion applies.",
+    "When the parent is a plain repost, replied_post is the view of the post that repost stands for, the same rule the post card already applies to a plain repost. A quote repost parent is the quote itself, with its reposted_post null (the depth cut).",
+    "A parent its owner deleted gives replied_post null and replied_post_deleted true. A parent hidden because its author is deactivated or soft-deleted gives replied_post null and replied_post_deleted false. A reply's own visibility rules are unchanged.",
+    "Building the views stays batched: the statement count for a page of 2 posts equals that for a page of 20, with replies, their parents and reposts mixed in, pinned by a statement-counting test.",
+    "assemble_post_views reads parents through app.posts.service's existing public reads (posts_by_ids, deleted_post_ids), or a new public function there, never posts' tables directly (Connection rule).",
+    "backend/openapi.json and frontend/src/api/schema.d.ts are regenerated, and every frontend fixture that builds a PostView sets both new fields, so the frontend suite compiles and passes unchanged in behaviour.",
+    "GET /feed, for guests and signed-in viewers alike, includes a reply exactly when it has at least one like, counted as the like_count its PostView reports. It is selected under the same author and mention rules as top-level posts, at its own id in the newest-first order: a like moves nothing. A reply with no likes never appears, and one whose last like is removed drops out on the next read. Top-level posts and reposts are unchanged, liked or not.",
+    "With liked replies mixed in, the before_id cursor still neither repeats nor skips a post across pages, and next_before_id keeps its full-page rule.",
+    "A migration adds an index on post_likes(post_id), which the like check reads; the PR states the feed query's plan before and after on the dev database. GET /feed/history, /feed/thread and search are unchanged in what they select.",
+    "No new dependency.",
+    "wiki/CodeContext/Modules/0x06-feed.md records the two fields beside reposted_post and the liked-replies rule; 0x03-posts.md records the index."
+  ],
+  "allowed_paths": [
+    "backend/app/feed/**",
+    "backend/app/posts/service.py",
+    "backend/app/posts/models.py",
+    "backend/alembic/versions/**",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/**",
+    "frontend/src/features/**/*.test.ts",
+    "frontend/src/features/**/*.test.tsx",
+    "wiki/CodeContext/Modules/0x06-feed.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/app/users/**",
+    "backend/app/events/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Standards/design-principles.md",
+    "wiki/CodeContext/Standards/gof-patterns.md"
+  ],
+  "required_skills": [
+    "fastapi-module",
+    "backend-testing",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
