@@ -45,7 +45,8 @@ export interface StatsNavigatorProps {
   adapter: StatsNavAdapter;
   /**
    * False hides the breadcrumb while the stack is one level deep, where it
-   * only repeats the heading (the records home). Deeper stacks keep it.
+   * only repeats the heading (the records home, the Seasons tab's season
+   * level). Deeper stacks keep it.
    */
   rootCrumb?: boolean;
 }
