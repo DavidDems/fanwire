@@ -38,6 +38,18 @@ SDK errors. Do not include real credentials, token values or verification codes
 in fixtures or diagnostics. This client/test addition does not alter any other
 USERS-007 paths, criteria, gates or sequencing.
 
+## Automatic profile creation after sign-in
+
+When a successful sign-in lands on the public feed (`/`), an authenticated
+account whose existing `GET /users/me` lookup returns 404 must automatically
+continue to `/create-profile`. Keep the feed public for anonymous visitors:
+they still see the guest feed and do not make a profile lookup. The existing
+404 already distinguishes an authenticated identity without a profile, so do
+not add a database column, schema change or boolean. Implement this routing
+behavior in `AppLayout.tsx` and cover the actual route flow in
+`auth-flow.test.tsx`, including the anonymous feed case. This is the only
+additional implementation path for the redirect.
+
 ## What this gives up, recorded so it is a choice
 
 - **An unverified account cannot reset its password.** Forgetting the password
