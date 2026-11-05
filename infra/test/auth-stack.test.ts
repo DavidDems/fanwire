@@ -100,9 +100,24 @@ describe('Auth stack (Cognito)', () => {
     expect(actions.length).toBeGreaterThan(0);
     expect(actions.every((action) => typeof action === 'string' && action.startsWith('logs:'))).toBe(true);
 
+    const logGroup = Object.entries(resources).find(
+      ([logicalId, resource]) =>
+        logicalId.includes('PreSignUpLogGroup') && resource.Type === 'AWS::Logs::LogGroup',
+    );
+    expect(logGroup).toBeDefined();
+    if (!logGroup) throw new Error('the dedicated pre-sign-up log group is missing');
+    const statementResources = statements.flatMap((statement) => {
+      const resource = statement.Resource;
+      return Array.isArray(resource) ? resource : [resource];
+    });
+    expect(statementResources.length).toBeGreaterThan(0);
+    expect(statementResources.every((resource) => {
+      const serialized = JSON.stringify(resource);
+      return serialized.includes(logGroup[0]) && !serialized.includes('"*"');
+    })).toBe(true);
+
     const managedPolicies = (role?.Properties?.ManagedPolicyArns as unknown[] | undefined) ?? [];
-    expect(managedPolicies.length).toBeGreaterThan(0);
-    expect(managedPolicies.every((policy) => JSON.stringify(policy).includes('AWSLambdaBasicExecutionRole'))).toBe(true);
+    expect(managedPolicies).toEqual([]);
   });
 
   test('SPA public client: no secret, SRP + refresh only, no OAuth, no user-existence leaks', () => {
