@@ -17,6 +17,9 @@
  * Every response here is held by a gate the test opens, so "while it is
  * loading" is a state the test is in, not a race it hopes to win.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -32,6 +35,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { components } from "../../api/schema";
 import { AuthProvider } from "../../auth/AuthContext";
 import skeletonStyles from "../../components/ui/Skeleton.module.css";
+import { SRC_DIR, stripComments } from "../../test/css";
 import {
   FakeAuthService,
   teamsAre,
@@ -178,9 +182,22 @@ function renderRouter(
 
 /** Every rendered element carrying one of the shared `Skeleton`'s classes. */
 function skeletonBlocks(): Element[] {
-  const classes = new Set(
-    Object.values(skeletonStyles as Record<string, string>),
+  // A CSS module is a Proxy with no own keys under vitest, so
+  // Object.values() is empty; take the class names from the stylesheet's
+  // source and map each through the module instead.
+  const names = Array.from(
+    stripComments(
+      readFileSync(
+        join(SRC_DIR, "components", "ui", "Skeleton.module.css"),
+        "utf8",
+      ),
+    ).matchAll(/\.([A-Za-z_][\w-]*)/g),
+    (match) => match[1],
   );
+  const classes = new Set(
+    names.map((name) => (skeletonStyles as Record<string, string>)[name]),
+  );
+  if (classes.size === 0) throw new Error("no Skeleton classes found");
   return Array.from(document.body.querySelectorAll("*")).filter((element) =>
     Array.from(element.classList).some((name) => classes.has(name)),
   );
