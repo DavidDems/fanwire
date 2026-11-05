@@ -42,7 +42,12 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
     judgment call, see wiki/CodeContext/Modules/0x06-feed.md), OR'd with
     posts relevant to one of the viewer's preferred team's games when one
     is set: a legacy mention of it, a game_final link to it or a
-    player_game link to a line in it (POSTS-006)."""
+    player_game link to a line in it (POSTS-006).
+
+    A viewer who follows nobody gets exactly GuestRecentStrategy's
+    selection instead, preferred team ignored (FEED-001): otherwise a new
+    account's feed held only its own posts while a guest saw every public
+    post. The global selection already includes the team's posts."""
 
     def __init__(self, viewer_id: int, preferred_team_id: int | None) -> None:
         self._viewer_id = viewer_id
@@ -50,6 +55,8 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
 
     def select_posts(self, session: Session, *, before_id: int | None, limit: int) -> list[Post]:
         author_ids = set(followed_user_ids(session, self._viewer_id))
+        if not author_ids:
+            return GuestRecentStrategy().select_posts(session, before_id=before_id, limit=limit)
         author_ids.add(self._viewer_id)
 
         team_game_ids = (
@@ -68,7 +75,9 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
 
 
 class GuestRecentStrategy(FeedRankingStrategy):
-    """Most-recent top-level posts globally -- the guest default. Resolves
+    """Most-recent top-level posts globally -- the guest default, and also
+    what a signed-in viewer with no follows gets (FEED-001, via
+    FollowsAndPreferredTeamStrategy). Resolves
     wiki/CodeContext/Modules/0x06-feed.md's previously-open "guest-feed
     algorithm" decision: no Follow/PostLike/preferred_team to personalize
     from for an unauthenticated visitor, so this is KISS's simplest
