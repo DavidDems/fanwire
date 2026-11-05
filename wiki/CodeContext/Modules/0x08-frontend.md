@@ -389,7 +389,14 @@ inconvenient:
   **ID token** as `Authorization: Bearer`; the backend rejects access tokens
   ([[0x01-users]]).
 - **A 404 from `GET /users/me`** means "authenticated, no profile yet" and routes
-  to profile creation. It is a state, not an error.
+  to profile creation. It is a state, not an error. When such an authenticated
+  user lands on `/`, `AppLayout` redirects to `/create-profile`; an anonymous
+  visitor still sees the guest feed without a profile lookup.
+- Email verification is optional for sign-in and core account use. The account
+  settings action restores and validates the current Cognito SDK session before
+  requesting a verification code, and completes only after the SDK reports its
+  successful code-entry callback. Cognito's signup delivery and verified-state
+  result remain a dev-pool acceptance check.
 - **Date of birth is private**: the user's own profile and settings only, never a
   public profile view.
 - **Configuration is read in exactly one module** (`src/config.ts`), which
