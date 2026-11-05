@@ -1,5 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 /**
@@ -46,6 +49,32 @@ export class AuthStack extends cdk.Stack {
       // domain exists and an SES identity is verified.
       email: cognito.UserPoolEmail.withCognito(),
     });
+
+    const preSignUpLogGroup = new logs.LogGroup(this, 'PreSignUpLogGroup', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    const preSignUpRole = new iam.Role(this, 'PreSignUpRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'fanwire Cognito pre-sign-up trigger; logs only',
+    });
+    preSignUpRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+      resources: [`${preSignUpLogGroup.logGroupArn}:*`],
+    }));
+    const preSignUp = new lambda.Function(this, 'PreSignUpTrigger', {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(
+        'def handler(event, context):\n' +
+          '    event["response"]["autoConfirmUser"] = True\n' +
+          '    return event\n',
+      ),
+      timeout: cdk.Duration.seconds(5),
+      role: preSignUpRole,
+      logGroup: preSignUpLogGroup,
+    });
+    this.userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, preSignUp);
 
     this.userPoolClient = this.userPool.addClient('SpaClient', {
       userPoolClientName: 'fanwire-spa',

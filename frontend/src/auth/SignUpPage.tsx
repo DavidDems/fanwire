@@ -87,6 +87,7 @@ export function SignUpPage() {
     <div className={styles.page}>
       <Card as="section" className={styles.card}>
         <h1>Sign up</h1>
+        <p>You can sign in now. You can verify your account later in Account settings.</p>
 
         {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 

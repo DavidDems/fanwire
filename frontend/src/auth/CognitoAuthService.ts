@@ -301,10 +301,16 @@ export class CognitoAuthService implements AuthService {
       );
     }
     return new Promise((resolve, reject) => {
-      user.getAttributeVerificationCode("email", {
-        onSuccess: () => resolve(),
-        onFailure: (error) => reject(toAuthError(error)),
-        inputVerificationCode: () => undefined,
+      user.getSession((error: Error | null, session: CognitoUserSession | null) => {
+        if (error || !session || !session.isValid()) {
+          reject(toAuthError(error ?? new Error(NO_VALID_SESSION)));
+          return;
+        }
+        user.getAttributeVerificationCode("email", {
+          onSuccess: () => resolve(),
+          onFailure: (requestError) => reject(toAuthError(requestError)),
+          inputVerificationCode: () => resolve(),
+        });
       });
     });
   }
