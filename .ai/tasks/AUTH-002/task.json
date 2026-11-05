@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "task_id": "AUTH-002",
+  "objective": "Track multiple remembered devices per user so authentication can recognize a previously verified device without treating an IP address as a device identity.",
+  "acceptance_criteria": [
+    "Start gate: a separate Director-owned policy/scope PR has merged to authorize the code agent to write only the required backend/alembic/versions/** migration path. Current code_agent policy denies that path; this task does not change .ai/policy.json or widen any role itself.",
+    "A users-owned remembered-device relation stores multiple records per user with a bigint identity primary key, a foreign key to users.id, a unique per-user hash of an opaque high-entropy device id, created_at, last_seen_at and nullable revoked_at. No device record stores a password, Cognito token, raw device id, IP address or geolocation.",
+    "The system can register, recognize, update last_seen_at for, and revoke one device without overwriting or forgetting other devices for the same user. A revoked, missing, malformed or unknown device id is never recognized.",
+    "The raw device id is generated with a cryptographically secure random source and is returned only as a Secure, HttpOnly, SameSite cookie scoped to the host and root path. The database stores only its hash. Replacing or clearing the cookie cannot make an unrecognized device trusted.",
+    "A user's latest device can be derived by ordering that user's device rows by last_seen_at. Do not add a single last_login_device or last_login_location field to users; one field cannot distinguish multiple known devices.",
+    "IP address, geolocation, user-agent and browser characteristics are not identity keys. They may only be considered risk context by AUTH-003; persist none of them in the device table. Any future retention of those signals requires a separate privacy/security decision.",
+    "Tests cover multiple simultaneous devices, per-user uniqueness, revoked and unknown ids, hash-only persistence, timestamp updates, user deletion/cascade behavior, and the database migration. No UI, email challenge or IP fingerprinting is introduced by this task.",
+    "wiki/CodeContext/Modules/0x01-users.md records the remembered-device relation and privacy boundary."
+  ],
+  "allowed_paths": [
+    "backend/app/users/**",
+    "backend/alembic/versions/**",
+    "backend/tests/users/**",
+    "backend/tests/test_route_auth.py",
+    "wiki/CodeContext/Modules/0x01-users.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "AGENTS.md",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "fastapi-module",
+    "backend-testing",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

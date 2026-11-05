@@ -87,6 +87,18 @@ In order, each when its unit reaches it.
   quota. Verification codes now go out only when someone presses Verify, so the
   quota is reached later. Moving it to SES is not in these units.
 
+## Deferred account-security work
+
+The later product direction is that email verification is optional for ordinary
+platform use. Password recovery and verified-account new-device checks are
+outside Track D and the ten Launch units. `USERS-007` must not implement reset
+behavior; the future work is queued after this sequence as `AUTH-001` (reset
+link), `AUTH-002` (remembered devices), then `AUTH-003` (new-device challenge).
+`AUTH-001` is independent; `AUTH-003` depends on `AUTH-002`. See
+`TODO/02-backlog.md` and the three task briefs. The recorded risk below reflects
+the decision at the time; AUTH-001 supersedes it as future work, not as a Track
+D requirement.
+
 ## Mechanics learned the hard way
 
 - Parallel sessions share the main checkout: work in a worktree

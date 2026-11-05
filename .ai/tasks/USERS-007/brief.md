@@ -12,10 +12,6 @@ on the dev pool, with a human-provided address:
 2. Confirm that sign-in works while `email_verified` is false.
 3. Confirm that `GetUserAttributeVerificationCode` then sends a code, and that
    `VerifyUserAttribute` flips it to true.
-4. Confirm what forgot-password does for the unverified account. With
-   `preventUserExistenceErrors` on and `accountRecovery: EMAIL_ONLY`, expect a
-   success-shaped answer and no email.
-
 If step 2 fails, stop and report: the design needs another route.
 
 ## What this gives up, recorded so it is a choice
@@ -28,7 +24,19 @@ If step 2 fails, stop and report: the design needs another route.
   unverified accounts is a sensible follow-up, not part of this unit.
 
 The human chose this on 2026-11-02 to make sign-up easy for friends and recruiters.
-Both limits are in the page copy and the module file.
+The paragraph above records the historical rationale and risks as they stood
+when USERS-007 was specified; it does not require this unit to add reset-limit
+copy or document password-recovery behavior. The unit documents the optional
+sign-up rule and points to the deferred AUTH tasks below.
+
+## Deferred account-security scope
+
+The 2026-11-02 decision above is preserved as historical context. The current
+product direction is to provide reset-link recovery for unverified email
+addresses and to challenge verified users on new devices. Those behaviors are
+deferred to `AUTH-001`, `AUTH-002` and `AUTH-003`; this unit must not edit or test
+forgot-password behavior or add device tracking/login challenges. The native
+Cognito recovery limitation remains until `AUTH-001` is completed.
 
 ## Why an inline function
 
