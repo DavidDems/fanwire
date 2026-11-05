@@ -60,7 +60,7 @@ export class AuthStack extends cdk.Stack {
     });
     preSignUpRole.addToPolicy(new iam.PolicyStatement({
       actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-      resources: [`${preSignUpLogGroup.logGroupArn}:*`],
+      resources: [`${preSignUpLogGroup.logGroupArn}:log-stream:*`],
     }));
     const preSignUp = new lambda.Function(this, 'PreSignUpTrigger', {
       runtime: lambda.Runtime.PYTHON_3_12,
