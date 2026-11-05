@@ -14,6 +14,30 @@ on the dev pool, with a human-provided address:
    `VerifyUserAttribute` flips it to true.
 If step 2 fails, stop and report: the design needs another route.
 
+## Cognito verification client scope
+
+This amendment adds only the frontend Cognito client and its focused test file
+to the unit. Keep the proof-first gate above unchanged: implementation still
+cannot start until the dev-pool sign-in-with-unverified-email and later
+verification proof is completed and recorded.
+
+`CognitoAuthService.requestEmailVerification()` must restore and validate the
+current SDK user's session before requesting `GetUserAttributeVerificationCode`,
+then make the request on that same hydrated SDK user instance. Do not attempt
+the request when no valid session is available. In
+`amazon-cognito-identity-js`, the successful callback is
+`inputVerificationCode`; resolve the method's Promise there so Account Settings
+can move to code entry. Convert SDK/session errors into rejected auth errors
+without leaving the Promise pending.
+
+Add focused tests in `CognitoAuthService.test.ts` that mock the Cognito SDK
+boundary, never contact a real pool, and cover: valid session restoration and
+request on the same user; missing or invalid session without a verification
+request; Promise completion through `inputVerificationCode`; and rejection on
+SDK errors. Do not include real credentials, token values or verification codes
+in fixtures or diagnostics. This client/test addition does not alter any other
+USERS-007 paths, criteria, gates or sequencing.
+
 ## What this gives up, recorded so it is a choice
 
 - **An unverified account cannot reset its password.** Forgetting the password
