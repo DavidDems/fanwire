@@ -163,6 +163,9 @@ describe("CognitoAuthService", () => {
 
   it("rejects an expired session without requesting an email verification code", async () => {
     storeSyntheticSession(true);
+    // Without a refresh token, the SDK rejects the expired cached session
+    // locally instead of trying its refresh-token HTTP flow.
+    window.localStorage.removeItem(`${CACHE_PREFIX}.${USERNAME}.refreshToken`);
     const targets: string[] = [];
     server.use(http.post(COGNITO_URL, async ({ request }) => {
       targets.push(request.headers.get("x-amz-target") ?? "");
