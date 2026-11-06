@@ -6,4 +6,8 @@ export default {
   entryJsRawGrowth: 2_048,
   entryJsGzipGrowth: 1_000,
   entryCssGzipGrowth: 1_000,
+  changed: {
+    AccountSettings: 3_500,
+    "css:AccountSettings.css": 700,
+  },
 } satisfies UnitBudget;
