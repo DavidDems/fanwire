@@ -262,7 +262,7 @@ describe("the content column (FRONTEND-030)", () => {
 /** FRONTEND-039: the sidebar widths and breakpoints are pinned by name. */
 describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
   const FROM_LABEL = /^@media\b.*\(\s*min-width\s*:\s*53\.75em\s*\)/i;
-  const FROM_RAIL = /^@media\b.*\(\s*min-width\s*:\s*76em\s*\)/i;
+  const FROM_RAIL = /^@media\b.*\(\s*min-width\s*:\s*76\.0625em\s*\)/i;
 
   it("pins the sidebar, rail and desktop restoration breakpoints", () => {
     const media = allBlocks(shellBlocks()).filter((block) =>
@@ -275,12 +275,13 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
     ).toBe(true);
     expect(
       media.some((block) => FROM_RAIL.test(block.prelude)),
-      "a (min-width: 76em) rail query",
+      "a (min-width: 76.0625em) rail query",
     ).toBe(true);
     const desktop = allBlocks(shellBlocks())
       .filter(
         (block) =>
-          isAtRule(block) && /\(\s*min-width\s*:\s*78em\s*\)/i.test(block.prelude),
+          isAtRule(block) &&
+          /\(\s*min-width\s*:\s*78em\s*\)/i.test(block.prelude),
       )
       .flatMap((media) => allBlocks(media.children))
       .filter((block) => !isAtRule(block));
@@ -301,8 +302,7 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
           selectorSet(block).has(".nav") &&
           block.declarations.some(
             ({ property, value }) =>
-              property === "width" &&
-              /--sidebar-width-compact/.test(value),
+              property === "width" && /--sidebar-width-compact/.test(value),
           ),
       ),
       "78em keeps the labelled sidebar instead of restoring icon-only nav",
@@ -321,7 +321,7 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
     ).toEqual([]);
   });
 
-  it("keeps the labelled layout's group at least space-4 from the edge and main at least 36rem", () => {
+  it("keeps the labelled layout inset and bounds main by the space left beside the sidebar", () => {
     const labelled = allBlocks(shellBlocks())
       .filter((block) => isAtRule(block) && FROM_LABEL.test(block.prelude))
       .flatMap((media) => allBlocks(media.children))
@@ -346,10 +346,13 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
       main.some((block) =>
         block.declarations.some(
           ({ property, value }) =>
-            property === "min-width" && value === "36rem",
+            property === "min-width" &&
+            /min\(\s*36rem\s*,\s*calc\(\s*100%\s*-\s*var\(\s*--sidebar-width\s*\)\s*-\s*var\(\s*--space-5\s*\)\s*\)\s*\)/.test(
+              value,
+            ),
         ),
       ),
-      "main cannot shrink below 36rem while the sidebar is labelled",
+      "main uses a 36rem minimum, bounded by available width at enlarged text",
     ).toBe(true);
   });
 });
@@ -384,7 +387,7 @@ describe("every *.module.css under src/routes (criterion 9)", () => {
  * looks right (and that nothing overflows at 320 to 1920 px) is the browser
  * rows'.
  *
- * - `main` on `/` is widened, from 76em only, to the feed's `--content-max`
+ * - `main` on `/` is widened, from 76.0625em only, to the feed's `--content-max`
  *   plus `--space-5` plus the rail's `--rail-width`, by a rule in the shell's
  *   module (where `main`'s other widths are). Which routes' `main` it reaches
  *   is `home-rail.test.tsx`'s, which renders them. `.main` itself keeps
@@ -397,7 +400,7 @@ describe("every *.module.css under src/routes (criterion 9)", () => {
  * - A post row's text is clamped to three lines.
  */
 describe("the home page's rail (FRONTEND-036)", () => {
-  const FROM_76EM = /^@media\b.*\(\s*min-width\s*:\s*76em\s*\)/i;
+  const FROM_76EM = /^@media\b.*\(\s*min-width\s*:\s*76\.0625em\s*\)/i;
   const RAIL_SOURCES = (): string[] => [
     "routes/HomeView.module.css",
     ...moduleCssFiles(join(SRC_DIR, "features", "search")).map((file) =>
@@ -417,7 +420,7 @@ describe("the home page's rail (FRONTEND-036)", () => {
     return (value ?? "").replace(/\s+/g, "");
   }
 
-  /** The shell's rules inside a (min-width: 76em) query, at any depth. */
+  /** The shell's rules inside a (min-width: 76.0625em) query, at any depth. */
   function shellRulesFrom76em(): CssBlock[] {
     return allBlocks(shellBlocks())
       .filter((block) => isAtRule(block) && FROM_76EM.test(block.prelude))
@@ -425,7 +428,7 @@ describe("the home page's rail (FRONTEND-036)", () => {
       .filter((block) => !isAtRule(block));
   }
 
-  it("widens main from 76em to --content-max + --space-5 + --rail-width", () => {
+  it("widens main from 76.0625em to --content-max + --space-5 + --rail-width", () => {
     const widened = shellRulesFrom76em().filter((rule) => {
       const value = compact(
         declared(rule, "max-width") ?? declared(rule, "max-inline-size"),
@@ -439,7 +442,7 @@ describe("the home page's rail (FRONTEND-036)", () => {
 
     expect(
       widened.map((rule) => rule.prelude),
-      "no rule under @media (min-width: 76em) in AppLayout.module.css widens main by the rail",
+      "no rule under @media (min-width: 76.0625em) in AppLayout.module.css widens main by the rail",
     ).not.toEqual([]);
     for (const rule of widened) {
       expect(
@@ -459,7 +462,7 @@ describe("the home page's rail (FRONTEND-036)", () => {
       if (!selectorSet(rule).has(".main")) continue;
       expect(
         declared(rule, "max-width"),
-        "@media (min-width: 76em) must not widen every route's .main",
+        "@media (min-width: 76.0625em) must not widen every route's .main",
       ).toBeUndefined();
     }
   });

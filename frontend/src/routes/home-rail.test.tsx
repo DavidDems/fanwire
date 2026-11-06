@@ -4,9 +4,9 @@
  *
  * - **No search bar above the feed, at any width.** The feed's `h1` stays the
  *   page's only one.
- * - **The rail is mounted from 76em only** (`useMediaQuery('(min-width:
- *   76em)')`), so below it nothing of the rail exists and none of its requests
- *   is made. A resize across 1216 px mounts or unmounts it with no reload.
+ * - **The rail is mounted from 76.0625em only** (`useMediaQuery('(min-width:
+ *   76.0625em)')`), so below it nothing of the rail exists and none of its requests
+ *   is made. A resize across 1217 px mounts or unmounts it with no reload.
  * - **The rail** is a `complementary` landmark (`<aside>`) inside `main`,
  *   after the feed: the shared `SearchBar`, then, when `?q=` is set, the
  *   results, then a slot `EVENTS-013` fills, which renders nothing here.
@@ -76,7 +76,7 @@ import shellStyles from "./AppLayout.module.css";
 
 const BOX_NAME = "Search accounts and posts";
 const WIDE = 1280;
-const NARROW = 1215;
+const NARROW = 1216;
 
 const FEED_TEXT = "Tip-off at the baseline";
 const OLDER_FEED_TEXT = "Second-half run from the corner";
@@ -234,7 +234,7 @@ describe("no search bar above the feed, at any width", () => {
     },
   );
 
-  it.each([1216, 1248, 1280, 1920])(
+  it.each([1217, 1248, 1280, 1920])(
     "at %i px: the bar is in the rail, beside and after the feed, not above it",
     async (width) => {
       at(width);
@@ -267,18 +267,18 @@ describe("no search bar above the feed, at any width", () => {
   );
 });
 
-describe("the rail is mounted from 76em only", () => {
-  it("asks matchMedia for (min-width: 76em)", async () => {
+describe("the rail is mounted from 76.0625em only", () => {
+  it("asks matchMedia for (min-width: 76.0625em)", async () => {
     const stub = at(WIDE);
     renderAppAt("/", "anonymous", handlersOf(arrange()));
     await feedHeading();
 
     expect(stub.queries.map((query) => query.replace(/\s+/g, ""))).toContain(
-      "(min-width:76em)",
+      "(min-width:76.0625em)",
     );
   });
 
-  it("below 76em, /?q= shows the feed alone and asks no search", async () => {
+  it("below 76.0625em, /?q= shows the feed alone and asks no search", async () => {
     at(NARROW);
     const arranged = arrange();
     renderAppAt("/?q=raptors", "anonymous", handlersOf(arranged));
@@ -295,7 +295,7 @@ describe("the rail is mounted from 76em only", () => {
     expect(arranged.posts.requests).toEqual([]);
   });
 
-  it("widening across 1216 px then shows that search's results, with no reload", async () => {
+  it("widening across 1217 px then shows that search's results, with no reload", async () => {
     const stub = at(NARROW);
     const arranged = arrange();
     const app = renderAppAt("/?q=raptors", "anonymous", handlersOf(arranged));
@@ -303,7 +303,7 @@ describe("the rail is mounted from 76em only", () => {
     await screen.findByText(FEED_TEXT);
     const entry = app.router.state.location.key;
 
-    stub.setWidth(1216);
+    stub.setWidth(1217);
 
     const found = await results("raptors");
     expect(
@@ -322,17 +322,17 @@ describe("the rail is mounted from 76em only", () => {
     expect(arranged.feed.requests).toHaveLength(1);
   });
 
-  it("narrowing below 1216 px unmounts the rail, and widening to 1216 mounts it again", async () => {
+  it("narrowing below 1217 px unmounts the rail, and widening to 1217 mounts it again", async () => {
     const stub = at(WIDE);
     renderAppAt("/", "anonymous", handlersOf(arrange()));
     await feedHeading();
     expect(rail()).toBeInTheDocument();
 
-    stub.setWidth(1215);
+    stub.setWidth(1216);
     expect(screen.queryByRole("complementary")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
 
-    stub.setWidth(1216);
+    stub.setWidth(1217);
     expect(rail()).toBeInTheDocument();
   });
 
@@ -991,7 +991,7 @@ describe("the result count is announced once per search", () => {
 
 /**
  * `main` is widened for the rail on `/` only. jsdom applies no media query,
- * so the shell module's rules under `(min-width: 76em)` that size `main` by
+ * so the shell module's rules under `(min-width: 76.0625em)` that size `main` by
  * `--rail-width` (`shell-css.test.ts` pins that one exists) are matched
  * against the rendered `main`, their module class names mapped to the
  * generated ones, the way `AppLayout.test.tsx` resolves the column.
@@ -1006,7 +1006,7 @@ describe("main is wide enough for the rail on / only", () => {
       .filter(
         (block) =>
           isAtRule(block) &&
-          /\(\s*min-width\s*:\s*76em\s*\)/i.test(block.prelude),
+          /\(\s*min-width\s*:\s*76\.0625em\s*\)/i.test(block.prelude),
       )
       .flatMap((media) => allBlocks(media.children))
       .filter(
@@ -1018,7 +1018,7 @@ describe("main is wide enough for the rail on / only", () => {
               /--rail-width/.test(value),
           ),
       );
-    expect(rules, "no 76em rule sizes main by the rail").not.toEqual([]);
+    expect(rules, "no 76.0625em rule sizes main by the rail").not.toEqual([]);
     return rules.some((rule) =>
       selectors(rule).some((selector) => {
         const generated = selector

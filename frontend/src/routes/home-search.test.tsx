@@ -1,14 +1,14 @@
 /**
  * FRONTEND-007 acceptance criterion 8, as FRONTEND-036 changed it: the
  * free-text bar renders on the search route, and the home page's own entry to
- * the same results view is the right rail's bar, from 76em only. Through the
+ * the same results view is the right rail's bar, from 76.0625em only. Through the
  * real route table, the way `App` mounts it.
  *
  * FRONTEND-036 removed the bar above the feed, at every width, on purpose:
  * this file pinned it there until then. With no `matchMedia` (jsdom, and so
  * the narrow layout) `/` is the feed alone: no search box and no `search`
  * landmark, and the feed's `h1` "Feed" stays the page's only `h1`, with no
- * second `main`, `banner` or Primary `nav` (`layout.md` §1). From 76em the
+ * second `main`, `banner` or Primary `nav` (`layout.md` §1). From 76.0625em the
  * rail's bar searches on `/` itself (`/?q=`), and its Show all reaches the
  * same `/search?q=` view; the rail itself is `home-rail.test.tsx`'s.
  */
@@ -95,7 +95,7 @@ describe("the home page has no search bar above the feed", () => {
 });
 
 describe("both entry points reach the same results view", () => {
-  it("from the home page's rail (from 76em): a search stays on /, and Show all lands on the Search view's results", async () => {
+  it("from the home page's rail (from 76.0625em): a search stays on /, and Show all lands on the Search view's results", async () => {
     const user = userEvent.setup();
     viewport = stubViewport(1280);
     const { accounts, posts } = arrangeResults();

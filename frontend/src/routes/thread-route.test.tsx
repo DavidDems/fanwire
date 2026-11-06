@@ -133,7 +133,7 @@ describe("opening a thread from the feed (criterion 1)", () => {
 
   it("keeps the page underneath's own state: the rail's typed text survives", async () => {
     // FRONTEND-036: the home page's search box is in the right rail, mounted
-    // from 76em only, so the viewport is stubbed wide for this test.
+    // from 76.0625em only, so the viewport is stubbed wide for this test.
     const viewport = stubViewport(1280);
     try {
       const user = userEvent.setup();

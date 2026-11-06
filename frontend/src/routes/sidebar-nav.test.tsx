@@ -492,7 +492,7 @@ const FROM_40 = 40; // 640 px
 const TABLET = 48; // 768 px: unchanged icon-only layout
 const BELOW_LABEL = 53.6875; // 859 px
 const FROM_LABEL = 53.75; // 860 px
-const RAIL = 76; // 1216 px: labelled sidebar, feed and rail fit
+const RAIL = 76.0625; // 1217 px: labelled sidebar, full feed and rail fit
 const FROM_78 = 78; // 1248 px: desktop look
 const WIDE = 120; // 1920 px
 
@@ -1157,9 +1157,10 @@ describe("from 40em: the left sidebar", () => {
           `the group is centred at ${width}em`,
         ).toBe(true);
       } else {
-        expect(justify, `the tablet group starts at its inset at ${width}em`).toBe(
-          "flex-start",
-        );
+        expect(
+          justify,
+          `the tablet group starts at its inset at ${width}em`,
+        ).toBe("flex-start");
       }
     }
   });
