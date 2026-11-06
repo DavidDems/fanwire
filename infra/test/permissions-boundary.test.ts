@@ -135,6 +135,13 @@ describe('permissions boundary: the policy', () => {
     for (const a of boundaryActions()) expect(a).not.toMatch(/^(iam|sts|organizations):/);
   });
 
+  test('allows Cognito AdminDeleteUser only in the AppData statement', () => {
+    const appData = loadBoundary().Statement.find((statement) => statement.Sid === 'AppData');
+    expect(appData).toBeDefined();
+    expect(asList(appData?.Action)).toContain('cognito-idp:AdminDeleteUser');
+    expect(boundaryActions().filter((action) => action === 'cognito-idp:AdminDeleteUser')).toHaveLength(1);
+  });
+
   test('fits the managed-policy size limit (6,144 non-whitespace characters)', () => {
     expect(fs.readFileSync(BOUNDARY_PATH, 'utf-8').replace(/\s/g, '').length).toBeLessThanOrEqual(6144);
   });
