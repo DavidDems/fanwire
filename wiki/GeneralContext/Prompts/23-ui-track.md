@@ -44,17 +44,11 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). Prerequisite
-Director PR #353 (bundle fold + `?line=` amendment) is green, awaiting merge.
-FRONTEND-037: tests committed locally as `d78fdac` (detached, worktree
-`fanwire-FRONTEND-037-test`, on top of #353's `43e7c80`, unpushed). The
-implementation is uncommitted in worktree `fanwire-FRONTEND-037-impl`, with
-a reviewed test correction (TeamSearch path compare, mutation-checked) and a
-new `unplayed-games.test.tsx` (red before, green after, mutation-checked).
-Typecheck and lint are clean; the full suite was stopped for low host memory
-and is still to run. Once #353 merges: cut `agent/FRONTEND-037` from
-origin/main, hand start, cherry-pick `d78fdac`, then commit the correction,
-the implementation and the wiki separately, then run gates, browser rows and the PR.
+EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). #353 (bundle
+fold + `?line=` amendment) and FRONTEND-037 #354 are merged; the owner
+approved both deploys (no migration). Next: verify production, then open the
+Finish PR, already drafted locally on `director/ui-track-finish` (worktree
+`fanwire-ui-finish`): FrontendUI docs as built, backlog rows, this file deleted.
 
 ## Order and gates
 
