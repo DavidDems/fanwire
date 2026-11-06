@@ -14,7 +14,7 @@
 }
 
 /* One section: its h2, its state line, its list, its Load more. */
-.section {
+.page > section {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

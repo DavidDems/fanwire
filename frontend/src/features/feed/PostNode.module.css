@@ -133,10 +133,67 @@
 }
 
 /*
+ * A reply's parent (FRONTEND-034) is the same box with a small avatar in its
+ * header and a line more of text: it is the context the reply answers.
+ */
+.parent .quotedText {
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+/*
  * An original that cannot be shown (FRONTEND-012): the quoted box's shape on
  * the muted surface, holding only "Post deleted" or "This post is
  * unavailable", in the original's place on a plain repost and in a quote.
  */
 .missing {
   background-color: var(--color-surface-muted);
+}
+
+/*
+ * A reply's card (FRONTEND-034): the reply, its parent's box, its action row
+ * and Show this thread, in one column like any card's. The wrapper only
+ * anchors the thread line.
+ */
+.threaded {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/*
+ * The thread line: decorative, so a pseudo-element no screen reader reads.
+ * Centred in the card's left padding (the gutter, --space-4 wide), from just
+ * below the reply's 2rem avatar to the middle of the Show this thread row
+ * (1.5rem tall). A border, so forced-colors mode keeps it in a system colour.
+ */
+.threaded::before {
+  position: absolute;
+  top: calc(2rem + var(--space-1));
+  bottom: 0.75rem;
+  left: calc(var(--space-4) / -2 - 1px);
+  border-left: 2px solid var(--color-border);
+  content: "";
+  pointer-events: none;
+}
+
+/*
+ * Show this thread: a small 600 link under the action row, sized to its words
+ * so the rest of the row stays the card's clickable surface. At least 24 px
+ * tall (WCAG 2.5.8); focus is base.css's ring.
+ */
+.showThread {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  min-height: 1.5rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.showThread:hover {
+  text-decoration: underline;
 }

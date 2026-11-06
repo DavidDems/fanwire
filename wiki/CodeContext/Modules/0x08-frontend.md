@@ -26,7 +26,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query, and `account.ts` (`useAccount()`, the one account-state hook, and the deactivate / recover / sign-out actions, `FRONTEND-012`) |
-| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` after the header, sharing a parent with `main`, that CSS makes the bottom icon bar on phones and a left sidebar from 40em (`FRONTEND-035`, below); `NavLink` sets `aria-current`; the header's end holds a phone-only Search icon link, then the active-profile Account menu described below, or Sign in for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` after the header, sharing a parent with `main`, that CSS makes the bottom icon bar on phones and a left sidebar from 40em (`FRONTEND-035`, below); `NavLink` sets `aria-current`; the header's end holds a phone-only Search icon link, then the active-profile Account menu described below, or Sign in for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the feed, and from 72em the right rail, `FRONTEND-036`), `useMediaQuery.ts`, `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/account/` | `AccountSettings.tsx` at `/settings` (`RequireAuth`): email verification, the disabled notifications setting and password-reauthenticated deactivation (`USERS-006`) |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
@@ -952,6 +952,19 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   **A plain repost of a quote shows no box**: `reposted_post` is one level
   deep ([[0x06-feed]]), so the quote inside always arrives with its own
   `reposted_post` null, which is the depth cut, not a missing original.
+- **A reply shows what it answers (`FRONTEND-034`).** A reply's card is the
+  reply at full size, then its `replied_post` in the quote's box (plus a `sm`
+  avatar, text clamped to four lines, no controls or media; a click in it
+  opens the parent's thread), then the reply's own action row, then a "Show
+  this thread" link to `/posts/<parent_post_id>` with the flow's state. A
+  null parent is the quote's muted "Post deleted" or "This post is
+  unavailable" box, and Show this thread stays. A decorative 2 px
+  `--color-border` line (`.threaded::before`, a border so forced colours keep
+  it) runs in the left gutter from under the avatar to that link. It applies
+  to the subject, so a plain repost of a reply has the box and a quote of a
+  reply does not. `PostNode`/`PreparedPostNode` take `showParent` (default
+  true); the thread modal's Replies list passes `false`, its parent being the
+  card above.
 
 ### The thread modal (`FRONTEND-010`)
 
@@ -1153,7 +1166,8 @@ is recorded so the second copy is a known state rather than a discovery.
 
 ## Search (`FRONTEND-007`)
 
-`src/features/search/`, wired at `/search`, and its bar on `/` too. **Public**,
+`src/features/search/`, wired at `/search`, and from 72em in the home page's
+right rail too. **Public**,
 like the feed: every search route is a read path ([[0x07-search]]).
 
 **Accounts and posts only (`FRONTEND-009`, the human, 2026-10-14).** The
@@ -1164,15 +1178,33 @@ stay: only the UI moved. `search-scope.test.ts` pins from disk that nothing
 under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
 `/search/games` route.
 
-- **The address is the seam between the two entry points.** The bar on `/`
-  and on `/search` both submit to `/search?q=<trimmed text>`; `SearchPage`
-  reads `q` from there, so both reach the same results view and a search is a
-  link. An empty or whitespace-only submit goes nowhere (the route 422s on an
-  empty `q`). The bar's input is `maxLength` 100, the route's own cap.
-- **The home page is a route-level composition.** `routes/HomeView.tsx`
-  renders `SearchBar` above `FeedPage`: `features/feed/**` was forbidden to
-  this unit, and neither feature imports the other. The feed's `h1` stays the
-  page's only one.
+- **The address is the seam.** On `/search` the bar submits to
+  `/search?q=<trimmed text>`, which `SearchPage` reads; on `/` it pushes
+  `/?q=<trimmed text>` and stays there, which the rail reads (`FRONTEND-036`).
+  A search is a link either way, and Back undoes it. An empty or
+  whitespace-only submit goes nowhere (the route 422s on an empty `q`). The
+  bar's input is `maxLength` 100, the route's own cap.
+- **No search bar above the feed, at any width (`FRONTEND-036`).** From 72em
+  `routes/HomeView.tsx` mounts an `<aside>` after `FeedPage`, through
+  `routes/useMediaQuery('(min-width: 72em)')`: below it the rail is not
+  mounted, so a phone makes none of its requests and searches on `/search`
+  (`FRONTEND-035`'s Search links). The rail is `SearchRail`, then an empty
+  slot for `EVENTS-013`'s recent games; HomeView composes the features and
+  none imports another. Mounting the rail, or a change of `q`, never remounts
+  `FeedPage`. `AppLayout.module.css` widens `main` from 72em by
+  `.main:has(aside)` to `--content-max` + `--space-5` + `--rail-width`, so no
+  other route changes width; the rail is sticky at the sidebar's `top` and
+  scrolls on its own.
+- **The rail is a preview.** "Results for <q>" (h2) with Clear search (a new
+  entry without `q`, focus back to the box), then Accounts and Posts (h3), at
+  most five each from the first page of the same infinite queries
+  (`accountsQuery`/`postsQuery` in `api.ts`), so Show all to `/search?q=` opens
+  from the cache. Accounts are `SearchPage`'s own `AccountResults` with
+  `showAll`; a post row is compact (author, time linking to `/posts/<id>` with
+  the modal flow's state, handed in by HomeView; text clamped to three lines;
+  no controls). Both pages share `ResultSection`'s loading, failure and empty
+  states; the rail adds Retry. A polite live region, present before any
+  search, announces the count once both sections settle.
 - **Accounts and posts page apart.** Two `useInfiniteQuery`s, each fed its own
   `next_offset` straight through; loading more of one never refetches the
   other (pinned with result sets of different lengths). Accounts render above

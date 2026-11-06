@@ -32,15 +32,26 @@ import messageStyles from "../../components/ui/message.module.css";
 import skeletonStyles from "../../components/ui/Skeleton.module.css";
 import { renderWithAuth } from "../../test/auth";
 import {
+  allBlocks,
+  isAtRule,
+  parseCss,
+  readSrcFile,
+  selectors,
+  type CssBlock,
+} from "../../test/css";
+import {
   feedPage,
   feedStub,
+  testAuthor,
   testPostView,
   type FeedPageBody,
   type PostView,
 } from "../../test/feed";
+import { declared, moduleCssViolations } from "../../test/module-css";
 import { server } from "../../test/server";
 import { FeedPage } from "./FeedPage";
 import { PostNode } from "./PostNode";
+import postStyles from "./PostNode.module.css";
 
 const ROOT_TEXT = "Game thread, tip-off in ten";
 
@@ -237,5 +248,197 @@ describe("Load more (criterion 7)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
     });
+  });
+});
+
+/**
+ * FRONTEND-034: a reply's card. The decorative thread line, a 2px
+ * `--color-border` rule in the card's left gutter from under the reply's
+ * avatar to the Show this thread row, is read off `PostNode.module.css`
+ * (jsdom draws nothing): CSS only, never in the accessibility tree, and kept
+ * in forced-colors mode, where backgrounds are forced to Canvas but borders
+ * keep a system colour. The four-line clamp on the parent's text is pinned
+ * against the rendered element in `reply-card.test.tsx`; here, that the rule
+ * exists and agrees with `line-clamp`.
+ */
+describe("a reply card's styles (FRONTEND-034)", () => {
+  const POST_CSS = "features/feed/PostNode.module.css";
+  const PARENT_TEXT = "The parent's take";
+  const REPLY_TEXT = "The reply's answer";
+  const PARENT = testPostView({
+    id: 501,
+    text: PARENT_TEXT,
+    author: testAuthor({ id: 31, username: "parent31" }),
+  });
+  const REPLY = testPostView({
+    id: 502,
+    text: REPLY_TEXT,
+    is_reply: true,
+    parent_post_id: 501,
+    replied_post: PARENT,
+  });
+
+  function blocks(): CssBlock[] {
+    return parseCss(readSrcFile(POST_CSS));
+  }
+
+  /** The selector without its pseudo-element, class names mapped to the build's. */
+  function mapped(selector: string): string {
+    return selector
+      .replace(/::?(before|after)\b/g, "")
+      .replace(
+        /\.(-?[_a-zA-Z][\w-]*)/g,
+        (_, name: string) =>
+          `.${CSS.escape((postStyles as Record<string, string>)[name])}`,
+      );
+  }
+
+  function isPseudo(selector: string): boolean {
+    return /::?(before|after)\b/.test(selector);
+  }
+
+  const LINE_VALUE =
+    /\b2px\b.*var\(--color-border\)|var\(--color-border\).*\b2px\b/;
+
+  /** Draws the 2px --color-border line as a left (inline-start) border. */
+  function bordered(block: CssBlock): boolean {
+    return ["border-left", "border-inline-start"].some((property) => {
+      const value = declared(block, property);
+      return (
+        value !== undefined && LINE_VALUE.test(value) && /\bsolid\b/.test(value)
+      );
+    });
+  }
+
+  /** Draws it as a 2px-wide filled box positioned at the left. */
+  function filled(block: CssBlock): boolean {
+    const width = declared(block, "width") ?? declared(block, "inline-size");
+    const fill =
+      declared(block, "background-color") ?? declared(block, "background");
+    return (
+      width === "2px" &&
+      fill !== undefined &&
+      /var\(--color-border\)/.test(fill) &&
+      ["left", "inset-inline-start", "inset", "inset-inline"].some(
+        (property) => declared(block, property) !== undefined,
+      )
+    );
+  }
+
+  /** The style rules outside every at-rule that draw the thread line. */
+  function lineRules(): CssBlock[] {
+    return allBlocks(blocks()).filter(
+      (block) =>
+        !isAtRule(block) &&
+        !/^@/.test(block.prelude) &&
+        (bordered(block) || filled(block)),
+    );
+  }
+
+  /** Elements under `root` (itself included) a rule's selector matches. */
+  function matches(root: HTMLElement, selector: string): HTMLElement[] {
+    const query = mapped(selector);
+    return [root, ...root.querySelectorAll<HTMLElement>("*")].filter(
+      (element) => {
+        try {
+          return element.matches(query);
+        } catch {
+          return false;
+        }
+      },
+    );
+  }
+
+  it("has no raw colour, px font size or bare outline removal in PostNode.module.css", () => {
+    expect(moduleCssViolations(readSrcFile(POST_CSS))).toEqual([]);
+  });
+
+  it("draws a 2px --color-border thread line in the left gutter", () => {
+    expect(
+      lineRules().map((block) => block.prelude),
+      "a rule drawing the line: border-left/inline-start 2px solid var(--color-border), or a 2px-wide positioned box filled with it",
+    ).not.toHaveLength(0);
+  });
+
+  it("puts the line on a reply's card, and on no other card", () => {
+    const rules = lineRules().flatMap(selectors);
+    expect(rules).not.toHaveLength(0);
+
+    const reply = renderNode(REPLY);
+    const replyCard = articleFor(REPLY_TEXT);
+    expect(
+      rules.some((selector) => matches(replyCard, selector).length > 0),
+      "a line rule matches something in the reply's card",
+    ).toBe(true);
+    reply.unmount();
+
+    renderNode(PARENT);
+    const plain = articleFor(PARENT_TEXT);
+    for (const selector of rules) {
+      expect(matches(plain, selector), `${selector} on a plain post`).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("keeps the line out of the accessibility tree: a pseudo-element, or an aria-hidden element", () => {
+    renderNode(REPLY);
+    const replyCard = articleFor(REPLY_TEXT);
+    const rules = lineRules().flatMap(selectors);
+    expect(rules).not.toHaveLength(0);
+
+    for (const selector of rules) {
+      if (isPseudo(selector)) continue;
+      for (const element of matches(replyCard, selector)) {
+        expect(
+          element.closest('[aria-hidden="true"]'),
+          `${selector} draws on an element a screen reader reads`,
+        ).not.toBeNull();
+        expect(element.textContent ?? "").toBe("");
+      }
+    }
+  });
+
+  it("keeps the line in forced-colors mode", () => {
+    const rules = lineRules();
+    expect(rules).not.toHaveLength(0);
+    const forced = allBlocks(blocks()).filter(
+      (block) =>
+        /^@media\b/i.test(block.prelude) &&
+        /forced-colors\s*:\s*active/i.test(block.prelude),
+    );
+    for (const block of rules) {
+      // A border keeps a system colour under forced colours.
+      if (bordered(block)) continue;
+      // A background is forced to Canvas: the line needs a forced-colors rule
+      // that gives it a system colour or opts it out.
+      const kept = forced
+        .flatMap((media) => allBlocks(media.children))
+        .some(
+          (rule) =>
+            selectors(rule).some((selector) =>
+              selectors(block).includes(selector),
+            ) &&
+            (declared(rule, "forced-color-adjust") === "none" ||
+              /\b(canvastext|graytext|buttonborder|buttontext)\b/i.test(
+                declared(rule, "background-color") ??
+                  declared(rule, "background") ??
+                  "",
+              )),
+        );
+      expect(kept, `${block.prelude} vanishes in forced-colors mode`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("declares a four-line clamp, -webkit-line-clamp and line-clamp agreeing", () => {
+    const fourLine = allBlocks(blocks()).filter(
+      (block) => declared(block, "-webkit-line-clamp") === "4",
+    );
+    expect(fourLine, "a rule clamping to four lines").not.toHaveLength(0);
+    for (const block of fourLine) {
+      expect(declared(block, "line-clamp"), block.prelude).toBe("4");
+    }
   });
 });
