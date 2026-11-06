@@ -6,35 +6,24 @@ type: prompt
 
 ## Update (2026-11-06, Director session)
 
-**Two more units first (the human, 2026-11-06).** `FRONTEND-038` removes the
-Invite button; `FRONTEND-039` shows the sidebar's labels from about 860 px,
-pulls it toward the left edge on tablets and moves the rail's breakpoint to
-where the labelled sidebar, feed and rail fit. Both run before `EVENTS-013`
-(re-gated on them), in parallel; test their combination. `EVENTS-013` and
-`FRONTEND-037` stay with another session, which deletes this brief at the end.
+**EVENTS-013 merged (#351, `2e29dac`) and deployed** (run 42291143916,
+success 2026-11-06 20:51Z). The owner ran Migration (the auto-mode classifier
+refused the session's own invoke): head `b9f4c7e2d610`, recorded on #351;
+`/api/health` and `/api/events/games/recent` answered 200.
+- FRONTEND-037 choices: short names from `teamShortName` in
+  `features/games/format.ts` (last word; "Trail Blazers" kept whole); season
+  carried as `/games/<id>?season=` (team cards always send the level's season,
+  Recent Games the game's); team tabs reuse `SegmentedTabs` ("Team box
+  scores"); cumulative chart is wins above / losses below a baseline with a
+  `<details>` table equivalent; two-column cards via a container query.
+- `EVENTS-013` is lazy, after SearchRail in `routes/HomeView.tsx`; bundle measurements: #351.
+- `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
+- EVENTS-013 design, test correction `ce6e244` and evidence: #351 (axe NOT DONE).
 
-- Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
-  #333, `FRONTEND-035` #336. `FRONTEND-034` #342 and `FRONTEND-036` #343 (after
-  amendment #340) are merged and deployed too.
-- `POSTS-009` #337: merged and deployed (deploy 42165903823, attempt 2, after
-  the `FanwireRoleBoundary` rollout). `Migration` returned head `e6d7328e8881`,
-  recorded on #337.
-- **For `EVENTS-013`:** the rail's slot is the comment after `SearchRail` in
-  `routes/HomeView.tsx`. The entry has 4 B of gzip budget left after
-  `FRONTEND-036`, so rail code belongs in a lazy chunk.
-- Design choices are in each PR body; `FrontendUI/` describes what was built.
-  Follow-ups are in `TODO/02-backlog.md` "UI track".
+**Autonomous Director brief:** worktree subagents, hand-run units and deploys.
 
-**Brief for a Director session that runs autonomously** (a high-tier model on the
-human's subscription), managing worktree subagents through five hand-run units
-and their deploys. Self-contained: read this file, then what it names.
-
-**Objective:** build the human's look-and-feel changes of 2026-11-05
-(`CodeContext/FrontendUI/decisions.md`, "Sidebar, search rail and reply
-context"). These are a reply card that shows its parent, liked replies in the
-feed, an icon nav that becomes a left sidebar with Sign out in it, a home page
-with no search bar above the feed and a right rail from 1152 px, and recent
-games in that rail. It closes the `TODO/02-backlog.md` section "UI track".
+**Objective:** finish the UI changes in `CodeContext/FrontendUI/decisions.md`;
+close `TODO/02-backlog.md` "UI track" after both remaining units deploy.
 
 You are a **Director** (`AGENTS.md` "Agent system"). Each unit's code lands on
 `agent/<ID>` and is held by `agent-guard` to its spec. Your own edits (this
@@ -55,12 +44,11 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-The Update note above is current as of 2026-11-06. Verify with
-`python .ai/bin/agentctl.py status`, `gh pr list` and
-`git branch -r --list "origin/agent/*"` before trusting it. `FRONTEND-037`
-compacts NBA game results across Recent Games, Stats seasons, the compose
-picker and game detail; it reuses `EVENTS-013`'s card, so it starts after that
-merges.
+EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). #353 (bundle
+fold + `?line=` amendment) and FRONTEND-037 #354 are merged; the owner
+approved both deploys (no migration). Next: verify production, then open the
+Finish PR, already drafted locally on `director/ui-track-finish` (worktree
+`fanwire-ui-finish`): FrontendUI docs as built, backlog rows, this file deleted.
 
 ## Order and gates
 
