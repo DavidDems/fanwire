@@ -11,6 +11,8 @@ import {
 
 export interface PreparedPostNodeProps {
   post: PostView;
+  /** Passed to `PostNode`: whether a reply shows its parent. Default true. */
+  showParent?: boolean;
   /**
    * Told whether this card is being prepared right now: in the window and
    * still a skeleton. What the feed's `aria-busy` is made of.
@@ -30,7 +32,11 @@ export interface PreparedPostNodeProps {
  * The swap is immediate (`components.md`: no shimmer, nothing to switch off for
  * reduced motion).
  */
-export function PreparedPostNode({ post, onPreparing }: PreparedPostNodeProps) {
+export function PreparedPostNode({
+  post,
+  showParent = true,
+  onPreparing,
+}: PreparedPostNodeProps) {
   const [windowRef, inWindow] = usePrepareWindow();
   const { ready, hasMedia, statusOf } = useCardReady(post, inWindow);
   const preparing = inWindow && !ready;
@@ -48,7 +54,7 @@ export function PreparedPostNode({ post, onPreparing }: PreparedPostNodeProps) {
   }
   return (
     <CardImageContext.Provider value={statusOf}>
-      <PostNode post={post} />
+      <PostNode post={post} showParent={showParent} />
     </CardImageContext.Provider>
   );
 }

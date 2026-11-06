@@ -563,3 +563,130 @@ describe("a thread whose root was deleted (POSTS-004)", () => {
     expect(within(dialog).queryByRole("textbox")).toBeNull();
   });
 });
+
+/**
+ * FRONTEND-034: a reply's card shows the post it answers. When the opened post
+ * is itself a reply, its card at the root of the modal shows its parent in a
+ * compact box with Show this thread, which is the case the human reported
+ * ("the original post is not visible, only its reply"). In the Replies list
+ * each reply's parent is the card directly above, so no row shows a box or
+ * Show this thread.
+ */
+describe("a reply's parent in the thread modal (FRONTEND-034)", () => {
+  const PARENT_TEXT = "Original take on the trade";
+  const REPLY_TEXT = "Not with that bench";
+  const UNDER_TEXT = "Bench was fine";
+  const SHOW_THREAD = "Show this thread";
+
+  const PARENT = testPostView({
+    id: 501,
+    text: PARENT_TEXT,
+    author: testAuthor({ id: 31, username: "parent31" }),
+    created_at: "2026-09-28T11:00:00Z",
+    reply_count: 1,
+  });
+  const REPLY = testPostView({
+    id: 502,
+    text: REPLY_TEXT,
+    author: testAuthor({ id: 32, username: "replier32" }),
+    created_at: "2026-09-28T11:30:00Z",
+    is_reply: true,
+    parent_post_id: 501,
+    replied_post: PARENT,
+    reply_count: 1,
+  });
+  // A reply to the reply, as the API sends it: with its own parent attached.
+  const UNDER = testPostView({
+    id: 503,
+    text: UNDER_TEXT,
+    author: testAuthor({ id: 33, username: "under33" }),
+    created_at: "2026-09-28T11:45:00Z",
+    is_reply: true,
+    parent_post_id: 502,
+    replied_post: REPLY,
+  });
+
+  async function openAt(path: string) {
+    const feed = feedStub([feedPage([], null)]);
+    const thread = threadServer([
+      threadView(PARENT, [REPLY]),
+      threadView(REPLY, [UNDER]),
+    ]);
+    const app = renderAppAt(path, "anonymous", [
+      feed.handler,
+      thread.handler,
+      gamesAre(),
+    ]);
+    const dialog = await threadDialog();
+    return { app, dialog, user: userEvent.setup() };
+  }
+
+  function repliesList(dialog: HTMLElement): HTMLElement {
+    return within(dialog).getByRole("list", { name: "Replies" });
+  }
+
+  it("shows the parent inside the root card when the opened post is a reply", async () => {
+    const { dialog } = await openAt("/posts/502");
+    await within(dialog).findByText(UNDER_TEXT);
+
+    const root = cardIn(dialog, REPLY_TEXT);
+    expect(repliesList(dialog).contains(root)).toBe(false);
+    expect(within(root).getByText(PARENT_TEXT)).toBeInTheDocument();
+    expect(
+      within(root).getByRole("link", { name: "parent31" }),
+    ).toHaveAttribute("href", "/profile/31");
+    expect(
+      within(root).getByRole("link", { name: SHOW_THREAD }),
+    ).toHaveAttribute("href", "/posts/501");
+    expect(
+      precedes(
+        within(root).getByText(REPLY_TEXT),
+        within(root).getByText(PARENT_TEXT),
+      ),
+    ).toBe(true);
+  });
+
+  it("shows no box and no Show this thread on a row of the Replies list", async () => {
+    const { dialog } = await openAt("/posts/502");
+    await within(dialog).findByText(UNDER_TEXT);
+
+    const list = repliesList(dialog);
+    const row = cardIn(dialog, UNDER_TEXT);
+    expect(list.contains(row)).toBe(true);
+    // The row's parent is the root card above it: its text is not repeated.
+    expect(within(list).queryByText(REPLY_TEXT)).toBeNull();
+    expect(within(dialog).getAllByText(REPLY_TEXT)).toHaveLength(1);
+    expect(within(list).queryByRole("link", { name: SHOW_THREAD })).toBeNull();
+    expect(within(list).queryByText("Post deleted")).toBeNull();
+    expect(within(list).queryByText("This post is unavailable")).toBeNull();
+  });
+
+  it("shows no box in the list when the opened post is the parent itself", async () => {
+    const { dialog } = await openAt("/posts/501");
+    await within(dialog).findByText(REPLY_TEXT);
+
+    expect(within(dialog).getAllByText(PARENT_TEXT)).toHaveLength(1);
+    expect(
+      within(dialog).queryByRole("link", { name: SHOW_THREAD }),
+    ).toBeNull();
+  });
+
+  it("opens the parent's thread in the same modal from Show this thread", async () => {
+    const { dialog, app, user } = await openAt("/posts/502");
+    await within(dialog).findByText(UNDER_TEXT);
+
+    await user.click(
+      within(cardIn(dialog, REPLY_TEXT)).getByRole("link", {
+        name: SHOW_THREAD,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(app.router.state.location.pathname).toBe("/posts/501"),
+    );
+    const again = await threadDialog();
+    expect(within(again).getAllByText(PARENT_TEXT)).toHaveLength(1);
+    expect(await within(again).findByText(REPLY_TEXT)).toBeInTheDocument();
+    expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
+  });
+});

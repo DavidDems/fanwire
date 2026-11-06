@@ -79,10 +79,24 @@ import { likesText, repliesText, repostsText } from "./counts";
  * alike: nothing of it is shown, and nothing links to it. An original that is
  * merely hidden (its author deactivated) still reads "This post is
  * unavailable".
+ *
+ * **A reply shows what it answers** (`FRONTEND-034`). A reply's card is the
+ * reply at full size, then its parent in the quote's compact box (with a small
+ * avatar, text clamped to four lines, no controls or media), then the reply's
+ * own action row, then a "Show this thread" link to the parent's thread. A
+ * decorative line in the left gutter joins them (CSS only). It applies to the
+ * subject, so a plain repost of a reply shows the box too; a quote of a reply
+ * shows only its original's box. The thread modal's Replies list passes
+ * `showParent={false}`: there the parent is the card above.
  */
 
 export interface PostNodeProps {
   post: PostView;
+  /**
+   * Whether a reply shows its parent's box and Show this thread. Default true;
+   * false where the parent is already on screen just above.
+   */
+  showParent?: boolean;
 }
 
 /** The address of a post's thread, or of the thread opened to reply. */
@@ -122,12 +136,11 @@ function useOpenThreadOnClick(postId: number) {
   };
 }
 
-export function PostNode({ post }: PostNodeProps) {
+export function PostNode({ post, showParent = true }: PostNodeProps) {
   const plain = isPlainRepost(post);
   // The post this card is about: what its header, text, controls and thread
   // belong to. For a plain repost that is the original, or nothing at all.
   const subject = plain ? post.reposted_post : post;
-  const state = useDetailLinkState();
   const openThread = useOpenThreadOnClick(subject?.id ?? post.id);
 
   const repostedBy = !plain ? null : (
@@ -152,66 +165,7 @@ export function PostNode({ post }: PostNodeProps) {
     ) : (
       <>
         {repostedBy}
-        <PostContent post={subject} />
-        {/*
-         * Only a quote reached directly shows its original. The API sends
-         * `reposted_post` one level deep, so a plain repost *of* a quote carries
-         * the quote with its own `reposted_post` always null — the depth cut,
-         * not an unavailable original — and the box is left out rather than
-         * claiming the original is gone.
-         */}
-        {!plain && subject.is_repost ? (
-          <QuotedPost
-            post={subject.reposted_post}
-            deleted={subject.reposted_post_deleted}
-          />
-        ) : null}
-
-        {/*
-         * The reader's controls, under the content: like, reply and repost,
-         * each followed by its count. For a plain repost every one of them acts
-         * on the original.
-         */}
-        <footer className={styles.footer}>
-          <TogglePostAction
-            postId={subject.id}
-            label="Like"
-            pressed={subject.liked_by_viewer}
-            count={likesText(subject)}
-            icon={<HeartIcon />}
-            pressedIcon={<HeartFilledIcon />}
-            send={setLiked}
-            apply={withLike}
-          />
-          {/*
-           * Reply is an address, never an import: the thread modal opened to
-           * reply, whose composer is `features/compose`'s and is put beside
-           * this card by `features/thread`, neither of which this folder
-           * imports ([[0x00-architecture]] Connection rule). It looks like the
-           * two toggles and stays a link: what it does is go somewhere. Its
-           * count links to the same thread, and moves only once a reply exists
-           * and the post is read again, never on the click.
-           */}
-          <PostAction
-            label="Reply"
-            to={threadPath(subject.id, true)}
-            countTo={threadPath(subject.id)}
-            state={state}
-            icon={<MessageCircleIcon />}
-            count={repliesText(subject)}
-          />
-          <TogglePostAction
-            postId={subject.id}
-            label="Repost"
-            pressed={subject.reposted_by_viewer}
-            count={repostsText(subject)}
-            icon={<Repeat2Icon />}
-            pressedIcon={<Repeat2FilledIcon />}
-            send={setReposted}
-            apply={withRepost}
-          />
-          <PostMenu post={subject} deletable={!plain} reportable />
-        </footer>
+        <SubjectBody subject={subject} showParent={showParent} plain={plain} />
       </>
     );
 
@@ -222,6 +176,112 @@ export function PostNode({ post }: PostNodeProps) {
     <Card as="article" className={styles.post} onClick={openThread}>
       {body}
     </Card>
+  );
+}
+
+/**
+ * The subject's content, its quote or parent box, and the reader's controls.
+ * A reply's parts sit in one wrapper, which carries the decorative thread line
+ * from under the avatar down to Show this thread.
+ */
+function SubjectBody({
+  subject,
+  showParent,
+  plain,
+}: {
+  subject: PostView;
+  showParent: boolean;
+  plain: boolean;
+}) {
+  const state = useDetailLinkState();
+  // The parent's id, when this card shows it: the thread Show this thread
+  // opens, whether the parent is present, deleted or hidden.
+  const parentId =
+    showParent && subject.is_reply
+      ? (subject.parent_post_id ?? subject.replied_post?.id ?? null)
+      : null;
+  const content = (
+    <>
+      <PostContent post={subject} />
+      {/*
+       * Only a quote reached directly shows its original. The API sends
+       * `reposted_post` one level deep, so a plain repost *of* a quote carries
+       * the quote with its own `reposted_post` always null — the depth cut,
+       * not an unavailable original — and the box is left out rather than
+       * claiming the original is gone.
+       */}
+      {!plain && subject.is_repost ? (
+        <QuotedPost
+          post={subject.reposted_post}
+          deleted={subject.reposted_post_deleted}
+        />
+      ) : null}
+      {/* A reply's parent, between the reply and its own controls. */}
+      {parentId === null ? null : subject.replied_post === null ? (
+        <MissingOriginal deleted={subject.replied_post_deleted} />
+      ) : (
+        <QuotedOriginal post={subject.replied_post} parent />
+      )}
+
+      {/*
+       * The reader's controls, under the content: like, reply and repost,
+       * each followed by its count. For a plain repost every one of them acts
+       * on the original.
+       */}
+      <footer className={styles.footer}>
+        <TogglePostAction
+          postId={subject.id}
+          label="Like"
+          pressed={subject.liked_by_viewer}
+          count={likesText(subject)}
+          icon={<HeartIcon />}
+          pressedIcon={<HeartFilledIcon />}
+          send={setLiked}
+          apply={withLike}
+        />
+        {/*
+         * Reply is an address, never an import: the thread modal opened to
+         * reply, whose composer is `features/compose`'s and is put beside
+         * this card by `features/thread`, neither of which this folder
+         * imports ([[0x00-architecture]] Connection rule). It looks like the
+         * two toggles and stays a link: what it does is go somewhere. Its
+         * count links to the same thread, and moves only once a reply exists
+         * and the post is read again, never on the click.
+         */}
+        <PostAction
+          label="Reply"
+          to={threadPath(subject.id, true)}
+          countTo={threadPath(subject.id)}
+          state={state}
+          icon={<MessageCircleIcon />}
+          count={repliesText(subject)}
+        />
+        <TogglePostAction
+          postId={subject.id}
+          label="Repost"
+          pressed={subject.reposted_by_viewer}
+          count={repostsText(subject)}
+          icon={<Repeat2Icon />}
+          pressedIcon={<Repeat2FilledIcon />}
+          send={setReposted}
+          apply={withRepost}
+        />
+        <PostMenu post={subject} deletable={!plain} reportable />
+      </footer>
+    </>
+  );
+  if (parentId === null) return content;
+  return (
+    <div className={styles.threaded}>
+      {content}
+      <Link
+        className={styles.showThread}
+        to={threadPath(parentId)}
+        state={state}
+      >
+        Show this thread
+      </Link>
+    </div>
   );
 }
 
@@ -296,11 +356,29 @@ function MissingOriginal({ deleted }: { deleted: boolean }) {
  * own thread. A click anywhere else in the box opens that thread too — the
  * original's, not the quote's around it.
  */
-function QuotedOriginal({ post }: { post: PostView }) {
+function QuotedOriginal({
+  post,
+  parent = false,
+}: {
+  post: PostView;
+  /** A reply's parent: a small avatar, and four lines of text, not three. */
+  parent?: boolean;
+}) {
   const openThread = useOpenThreadOnClick(post.id);
   return (
-    <div className={styles.quoted} onClick={openThread}>
+    <div
+      className={parent ? `${styles.quoted} ${styles.parent}` : styles.quoted}
+      onClick={openThread}
+    >
       <p className={styles.quotedHeader}>
+        {parent ? (
+          <Avatar
+            username={post.author.username}
+            size="sm"
+            avatarKey={post.author.profile_avatar_key}
+            pictureKey={post.author.profile_picture_key}
+          />
+        ) : null}
         <Link className={styles.author} to={`/profile/${post.author.id}`}>
           {post.author.username}
         </Link>

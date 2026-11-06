@@ -175,14 +175,18 @@ function Thread({ postId, replying }: ThreadProps) {
   );
 }
 
-/** The direct replies, oldest first, each a post card of its own. */
+/**
+ * The direct replies, oldest first, each a post card of its own. A reply here
+ * shows no parent box (`FRONTEND-034`): its parent is the card above.
+ */
 function Replies({ replies }: { replies: PostView[] }) {
   if (replies.length === 0) return <EmptyState>No replies yet.</EmptyState>;
   return (
     <ol className={styles.replies} aria-label="Replies">
       {oldestFirst(replies).map((reply) => (
         <li key={reply.id}>
-          <PreparedPostNode post={reply} />
+          {/* Its parent is the card above: no parent box, no Show this thread. */}
+          <PreparedPostNode post={reply} showParent={false} />
         </li>
       ))}
     </ol>

@@ -952,6 +952,19 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
   **A plain repost of a quote shows no box**: `reposted_post` is one level
   deep ([[0x06-feed]]), so the quote inside always arrives with its own
   `reposted_post` null, which is the depth cut, not a missing original.
+- **A reply shows what it answers (`FRONTEND-034`).** A reply's card is the
+  reply at full size, then its `replied_post` in the quote's box (plus a `sm`
+  avatar, text clamped to four lines, no controls or media; a click in it
+  opens the parent's thread), then the reply's own action row, then a "Show
+  this thread" link to `/posts/<parent_post_id>` with the flow's state. A
+  null parent is the quote's muted "Post deleted" or "This post is
+  unavailable" box, and Show this thread stays. A decorative 2 px
+  `--color-border` line (`.threaded::before`, a border so forced colours keep
+  it) runs in the left gutter from under the avatar to that link. It applies
+  to the subject, so a plain repost of a reply has the box and a quote of a
+  reply does not. `PostNode`/`PreparedPostNode` take `showParent` (default
+  true); the thread modal's Replies list passes `false`, its parent being the
+  card above.
 
 ### The thread modal (`FRONTEND-010`)
 
