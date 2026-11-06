@@ -21,10 +21,6 @@
  * the others: `circle-plus` (the floating new-post button), `paperclip` (attach)
  * and `circle-x` (clear). Same frame, same `size` and `className` props.
  *
- * FRONTEND-032 adds lucide `link` for the Invite button beside compose:
- * `LinkIcon`, copied the same way and under the same licence, its two paths
- * pinned below as Lucide draws them.
- *
  * FRONTEND-035 adds lucide `log-out` for Sign out, the nav's last item:
  * `LogOutIcon`, copied the same way from the same commit and under the same
  * licence, its three paths pinned below as Lucide draws them.
@@ -48,7 +44,6 @@ import {
   HeartIcon,
   HouseIcon,
   ImageIcon,
-  LinkIcon,
   LogOutIcon,
   MessageCircleIcon,
   PaperclipIcon,
@@ -82,7 +77,6 @@ const ICONS: [string, ComponentType][] = [
   ["circle-plus (UI-010)", CirclePlusIcon],
   ["paperclip (UI-010)", PaperclipIcon],
   ["circle-x (UI-010)", CircleXIcon],
-  ["link (FRONTEND-032)", LinkIcon],
   ["log-out (FRONTEND-035)", LogOutIcon],
 ];
 
@@ -119,11 +113,20 @@ describe.each(ICONS)("icon %s", (_name, Icon) => {
   });
 });
 
+describe("the retired sharing icon", () => {
+  it("is absent and the icon count in the index header is current", () => {
+    const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
+    const removedExport = ["Link", "Icon"].join("");
+
+    expect(index).not.toContain(removedExport);
+    expect(index).toContain("nineteen Lucide icons in all");
+  });
+});
+
 describe.each([
   ["circle-plus", CirclePlusIcon],
   ["paperclip", PaperclipIcon],
   ["circle-x", CircleXIcon],
-  ["link", LinkIcon],
   ["log-out", LogOutIcon],
 ] as [string, ComponentType<IconProps>][])(
   "%s (UI-010, FRONTEND-032, FRONTEND-035)",
@@ -161,26 +164,6 @@ describe("chart-column (FRONTEND-009)", () => {
       "path M13 17V5",
       "path M8 17v-3",
     ]);
-  });
-});
-
-describe("link (FRONTEND-032)", () => {
-  it("draws Lucide's two paths, unchanged", () => {
-    const { container } = render(<LinkIcon />);
-
-    const paths = [...container.querySelectorAll("svg > *")].map(
-      (shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`,
-    );
-    expect(paths).toEqual([
-      "path M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71",
-      "path M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
-    ]);
-  });
-
-  it("is documented in the index's header with the others", () => {
-    const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
-
-    expect(index).toMatch(/lucide: link(?![\w-])/);
   });
 });
 
