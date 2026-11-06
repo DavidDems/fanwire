@@ -21,8 +21,8 @@ hidden link leaves the accessibility tree, so a reader meets exactly one. Tests
 scope Search queries with `within()` to the header or the nav. Don't copy this
 pattern for anything else.
 
-**Not an exception: the home rail** (`FRONTEND-036`). It exists only from
-1152 px and is *mounted*, not hidden, below that (`useMediaQuery`), so it is not
+**Not an exception: the home rail** (`FRONTEND-036`, `FRONTEND-039`). It exists only
+from 76.0625em (1217 px) and is *mounted*, not hidden, below that (`useMediaQuery`), so it is not
 a second copy of anything and a phone makes none of its requests. That hook is
 the one place width reaches JavaScript.
 
@@ -33,14 +33,14 @@ exactly. An icon may be added beside the text, but the text isn't replaced.
 ## 2. The shell (`src/routes/AppLayout.tsx`, `UI-003`, `FRONTEND-035`)
 
 ```
-phone (< 640 px)              640-1247 px                     >= 1248 px (on / from 1152 px: + rail)
+phone (< 640 px)              640-859 px                      >= 860 px (on / from 1217 px: + rail)
 +------------------------+    +----------------------------+  +---------------------------------------------+
 | fanwire    [S]  [av]   |    | fanwire              [av]  |  | fanwire                               [av]  |
 +------------------------+    +----------------------------+  +---------------------------------------------+
 |                        |    | [H]  +---- 640 ----+       |  | H Home      +---- 640 ----+  +- rail 288 -+ |
 |   content column       |    | [St] | content     |       |  | St Stats    | content     |  | search     | |
 |                        |    | [S]  | column      |       |  | S Search    | column      |  | results    | |
-+------------------------+    | [N]  |             |       |  | N Notif.    |             |  | (slot)     | |
++------------------------+    | [N]  |             |       |  | N Notif.    |             |  | recent     | |
 | [H]  [St]  [N]  [Out]  |    | [Out]+-------------+       |  | Out Sign out+-------------+  +------------+ |
 +------------------------+    +----------------------------+  +---------------------------------------------+
   bottom icon bar               compact sidebar (72 px)          labelled sidebar (192 px)
@@ -86,14 +86,17 @@ phone (< 640 px)              640-1247 px                     >= 1248 px (on / f
     cells at least `--target-min` tall, `padding-bottom:
     env(safe-area-inset-bottom)`. `<main>`'s bottom padding clears the bar and
     the floating buttons.
-  - **640 px to 1247 px:** a sticky left sidebar under the header (`top` = the
+  - **640 px to 859 px:** a sticky left sidebar under the header (`top` = the
     header's height), `--sidebar-width-compact` (72 px) wide, icon only, every
     item at least `--target-min` square, transparent, with `padding-top:
     --space-5` so the first item lines up with main's top.
-  - **From 1248 px (78em):** `--sidebar-width` (192 px), each item an icon then
-    its visible label at `--font-size-md` on one row. Between 1152 and 1248 px
-    it stays icon only, even where the home rail shows.
-  - **The sidebar and `<main>` are one centred group**, `--space-5` apart.
+  - **From 53.75em (860 px, `FRONTEND-039`):** `--sidebar-width` (192 px), each
+    item an icon then its visible label at `--font-size-md` on one row. Up to
+    78em the sidebar and `<main>` start `--space-4` from the viewport's left
+    edge, and `<main>` keeps a 36rem minimum only while it fits, so 200% text
+    never overflows.
+  - **The sidebar and `<main>` are one group**, `--space-5` apart; from 78em
+    (1248 px) the group is centred, as before `FRONTEND-039`.
   - **Current page:** `NavLink`'s `aria-current="page"`. Weight 600 and
     `--color-text`, plus a 3 px `--color-action` bar drawn as a border on a
     `::after` (top edge in the bar, inset `--space-3`; inline-start edge in the
@@ -106,12 +109,12 @@ phone (< 640 px)              640-1247 px                     >= 1248 px (on / f
   Vertical padding `--space-5`. **Two exceptions:**
   - `/stats/records` (`FRONTEND-030`): `--content-max-wide` (1024 px), chosen
     by `AppLayout` from the route (`useMatch("/stats/records")`).
-  - `/` from 1152 px (`FRONTEND-036`): `.main:has(aside)` widens it to
+  - `/` from 76.0625em (`FRONTEND-036`, `FRONTEND-039`): `.main:has(aside)` widens it to
     `--content-max` + `--space-5` + `--rail-width`, so the feed keeps its 640 px
     beside the rail. Every other route keeps `--content-max`.
 
 **One column, except the home rail.** The only second column is the home
-page's right rail from 1152 px (§3), the human's 2026-11-05 ask. Every other
+page's right rail from 76.0625em (1217 px, §3), the human's 2026-11-05 ask. Every other
 route stays one column.
 
 ## 3. Page templates
@@ -126,7 +129,7 @@ Each view keeps its one `h1`, which is its identity in the route sweep.
 | `/notifications` | `NotificationsPage` | **Settings strip plus list.** `h1`, then the email preference as a one-row card (checkbox and label), then the list as a single card with dividers between rows (not a card per row: rows are short, and dividers keep the list dense). |
 | `/profile/:userId` | `ProfilePage` | **Identity header plus body.** A header card: avatar initial, username as `h1`, follower and following counts on one line, then Follow/Unfollow (public) on the right, wrapping under the name on phones. The description below it. On the own profile, the date of birth row ("Only you can see this") and the Settings card after it. |
 | `/search` | `SearchPage` (`FRONTEND-007`) | **Search bar plus result sections.** `h1` "Search", the search bar card, then (only when `?q=` is set) "Accounts" as one list card with dividers and "Posts" as a stack of post cards, each section with its own full-width "Load more", then "Games": a filter card with three stacked selects and the results as one list card. The search box and its button, and the three selects, are **stacked at every width**: a row would need a rule on `Field`'s wrapper, which §5 of `components.md` forbids (a `Field` row layout is in `TODO/02-backlog.md`). |
-| `/` (home) | `routes/HomeView` | **The feed, then from 1152 px the rail** (`FRONTEND-036`). No search bar above the feed at any width. From 72em `HomeView` mounts an `<aside>` after the feed, `--space-5` from it: sticky at the header's height, `--rail-width` (288 px), scrolling on its own (`max-height` from `100dvh`, `overflow-y: auto`). It holds the search bar (submits to `/?q=`, a new history entry, staying on `/`), then with `?q=` a "Results for “q”" section (`h2`, Clear search beside it) with Accounts then Posts (`h3`, at most five rows each from the first page of `/search`'s own queries, each ending with Show all to `/search?q=`), then the slot `EVENTS-013` fills with recent games. Post rows are compact (author, a time link opening the thread over home, three-line text). Below 1152 px the rail isn't mounted; Search is the Search icon (§2). Composed in `routes/` so the features stay independent; the feed's `h1` is the page's only one. |
+| `/` (home) | `routes/HomeView` | **The feed, then from 76.0625em (1217 px) the rail** (`FRONTEND-036`, `FRONTEND-039`). No search bar above the feed at any width. From 76.0625em `HomeView` mounts an `<aside>` after the feed, `--space-5` from it: sticky at the header's height, `--rail-width` (288 px), scrolling on its own (`max-height` from `100dvh`, `overflow-y: auto`). It holds the search bar (submits to `/?q=`, a new history entry, staying on `/`), then with `?q=` a "Results for “q”" section (`h2`, Clear search beside it) with Accounts then Posts (`h3`, at most five rows each from the first page of `/search`'s own queries, each ending with Show all to `/search?q=`), then "Recent games" (`EVENTS-013`, lazy; compact cards per `FRONTEND-037`, `components.md`). Post rows are compact (author, a time link opening the thread over home, three-line text). Below 76.0625em the rail isn't mounted; Search is the Search icon (§2). Composed in `routes/` so the features stay independent; the feed's `h1` is the page's only one. |
 | `/sign-in`, `/sign-up`, `/confirm`, `/forgot-password`, `/create-profile` | the five auth pages | **Narrow form card.** One card, `max-width: 25rem` (400 px), centred in the column. `h1` inside the card, the request alert at the top of the card, fields stacked, primary button full width, secondary links (e.g. "Forgotten your password?") as plain links below the card. |
 | `/stats/records` | `StatsNav` records home (`FRONTEND-030`) | **Card grid in the wide column** (`layout.md` §2), under one title: no one-item breadcrumb. The Historical / Seasonal view bar sits at the end of the Top records / Team / Player bar's row; on a phone the row wraps and the view bar takes its own line at the end. On Seasonal it ends the season picker's row; on a record's page it has a row of its own above the breadcrumb. The record cards are 1 column on phones, 2 from 40rem (640 px), 3 from 64rem (1024 px), `--space-3` apart. Each card's holder space is a fixed room (four body lines and the gaps, in em) with clamped lines, so an answer that lands moves nothing; the human decided to keep it (2026-11-04, `FRONTEND-030` review). At 200% text on a 360 px viewport the shell header now wraps instead of overflowing (`FRONTEND-035`, §2). |
 | `*` | `NotFoundView` | **Message.** `h1` "Not found", the existing line, and a link back to the feed. |
