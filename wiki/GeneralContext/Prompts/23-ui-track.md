@@ -7,7 +7,7 @@ type: prompt
 ## Update (2026-11-05, Director session)
 
 **Progress.** Gate units unstarted at session start, so this session runs them.
-- `FEED-001`: PR #332 open, no migration. Root cause: a signed-in viewer gets
+- `FEED-001`: PR #332 merged 2026-11-06 02:31Z; deploy 42150873983 awaiting approval (no migration). Root cause: a signed-in viewer gets
   `FollowsAndPreferredTeamStrategy` (followed + self + preferred team), so an
   account that follows nobody saw an empty feed (reproduced on localhost).
 - `FRONTEND-032`: PR #331 merged 2026-11-06 01:54Z; deploy 42146851577 succeeded (no migration), `/api/health` ok, the Invite code is in the production bundle.
@@ -16,7 +16,7 @@ type: prompt
   the lazy chunk loads, "Loading this profile…" ~430 ms, content ~960 ms.
   Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
   ~57 ms throttled, 3 stale frames instead of 31.
-- Next: `POSTS-009` after #332 merges; `FRONTEND-035` after #331 and 033 merge.
+- Next: `POSTS-009` is unblocked (branch from `origin/main`), not started: on 2026-11-06 the host ran critically low on memory and Claude Code stopped the dev stack (uvicorn 8011, previews 5210/5211) and the merge watch. `FRONTEND-035` waits for #333. Postgres `fw-ui-pg` (55432) is still up.
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
