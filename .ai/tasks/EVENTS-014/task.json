@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-014",
+  "objective": "Load each season's published schedule from the dataset's LeagueSchedule file into a table of its own, and serve a season's full schedule, played and upcoming games together, from one new route, without changing what any existing route returns: a game reaches standings, a team's season, the game list and every other existing read only once it has been played and loaded.",
+  "acceptance_criteria": [
+    "Start gate: EVENTS-013 is not open at the same time. Run this unit after EVENTS-013 has merged or before it starts; both edit routes.py, service.py, schemas.py, openapi.json and schema.d.ts, and either may add a migration. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "A new table, scheduled_games (bigint identity id, per 0x00 Conventions), holds one row per scheduled game: nba_game_id (bigint, unique, not null), season (text, not null), date (naive US Eastern timestamp, not null), time_tbd (boolean, not null), game_type (text, not null), label, sub_label, venue (text, nullable), series_game_number (integer, nullable), home_team_id and away_team_id (FK to teams, nullable: null means the team is not decided yet). An index serves reads by (season, date). It is added in a new Alembic migration that downgrades cleanly. No existing table or column changes.",
+    "load_nba_history also reads, for each season it loads, the file LeagueSchedule<YY>_<YY>.csv from the same directory when present (2026-27 reads LeagueSchedule26_27.csv). With seasons=None it reads every such file present for 2003-04 or later. A missing file is not an error: the season's report says it had no schedule file and that season's stored schedule is left as it was.",
+    "The file is read only in the header shape of LeagueSchedule25_26.csv and LeagueSchedule26_27.csv (gameId, gameDateTimeEst, homeTeamId, awayTeamId, arenaName, gameLabel, gameSubLabel, seriesGameNumber, among others). A file missing one of the columns the loader reads, such as LeagueSchedule24_25.csv (hometeamId spelling, UTC offsets in gameDateTimeEst), is a DatasetError naming the file, and nothing is written.",
+    "Each schedule row follows the games rule for its id prefix: 2 regular (NBA Cup group and knockout games included), 6 cup-final, 5 play-in, 4 playoffs are stored; 1 preseason and 3 All-Star are skipped and counted. A row whose id's season is not the file's season, a malformed id or date, or two rows with the same id that disagree is a DatasetError; identical duplicates keep the first and are counted.",
+    "A team id of 0 or blank is stored as a null team (to be decided: Cup knockout games and the Cup final). Any other team id that is not one of the 30 stored franchises is UnrecognizedTeamError, as for games.",
+    "A row whose gameDateTimeEst time is 00:00:00 has time_tbd true (the source writes midnight for a start time not yet set); every other row has time_tbd false. date keeps the value as written. A blank or 0 seriesGameNumber is null; blank label, sub-label or arena is null.",
+    "A season's schedule is replaced as a whole on each load that reads its file: rows no longer in the file (a postponed game moved to a new id, a cancelled game) are removed, rows whose fields changed are updated, new rows are added. It happens inside the load's single transaction, so a failed load leaves the stored schedule as it was. Nothing outside scheduled_games references it.",
+    "The load report gives, per season, either the schedule rows stored, how many of them have an undecided team, and the preseason, All-Star and duplicate rows skipped, or that the season had no schedule file. Every existing report line is unchanged.",
+    "SportsDataLoad (app.events.load_handler) downloads, beside the four files it reads today, LeagueSchedule<YY>_<YY>.csv under nba-eoin/ for each season in the event. A key that does not exist (S3 404 / NoSuchKey) means no schedule file for that season, never a failure; any other S3 error fails the load as today. No infra change: the function's s3:GetObject grant already covers nba-eoin/*.",
+    "GET /events/seasons/{season}/schedule is public, like the other /events reads, and returns {season, games}, games ordered by date, then nba_game_id. It is the union of the season's stored games (status 'final') and the season's scheduled_games rows whose nba_game_id is not a stored game (status 'scheduled'). A game present in both is listed once, as final, with the fields of the stored game; a stored game with no schedule row (a playoff game played after the file was loaded) is listed too.",
+    "Each item carries nba_game_id, status ('final' or 'scheduled'), game_id (the Game id for a final game, null for a scheduled one, so the frontend can link to /games/<id>), date, time_tbd (false for a final game), game_type, label, sub_label, series_game_number, venue, home_team and away_team (TeamRefOut, null when not decided), home_score and away_score (null for a scheduled game).",
+    "Optional filters: team_id (games where that team is home or away), date_from and date_to (inclusive, on the game's Eastern calendar date). A malformed season or date, or date_from after date_to, is a 422; a well-formed season with neither a stored game nor a schedule row, or an unknown team_id, is a 404; filters that match nothing are an empty games list with 200. The route's docstring says so, so it reaches openapi.json.",
+    "The read is a fixed number of statements whatever the season's size or the filters, pinned by a statement-counting test, and never loads a season's box scores. The full 2026-27 schedule's response size and time on a throwaway Postgres loaded with the real dataset are recorded in 0x02-events.md.",
+    "No existing route changes: after a schedule with unplayed games is loaded, GET /events/games, /events/games/{id}, /events/seasons, /events/seasons/{season}/standings, /champion, /leaders, /events/teams/{id}/seasons/{season}, /events/players/{id} and /games, and /events/records return exactly what they returned before that load, pinned by a test that compares the two responses. A scheduled game appears in a team's season only after it has been played and loaded into games.",
+    "Every existing events schema in openapi.json is unchanged; backend/openapi.json and frontend/src/api/schema.d.ts are regenerated with the new route and its schemas only.",
+    "Tests run on the synthetic fixture: a LeagueSchedule25_26.csv in backend/tests/fixtures/nba_data/ with the real header, holding rows for games already in its Games.csv, rows for games not in it, a row with undecided teams and a midnight start, a preseason row, an All-Star row and a cup-final row. Expected values come from the fixture files read independently in the test, never from the code under test.",
+    "wiki/CodeContext/Modules/0x02-events.md documents the ScheduledGame table, the schedule file's reading rules and quirks, the route and its union rule, and the measurement."
+  ],
+  "allowed_paths": [
+    "backend/app/events/**",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "frontend/src/routes/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/notifications/**",
+    "backend/app/feed/**",
+    "backend/app/search/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
