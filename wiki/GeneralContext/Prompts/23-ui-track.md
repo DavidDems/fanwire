@@ -10,7 +10,7 @@ type: prompt
 - `FEED-001`: PR #332 open, no migration. Root cause: a signed-in viewer gets
   `FollowsAndPreferredTeamStrategy` (followed + self + preferred team), so an
   account that follows nobody saw an empty feed (reproduced on localhost).
-- `FRONTEND-032`: PR #331 open, CI green, no migration.
+- `FRONTEND-032`: PR #331 merged 2026-11-06 01:54Z; deploy 42146851577 succeeded (no migration), `/api/health` ok, the Invite code is in the production bundle.
 - `FRONTEND-033`: PR #333 open, no migration. Before timings (localhost, throttled
   400 ms / 1.6 Mbps / CPU 4x): URL at ~25 ms, old page visible ~500 ms while
   the lazy chunk loads, "Loading this profile…" ~430 ms, content ~960 ms.
