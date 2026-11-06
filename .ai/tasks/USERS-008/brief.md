@@ -35,12 +35,27 @@ with no credentials left to retry with.
 - `notifications.reference_id` has no FK and is polymorphic (`users.id` for `follow`,
   `posts.id` for `reply` and `repost`). Clear by type.
 - `Post.author_id: Mapped[int]` becomes `int | None`, so mypy will walk the readers.
-  They only ever see `deleted_at IS NULL` rows; a narrow assert at those boundaries
-  beats a null path that can never run.
+  Feed read assembly in `backend/app/feed/views.py` filters anonymous/deleted
+  tombstones before profile reads and narrows author ids before profile lookup.
+  Keep the existing `root_deleted` and deleted-original repost contracts. Do not
+  use casts to hide a nullable-author invariant; record the read rule in the Feed
+  module reference alongside the Users and Posts references.
 - API Gateway's limit is 30 s. Batch the S3 deletes (`delete_objects`, 1,000 a call).
 - `test_route_auth.py` allowlists named routes. The new entry is deliberate.
 - Backups are 7 days (`infra/lib/data-stack.ts`), hence the dialog's wording. If
   retention changes, the copy changes.
+
+## Success announcement and exact scope
+
+After deletion succeeds, sign out and clear the account cache before navigating
+to `/`. The shell in `frontend/src/routes/AppLayout.tsx` owns the accessible
+`StatusLine` announcing "Your account and data have been deleted.", using router
+state passed with that navigation. It survives the settings page unmounting;
+do not append or mutate a status element imperatively in the document.
+
+Only that exact shell file is added to the route scope. Other route files remain
+outside `allowed_paths`. The existing entry growth limits remain 2 KiB raw and
+1 KiB gzip; this scope clarification does not increase any bundle allowance.
 
 ## Not in this unit
 
