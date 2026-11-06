@@ -28,6 +28,7 @@
     "backend/app/posts/**",
     "backend/app/media/**",
     "backend/app/notifications/**",
+    "backend/app/feed/views.py",
     "backend/app/account_deletion.py",
     "backend/app/dependencies.py",
     "backend/alembic/**",
@@ -37,6 +38,7 @@
     "frontend/src/auth/account.ts",
     "frontend/src/auth/account.test.tsx",
     "frontend/src/features/account/**",
+    "frontend/src/routes/AppLayout.tsx",
     "frontend/src/test/account.ts",
     "frontend/src/test/auth.tsx",
     "frontend/src/test/bundle-budgets/USERS-008.ts",
@@ -47,6 +49,7 @@
     "wiki/CodeContext/Modules/0x03-posts.md",
     "wiki/CodeContext/Modules/0x04-media.md",
     "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
     "wiki/CodeContext/Modules/0x08-frontend.md"
   ],
   "forbidden_paths": [
@@ -62,8 +65,7 @@
     "infra/package.json",
     "docker/**",
     "docker-compose.yml",
-    "frontend/src/styles/tokens.css",
-    "frontend/src/routes/**"
+    "frontend/src/styles/tokens.css"
   ],
   "required_context": [
     "wiki/CodeContext/Modules/0x00-architecture.md",
@@ -71,6 +73,7 @@
     "wiki/CodeContext/Modules/0x03-posts.md",
     "wiki/CodeContext/Modules/0x04-media.md",
     "wiki/CodeContext/Modules/0x05-notifications.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
     "wiki/CodeContext/Standards/security.md",
     "wiki/CodeContext/Standards/design-principles.md",
     "wiki/CodeContext/Modules/0x08-frontend.md"
