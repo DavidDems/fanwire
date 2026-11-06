@@ -1,6 +1,7 @@
-import { lazy } from "react";
+import { Suspense, lazy } from "react";
 import { Navigate, type RouteObject } from "react-router-dom";
 
+import { ProfileLoading } from "../features/profile/ProfileLoading";
 import { SearchPage } from "../features/search/SearchPage";
 import { DetailModal } from "../features/thread/DetailModal";
 import { ThreadModal } from "../features/thread/ThreadModal";
@@ -137,7 +138,19 @@ const pages: RouteObject[] = [
   { path: "search", element: <SearchPage /> },
   // FRONTEND-003's page. Still public, and still one route: the id in the
   // path is what selects the own-profile variant from the public one.
-  { path: "profile/:userId", element: <ProfilePage /> },
+  // FRONTEND-033: a Suspense of its own. A navigation runs in a transition,
+  // and React keeps an already-revealed boundary's content during one, so
+  // behind `BackgroundRoutes`' Suspense alone the previous page stayed on
+  // screen until the chunk arrived. A boundary mounted by the navigation shows
+  // its fallback at once: the same loading state the page shows for its data.
+  {
+    path: "profile/:userId",
+    element: (
+      <Suspense fallback={<ProfileLoading />}>
+        <ProfilePage />
+      </Suspense>
+    ),
+  },
   // FRONTEND-008's page. Public: a game is a read path ([[0x02-events]]),
   // and every other feature reaches it by this address, never by import.
   { path: "games/:gameId", element: <GamePage /> },

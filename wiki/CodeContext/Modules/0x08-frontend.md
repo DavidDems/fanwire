@@ -243,6 +243,21 @@ profile fields; account lifecycle controls live on the separate, guarded
   belongs to `FRONTEND-004`, which has not landed; a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would
   need deleting rather than merging. `profile_picture_media_id` is never sent.
+- **A profile that is not ready shows `ProfileLoading` (`FRONTEND-033`).**
+  React Router navigates in a transition, and React keeps an already-revealed
+  Suspense boundary's content during one, so behind `BackgroundRoutes`' shared
+  boundary the previous page stayed on screen, with no feedback, until the
+  profile chunk arrived. The profile route therefore has a `<Suspense>` of its
+  own in `routes.tsx`: mounted fresh by the navigation, it shows its fallback
+  at once, on a direct load too. `ProfilePage` renders the same component while
+  its data is pending, so the chunk wait and the data wait read as one, and a
+  new `:userId` never shows the previous profile. `ProfileLoading` is a
+  `role="status"` "Loading this profile…" line under an `aria-hidden` header
+  card skeleton (shared `Skeleton` bars, laid out as `ProfileSummary`, so the
+  card revealed in its place moves nothing); no heading, no focus movement, no
+  animation. It lives in its own module because the route table imports it
+  statically and `ProfilePage` must stay lazy. A failed read shows the
+  existing alert with HistoryPage's secondary `Retry`, which refetches.
 - **`AppLayout` links "Your profile" by id**, because the route has no fixed
   address for "me". It renders only for a visitor who has a profile, and reads
   it through the same shared query gated on the same session the guards use —
@@ -1129,7 +1144,8 @@ is recorded so the second copy is a known state rather than a discovery.
   for the game and player details, which resolves to the same chunks. The
   feed, search, the thread modal, `DetailModal` and the shell stay eager.
   `BackgroundRoutes` wraps the page alone in one
-  `<Suspense fallback={<StatusLine>…}>`. `DetailModal` has its own around
+  `<Suspense fallback={<StatusLine>…}>`; the profile route adds its own
+  (`FRONTEND-033`, under Profile and follow). `DetailModal` has its own around
   its `<Outlet />`, so a lazy detail never unmounts the dialog. The main
   chunk was 454 kB after the split (it had been 513 kB), so the build no
   longer warns. `lazy-routes.test.ts` pins this through the static import
