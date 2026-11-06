@@ -33,9 +33,15 @@
 }
 
 @media (min-width: 40em) {
+  /*
+   * The height is unchanged; it is restated beside the bottom offset so a
+   * reader of this rule alone (floating-clearance.test.ts, FRONTEND-032) gets
+   * the + whole here, as it does in the phone rule.
+   */
   .floating {
     right: var(--space-5);
     bottom: var(--space-5);
+    height: 3.5rem;
   }
 }
 

@@ -6,7 +6,9 @@
  * not by colour alone (`accessibility.md`). `FRONTEND-012` adds lucide
  * `ellipsis`, the post card's "More options" menu button. `UI-010` adds three
  * for the stats and compose redesign: `circle-plus` (the floating new-post
- * button), `paperclip` (attach) and `circle-x` (clear).
+ * button), `paperclip` (attach) and `circle-x` (clear). `FRONTEND-032` adds
+ * lucide `link`, the Invite button beside compose: nineteen Lucide icons in
+ * all, plus the two pressed variants.
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
  * 1fae58d0a9c661a338036838caf3399b5507bab6. The shape elements below are those
@@ -231,6 +233,16 @@ export function CircleXIcon(props: IconProps) {
       <circle cx="12" cy="12" r="10" />
       <path d="m15 9-6 6" />
       <path d="m9 9 6 6" />
+    </Icon>
+  );
+}
+
+/** lucide: link — the Invite button beside compose (`FRONTEND-032`) */
+export function LinkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </Icon>
   );
 }
