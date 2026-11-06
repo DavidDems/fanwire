@@ -66,7 +66,7 @@ import {
 } from "../../test/stats";
 import {
   bodyRows,
-  columnHeaders,
+  tablesCaptioned,
   figure,
   rowText,
   tableCaptioned,
@@ -338,45 +338,81 @@ describe("the standings (criterion 4)", () => {
     );
   });
 
-  it("plots every team-season margin chronologically with symmetric five-point ticks", async () => {
+  // FRONTEND-037 replaced the point-margin chart and its table (five tests
+  // stood here: the margins and five-point ticks, the season switch, one and
+  // no games, the failure, the pending status) with a chart of the team's
+  // cumulative record after each game, in chronological order, its axis in
+  // month names only, and an equivalent table, captioned "Record after each
+  // game", inside a <details> whose <summary> says the same. The same cases
+  // are pinned against it.
+
+  function main(): HTMLElement {
+    return screen.getByRole("main");
+  }
+
+  /** Open the record table's <details> (if it is closed) and return it. */
+  async function recordTable(
+    user: ReturnType<typeof userEvent.setup>,
+  ): Promise<HTMLTableElement> {
+    const summary = await within(main()).findByText("Record after each game", {
+      selector: "summary",
+    });
+    const details = summary.closest("details");
+    expect(details, "the summary opens a <details>").not.toBeNull();
+    if (!(details as HTMLDetailsElement).open) await user.click(summary);
+    const table = tableCaptioned(main(), /record after each game/i);
+    expect(table.closest("details")).toBe(details);
+    return table;
+  }
+
+  /** Each row's record, as "wins-losses". */
+  function recordsOf(table: HTMLTableElement): string[] {
+    return bodyRows(table).map((row) => {
+      const found = rowText(row).match(/\b(\d+)\s*[-–]\s*(\d+)\b/);
+      return found === null ? "" : `${found[1]}-${found[2]}`;
+    });
+  }
+
+  /** Each row's result, "W" or "L" (a letter or the word). */
+  function resultsOf(table: HTMLTableElement): string[] {
+    return bodyRows(table).map((row) => {
+      const text = rowText(row);
+      const won = /\b(W|Won)\b/.test(text);
+      const lost = /\b(L|Lost)\b/.test(text);
+      return won && !lost ? "W" : lost && !won ? "L" : "?";
+    });
+  }
+
+  it("charts the team's cumulative record, month names only, without the overall record", async () => {
     const { stubs } = openSeasons(
       `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
     );
 
-    const chart = await screen.findByRole("img", {
-      name: /margin.*boston celtics.*2023-24/i,
-    });
-    const table = tableCaptioned(screen.getByRole("main"), /margin/i);
-    const headers = columnHeaders(table);
-    const marginIndex = headers.findIndex((header) => /margin/i.test(header));
-    const resultIndex = headers.findIndex((header) => /result/i.test(header));
-    if (marginIndex < 0 || resultIndex < 0)
-      throw new Error("chart table must name its margin and result columns");
-    const rows = bodyRows(table);
-
-    expect(rows).toHaveLength(3);
-    expect(rows.map((row) => Number(row.cells[marginIndex].textContent))).toEqual([
-      22, -6, 18,
-    ]);
-    expect(rows.map((row) => row.cells[resultIndex].textContent?.trim())).toEqual([
-      "W",
-      "L",
-      "W",
-    ]);
-    const dates = rows.map((row) => Date.parse(row.cells[0].textContent ?? ""));
-    expect(dates).toEqual([...dates].sort((a, b) => a - b));
-    expect(table.querySelector("caption")?.textContent).toMatch(/boston celtics/i);
-    expect(table.querySelector("caption")?.textContent).toContain("2023-24");
-    for (const tick of ["-25", "-20", "-15", "-10", "-5", "0", "5", "10", "15", "20", "25"])
-      expect(chart.textContent).toContain(tick);
+    const chart = await screen.findByRole("img", { name: /wins and losses/i });
+    expect(chart).not.toHaveAccessibleName(/64\s*[-–]\s*18/);
+    expect(chart.textContent ?? "").not.toMatch(/64\s*[-–]\s*18/);
+    const labels = [...chart.querySelectorAll("text")]
+      .map((text) => (text.textContent ?? "").trim())
+      .filter((text) => text !== "");
+    // The fixture's games are in January, March and June 2024.
+    expect(labels).toEqual(expect.arrayContaining(["Jan", "Mar", "Jun"]));
+    for (const label of labels)
+      expect(label, "a month with a day").not.toMatch(/[A-Z][a-z]{2} \d{1,2}/);
+    expect(main().textContent).not.toMatch(/point margin/i);
     expect(stubs.teamSeason.requests).toHaveLength(1);
+  });
 
-    // Keep the existing full game table alongside the plotted subset/view.
-    expect(
-      bodyRows(
-        tableCaptioned(screen.getByRole("main"), /games, 2023-24, newest first/i),
-      ),
-    ).toHaveLength(3);
+  it("gives the chart's values as a table: the record after each game, oldest first", async () => {
+    openSeasons(`/stats/seasons?season=2023-24&team=${CELTICS.id}`);
+    const user = userEvent.setup();
+    await screen.findByRole("img", { name: /wins and losses/i });
+
+    const table = await recordTable(user);
+    expect(bodyRows(table)).toHaveLength(3);
+    // Oldest first: won in January, lost in March, won in June.
+    expect(recordsOf(table)).toEqual(["1-0", "1-1", "2-1"]);
+    expect(resultsOf(table)).toEqual(["W", "L", "W"]);
+    expect(tableProblems(table.closest("details") as HTMLElement)).toEqual([]);
   });
 
   it("updates the chart from the selected team-season response without duplicate reads", async () => {
@@ -415,50 +451,57 @@ describe("the standings (criterion 4)", () => {
       { team_id: String(CELTICS.id), season: "2022-23" },
     ]);
 
-    await screen.findByRole("img", {
-      name: /margin.*boston celtics.*2022-23/i,
-    });
-
-    const table = tableCaptioned(screen.getByRole("main"), /margin.*2022-23/i);
-    const marginIndex = columnHeaders(table).findIndex((header) =>
-      /margin/i.test(header),
+    await screen.findByRole("heading", { name: /Boston Celtics, 2022-23/ });
+    await screen.findByRole("img", { name: /wins and losses/i });
+    await waitFor(() =>
+      expect(main().textContent).not.toMatch(/updating the team season/i),
     );
-    expect(bodyRows(table).map((row) => Number(row.cells[marginIndex].textContent))).toEqual([
-      4, 4, 4,
-    ]);
+    expect(recordsOf(await recordTable(user))).toEqual(["1-0", "2-0", "3-0"]);
   });
 
-  it.each(["one game", "no games"] as const)(
-    "keeps the exact %s values and explains why no line is drawn",
-    async (label) => {
-      const base = testTeamSeason(CELTICS, "2023-24");
-      const games = label === "one game" ? base.games.slice(0, 1) : [];
-      const { stubs } = openSeasons(
-        `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
-        {
-          tweak: (current) => {
-            current.teamSeason = teamSeasonStub((_teamId, season) => ({
-              ...testTeamSeason(CELTICS, season),
-              games,
-            }));
-          },
+  it("charts a one-game season as one value, with a one-row table", async () => {
+    const one = testTeamSeason(CELTICS, "2023-24").games.slice(0, 1);
+    const { stubs } = openSeasons(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+      {
+        tweak: (current) => {
+          current.teamSeason = teamSeasonStub((_teamId, season) => ({
+            ...testTeamSeason(CELTICS, season),
+            games: one,
+          }));
         },
-      );
+      },
+    );
+    const user = userEvent.setup();
 
-      const table = (await screen.findByRole("table", {
-        name: /margin/i,
-      })) as HTMLTableElement;
-      const expectedRows = label === "one game" ? 1 : 0;
-      await waitFor(() => expect(bodyRows(table)).toHaveLength(expectedRows));
-      expect(screen.queryByRole("img", { name: /margin/i })).toBeNull();
-      if (expectedRows === 1)
-        expect(rowText(bodyRows(table)[0])).toContain("18");
-      expect(screen.getByRole("main").textContent).toMatch(
-        /not enough|fewer than two|at least two|no games/i,
-      );
-      expect(stubs.teamSeason.requests).toHaveLength(1);
-    },
-  );
+    expect(
+      await screen.findByRole("img", { name: /wins and losses/i }),
+    ).toBeVisible();
+    const table = await recordTable(user);
+    expect(bodyRows(table)).toHaveLength(1);
+    expect(recordsOf(table)).toEqual(["1-0"]);
+    expect(resultsOf(table)).toEqual(["W"]);
+    expect(stubs.teamSeason.requests).toHaveLength(1);
+  });
+
+  it("draws no chart and no record table for a season with no games, and says so", async () => {
+    const { stubs } = openSeasons(
+      `/stats/seasons?season=2023-24&team=${CELTICS.id}`,
+      {
+        tweak: (current) => {
+          current.teamSeason = teamSeasonStub((_teamId, season) => ({
+            ...testTeamSeason(CELTICS, season),
+            games: [],
+          }));
+        },
+      },
+    );
+
+    await waitFor(() => expect(main().textContent).toMatch(/played no games/i));
+    expect(screen.queryByRole("img", { name: /wins and losses/i })).toBeNull();
+    expect(tablesCaptioned(main(), /record after each game/i)).toEqual([]);
+    expect(stubs.teamSeason.requests).toHaveLength(1);
+  });
 
   it("keeps a team-season request failure distinct from an empty chart", async () => {
     const { stubs } = openSeasons(
@@ -466,10 +509,11 @@ describe("the standings (criterion 4)", () => {
     );
     stubs.teamSeason.fail();
 
-    const main = screen.getByRole("main");
-    expect(await within(main).findByRole("alert")).toBeVisible();
-    expect(within(main).queryByRole("img", { name: /margin/i })).toBeNull();
-    expect(within(main).queryByRole("table", { name: /margin/i })).toBeNull();
+    expect(await within(main()).findByRole("alert")).toBeVisible();
+    expect(
+      within(main()).queryByRole("img", { name: /wins and losses/i }),
+    ).toBeNull();
+    expect(tablesCaptioned(main(), /record after each game/i)).toEqual([]);
   });
 
   it("keeps the pending team-season status until its response arrives", async () => {
@@ -490,9 +534,7 @@ describe("the standings (criterion 4)", () => {
       /loading the team.s season/i,
     );
     expect(
-      await screen.findByRole("img", {
-        name: /margin.*boston celtics.*2023-24/i,
-      }),
+      await screen.findByRole("img", { name: /wins and losses/i }),
     ).toBeVisible();
   });
 });

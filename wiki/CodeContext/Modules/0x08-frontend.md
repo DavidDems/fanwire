@@ -118,7 +118,8 @@ that here as usual.
 - **Where:** standings (`SeasonLevel`), `TeamLevel` and the team level's
   heading in `StatsNavigator`, `TeamSearch`, the `GamePage` header,
   `BoxScore` headings, team records only in `RecordLevel`/`RecordsLevel`,
-  the feed's `GamePreview` and `PlayerGamePreview`, `StatsPicker` rows, and
+  the feed's `GamePreview` and `PlayerGamePreview`, `StatsPicker` rows,
+  `RecentGames` cards, and
   `PlayerPage`'s "Team" fact (the last team of the newest season line).
   Dense opponent cells stay text. Nothing reads `TeamOut.logo_url`.
 
@@ -683,6 +684,8 @@ submits the draft.
   `RecordsTab` supplies records views; the picker supplies game, players
   and player views from `features/compose/`. `TeamLevel` takes an optional
   `onGame`; select mode opens a level, while Stats keeps its game links.
+  Both draw the same result cards (`FRONTEND-037`): in the picker each card
+  is the button that opens the game level, whose radios are unchanged.
   Records views and reads stay outside the picker's loaded chunks.
 - **Shared reads close R29.** `api/stats.ts` owns `seasonsQuery` (five-minute
   freshness), game and player detail fetchers and query options. Detail
@@ -1216,12 +1219,15 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
 `HomeView` lazy-loads `features/games/RecentGames` after SearchRail only while
 the home rail is mounted. Its h2 is "Recent games". One public
 `GET /events/games/recent` read uses `["events", "games", "recent"]`, fresh
-for five minutes, retaining API order. Each whole-row link contains both
-TeamIcons, abbreviations and the shared GameScore; its accessible name gives
-both teams and scores. Modal-flow state opens the game over home. Lazy and
-query loading reserve five Skeleton rows; errors use InlineAlert and Retry;
-an empty response removes the section. Season, ranks and overall records stay
-in the generated response for subsequent presentation without extra requests.
+for five minutes, retaining API order. Each card (`FRONTEND-037`) is one
+link to `/games/<id>?season=<season>`: away above home, each a TeamIcon, the
+short name (`teamShortName`), the overall record in small parentheses and
+the score. The losing line is muted text that still meets contrast; the
+winner's score is bolder and named in hidden text, so the result is never
+colour alone. No home/away records and no date. Modal-flow state opens the
+game over home. Lazy and query loading reserve five Skeleton rows the card's
+height; errors use InlineAlert and Retry; an empty response removes the
+section.
 
 ## Game page (`FRONTEND-008`)
 
@@ -1248,7 +1254,15 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
   [[0x02-events]] Game, never split or padded).
 - **Dates as stored.** The timestamp is naive US-Eastern; `parseISO` on the
   string without `Z` shows the stored calendar date in every viewer's zone.
-- **The winner is said in words** ("Final: X won, 117–109"), never by colour.
+- **Team links and tabs** (`FRONTEND-037`). Each team's name in the `h1`
+  links to its Stats > Seasons page with the `?season=` the game was opened
+  with (a direct address carries none: the default season); the game's path
+  stays `/games/<id>`. Below the line score, a `SegmentedTabs` "Team box
+  scores" bar holds one tab per team, "<short name> <score>": the winner
+  first (a tie or an unplayed 0-0 game, home first), selected initially
+  unless `?line=` names the other team's player line. The panel shows the
+  selected team's box score only. Only selection lights a tab; there is no
+  winner colour, and no spelled-out final-score sentence.
 - **Real tables.** `<caption>`, `th scope="col"` headers, the player in a
   `th scope="row"`, starters then bench in API order, the API's `totals` as
   the last row. Each table sits in a labelled `role="region"` with
@@ -1322,10 +1336,19 @@ the generated schema. The players feature has its own `api.ts`; since
   completed games, with a captioned Points table as its text equivalent. A
   404 or a non-numeric id is "Player not found"; any other failure is
   `InlineAlert`.
-- **The team level** (`FRONTEND-023`) plots point margin chronologically on a
-  zero-centred scale and provides every game's date, opponent, W/L result and
-  signed margin in a captioned table. While a new team-season read is pending,
-  the previous result stays visible with an updating status.
+- **The team level** (`FRONTEND-037`, replacing `FRONTEND-023`'s point-margin
+  chart) charts the cumulative record over played games in date order: per
+  game, a wins bar above a baseline and a losses bar below it, "Wins" and
+  "Losses" labelled, month-only axis labels, and no overall record. Its text
+  equivalent is the "Record after each game" table (game, month, W/L,
+  record) in a `<details>`. The games follow as result cards in API order
+  (newest first): one link each to `/games/<id>?season=<level season>`, the
+  selected team first ("Celtics vs Knicks" / "at"), short names, a W/L chip
+  (solid W, outlined L, the word in hidden text), score and type or label, no
+  date. One column, two from 36em of container width, row-major. An unplayed
+  0-0 game has no chip, reads "Not played yet" and counts in no total. While a
+  new team-season read is pending, the previous result stays visible with an
+  updating status.
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not

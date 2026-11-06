@@ -90,11 +90,6 @@
   color: var(--color-text-muted);
 }
 
-.result {
-  margin: 0;
-  font-weight: var(--font-weight-semibold);
-}
-
 .muted {
   margin: 0;
   font-size: var(--font-size-sm);
