@@ -898,6 +898,30 @@ class TestTheGateStaysAuthoritative:
             "non-PR events must bypass the path filter entirely"
         )
 
+    def test_bookkeeping_only_prs_still_trigger_the_required_check(self, gate):
+        """Trigger-level path filters skip the whole workflow, including its
+        required aggregate `gate`; job-level filtering can skip suites while
+        still reporting that required check for state/telemetry-only PRs."""
+        trigger = re.search(
+            r"(?ms)^on:\n(?P<body>.*?)(?=^[^ \t#][^\n]*:\s*(?:#.*)?$|\Z)",
+            gate,
+        )
+        assert trigger, "test-agent.yml must declare its event triggers"
+        pull_request = re.search(
+            r"(?ms)^  pull_request:\n(?P<body>.*?)(?=^  [^ \t#][^\n]*:|\Z)",
+            trigger.group("body"),
+        )
+        assert pull_request, "test-agent.yml must run on pull_request"
+        assert not re.search(
+            r"(?m)^    paths(?:-ignore)?:", pull_request.group("body")
+        ), "trigger-level path filters can strand bookkeeping-only PRs without `gate`"
+
+        # Keep cost filtering inside the workflow: the changes job can skip
+        # unrelated suites, while the unconditional aggregate still reports.
+        assert "GROUPS = {" in gate
+        assert "needs.changes.outputs.backend == 'true'" in gate
+        assert "  gate:\n    if: always()" in gate
+
     def test_changing_the_gate_itself_runs_everything(self, gate):
         """Trusting the filter to decide whether to test the filter is how a
         broken gate ships green."""
