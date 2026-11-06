@@ -17,7 +17,8 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from fractions import Fraction
+from typing import Any, overload
 
 from sqlalchemy import (
     RowMapping,
@@ -927,23 +928,132 @@ def _team_games(*columns: ColumnElement[Any]) -> Select[Any]:
     )
 
 
+@overload
 def _records(
     session: Session, season: str, team_id: int | None = None
-) -> list[tuple[Team, Record]]:
-    """Every team's regular-season record in `season` (one GROUP BY), or
-    only `team_id`'s. A team without a regular game has no row."""
+) -> list[tuple[Team, Record]]: ...
+
+
+@overload
+def _records(
+    session: Session, season: set[str], team_id: int | None = None
+) -> list[tuple[str, Team, Record]]: ...
+
+
+def _records(
+    session: Session, season: str | set[str], team_id: int | None = None
+) -> list[tuple[Team, Record]] | list[tuple[str, Team, Record]]:
+    """Regular records in one season, or batched across seasons in one GROUP BY.
+    A team without a regular game has no row. Single-season callers retain
+    their (team, record) projection; batched callers also get the season.
+    """
     won, is_home = _team_won(), Game.home_team_id == Team.id
-    stmt = _team_games(
-        func.count().filter(won),
-        func.count().filter(~won),
-        func.count().filter(is_home, won),
-        func.count().filter(is_home, ~won),
-        func.count().filter(~is_home, won),
-        func.count().filter(~is_home, ~won),
-    ).where(Game.season == season, Game.game_type == REGULAR)
+    seasons = [season] if isinstance(season, str) else season
+    stmt = (
+        _team_games(
+            Game.season.label("season"),
+            func.count().filter(won),
+            func.count().filter(~won),
+            func.count().filter(is_home, won),
+            func.count().filter(is_home, ~won),
+            func.count().filter(~is_home, won),
+            func.count().filter(~is_home, ~won),
+        )
+        .where(Game.season.in_(seasons), Game.game_type == REGULAR)
+        .group_by(Game.season)
+    )
     if team_id is not None:
         stmt = stmt.where(Team.id == team_id)
-    return [(team, Record(*counts)) for team, *counts in session.execute(stmt).tuples()]
+    rows = [(year, team, Record(*counts)) for team, year, *counts in session.execute(stmt).tuples()]
+    if isinstance(season, str):
+        return [(team, record) for _, team, record in rows]
+    return rows
+
+
+def _standing_order(entry: tuple[Team, Record]) -> tuple[Fraction, int, str]:
+    """The shared standings order, using an exact fraction before display rounding."""
+    team, record = entry
+    return (-Fraction(record.wins, record.wins + record.losses), -record.wins, team.name)
+
+
+@dataclass(frozen=True)
+class RecentRecord:
+    wins: int
+    losses: int
+
+
+@dataclass(frozen=True)
+class RecentGame:
+    id: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    home_team: TeamRef
+    away_team: TeamRef
+    home_score: int
+    away_score: int
+    home_rank: int
+    away_rank: int
+    home_record: RecentRecord
+    away_record: RecentRecord
+
+
+def recent_games(session: Session, limit: int) -> list[RecentGame]:
+    """Three completed calendar dates, ranked by each game's current season.
+
+    Three statements regardless of candidates, seasons or limit: candidates
+    (including the dates subquery), all teams, then batched regular records.
+    The completed date expression matches ix_games_completed_date exactly.
+    """
+    day = func.date(Game.date)
+    dates = select(day).where(Game.completed).distinct().order_by(day.desc()).limit(3)
+    candidates = list(session.scalars(select(Game).where(Game.completed, day.in_(dates))))
+    teams = {team.id: team for team in session.scalars(select(Team))}
+    seasons = {game.season for game in candidates}
+    by_season: dict[str, list[tuple[Team, Record]]] = {season: [] for season in seasons}
+    records: dict[tuple[str, int], Record] = {}
+    for season, team, record in _records(session, seasons):
+        by_season[season].append((team, record))
+        records[season, team.id] = record
+    ranks: dict[tuple[str, int], int] = {}
+    for season, entries in by_season.items():
+        ordered = [team for team, _ in sorted(entries, key=_standing_order)]
+        recorded = {team.id for team in ordered}
+        ordered.extend(
+            sorted((t for t in teams.values() if t.id not in recorded), key=lambda t: t.name)
+        )
+        ranks.update({(season, team.id): rank for rank, team in enumerate(ordered, 1)})
+    # Stable passes preserve descending full timestamps and ids for equal sums.
+    candidates.sort(key=lambda game: (game.date, game.id), reverse=True)
+    candidates.sort(
+        key=lambda game: (
+            ranks[game.season, game.home_team_id] + ranks[game.season, game.away_team_id]
+        )
+    )
+
+    def record_for(game: Game, team_id: int) -> RecentRecord:
+        record = records.get((game.season, team_id), _NO_RECORD)
+        return RecentRecord(record.wins, record.losses)
+
+    return [
+        RecentGame(
+            id=game.id,
+            date=game.date,
+            season=game.season,
+            game_type=game.game_type,
+            label=game.label,
+            home_team=_team_ref(teams[game.home_team_id]),
+            away_team=_team_ref(teams[game.away_team_id]),
+            home_score=game.home_score,
+            away_score=game.away_score,
+            home_rank=ranks[game.season, game.home_team_id],
+            away_rank=ranks[game.season, game.away_team_id],
+            home_record=record_for(game, game.home_team_id),
+            away_record=record_for(game, game.away_team_id),
+        )
+        for game in candidates[:limit]
+    ]
 
 
 def standings(session: Session, season: str) -> Standings | None:
@@ -954,12 +1064,8 @@ def standings(session: Session, season: str) -> Standings | None:
     if not season_has_games(session, season):
         return None
 
-    def order(entry: tuple[Team, Record]) -> tuple[float, int, str]:
-        team, record = entry
-        return (-record.wins / (record.wins + record.losses), -record.wins, team.name)
-
     by_conference: dict[str, list[tuple[Team, Record]]] = {}
-    for entry in sorted(_records(session, season), key=order):
+    for entry in sorted(_records(session, season), key=_standing_order):
         by_conference.setdefault(entry[0].conference, []).append(entry)
 
     conferences = []

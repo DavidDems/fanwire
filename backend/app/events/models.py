@@ -265,6 +265,7 @@ Index(
     postgresql_where=(Game.game_type == "playoffs") & (Game.label == FINALS_LABEL),
 )
 Index("ix_games_season", Game.season)
+Index("ix_games_completed_date", func.date(Game.date), postgresql_where=Game.completed)
 
 
 # EVENTS-012's two aggregate tables, the records library's season, career and
