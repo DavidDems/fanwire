@@ -6,14 +6,22 @@ type: prompt
 
 ## Update (2026-11-06, Director session)
 
-**EVENTS-013 PR [#351](https://github.com/DavidDems/fanwire/pull/351) is open.**
-Both prerequisite merge commits reached main; #346 deploy 42274743845 and
-#347 deploy 42276420158 succeeded. Unit validation passed: backend container
-2,165 tests; frontend direct/container 3,468; agent-system 1,656 plus selfcheck;
-24 Chromium rows. CI, human merge and approved deploy remain. Local migration
-cycle ends at `b9f4c7e2d610`; invoke production Migration only after deployment.
-FRONTEND-037 starts from refreshed origin/main after EVENTS-013 merges.
-
+**EVENTS-013 merged (#351, `2e29dac`) and deployed** (run 42291143916,
+success 2026-11-06 20:51Z). The owner ran Migration (the auto-mode classifier
+refused the session's own invoke): head `b9f4c7e2d610`, recorded on #351;
+`/api/health` and `/api/events/games/recent` answered 200.
+**FRONTEND-037 prerequisite:** Director branch
+`director/bundle-fold-before-frontend037` (worktree `fanwire-f037-fold`) folds
+every merged unit's bundle file into `BASE` (re-measured at `2e29dac`;
+FRONTEND-031 and EVENTS-013 claimed outputs 037 changes) and amends the tab
+criterion: a `?line=` address starts on that line's team. It must merge
+before the unit PR. Test agent works in `fanwire-FRONTEND-037-test`.
+- FRONTEND-037 choices: short names from `teamShortName` in
+  `features/games/format.ts` (last word; "Trail Blazers" kept whole); season
+  carried as `/games/<id>?season=` (team cards always send the level's season,
+  Recent Games the game's); team tabs reuse `SegmentedTabs` ("Team box
+  scores"); cumulative chart is wins above / losses below a baseline with a
+  `<details>` table equivalent; two-column cards via a container query.
 - Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
 - Checkpoint `c3c98b4` reconciled here; original worktree untouched.
 - `EVENTS-013` is lazy, after SearchRail in `routes/HomeView.tsx`; bundle measurements: #351.
@@ -49,9 +57,9 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-EVENTS-013 #351 awaits CI and human merge/deploy. FRONTEND-037 has not started.
-After deployment, record returned migration head and production health/endpoint
-checks on #351. Finish follows both remaining units' merges and deployments.
+EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). FRONTEND-037 is
+in its test stage; its prerequisite Director PR (bundle fold + `?line=`
+amendment) must merge first. Then the unit's PR, its deploy, and Finish.
 
 ## Order and gates
 
