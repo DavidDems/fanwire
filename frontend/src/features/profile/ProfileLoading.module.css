@@ -1,0 +1,63 @@
+/*
+ * The profile's loading state (FRONTEND-033). Static, like the shared
+ * Skeleton (accessibility.md A8): nothing here animates in either motion
+ * setting. Laid out as Profile.module.css's page and header card, with the
+ * same tokens, so the profile revealed in its place moves as little as
+ * possible; keep the two in step.
+ */
+
+/* Profile.module.css .page: the header card, then what follows it. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Profile.module.css .header: the avatar beside the name and the counts. */
+.header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-4);
+}
+
+/* Avatar.module.css .lg: the 4 rem circle. */
+.avatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-muted);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/*
+ * The h1's line box (base.css: the xl size at the tight line height), with
+ * the Skeleton's 1 em bar centred in it; about as wide as a username.
+ */
+.name {
+  display: flex;
+  align-items: center;
+  width: min(9em, 100%);
+  height: calc(1em * var(--line-height-tight));
+  font-size: var(--font-size-xl);
+}
+
+/* The counts row (Profile.module.css .counts): small type, body line box. */
+.counts {
+  display: flex;
+  align-items: center;
+  width: min(12em, 100%);
+  height: calc(1em * var(--line-height-body));
+  font-size: var(--font-size-sm);
+}
+
+.name > *,
+.counts > * {
+  flex: 1;
+}

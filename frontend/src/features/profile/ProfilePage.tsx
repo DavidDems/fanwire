@@ -2,9 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 
 import { useAccount } from "../../auth/account";
+import { Button } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
-import { StatusLine } from "../../components/ui/StatusLine";
 import { OwnProfile } from "./OwnProfile";
+import styles from "./Profile.module.css";
+import { ProfileLoading } from "./ProfileLoading";
 import { PublicProfile } from "./PublicProfile";
 import {
   FOLLOWING_QUERY_KEY,
@@ -83,13 +85,27 @@ export function ProfilePage() {
     viewed.isPending ||
     (readsFollowSet && followSet.isPending)
   ) {
-    return <StatusLine>Loading this profile…</StatusLine>;
+    // The same state the route's Suspense shows while this page's chunk
+    // loads (`FRONTEND-033`), so the two waits read as one.
+    return <ProfileLoading />;
   }
   if (viewed.isError || viewed.data === undefined) {
+    // HistoryPage's failure treatment: the alert, then a Retry that asks again.
     return (
-      <InlineAlert>
-        We could not load this profile just now. Please try again.
-      </InlineAlert>
+      <section className={styles.failure}>
+        <InlineAlert>
+          We could not load this profile just now. Please try again.
+        </InlineAlert>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          onClick={() => void viewed.refetch()}
+          disabled={viewed.isFetching}
+        >
+          Retry
+        </Button>
+      </section>
     );
   }
   return (

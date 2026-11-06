@@ -274,23 +274,19 @@ workflows using it act *as that person* — and would inherit that person's
 ruleset bypass. The PR-creation step is deliberately pinned to `github.token`
 so agent PRs stay bot-authored; keep it that way, and do not widen the PAT.
 
-### 5.2 `paths-ignore` can strand a PR — still open
+### 5.2 `paths-ignore` can strand a PR — closed 2026-11-05
 
-`test-agent.yml`'s `pull_request` trigger ignores `.ai/tasks/**` and
-`.ai/telemetry/**`, so state commits do not re-run CI. Consequence: **a PR whose
-diff is *only* those paths never triggers the workflow, so `gate` never reports
-and the PR cannot merge.** Agent PRs normally contain code too, so this is latent
-rather than active — but if you ever see a PR blocked with no checks at all, this
-is one of the two causes (the other is §1a).
+**Was:** `test-agent.yml`'s `pull_request` trigger ignored state and telemetry
+bookkeeping paths. A PR containing only `.ai/tasks/<ID>/state.json` and/or
+`.ai/telemetry/**` therefore never started the workflow, leaving required `gate`
+unreported. The human observed this on #328; a successful `workflow_dispatch`
+run did not satisfy the PR's required check.
 
-Note this is distinct from the **path filtering** added 2026-09-23, which is a
-`changes` job deciding which suites to *run* within a triggered workflow. That
-one is safe by construction: filtering applies to `pull_request` only, and a
-`workflow_dispatch` run — how the orchestrator gets its authoritative verdict —
-always runs every job. A skipped suite reports success, and a red baseline
-reporting success would tell the state machine that tests pin something when they
-pinned nothing. Trigger-level `paths-ignore` is the older, coarser mechanism and
-is the one that can still strand a PR.
+**Now:** the trigger has no path filter and starts for every pull request. The
+`changes` job still selects the relevant suites inside the run, and the
+unconditional aggregate `gate` reports even when suites are skipped. This keeps
+path-based runtime savings without allowing a bookkeeping-only diff to suppress
+the required check. `.ai/tests/test_workflows.py` pins this trigger-level rule.
 
 ### 5.3 A skipped required check — closed 2026-09-23 (#43)
 
@@ -668,9 +664,9 @@ tells you how much weight that reviewer's "no finding" deserves elsewhere.
   is not obvious from the code.
 - The orchestrator's `if:` admits **every** `workflow_dispatch`, including one
   naming a task with no spec. What that produces is untested.
-- §5.2 plus a bookkeeping-only PR: a diff of only state and telemetry gets no
-  checks, and a required check that never reports is indistinguishable from one
-  pending forever.
+- §5.2 plus a bookkeeping-only PR: confirmed on #328. Trigger-level path
+  filtering suppressed the required `gate`; resolved by running `test-agent`
+  for every PR and retaining suite filtering inside the workflow.
 
 </details>
 

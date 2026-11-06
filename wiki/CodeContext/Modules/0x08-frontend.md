@@ -38,7 +38,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) `Menu` (`FRONTEND-012`: a button and a `popover` list), and `SearchInput`, `SegmentedTabs` and `FloatingButton` (`UI-010`, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) `Menu` (`FRONTEND-012`: a button and a `popover` list), and `SearchInput`, `SegmentedTabs` and `FloatingButton` (`UI-010`, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), `EllipsisIcon` (`FRONTEND-012`), `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), and `LinkIcon` and `InviteButton` (`FRONTEND-032`, below) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
@@ -243,6 +243,21 @@ profile fields; account lifecycle controls live on the separate, guarded
   belongs to `FRONTEND-004`, which has not landed; a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would
   need deleting rather than merging. `profile_picture_media_id` is never sent.
+- **A profile that is not ready shows `ProfileLoading` (`FRONTEND-033`).**
+  React Router navigates in a transition, and React keeps an already-revealed
+  Suspense boundary's content during one, so behind `BackgroundRoutes`' shared
+  boundary the previous page stayed on screen, with no feedback, until the
+  profile chunk arrived. The profile route therefore has a `<Suspense>` of its
+  own in `routes.tsx`: mounted fresh by the navigation, it shows its fallback
+  at once, on a direct load too. `ProfilePage` renders the same component while
+  its data is pending, so the chunk wait and the data wait read as one, and a
+  new `:userId` never shows the previous profile. `ProfileLoading` is a
+  `role="status"` "Loading this profile…" line under an `aria-hidden` header
+  card skeleton (shared `Skeleton` bars, laid out as `ProfileSummary`, so the
+  card revealed in its place moves nothing); no heading, no focus movement, no
+  animation. It lives in its own module because the route table imports it
+  statically and `ProfilePage` must stay lazy. A failed read shows the
+  existing alert with HistoryPage's secondary `Retry`, which refetches.
 - **`AppLayout` links "Your profile" by id**, because the route has no fixed
   address for "me". It renders only for a visitor who has a profile, and reads
   it through the same shared query gated on the same session the guards use —
@@ -603,6 +618,15 @@ over the page you are on.
   post", and shown only to an active account. `main` is padded at the bottom
   so the last card's controls scroll clear of it: 8.5rem on phones and 5rem
   from 40em (`floating-clearance.test.ts`).
+- **The Invite button** (`FRONTEND-032`, `components/ui/InviteButton.tsx`)
+  is rendered immediately before the +, outside `main`, under the same
+  gate, so Tab reaches Invite then compose and the open dialog inerts both.
+  It is fixed on the +'s baseline, `3.5rem` plus `--space-3` further left,
+  a Button secondary pill as tall as the +. It copies
+  `window.location.origin + "/"`, the guest feed, with no query and no
+  request; it reads "Copied" for 2 s and a hidden polite region says "Link
+  copied". With no clipboard, or a refusal, a read-only field above it
+  holds the address, focused and selected, until the next press or Escape.
 - **A published post closes the modal**, the same way Close does, and
   invalidates the `["feed"]` prefix. Compose spells the key and doesn't
   import the feed feature. A failed post keeps the draft and the modal.
@@ -1120,7 +1144,8 @@ is recorded so the second copy is a known state rather than a discovery.
   for the game and player details, which resolves to the same chunks. The
   feed, search, the thread modal, `DetailModal` and the shell stay eager.
   `BackgroundRoutes` wraps the page alone in one
-  `<Suspense fallback={<StatusLine>…}>`. `DetailModal` has its own around
+  `<Suspense fallback={<StatusLine>…}>`; the profile route adds its own
+  (`FRONTEND-033`, under Profile and follow). `DetailModal` has its own around
   its `<Outlet />`, so a lazy detail never unmounts the dialog. The main
   chunk was 454 kB after the split (it had been 513 kB), so the build no
   longer warns. `lazy-routes.test.ts` pins this through the static import
