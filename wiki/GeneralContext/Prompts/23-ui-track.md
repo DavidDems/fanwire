@@ -25,9 +25,10 @@ type: prompt
   only then invoke Migration for `e6d7328e8881` and record it on #337.
 - 2026-11-06: the human merged both and asked this session to finish the track
   without waiting, except `EVENTS-013` and `FRONTEND-037` (another agent's).
-  `FRONTEND-036` (fw-FRONTEND-036) and `FRONTEND-034` (fw-FRONTEND-034)
-  hand-started from origin/main b7f1029; test subagents running. Dev servers
-  stopped at the human's request (other agents share the host).
+- `FRONTEND-034`: PR #342 open, no migration; container 3408/3408; all browser
+  rows measured. Dev DB seeded posts 27–32 (replies, a deleted parent, likes).
+- `FRONTEND-036`: tests committed; #340 (spec amendment: `thread-route.test.tsx`)
+  must merge before 036's PR; implementation subagent running.
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
@@ -101,6 +102,19 @@ type: prompt
 - `POSTS-009`: EVENTS-012's head-pin migration test (`get_heads() == [its
   revision]`) rewritten in its own commit to "one head, that revision on its
   line". Why: any later migration broke it; mutation-checked with two heads.
+- `FRONTEND-034`: parent box = `QuotedOriginal` with a `parent` flag, `Avatar
+  sm` (2rem, same as the reply's) from the parent's keys, quote spacing kept.
+  Why: `Avatar` has only sm/lg and takes no class; the brief says reuse.
+- `FRONTEND-034`: the parent clamps to four lines, the quote stays at three.
+  Why: the parent is the reply's context.
+- `FRONTEND-034`: the thread line is `.threaded::before`, a 2px `--color-border`
+  border centred in the card's left padding, from under the avatar to the
+  middle of the Show this thread row. Why: a wrapper excludes a repost's
+  "reposted" line; content isn't indented, so a line at the avatar's centre
+  would cross the text; a border survives forced colours.
+- `FRONTEND-034`: Show this thread at `--font-size-sm`, weight 600, link colour,
+  underline on hover, 1.5rem min-height, only as wide as its words. Why: like
+  the time link; WCAG 2.5.8; the rest of the row still opens the reply.
 - Follow-up (test flake, 2026-11-05): `ComposeRoute.test.tsx` "renders the
   real composer…" fails in the local frontend container on `main` itself
   (c4f5a2a) while CI passes it: `getByRole('textbox')` right after
@@ -114,6 +128,7 @@ type: prompt
   `features/account/account-menu.test.tsx` and `routes/compose-modal.test.tsx`;
   `frontend/src/features/**` leaves `forbidden_paths` (forbidden wins). Why: both
   tests pin the old nav and break by design; must merge before 035's PR.
+- #340 (2026-11-06): `FRONTEND-036` `allowed_paths` gains\n  `routes/thread-route.test.tsx`, whose typed-text test used the removed home\n  bar. Must merge before 036's PR.
 
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
