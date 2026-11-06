@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
-import scoreStyles from "../../components/ui/GameScore.module.css";
 import skeletonStyles from "../../components/ui/Skeleton.module.css";
 import iconStyles from "../../components/ui/TeamIcon.module.css";
 import { recentGamesAre, testRecentGame } from "../../test/games";
@@ -11,9 +10,20 @@ import { createTestQueryClient, renderWithProviders } from "../../test/render";
 import { server } from "../../test/server";
 import { RecentGames } from "./RecentGames";
 
+/**
+ * FRONTEND-037 changed the first test: each card was the two abbreviations
+ * and the shared `GameScore`, linked to `/games/<id>`. It is now the compact
+ * card: the two short names (no city), each team's overall record in
+ * parentheses ("(12-4)"), both scores, no home or away record, and one link
+ * to `/games/<id>?season=<the game's season>`. Muting the losing side is a
+ * browser check.
+ */
 describe("Recent games", () => {
-  it("preserves API order, shares the icons and score, and names each game link", async () => {
-    const items = [testRecentGame({ id: 99 }), testRecentGame({ id: 2 })];
+  it("preserves API order, shows short names, records and scores, and names each game link", async () => {
+    const items = [
+      testRecentGame({ id: 99 }),
+      testRecentGame({ id: 2, season: "2022-23" }),
+    ];
     server.use(recentGamesAre(items));
     renderWithProviders(<RecentGames />);
     expect(
@@ -23,14 +33,23 @@ describe("Recent games", () => {
     expect(rows).toHaveLength(2);
     rows.forEach((row, index) => {
       const link = within(row).getByRole("link");
-      expect(link).toHaveAttribute("href", `/games/${items[index].id}`);
+      const href = new URL(link.getAttribute("href") ?? "", "http://x.test");
+      expect(href.pathname).toBe(`/games/${items[index].id}`);
+      expect(href.searchParams.get("season")).toBe(items[index].season);
       expect(link).toHaveAccessibleName(
-        /Toronto Raptors.*117.*Phoenix Suns.*109|Phoenix Suns.*109.*Toronto Raptors.*117/,
+        /Raptors.*117.*Suns.*109|Suns.*109.*Raptors.*117/,
       );
       expect(row.querySelectorAll(`.${iconStyles.icon}`)).toHaveLength(2);
-      expect(row.querySelector(`.${scoreStyles.score}`)).not.toBeNull();
-      expect(row).toHaveTextContent("TOR");
-      expect(row).toHaveTextContent("PHX");
+      const text = row.textContent ?? "";
+      expect(text).toContain("Raptors");
+      expect(text).toContain("Suns");
+      expect(text).not.toMatch(/\bToronto\b|\bPhoenix\b/);
+      expect(text).toMatch(/\(12-4\)/);
+      expect(text).toMatch(/\(8-8\)/);
+      expect(text).toMatch(/(?<!\d)117(?!\d)/);
+      expect(text).toMatch(/(?<!\d)109(?!\d)/);
+      expect(text).not.toMatch(/\bhome\b|\baway\b/i);
+      expect(text).not.toMatch(/15 Jan|Jan(uary)? 15/);
       expect(within(row).queryAllByRole("link")).toHaveLength(1);
     });
   });

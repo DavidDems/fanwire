@@ -9,6 +9,7 @@
  * real interface (see `components/stats-nav/team-icons.test.tsx`).
  */
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderAppAt } from "../../test/app-route";
@@ -95,6 +96,12 @@ describe("each box score's heading (BoxScore)", () => {
     ["home", TEST_HOME_TEAM],
   ])("the %s team's heading has its icon and its name", async (_side, team) => {
     await openGame();
+    // FRONTEND-037: each box score is behind its team's tab ("Suns 109").
+    const tab = screen.getByRole("tab", {
+      name: new RegExp(`^${team.name.split(" ").slice(-1)[0]} \\d+$`),
+    });
+    if (tab.getAttribute("aria-selected") !== "true")
+      await userEvent.setup().click(tab);
     const heading = screen.getByRole("heading", { level: 2, name: team.name });
     expect(iconsIn(heading)).toEqual([team.abbreviation]);
     expect(heading.querySelector("[data-team-icon]")).toHaveAttribute(
@@ -106,7 +113,8 @@ describe("each box score's heading (BoxScore)", () => {
   it("puts no icon in any table: the line score and box score rows stay text", async () => {
     await openGame();
     const tables = [...document.querySelectorAll("table")];
-    expect(tables.length).toBeGreaterThanOrEqual(3);
+    // FRONTEND-037 changed this from 3: one box score is shown at a time.
+    expect(tables.length).toBeGreaterThanOrEqual(2);
     for (const table of tables) expect(iconsIn(table)).toEqual([]);
     // The line score still shows each team's abbreviation as its row header.
     const lineScore = tables.find((table) =>

@@ -194,7 +194,8 @@ describe("the team search bar (criterion 5)", () => {
     const second = statsTeams().find((team) =>
       options[1].textContent?.includes(team.name),
     );
-    if (second === undefined) throw new Error("the second option names no team");
+    if (second === undefined)
+      throw new Error("the second option names no team");
 
     await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
@@ -283,20 +284,25 @@ describe("the team view (criteria 5, 6)", () => {
     await chooseBoston();
     const main = screen.getByRole("main");
     const season = testTeamSeason();
+    // FRONTEND-037 changed this test: a game's link carries the season shown
+    // (`/games/<id>?season=<season>`), and the card names the opponent by its
+    // short name ("Mavericks"), so paths are compared without the query.
+    const gamePath = (link: HTMLElement): string =>
+      new URL(link.getAttribute("href") ?? "", "http://x.test").pathname;
 
     await waitFor(() =>
       expect(
         within(main)
           .queryAllByRole("link")
-          .some((link) => link.getAttribute("href") === "/games/9101"),
+          .some((link) => gamePath(link) === "/games/9101"),
       ).toBe(true),
     );
     const hrefs = [
       ...new Set(
         within(main)
           .getAllByRole("link")
-          .map((link) => link.getAttribute("href") ?? "")
-          .filter((href) => /^\/games\/\d+$/.test(href)),
+          .map(gamePath)
+          .filter((path) => /^\/games\/\d+$/.test(path)),
       ),
     ];
     expect(hrefs).toEqual(season.games.map((game) => `/games/${game.game_id}`));
@@ -304,14 +310,11 @@ describe("the team view (criteria 5, 6)", () => {
     for (const game of season.games) {
       const link = within(main)
         .getAllByRole("link")
-        .find((l) => l.getAttribute("href") === `/games/${game.game_id}`);
+        .find((l) => gamePath(l) === `/games/${game.game_id}`);
       const row = link?.closest<HTMLElement>("tr, li");
       if (row == null) throw new Error(`game ${game.game_id} is in no row`);
       const text = rowText(row);
-      expect(
-        text.includes(game.opponent.name) ||
-          new RegExp(`\\b${game.opponent.abbreviation}\\b`).test(text),
-      ).toBe(true);
+      expect(text).toContain(game.opponent.name.split(" ").slice(-1)[0]);
       expect(text).toMatch(
         game.won ? /\bW\b|\bwon\b|\bwin\b/i : /\bL\b|\blost\b|\bloss\b/i,
       );
@@ -355,7 +358,9 @@ describe("the team view (criteria 5, 6)", () => {
     await user.clear(bar());
 
     await waitFor(() => expect(search(router).has("team")).toBe(false));
-    expect(await screen.findByRole("region", { name: "Standings" })).toBeVisible();
+    expect(
+      await screen.findByRole("region", { name: "Standings" }),
+    ).toBeVisible();
     // FRONTEND-019 changed this line, which expected the Leaders region: the
     // leaders moved to Records > Seasonal, and the league view is now the
     // champion and the standings.
@@ -370,7 +375,13 @@ describe("the team view (criteria 5, 6)", () => {
       expect(
         within(main)
           .queryAllByRole("link")
-          .some((link) => link.getAttribute("href") === "/games/9101"),
+          .some(
+            // FRONTEND-037 correction: the card's link carries ?season=, so
+            // compare the path, as the team-view test above does.
+            (link) =>
+              new URL(link.getAttribute("href") ?? "", "http://x.test")
+                .pathname === "/games/9101",
+          ),
       ).toBe(true),
     );
 

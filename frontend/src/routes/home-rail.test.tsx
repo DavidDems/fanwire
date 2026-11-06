@@ -35,7 +35,13 @@
  * stickiness, width and the three-line clamp are `shell-css.test.ts`'s and the
  * browser rows'.
  */
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -189,8 +195,10 @@ describe("recent games in the mounted home rail", () => {
         name: "Recent games",
       }),
     ).toBeInTheDocument();
+    // FRONTEND-037 changed both names: the compact card uses short names
+    // ("Raptors", "Suns"), so the city is no longer required.
     await within(rail()).findByRole("link", {
-      name: /Toronto Raptors.*117|Phoenix Suns.*109/,
+      name: /Raptors.*117|Suns.*109/,
     });
     expect(calls).toBe(1);
     await act(async () => app.router.navigate("/?q=raptors"));
@@ -208,7 +216,7 @@ describe("recent games in the mounted home rail", () => {
     ]);
     const heading = await feedHeading();
     const link = await within(rail()).findByRole("link", {
-      name: /Toronto Raptors.*117|Phoenix Suns.*109/,
+      name: /Raptors.*117|Suns.*109/,
     });
     const user = userEvent.setup();
     link.focus();

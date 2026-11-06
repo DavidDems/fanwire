@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "../../api/schema";
 import {
   BARNES_LINE_ID,
+  COMPLETED_GAME_NAME,
+  UNPLAYED_GAME_NAME,
   attachBarnesLine,
   attachGameResult,
   attachLebronCareer,
@@ -234,7 +236,7 @@ describe("the picker modal", () => {
   it("an unplayed Final score is plain text with no disabled or selectable radio", async () => {
     const { user } = renderComposer();
     await openPicker(user);
-    const dialog = await openGame(user, /Jan.*18|18.*Jan/);
+    const dialog = await openGame(user, UNPLAYED_GAME_NAME);
     expect(within(dialog).getByText(/Final score/)).toBeInTheDocument();
     expect(
       within(dialog).queryByRole("radio", { name: /Final score/ }),
@@ -296,7 +298,7 @@ describe("the picker modal", () => {
     await user.click(within(dialog).getByRole("button", { name: "Back" }));
     expect(within(dialog).getByText(/^Selected:/)).toHaveTextContent(/Barnes/);
     await user.click(
-      within(dialog).getByRole("button", { name: /Jan.*15|15.*Jan/ }),
+      within(dialog).getByRole("button", { name: COMPLETED_GAME_NAME }),
     );
     expect(within(dialog).getByRole("radio", { name: /Barnes/ })).toBeChecked();
     await user.click(

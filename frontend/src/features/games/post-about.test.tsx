@@ -97,6 +97,19 @@ async function openGame(game: GameDetailOut, as: Visitor) {
   return { router: rendered.router, user: userEvent.setup() };
 }
 
+/**
+ * FRONTEND-037: each team's box score is behind its tab in the "Team box
+ * scores" tablist, named "<short name> <score>"; select it first.
+ */
+async function showTeam(team: TeamRefOut): Promise<void> {
+  const short = team.name.split(" ").slice(-1)[0];
+  const tab = screen.getByRole("tab", {
+    name: new RegExp(`^${escapeRegExp(short)} `),
+  });
+  if (tab.getAttribute("aria-selected") !== "true")
+    await userEvent.setup().click(tab);
+}
+
 function boxScoreFor(team: TeamRefOut): HTMLTableElement {
   const table = screen
     .getAllByRole("table")
@@ -186,6 +199,7 @@ describe("each played box-score row: a 'Post about …' link, signed in", () => 
     "%s: each played row links to its line, named for the player; a DNP row has none",
     async (_name, team, boxScore) => {
       await openGame(GAME, "member");
+      await showTeam(team);
       const table = boxScoreFor(team);
 
       for (const player of boxScore.players) {
@@ -213,6 +227,7 @@ describe("each played box-score row: a 'Post about …' link, signed in", () => 
     "%s: the did-not-play list and the totals row have none",
     async (_name, team, boxScore) => {
       await openGame(GAME, "member");
+      await showTeam(team);
 
       expect(boxScore.did_not_play.length).toBeGreaterThan(0);
       const dnp = screen.getByRole("list", {
@@ -226,12 +241,20 @@ describe("each played box-score row: a 'Post about …' link, signed in", () => 
     },
   );
 
+  // FRONTEND-037 changed this: both box scores were on one screen; each is
+  // now behind its team's tab, so the links are counted tab by tab.
   it("offers one line link per played row and one game link, and nothing else", async () => {
     await openGame(GAME, "member");
 
     expect(PLAYED_COUNT).toBe(7);
-    expect(composeLinks(main())).toHaveLength(PLAYED_COUNT + 1);
-    expect(postAboutLinks(main())).toHaveLength(PLAYED_COUNT + 1);
+    const lines = new Set<string>();
+    for (const [, team] of SIDES) {
+      await showTeam(team);
+      for (const link of composeLinks(main()))
+        lines.add(link.getAttribute("href") ?? "");
+      expect(composeLinks(main()).length).toBe(postAboutLinks(main()).length);
+    }
+    expect(lines.size).toBe(PLAYED_COUNT + 1);
   });
 });
 
