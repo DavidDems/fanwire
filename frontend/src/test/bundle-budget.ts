@@ -52,12 +52,16 @@ export interface UnitBudget {
  * its stylesheet, and every lazy output → gzip bytes. Measure with the test's
  * build, not `npm run build`: under Vitest the build inlines `test.env`'s
  * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
+ * USERS-006's AccountSettings JS/CSS alone were folded from origin/main
+ * 17f1803 using the same build environment; all other base values and unit
+ * allowances remain unchanged by that partial fold.
  */
 export const BASE = {
   entryJsGzip: 148_665,
   entryJsRaw: 468_154,
   entryCssGzip: 5_831,
   lazy: {
+    AccountSettings: 1_890,
     "AuthPage.module": 158,
     ComposePage: 3_883,
     ConfirmPage: 1_053,
@@ -85,6 +89,7 @@ export const BASE = {
     StatsPage: 400,
     StatsPicker: 2_206,
     VisuallyHidden: 139,
+    "css:AccountSettings.css": 403,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 411,
     "css:GamePage.css": 1_081,

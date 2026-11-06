@@ -12,8 +12,6 @@ export default {
     ProfilePage: 3_121,
     "css:ProfilePage.css": 813,
   },
-  added: {
-    AccountSettings: 12_000,
-    "css:AccountSettings.css": 3_000,
-  },
+  // AccountSettings JS/CSS alone were folded into BASE at measured sizes
+  // from origin/main 17f1803. Entry and ProfilePage allowances stay here.
 } satisfies UnitBudget;
