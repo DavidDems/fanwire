@@ -13,11 +13,9 @@ session deletes it as `Finish` says.
 - Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
   #333, `FRONTEND-035` #336. Open: `FRONTEND-034` #342, `FRONTEND-036` #343
   (merge spec amendment #340 first).
-- `POSTS-009` #337 is merged, but **deploy 42165903823 failed** at "Check the
-  live IAM matches the repo": live `FanwireRoleBoundary` v1 lacks
-  `cognito-idp:AdminDeleteUser`, added by #338 (Track D). After the human rolls
-  it out and re-runs the deploy, invoke `Migration` and record head
-  `e6d7328e8881` on #337.
+- `POSTS-009` #337: merged and deployed (deploy 42165903823, attempt 2, after
+  the `FanwireRoleBoundary` rollout). `Migration` returned head `e6d7328e8881`,
+  recorded on #337.
 - **For `EVENTS-013`:** the rail's slot is the comment after `SearchRail` in
   `routes/HomeView.tsx`. The entry has 4 B of gzip budget left after
   `FRONTEND-036`, so rail code belongs in a lazy chunk.

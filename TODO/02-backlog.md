@@ -148,10 +148,10 @@ picker's usability is a later spec.
 
 | Order | Task | What | State (2026-11-06) |
 |---|---|---|---|
-| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) | #337 merged; deploy waits on the `FanwireRoleBoundary` rollout, then `Migration` |
+| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) | #337 merged, deployed; migration `e6d7328e8881` run |
 | 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread | #342 open |
 | 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones | #336 merged, deployed |
-| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 open, after #340 |
+| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 open (#340 merged) |
 | 5 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) | another session, with `FRONTEND-037` |
 
 `FRONTEND-034` and `FRONTEND-035` share no file and can swap order;
