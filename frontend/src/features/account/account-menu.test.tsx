@@ -43,12 +43,15 @@ describe("the account menu", () => {
     const button = await screen.findByRole("button", { name: "Account menu" });
     // The default test profile is "raptorsfan" with no preset, so Avatar draws "r".
     expect(button.querySelector('[aria-hidden="true"]')?.textContent).toBe("r");
+    // FRONTEND-035: the menu sits at the header's end, and Sign out moved out
+    // of the header into the Primary nav, which follows the header.
     const banner = screen.getByRole("banner");
-    const nav = within(banner).getByRole("navigation", { name: "Primary" });
-    const signOut = within(banner).getByRole("button", { name: "Sign out" });
-    expect(
-      nav.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(banner).toContainElement(button);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(banner).not.toContainElement(nav);
+    expect(nav).not.toContainElement(button);
+    const signOut = within(nav).getByRole("button", { name: "Sign out" });
+    expect(within(banner).queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(
       button.compareDocumentPosition(signOut) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();

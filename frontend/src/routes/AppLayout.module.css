@@ -3,16 +3,21 @@
  * every rule outside a media query is the phone layout, and only min-width
  * queries widen it. Values come from tokens.css by name only.
  *
- * The header is target-min tall plus space-2 above and below. The bottom bar is
- * about 55 px tall plus the safe area, with every label on one line, which holds
- * down to 330 px of content; under that "Your profile" wraps and the bar is about
- * 70 px, which scroll-padding-bottom (space-8 + space-2, 72 px) still clears.
- * scroll-padding and main's bottom padding are sized from those so nothing
- * focused or last in the list is hidden under either bar (accessibility.md A5).
- * main's bottom padding also
- * reaches past the floating + (FRONTEND-020: FloatingButton, 3.5rem, its
- * bottom space-8 + space-4 above the viewport's on phones and space-5 from
- * 40em), so the last card's controls scroll fully clear of it.
+ * FRONTEND-035: the header holds the brand at its start and, at its end, the
+ * phone-only Search icon link and the Account menu or Sign in. The primary nav
+ * follows the header and shares `.body` with main: an icon bar fixed to the
+ * bottom on phones, a sticky icon-only left sidebar from 40em, labelled from
+ * 78em, the sidebar and main one centred group.
+ *
+ * The header is target-min tall plus space-2 above and below, which is also
+ * the sticky sidebar's top. The bottom bar is one row of target-min cells plus
+ * its 1 px edge and the safe area, about 45 px, which scroll-padding-bottom
+ * (space-8 + space-2, 72 px) clears. scroll-padding and main's bottom padding
+ * are sized from those so nothing focused or last in the list is hidden under
+ * either bar (accessibility.md A5). main's bottom padding also reaches past
+ * the floating + (FRONTEND-020: FloatingButton, 3.5rem, its bottom space-8 +
+ * space-4 above the viewport's on phones and space-5 from 40em), so the last
+ * card's controls scroll fully clear of it.
  */
 
 :global(html) {
@@ -59,8 +64,13 @@
   top: 0;
   z-index: var(--z-sticky);
   display: flex;
+  /*
+   * At 200% text a phone has no room for one row: the end group wraps under
+   * the brand, still at the right. At normal size everything fits one row.
+   */
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
   padding: var(--space-2) var(--space-4);
   background-color: var(--color-surface);
   box-shadow: var(--shadow-1);
@@ -72,7 +82,7 @@
   }
 }
 
-/* Brand: the cursive wordmark alone, at every width; 28 px tall, 18 px from 40em to 44em. */
+/* Brand: the cursive wordmark alone, 28 px tall at every width. */
 .brand {
   display: inline-flex;
   flex-shrink: 0;
@@ -92,9 +102,13 @@
   height: 1.75rem;
 }
 
-/* Sign in and Sign out sit at the right edge of the header. */
-.signIn,
-.signOut {
+/* The header's end: Search (phones), then the Account menu or Sign in. */
+.headerEnd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
   margin-left: auto;
 }
 
@@ -104,7 +118,23 @@
   padding: 0;
 }
 
-/* Primary nav, phone: a bar fixed to the bottom of the viewport. */
+/* The header's Search: an icon link, phones only (the nav's from 40em). */
+.headerSearch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.headerSearch:hover {
+  background-color: var(--color-surface-muted);
+}
+
+/* Primary nav, phone: an icon bar fixed to the bottom of the viewport. */
 .nav {
   position: fixed;
   bottom: 0;
@@ -125,27 +155,44 @@
   list-style: none;
 }
 
-/* One cell: the icon above a small label. */
+/* The nav's Search: the header has it on phones. */
+.sidebarOnly {
+  display: none;
+}
+
+/*
+ * One item, a link or the Sign out button: an icon cell, its label visually
+ * hidden. The button's native face (base.css) is undone so both look alike.
+ */
 .link {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-1);
+  gap: var(--space-3);
+  width: 100%;
   min-height: var(--target-min);
-  /* No inline padding: "Your profile" needs all of a 69 px cell for one line. */
-  padding: var(--space-2) 0;
+  margin: 0;
+  padding: var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-tight);
-  text-align: center;
   text-decoration: none;
-  transition: color var(--duration-fast) var(--ease-out);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 .link:hover {
   color: var(--color-text);
+}
+
+/* Inside the cell, so the ring is not cut off by the viewport's bottom edge. */
+.link:focus-visible {
+  outline-offset: -2px;
 }
 
 .icon {
@@ -183,54 +230,73 @@
   max-width: var(--content-max-wide);
 }
 
-/* From 40em (640 px): the nav sits inline in the header, labels only. */
+/* From 40em (640 px): the nav is a sticky icon-only sidebar beside main. */
 @media (min-width: 40em) {
   :global(html) {
     scroll-padding-bottom: 0;
   }
 
-  /* The nav joins the header: the wordmark shrinks so Sign out keeps its line. */
-  .wordmark img {
-    height: 1.125rem;
+  /* One row from 40em: the sticky sidebar's top is that row's height. */
+  .header {
+    flex-wrap: nowrap;
+  }
+
+  .headerSearch {
+    display: none;
+  }
+
+  /* The sidebar and main: one group, centred, space-5 apart. */
+  .body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-5);
   }
 
   .nav {
-    position: static;
-    padding-bottom: 0;
+    position: sticky;
+    top: calc(var(--target-min) + 2 * var(--space-2));
+    flex: none;
+    width: var(--sidebar-width-compact);
+    padding: var(--space-5) 0 0;
     background-color: transparent;
     border-top: 0;
   }
 
   .list {
     display: flex;
+    flex-direction: column;
     gap: var(--space-1);
   }
 
+  .sidebarOnly {
+    display: block;
+  }
+
   .link {
-    flex-direction: row;
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    min-width: var(--target-min);
+    border-radius: var(--radius-md);
   }
 
-  .icon {
-    display: none;
+  .link:hover {
+    background-color: var(--color-surface-muted);
   }
 
+  /* The bar moves to the inline-start edge. */
   .link[aria-current="page"]::after {
-    top: auto;
-    bottom: 0;
+    top: var(--space-2);
+    bottom: var(--space-2);
+    left: 0;
+    right: auto;
+    border-top: 0;
+    border-inline-start: 3px solid var(--color-action);
   }
 
   .main {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-inline: 0;
     padding-bottom: calc(var(--space-5) + 3.5rem + var(--space-4));
-  }
-}
-
-/* From 44em (704 px): room for the full-size wordmark again. */
-@media (min-width: 44em) {
-  .wordmark img {
-    height: 1.75rem;
   }
 }
 
@@ -241,5 +307,27 @@
 
   .main {
     padding-inline: var(--space-5);
+  }
+}
+
+/* From 78em (1248 px): the sidebar is wider and shows each label. */
+@media (min-width: 78em) {
+  .nav {
+    width: var(--sidebar-width);
+  }
+
+  .link {
+    justify-content: flex-start;
+    padding-inline: var(--space-3);
+  }
+
+  .link .label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    font-size: var(--font-size-md);
   }
 }
