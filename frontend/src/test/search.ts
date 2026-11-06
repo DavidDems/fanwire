@@ -224,7 +224,7 @@ export function gamesStub(
  * FRONTEND-036: a stand-in for `window.matchMedia`, which jsdom does not
  * implement, so a test can say how wide the viewport is and then resize it.
  *
- * The home page's right rail is mounted from 72em through
+ * The home page's right rail is mounted from 76em through
  * `routes/useMediaQuery`, and that hook must never stub `matchMedia` itself:
  * the stub lives here, installed per test and removed by `restore()`.
  *

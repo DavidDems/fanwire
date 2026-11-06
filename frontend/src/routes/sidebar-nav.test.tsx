@@ -489,13 +489,15 @@ describe("the tab order", () => {
 /** Viewport widths in em (16 px), one inside each band the spec names. */
 const PHONE = 22.5; // 360 px
 const FROM_40 = 40; // 640 px
-const TABLET = 64; // 1024 px
-const RAIL = 75; // 1200 px: 72em to 78em, the rail shown, the sidebar still icon only
-const FROM_78 = 78; // 1248 px
+const TABLET = 48; // 768 px: unchanged icon-only layout
+const BELOW_LABEL = 53.6875; // 859 px
+const FROM_LABEL = 53.75; // 860 px
+const RAIL = 76; // 1216 px: labelled sidebar, feed and rail fit
+const FROM_78 = 78; // 1248 px: desktop look
 const WIDE = 120; // 1920 px
 
-const SIDEBAR_COMPACT = [FROM_40, TABLET, RAIL];
-const SIDEBAR_LABELLED = [FROM_78, WIDE];
+const SIDEBAR_COMPACT = [FROM_40, TABLET, BELOW_LABEL];
+const SIDEBAR_LABELLED = [FROM_LABEL, RAIL, FROM_78, WIDE];
 const SIDEBAR = [...SIDEBAR_COMPACT, ...SIDEBAR_LABELLED];
 
 interface Rule {
@@ -1049,7 +1051,7 @@ describe("from 40em: the left sidebar", () => {
     }
   });
 
-  it("is var(--sidebar-width-compact) wide and icon only from 40em to 78em, the rail's band included", async () => {
+  it("is var(--sidebar-width-compact) wide and icon only from 40em to just below 53.75em", async () => {
     await show("/", "member");
 
     for (const width of SIDEBAR_COMPACT) {
@@ -1086,7 +1088,7 @@ describe("from 40em: the left sidebar", () => {
     }
   });
 
-  it("from 78em is var(--sidebar-width) wide, each item an icon then its visible label at --font-size-md, on one row", async () => {
+  it("from 53.75em onward is var(--sidebar-width) wide, each item an icon then its visible label at --font-size-md, on one row", async () => {
     await show("/", "member");
 
     for (const width of SIDEBAR_LABELLED) {

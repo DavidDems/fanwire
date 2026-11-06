@@ -259,23 +259,30 @@ describe("the content column (FRONTEND-030)", () => {
   });
 });
 
-/**
- * FRONTEND-035: the sidebar's widths and breakpoints, as source. What each
- * element gets at each width is resolved against the rendered shell in
- * `sidebar-nav.test.tsx`; this pins only what the module must say by name.
- */
+/** FRONTEND-039: the sidebar widths and breakpoints are pinned by name. */
 describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
-  const FROM_78EM = /^@media\b.*78em/i;
+  const FROM_LABEL = /^@media\b.*\(\s*min-width\s*:\s*53\.75em\s*\)/i;
+  const FROM_RAIL = /^@media\b.*\(\s*min-width\s*:\s*76em\s*\)/i;
 
-  it("has a 40em query and a 78em query", () => {
+  it("has a 40em query, labels from 53.75em, and widens the home rail at 76em", () => {
     const media = allBlocks(shellBlocks()).filter((block) =>
       /^@media\b/i.test(block.prelude),
     );
     expect(media.some(isFrom40em), "a (min-width: 40em) query").toBe(true);
     expect(
-      media.some((block) => FROM_78EM.test(block.prelude)),
-      "a 78em query",
+      media.some((block) => FROM_LABEL.test(block.prelude)),
+      "a (min-width: 53.75em) label query",
     ).toBe(true);
+    expect(
+      media.some((block) => FROM_RAIL.test(block.prelude)),
+      "a (min-width: 76em) rail query",
+    ).toBe(true);
+    expect(
+      media.some((block) =>
+        /\(\s*min-width\s*:\s*78em\s*\)/i.test(block.prelude),
+      ),
+      "the old 78em label breakpoint is gone",
+    ).toBe(false);
   });
 
   it("names the sidebar's widths by token, never as numbers", () => {
@@ -288,6 +295,38 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
     expect(
       values.filter((value) => /(?<![\d.])(4\.5|12)rem\b/.test(value)),
     ).toEqual([]);
+  });
+
+  it("keeps the labelled layout's group at least space-4 from the edge and main at least 36rem", () => {
+    const labelled = allBlocks(shellBlocks())
+      .filter((block) => isAtRule(block) && FROM_LABEL.test(block.prelude))
+      .flatMap((media) => allBlocks(media.children))
+      .filter((block) => !isAtRule(block));
+    const body = labelled.filter((block) => selectorSet(block).has(".body"));
+    const main = labelled.filter((block) => selectorSet(block).has(".main"));
+    expect(
+      body.some((block) =>
+        block.declarations.some(
+          ({ property, value }) =>
+            [
+              "padding",
+              "padding-inline",
+              "padding-left",
+              "margin-inline",
+            ].includes(property) && /var\(\s*--space-4\s*\)/.test(value),
+        ),
+      ),
+      "the labelled shell group has a space-4 edge allowance",
+    ).toBe(true);
+    expect(
+      main.some((block) =>
+        block.declarations.some(
+          ({ property, value }) =>
+            property === "min-width" && value === "36rem",
+        ),
+      ),
+      "main cannot shrink below 36rem while the sidebar is labelled",
+    ).toBe(true);
   });
 });
 
@@ -321,7 +360,7 @@ describe("every *.module.css under src/routes (criterion 9)", () => {
  * looks right (and that nothing overflows at 320 to 1920 px) is the browser
  * rows'.
  *
- * - `main` on `/` is widened, from 72em only, to the feed's `--content-max`
+ * - `main` on `/` is widened, from 76em only, to the feed's `--content-max`
  *   plus `--space-5` plus the rail's `--rail-width`, by a rule in the shell's
  *   module (where `main`'s other widths are). Which routes' `main` it reaches
  *   is `home-rail.test.tsx`'s, which renders them. `.main` itself keeps
@@ -334,7 +373,7 @@ describe("every *.module.css under src/routes (criterion 9)", () => {
  * - A post row's text is clamped to three lines.
  */
 describe("the home page's rail (FRONTEND-036)", () => {
-  const FROM_72EM = /^@media\b.*\(\s*min-width\s*:\s*72em\s*\)/i;
+  const FROM_76EM = /^@media\b.*\(\s*min-width\s*:\s*76em\s*\)/i;
   const RAIL_SOURCES = (): string[] => [
     "routes/HomeView.module.css",
     ...moduleCssFiles(join(SRC_DIR, "features", "search")).map((file) =>
@@ -354,16 +393,16 @@ describe("the home page's rail (FRONTEND-036)", () => {
     return (value ?? "").replace(/\s+/g, "");
   }
 
-  /** The shell's rules inside a (min-width: 72em) query, at any depth. */
-  function shellRulesFrom72em(): CssBlock[] {
+  /** The shell's rules inside a (min-width: 76em) query, at any depth. */
+  function shellRulesFrom76em(): CssBlock[] {
     return allBlocks(shellBlocks())
-      .filter((block) => isAtRule(block) && FROM_72EM.test(block.prelude))
+      .filter((block) => isAtRule(block) && FROM_76EM.test(block.prelude))
       .flatMap((media) => allBlocks(media.children))
       .filter((block) => !isAtRule(block));
   }
 
-  it("widens main from 72em to --content-max + --space-5 + --rail-width", () => {
-    const widened = shellRulesFrom72em().filter((rule) => {
+  it("widens main from 76em to --content-max + --space-5 + --rail-width", () => {
+    const widened = shellRulesFrom76em().filter((rule) => {
       const value = compact(
         declared(rule, "max-width") ?? declared(rule, "max-inline-size"),
       );
@@ -376,7 +415,7 @@ describe("the home page's rail (FRONTEND-036)", () => {
 
     expect(
       widened.map((rule) => rule.prelude),
-      "no rule under @media (min-width: 72em) in AppLayout.module.css widens main by the rail",
+      "no rule under @media (min-width: 76em) in AppLayout.module.css widens main by the rail",
     ).not.toEqual([]);
     for (const rule of widened) {
       expect(
@@ -392,11 +431,11 @@ describe("the home page's rail (FRONTEND-036)", () => {
       (block) => !isAtRule(block) && selectorSet(block).has(".main"),
     );
     expect(declared(main as CssBlock, "max-width")).toBe("var(--content-max)");
-    for (const rule of shellRulesFrom72em()) {
+    for (const rule of shellRulesFrom76em()) {
       if (!selectorSet(rule).has(".main")) continue;
       expect(
         declared(rule, "max-width"),
-        "@media (min-width: 72em) must not widen every route's .main",
+        "@media (min-width: 76em) must not widen every route's .main",
       ).toBeUndefined();
     }
   });
