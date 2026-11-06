@@ -1179,8 +1179,8 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
   `routes/HomeView.tsx` mounts an `<aside>` after `FeedPage`, through
   `routes/useMediaQuery('(min-width: 76.0625em)')`: below it the rail is not
   mounted, so a phone makes none of its requests and searches on `/search`
-  (`FRONTEND-035`'s Search links). The rail is `SearchRail`, then an empty
-  slot for `EVENTS-013`'s recent games; HomeView composes the features and
+  (`FRONTEND-035`'s Search links). The rail is `SearchRail`, then lazy `RecentGames` (`EVENTS-013`);
+  HomeView composes the features and
   none imports another. Mounting the rail, or a change of `q`, never remounts
   `FeedPage`. `AppLayout.module.css` widens `main` from 76.0625em by
   `.main:has(aside)` to `--content-max` + `--space-5` + `--rail-width`, so no
@@ -1210,6 +1210,18 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
   imports `PostNode` and `feed/api` only, enforced from disk by
   `search-isolation.test.ts`.
 - **Every empty result names what was searched.**
+
+### Recent games (`EVENTS-013`)
+
+`HomeView` lazy-loads `features/games/RecentGames` after SearchRail only while
+the home rail is mounted. Its h2 is "Recent games". One public
+`GET /events/games/recent` read uses `["events", "games", "recent"]`, fresh
+for five minutes, retaining API order. Each whole-row link contains both
+TeamIcons, abbreviations and the shared GameScore; its accessible name gives
+both teams and scores. Modal-flow state opens the game over home. Lazy and
+query loading reserve five Skeleton rows; errors use InlineAlert and Retry;
+an empty response removes the section. Season, ranks and overall records stay
+in the generated response for subsequent presentation without extra requests.
 
 ## Game page (`FRONTEND-008`)
 
