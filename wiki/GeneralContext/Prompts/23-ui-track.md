@@ -17,6 +17,15 @@ type: prompt
   Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
   ~57 ms throttled, 3 stale frames instead of 31.
 - 2026-11-06 ~03:10Z: host memory freed (vite previews and 8011 stopped, Docker restarted at the human's request). `POSTS-009` (worktree fw-POSTS-009) and `FRONTEND-035` (fw-FRONTEND-035) hand-started from origin/main 85ede3d; test subagents running.
+- Paused ~03:50Z for the human's PC restart. Both test commits are made
+  locally (not pushed), guard OK: `POSTS-009` test commit on agent/POSTS-009
+  (worktree fw-POSTS-009; 49 red / 175 green; tests ran against fw-ui-pg via the
+  scratchpad plugin `pgplug/devpg_plugin.py`), `FRONTEND-035` test commit on
+  agent/FRONTEND-035 (fw-FRONTEND-035; 125 red / 405 green on touched files).
+  Next on resume: `docker start fw-ui-pg`; delegate both implementations; for
+  FRONTEND-035, after #335 merges, rebase the unpushed branch onto main and add a
+  second test commit fixing `account-menu.test.tsx` and `compose-modal.test.tsx`
+  (they pin the nav in the banner and the name "Feed").
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
@@ -62,7 +71,11 @@ type: prompt
 - `FEED-001` follow-up (not built): an account whose only follows are
   deactivated still counts as following someone, so its feed stays thin.
 
-**Spec amendments:** none.
+**Spec amendments:**
+- #335 (2026-11-06): `FRONTEND-035` `allowed_paths` gains
+  `features/account/account-menu.test.tsx` and `routes/compose-modal.test.tsx`;
+  `frontend/src/features/**` leaves `forbidden_paths` (forbidden wins). Why: both
+  tests pin the old nav and break by design; must merge before 035's PR.
 
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
