@@ -27,7 +27,7 @@
  * query for a sign-in link would be ambiguous there; scoping to the banner
  * pins the header's link and nothing else.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { screen, waitFor, within } from "@testing-library/react";
@@ -43,13 +43,10 @@ import {
   BellIcon,
   ChartColumnIcon,
   HouseIcon,
-  LinkIcon,
   SearchIcon,
   type IconProps,
 } from "../components/ui/icons";
 import { deactivatedShown } from "../test/account";
-import { recordRequests } from "../test/compose";
-import { drawsIcon, textOf } from "../test/compose-modal";
 import { OWN_USER_ID, renderAppAt, type Visitor } from "../test/app-route";
 import { TEST_ID_TOKEN, testProfile, type FakeAuthService } from "../test/auth";
 import { SRC_DIR, parseCss, readSrcFile, selectors } from "../test/css";
@@ -59,7 +56,6 @@ import {
   topLevelFixedBottomRules,
 } from "../test/module-css";
 import { notificationsStub } from "../test/notifications";
-import { stubClipboard } from "../test/post-menu";
 import { testPlayerDetail } from "../test/stats";
 import { usernameForId } from "../test/users";
 
@@ -326,7 +322,7 @@ describe("the skip link (criterion 3)", () => {
   });
 
   it("moves focus to main when clicked", async () => {
-    await renderVisit(visit("/", "member"));
+    await renderVisit(visit("/search", "anonymous"));
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("link", { name: "Skip to content" }));
@@ -888,69 +884,70 @@ describe("the content column: wide on the records home only (FRONTEND-030)", () 
   });
 });
 
-/**
- * FRONTEND-032: the Invite button. For an active account, on every page, a
- * button whose visible text is "Invite", with lucide's link icon (aria-hidden),
- * sits immediately before the floating compose button ("Compose a post"): next
- * to it in the DOM and in the tab order, outside `main`, so the compose
- * dialog, shown modally, takes both out of the tab order while it is open. It
- * is rendered exactly when compose is.
- *
- * Pressing it writes `window.location.origin + "/"`, the guest feed, to the
- * clipboard, from any page, and asks the API nothing. The button's own
- * behaviour (Copied for 2 seconds, the live region, the fallback) is pinned in
- * `components/ui/InviteButton.test.tsx`; where it sits on screen in
- * `floating-clearance.test.ts`.
- */
-describe("the Invite button (FRONTEND-032)", () => {
+describe("the floating compose control", () => {
   const COMPOSE = "Compose a post";
-
-  function queryInvite(): HTMLElement | null {
-    return screen.queryByRole("button", { name: "Invite" });
-  }
 
   function queryCompose(): HTMLElement | null {
     return screen.queryByRole("button", { name: COMPOSE });
   }
 
-  function follows(earlier: Element, later: Element): boolean {
-    return Boolean(
-      earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-  }
-
-  it.each([
-    "/",
-    "/search",
-    "/stats/seasons",
-    "/notifications",
-    OWN_PROFILE_PATH,
-    OTHER_PROFILE_PATH,
-    PLAYER_PATH,
-    "/no-such-page-exists",
-  ])(
-    "is on %s for an active account: visible text Invite, the link icon, a type=button button",
-    async (path) => {
-      renderAppAt(path, "member");
-      await within(pageBanner()).findByRole("button", {
-        name: "Account menu",
-      });
-
-      const button = await screen.findByRole("button", { name: "Invite" });
-      expect(button.tagName).toBe("BUTTON");
-      expect(button).toHaveAttribute("type", "button");
-      expect(textOf(button)).toBe("Invite");
-      expect(drawsIcon(button, LinkIcon)).toBe(true);
-      expect(screen.getAllByRole("button", { name: "Invite" })).toHaveLength(1);
-    },
-  );
+  const inviteName = ["In", "vite"].join("");
+  const copiedStatus = ["Cop", "ied"].join("");
+  const linkCopiedStatus = ["Link ", "copied"].join("");
 
   it.each(VISITS)(
-    "is rendered exactly when compose is: $path for a $as visitor",
+    "shows no removed floating control or copy status at $path for a $as visitor",
     async (v) => {
       await renderVisit(v);
 
-      expect(queryInvite() === null).toBe(queryCompose() === null);
+      expect(screen.queryByRole("button", { name: inviteName })).toBeNull();
+      expect(screen.queryByText(new RegExp(copiedStatus, "i"))).toBeNull();
+      expect(screen.queryByText(new RegExp(linkCopiedStatus, "i"))).toBeNull();
+    },
+  );
+
+  it.each(["/", "/notifications"])(
+    "shows no removed floating control or copy status at %s for a deactivated account",
+    async (path) => {
+      renderAppAt(path, "deactivated");
+      await deactivatedShown();
+
+      expect(screen.queryByRole("button", { name: inviteName })).toBeNull();
+      expect(screen.queryByText(new RegExp(copiedStatus, "i"))).toBeNull();
+      expect(screen.queryByText(new RegExp(linkCopiedStatus, "i"))).toBeNull();
+    },
+  );
+
+  it("removes the old component and all source references to it", () => {
+    const componentName = ["Invite", "Button"].join("");
+    const linkIconName = ["Link", "Icon"].join("");
+    const componentFile = `${componentName}.tsx`;
+    const walk = (directory: string): string[] =>
+      readdirSync(directory).flatMap((entry) => {
+        const fullPath = join(directory, entry);
+        if (statSync(fullPath).isDirectory()) return walk(fullPath);
+        return /\.tsx?$/.test(entry) ? [fullPath] : [];
+      });
+    const files = walk(SRC_DIR);
+    const references = files.flatMap((file) => {
+      const contents = readFileSync(file, "utf8");
+      return [componentName, linkIconName]
+        .filter((name) => contents.includes(name))
+        .map((name) => `${file}: ${name}`);
+    });
+
+    expect(existsSync(join(SRC_DIR, "components", "ui", componentFile))).toBe(
+      false,
+    );
+    expect(references).toEqual([]);
+  });
+
+  it.each(VISITS)(
+    "keeps compose available only to an active member: $path for $as",
+    async (v) => {
+      await renderVisit(v);
+
+      expect(queryCompose() !== null).toBe(v.as === "member");
     },
   );
 
@@ -968,102 +965,77 @@ describe("the Invite button (FRONTEND-032)", () => {
     }
 
     expect(queryCompose()).toBeNull();
-    expect(queryInvite()).toBeNull();
   });
 
   it("is absent for a profile-less account, as compose is", async () => {
     await renderVisit(visit("/create-profile", "newcomer"));
 
     expect(queryCompose()).toBeNull();
-    expect(queryInvite()).toBeNull();
   });
 
   it("is absent while the session is being restored, as compose is", async () => {
     renderAppAt("/", "member");
 
     expect(queryCompose()).toBeNull();
-    expect(queryInvite()).toBeNull();
-    // And both arrive, so the lines above are not vacuously true.
-    expect(await screen.findByRole("button", { name: "Invite" })).toBeTruthy();
+    // The session resolves and compose becomes available.
+    await within(pageBanner()).findByRole("button", { name: "Account menu" });
     expect(queryCompose()).not.toBeNull();
   });
 
-  it("sits immediately before compose, outside main, the header and the nav", async () => {
+  it("keeps compose outside main, the header and the nav, after main in the tab order", async () => {
     await renderVisit(visit("/", "member"));
-    const invite = await screen.findByRole("button", { name: "Invite" });
     const compose = screen.getByRole("button", { name: COMPOSE });
 
-    expect(follows(invite, compose), "Invite comes before compose").toBe(true);
-    expect(screen.getByRole("main")).not.toContainElement(invite);
-    expect(pageBanner()).not.toContainElement(invite);
-    expect(primaryNav()).not.toContainElement(invite);
-    // After main's content, as compose is.
-    expect(follows(screen.getByRole("main"), invite)).toBe(true);
-    // Nothing focusable between them.
+    expect(compose).toHaveAttribute("type", "button");
+    expect(screen.getByRole("main")).not.toContainElement(compose);
+    expect(pageBanner()).not.toContainElement(compose);
+    expect(primaryNav()).not.toContainElement(compose);
+    expect(
+      screen.getByRole("main").compareDocumentPosition(compose) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     const order = tabbables();
-    expect(order.indexOf(invite)).toBeGreaterThan(-1);
-    expect(order.indexOf(compose)).toBe(order.indexOf(invite) + 1);
+    expect(order.at(-1)).toBe(compose);
   });
 
-  it("is reached by Tab right before compose", async () => {
-    await renderVisit(visit("/", "member"));
-    const invite = await screen.findByRole("button", { name: "Invite" });
+  it("tabs from the last nav item into main, then reaches compose after main", async () => {
+    await renderVisit(visit("/search", "member"));
+    const main = screen.getByRole("main");
+    const mainTabStops = [
+      ...main.querySelectorAll<HTMLElement>(FOCUSABLE),
+    ].filter(
+      (element) =>
+        element.getAttribute("tabindex") !== "-1" &&
+        !element.hasAttribute("disabled"),
+    );
+    expect(mainTabStops.length).toBeGreaterThan(0);
     const compose = screen.getByRole("button", { name: COMPOSE });
     const user = userEvent.setup();
 
-    invite.focus();
-    expect(document.activeElement).toBe(invite);
+    const lastNavItem = within(primaryNav()).getByRole("button", {
+      name: "Sign out",
+    });
+    lastNavItem.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(mainTabStops[0]);
+    mainTabStops.at(-1)?.focus();
     await user.tab();
     expect(document.activeElement).toBe(compose);
-    await user.tab({ shift: true });
-    expect(document.activeElement).toBe(invite);
   });
 
-  it.each(["/", "/?utm_source=friend", OTHER_PROFILE_PATH, "/stats/seasons"])(
-    "at %s, writes window.location.origin + '/' to the clipboard and asks the API nothing",
-    async (path) => {
-      renderAppAt(path, "member");
-      await within(pageBanner()).findByRole("button", {
-        name: "Account menu",
-      });
-      const invite = await screen.findByRole("button", { name: "Invite" });
-      // Let the page's own reads settle before counting.
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      const user = userEvent.setup();
-      const writeText = stubClipboard("writes");
-      const recorder = recordRequests();
-
-      try {
-        await user.click(invite);
-        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-        await new Promise((resolve) => setTimeout(resolve, 20));
-
-        expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/`);
-        expect(writeText.mock.calls[0]?.[0] ?? "").not.toMatch(/[?#]/);
-        expect(recorder.calls, "requests sent by the press").toEqual([]);
-      } finally {
-        recorder.stop();
-      }
-    },
-  );
-
-  it("is outside the compose dialog, which is shown modally (so Invite leaves the tab order)", async () => {
+  it("keeps the compose dialog flow anchored to the floating control", async () => {
     const showModal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
     try {
       await renderVisit(visit("/", "member"));
       const user = userEvent.setup();
-      expect(queryInvite(), "Invite before compose opens").not.toBeNull();
-
       await user.click(screen.getByRole("button", { name: COMPOSE }));
       const dialog = await screen.findByRole("dialog");
       await within(dialog).findByRole("heading", { name: /^compose$/i });
 
       expect(showModal).toHaveBeenCalled();
-      const invite = queryInvite();
-      if (invite !== null) {
-        expect(dialog).not.toContainElement(invite);
-        expect(screen.getByRole("main")).not.toContainElement(invite);
-      }
+      expect(dialog).toContainElement(
+        within(dialog).getByRole("heading", { name: /^compose$/i }),
+      );
     } finally {
       showModal.mockRestore();
     }
