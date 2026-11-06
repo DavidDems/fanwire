@@ -6,22 +6,22 @@ type: prompt
 
 ## Update (2026-11-06, Director session)
 
-**Continuation checkpoint reconciled with current main.** `FRONTEND-038` #346
-and `FRONTEND-039` #347 merged; both merge commits were verified as ancestors
-of `origin/main`. Deploy 42274743845 (#346) succeeded. Deploy 42276420158
-(#347) succeeded too. Run
-`FRONTEND-037` only after `EVENTS-013` merges. The human merges and approves
-deployments. EVENTS-013 started on `agent/EVENTS-013` (`e100ab1`); red tests committed at `a3a74ab`; implementation reviewed from isolated
-`fanwire-EVENTS-013-impl`. Parent focused backend tests: 29 passed.
+**EVENTS-013 PR [#351](https://github.com/DavidDems/fanwire/pull/351) is open.**
+Both prerequisite merge commits reached main; #346 deploy 42274743845 and
+#347 deploy 42276420158 succeeded. Unit validation passed: backend container
+2,165 tests; frontend direct/container 3,468; agent-system 1,656 plus selfcheck;
+24 Chromium rows. CI, human merge and approved deploy remain. Local migration
+cycle ends at `b9f4c7e2d610`; invoke production Migration only after deployment.
+FRONTEND-037 starts from refreshed origin/main after EVENTS-013 merges.
 
 - Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
 - Checkpoint `c3c98b4` reconciled here; original worktree untouched.
-- `EVENTS-013` goes after `SearchRail` in `routes/HomeView.tsx`; check current budgets and use a lazy chunk (the earlier measurement left 4 B gzip).
+- `EVENTS-013` is lazy, after SearchRail in `routes/HomeView.tsx`; bundle measurements: #351.
 - Prior browser evidence: #346 (360/768/1280, both themes, signed-in/guest).
 - `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
 - The combined container suite passed 3,476 tests. Default-parallel local runs exposed an existing intermittent ComposeRoute failure; bounded full suites with two workers and CI passed. Axe remains NOT DONE.
-- Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. No servers or containers started.
-- EVENTS-013 test correction `f4d6044`: await empty-response settlement in two rail assertions; dispatch native cancel in jsdom. All three assertions mutation-checked; real Escape still needs Chromium.
+- Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. All session servers/containers stopped; evidence in unit `.playwright-mcp/`.
+- EVENTS-013 test correction `ce6e244`: await empty-response settlement in two rail assertions; dispatch native cancel in jsdom. All three assertions mutation-checked; native Escape and focus return passed in Chromium.
 - EVENTS-013 choice: include season and overall home_record/away_record (wins/losses) from the ranking aggregation, enabling FRONTEND-037 without extra requests or an API change.
 - EVENTS-013 design: stacked icons/abbreviations then shared score, quiet dividers, 128px minimum rows matching lazy/request placeholders; rows grow with text. Chromium: 24 rows passed, axe NOT DONE. Migration cycle passed.
 
@@ -49,8 +49,9 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-Both frontend prerequisites merged and deployed. EVENTS-013 validation is in progress.
-FRONTEND-037 starts after its merge. Finish follows both deployments.
+EVENTS-013 #351 awaits CI and human merge/deploy. FRONTEND-037 has not started.
+After deployment, record returned migration head and production health/endpoint
+checks on #351. Finish follows both remaining units' merges and deployments.
 
 ## Order and gates
 
