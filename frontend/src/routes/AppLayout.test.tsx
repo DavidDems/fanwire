@@ -14,6 +14,14 @@
  * a second nav for desktop would be "visible" to every test. Hence exactly one
  * navigation named Primary on every route, for every visitor.
  *
+ * **FRONTEND-035** moved the nav out of the header: it is a sibling after the
+ * header and before `main` (the phone bar, then the left sidebar from 40em),
+ * "Feed" became "Home", the order is Home, Stats, Search, Notifications, and
+ * Sign out left the header to become the nav's last item. Search also has an
+ * icon link in the header for phones, so a whole-page query for a Search link
+ * is ambiguous: the nav's is always looked up `within()` the nav. The new
+ * shape and its CSS are pinned in `sidebar-nav.test.tsx`.
+ *
  * The Sign in link is asserted inside the banner only. `/confirm` and
  * `/forgot-password` carry their own "Back to sign in" link, so a whole-page
  * query for a sign-in link would be ambiguous there; scoping to the banner
@@ -180,12 +188,14 @@ async function renderVisit({ path, as, heading }: Visit): Promise<void> {
 }
 
 const NAV_ITEMS: [string, ComponentType<IconProps>][] = [
-  ["Feed", HouseIcon],
+  // FRONTEND-035: "Feed" is renamed "Home", and the order is Home, Stats,
+  // Search, Notifications (Sign out, a button, follows them in the list).
+  ["Home", HouseIcon],
   // FRONTEND-020: Compose left the nav for the floating + (compose-modal.test.tsx).
-  ["Notifications", BellIcon],
-  ["Search", SearchIcon],
-  // FRONTEND-009: Stats follows Search; account destinations live in the menu.
+  // FRONTEND-009: account destinations live in the menu.
   ["Stats", ChartColumnIcon],
+  ["Search", SearchIcon],
+  ["Notifications", BellIcon],
 ];
 
 function navNamesFor(): string[] {
@@ -259,9 +269,21 @@ describe("landmarks (criterion 2)", () => {
       expect(pageBanners()).toHaveLength(1);
       const navs = screen.getAllByRole("navigation", { name: "Primary" });
       expect(navs).toHaveLength(1);
-      // Inside the header in the DOM: the CSS moves it to the bottom bar on
-      // phones, but from 40em it sits in the header, so that is where it lives.
-      expect(pageBanner()).toContainElement(navs[0]);
+      // FRONTEND-035: no longer inside the header. After it and before main,
+      // in neither: the bottom bar on phones, the left sidebar from 40em.
+      const header = pageBanner();
+      expect(header).not.toContainElement(navs[0]);
+      expect(mains[0]).not.toContainElement(navs[0]);
+      expect(
+        header.compareDocumentPosition(navs[0]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        "the nav follows the header",
+      ).toBeTruthy();
+      expect(
+        navs[0].compareDocumentPosition(mains[0]) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        "main follows the nav",
+      ).toBeTruthy();
     },
   );
 });
@@ -394,9 +416,9 @@ describe("the brand link (criterion 4)", () => {
 
 describe("aria-current on the current route's nav link (criterion 5)", () => {
   const CASES: { path: string; as: Visitor; current: string | null }[] = [
-    { path: "/", as: "anonymous", current: "Feed" },
+    { path: "/", as: "anonymous", current: "Home" },
     { path: "/search", as: "anonymous", current: "Search" },
-    { path: "/", as: "member", current: "Feed" },
+    { path: "/", as: "member", current: "Home" },
     // FRONTEND-020: compose is a dialog over the feed, and no nav item is the
     // current page under an overlay (as under the thread modal).
     { path: "/compose", as: "member", current: null },
@@ -493,12 +515,14 @@ describe("Sign in in the header (criterion 7)", () => {
 });
 
 /**
- * FRONTEND-027: the header's Sign out. Who sees it, where it sits, and what
- * pressing it leaves behind.
+ * FRONTEND-027: Sign out. Who sees it, where it sits, and what pressing it
+ * leaves behind. FRONTEND-035 moved it from the header into the Primary nav,
+ * as the list's last item, under the same rule: a restored session whose
+ * account is not deactivated. The header has no Sign out any more.
  */
-describe("Sign out in the header", () => {
-  function headerSignOut(): HTMLElement | null {
-    return within(pageBanner()).queryByRole("button", { name: "Sign out" });
+describe("Sign out in the nav", () => {
+  function navSignOut(): HTMLElement | null {
+    return within(primaryNav()).queryByRole("button", { name: "Sign out" });
   }
 
   function pageSignOuts(): HTMLElement[] {
@@ -515,33 +539,36 @@ describe("Sign out in the header", () => {
     visit(OWN_PROFILE_PATH, "member"),
     visit("/create-profile", "newcomer"),
   ])(
-    "is the page's one Sign out, after the nav, at $path for a $as visitor",
+    "is the page's one Sign out, the nav list's last item, at $path for a $as visitor",
     async (v) => {
       await renderVisit(v);
 
-      const button = await within(pageBanner()).findByRole("button", {
+      const button = await within(primaryNav()).findByRole("button", {
         name: "Sign out",
       });
 
       expect(pageSignOuts()).toEqual([button]);
-      expect(primaryNav()).not.toContainElement(button);
-      expect(
-        primaryNav().compareDocumentPosition(button) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
+      expect(button.tagName).toBe("BUTTON");
+      expect(pageBanner()).not.toContainElement(button);
+      const items = within(primaryNav()).getAllByRole("listitem");
+      expect(items[items.length - 1]).toContainElement(button);
+      expect(button).not.toHaveAttribute("aria-current");
       expect(tabbables()[0]).toBe(
         screen.getByRole("link", { name: "Skip to content" }),
       );
     },
   );
 
-  it("carries the class of the shell's rule for it", async () => {
-    const { default: styles } = await importLate<Record<string, string>>(
-      "./AppLayout.module.css",
-    );
-    await renderVisit(visit("/", "member"));
+  it.each([
+    visit("/", "member"),
+    visit("/create-profile", "newcomer"),
+    visit("/", "anonymous"),
+  ])("is never in the header: $path for a $as visitor", async (v) => {
+    await renderVisit(v);
 
-    expect(headerSignOut()).toHaveClass(styles.signOut);
+    expect(
+      within(pageBanner()).queryByRole("button", { name: "Sign out" }),
+    ).toBeNull();
   });
 
   it("is offered when the profile could not be read: the visitor still has a way out", async () => {
@@ -551,7 +578,7 @@ describe("Sign out in the header", () => {
       ),
     ]);
 
-    const button = await within(pageBanner()).findByRole("button", {
+    const button = await within(primaryNav()).findByRole("button", {
       name: "Sign out",
     });
 
@@ -578,15 +605,15 @@ describe("Sign out in the header", () => {
 
     // And it does arrive, so the line above is not vacuously true.
     expect(
-      await within(pageBanner()).findByRole("button", { name: "Sign out" }),
+      await within(primaryNav()).findByRole("button", { name: "Sign out" }),
     ).toBeInTheDocument();
   });
 
-  it("is not offered to a deactivated account, whose banner has the one Sign out", async () => {
+  it("is not offered to a deactivated account, whose banner has the one Sign out (none in the nav)", async () => {
     renderAppAt("/", "deactivated");
     const banner = await deactivatedShown();
 
-    expect(headerSignOut()).toBeNull();
+    expect(navSignOut()).toBeNull();
     expect(pageSignOuts()).toEqual([
       within(banner).getByRole("button", { name: "Sign out" }),
     ]);
@@ -596,13 +623,13 @@ describe("Sign out in the header", () => {
     renderAppAt("/notifications", "deactivated");
     await deactivatedShown();
 
-    expect(headerSignOut()).toBeNull();
+    expect(navSignOut()).toBeNull();
   });
 
   it("signs out once on a public route: same address, Sign in offered, focus on main", async () => {
     const user = userEvent.setup();
     const app = renderAppAt("/search", "member");
-    const button = await within(pageBanner()).findByRole("button", {
+    const button = await within(primaryNav()).findByRole("button", {
       name: "Sign out",
     });
 
@@ -622,7 +649,7 @@ describe("Sign out in the header", () => {
   it("on a signed-in-only route lands on /sign-in through the guard, focus on main", async () => {
     const user = userEvent.setup();
     const app = renderAppAt("/notifications", "member");
-    const button = await within(pageBanner()).findByRole("button", {
+    const button = await within(primaryNav()).findByRole("button", {
       name: "Sign out",
     });
 
@@ -641,7 +668,7 @@ describe("Sign out in the header", () => {
       notifications.handler,
     ]);
     await screen.findByRole("heading", { name: /^notifications$/i });
-    const button = await within(pageBanner()).findByRole("button", {
+    const button = await within(primaryNav()).findByRole("button", {
       name: "Sign out",
     });
     await waitFor(() => expect(notifications.requests).toHaveLength(1));
@@ -690,7 +717,7 @@ describe("Sign out in the header", () => {
 
     const liked = await screen.findByRole("button", { name: "Like" });
     await waitFor(() => expect(liked).toHaveAttribute("aria-pressed", "true"));
-    const button = await within(pageBanner()).findByRole("button", {
+    const button = await within(primaryNav()).findByRole("button", {
       name: "Sign out",
     });
 
