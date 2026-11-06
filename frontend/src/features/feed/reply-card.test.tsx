@@ -1,7 +1,8 @@
 /**
  * FRONTEND-034 — a reply's card shows the post it answers.
  *
- * What jsdom can pin (`verification.md` §2b, §2c): the order the pieces sit
+ * What jsdom can pin (`verification.md` §2b and
+ * `verification.md` §2c): the order the pieces sit
  * in, which post each link and control acts on, the parent box's contents and
  * its click, the Show this thread link and the state it carries, the deleted
  * and hidden parents, where the box applies and where it does not, and the
