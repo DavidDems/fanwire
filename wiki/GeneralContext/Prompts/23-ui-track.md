@@ -19,9 +19,11 @@ type: prompt
 - 2026-11-06 ~03:10Z: host memory freed (vite previews and 8011 stopped, Docker restarted at the human's request). `POSTS-009` (worktree fw-POSTS-009) and `FRONTEND-035` (fw-FRONTEND-035) hand-started from origin/main 85ede3d; test subagents running.
 - `FRONTEND-035`: PR #336 open (needs #335, merged), no migration; 48/48
   overflow rows clean, 200 % text fixed by a wrap commit.
-- `POSTS-009`: tests committed (5444611 after rebase); implementation subagent
-  running in fw-POSTS-009. Dev stack: fw-ui-pg (55432), uvicorn 8011 from
-  fw-FEED-001/backend, preview 5212 from fw-FRONTEND-035.
+- `POSTS-009`: PR #337 open. **Deploy adds migration `e6d7328e8881`**: invoke
+  Migration after it, record the head on the PR, curl `/api/health` and
+  `/api/feed`. Backend container 2152 passed; combo with #336 frontend 3371/3372
+  (known ComposeRoute flake). Security review: no findings.
+- Next: `FRONTEND-036` after #336 merges; `FRONTEND-034` after #337 merges.
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
