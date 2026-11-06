@@ -23,15 +23,11 @@ before the unit PR. Test agent works in `fanwire-FRONTEND-037-test`.
   scores"); cumulative chart is wins above / losses below a baseline with a
   `<details>` table equivalent; two-column cards via a container query.
 - Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
-- Checkpoint `c3c98b4` reconciled here; original worktree untouched.
 - `EVENTS-013` is lazy, after SearchRail in `routes/HomeView.tsx`; bundle measurements: #351.
 - Prior browser evidence: #346 (360/768/1280, both themes, signed-in/guest).
 - `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
 - The combined container suite passed 3,476 tests. Default-parallel local runs exposed an existing intermittent ComposeRoute failure; bounded full suites with two workers and CI passed. Axe remains NOT DONE.
-- Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. All session servers/containers stopped; evidence in unit `.playwright-mcp/`.
-- EVENTS-013 test correction `ce6e244`: await empty-response settlement in two rail assertions; dispatch native cancel in jsdom. All three assertions mutation-checked; native Escape and focus return passed in Chromium.
-- EVENTS-013 choice: include season and overall home_record/away_record (wins/losses) from the ranking aggregation, enabling FRONTEND-037 without extra requests or an API change.
-- EVENTS-013 design: stacked icons/abbreviations then shared score, quiet dividers, 128px minimum rows matching lazy/request placeholders; rows grow with text. Chromium: 24 rows passed, axe NOT DONE. Migration cycle passed.
+- EVENTS-013 design, test correction `ce6e244` and evidence: #351 (axe NOT DONE).
 
 **Autonomous Director brief:** worktree subagents, hand-run units and deploys.
 
