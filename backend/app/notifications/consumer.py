@@ -39,15 +39,11 @@ DLQ. The facade commits before it publishes, so a missing row means a later
 delete in practice; it can't be told apart from a wrong id, a silent no-op
 being the accepted cost. A record with no post_id key still fails.
 
-Every other row an event names that does not exist raises
-MissingReferenceError, before anything is committed. The FK on parent_post_id
-and original_post_id means a post that exists always has them, and
-unrepost_post answers 409 rather than delete a repost that has a reply or is
-itself reposted. Users are only soft-deleted. So that is a malformed event,
-not a race a retry would win: it fails the record, and SQS dead-letters it for
-a human. The recipient is looked up before the commit for the same reason --
-after it, failing the record would commit a duplicate row on redelivery (see
-"Email is best-effort" in the module wiki).
+Account deletion (USERS-008) can also remove actors and recipients before an
+already-published event arrives. Missing referenced rows, deleted new posts and
+anonymous parents are successful no-ops with a non-identifying INFO log. Missing
+required payload keys still fail as malformed events. All references are checked
+before committing a notification so an undeliverable event cannot leave a row.
 """
 
 from __future__ import annotations
@@ -106,22 +102,28 @@ def handle_domain_event(
     the commit still propagate, MissingReferenceError among them; a PostCreated
     whose new post has no row is not one of them (see the module docstring).
     """
-    if event_name == POST_CREATED:
-        recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(session, detail)
-        if recipient_id is None:
-            return None  # plain post or undone repost -- nothing to notify
-    elif event_name == USER_FOLLOWED:
-        recipient_id = detail["followed_user_id"]
-        actor_id = detail["follower_user_id"]
-        notif_type = NotificationType.FOLLOW
-        reference_id = actor_id
-    else:
+    try:
+        if event_name == POST_CREATED:
+            recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(
+                session, detail
+            )
+            if recipient_id is None:
+                return None
+        elif event_name == USER_FOLLOWED:
+            recipient_id = detail["followed_user_id"]
+            actor_id = detail["follower_user_id"]
+            notif_type = NotificationType.FOLLOW
+            reference_id = actor_id
+        else:
+            return None
+        _require(session, User, actor_id)
+        recipient = _require(session, User, recipient_id)
+    except MissingReferenceError:
+        logger.info("notification event names data that no longer exists")
         return None
 
     if recipient_id == actor_id:
-        return None  # self-reply/self-repost -- see module docstring
-
-    recipient = _require(session, User, recipient_id)
+        return None
 
     notification = Notification(
         recipient_user_id=recipient_id,
@@ -167,14 +169,20 @@ def _resolve_post_created(
     post = session.get(Post, detail["post_id"])
     actor_id = detail["author_id"]
 
-    if post is None:
+    if post is None or post.deleted_at is not None or post.author_id is None:
         logger.info("post created event names a post that no longer exists")
         return None, actor_id, None, None
     if post.is_reply:
         parent = _require(session, Post, post.parent_post_id)
+        if parent.author_id is None:
+            logger.info("notification recipient no longer exists")
+            return None, actor_id, None, None
         return parent.author_id, actor_id, NotificationType.REPLY, post.id
     if post.is_repost:
         original = _require(session, Post, post.original_post_id)
+        if original.author_id is None:
+            logger.info("notification recipient no longer exists")
+            return None, actor_id, None, None
         return original.author_id, actor_id, NotificationType.REPOST, post.id
 
     return None, actor_id, None, None

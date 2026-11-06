@@ -46,7 +46,7 @@ from collections.abc import Collection
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import ColumnElement, and_, delete, func, or_, select, tuple_
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from app.eventbus import PostEventBus
@@ -589,3 +589,77 @@ def delete_post(session: Session, *, user_id: int, post_id: int) -> None:
     if post.deleted_at is None:
         post.deleted_at = datetime.now(UTC)
         session.commit()
+
+
+def account_post_ids(session: Session, user_id: int) -> list[int]:
+    return list(session.scalars(select(Post.id).where(Post.author_id == user_id)))
+
+
+def remove_account_posts(session: Session, user_id: int, post_ids: Collection[int]) -> None:
+    """Keep only the owned ancestor closure needed by other authors' rows.
+
+    Recursive UNION (not UNION ALL) terminates even on a malformed cyclic graph.
+    Both reply and repost edges participate in the same closure. One DELETE
+    handles the remaining self-referencing rows as a set, without leaf loops.
+    """
+    session.execute(
+        delete(PostLike).where(
+            or_(
+                PostLike.user_id == user_id,
+                PostLike.post_id.in_(post_ids),
+            )
+        )
+    )
+    session.execute(
+        delete(Report).where(
+            or_(
+                Report.reporter_id == user_id,
+                Report.post_id.in_(post_ids),
+            )
+        )
+    )
+    session.execute(delete(EventMention).where(EventMention.post_id.in_(post_ids)))
+    if not post_ids:
+        return
+    child = Post.__table__.alias("dependent")
+    ancestor = Post.__table__.alias("ancestor")
+    retained = (
+        select(ancestor.c.id, ancestor.c.parent_post_id, ancestor.c.original_post_id)
+        .where(
+            ancestor.c.author_id == user_id,
+            or_(ancestor.c.id == child.c.parent_post_id, ancestor.c.id == child.c.original_post_id),
+            or_(child.c.author_id != user_id, child.c.author_id.is_(None)),
+        )
+        .cte("retained_account_posts", recursive=True)
+    )
+    retained = retained.union(
+        select(
+            ancestor.c.id,
+            ancestor.c.parent_post_id,
+            ancestor.c.original_post_id,
+        )
+        .join(
+            retained,
+            or_(
+                ancestor.c.id == retained.c.parent_post_id,
+                ancestor.c.id == retained.c.original_post_id,
+            ),
+        )
+        .where(ancestor.c.author_id == user_id)
+    )
+    retained_ids = list(session.scalars(select(retained.c.id)))
+    session.execute(
+        update(Post)
+        .where(Post.id.in_(retained_ids))
+        .values(
+            author_id=None,
+            text=None,
+            deleted_at=func.coalesce(Post.deleted_at, func.now()),
+            linked_game_id=None,
+            linked_player_game_stats_id=None,
+            linked_player_id=None,
+            linked_player_scope=None,
+            linked_line_game_id=None,
+        )
+    )
+    session.execute(delete(Post).where(Post.id.in_(post_ids), Post.id.not_in(retained_ids)))

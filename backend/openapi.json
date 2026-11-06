@@ -6738,6 +6738,23 @@
         ]
       }
     },
+    "/users/me/data": {
+      "delete": {
+        "operationId": "delete_my_data_users_me_data_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "recent_auth_required: authenticate within the last five minutes."
+          }
+        },
+        "summary": "Delete My Data",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/users/me/following": {
       "get": {
         "operationId": "get_my_following_users_me_following_get",
