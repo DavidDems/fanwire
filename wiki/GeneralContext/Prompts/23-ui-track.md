@@ -4,6 +4,24 @@ type: prompt
 
 # 23 — UI track: sidebar, search rail, reply context and recent games
 
+## Update (2026-11-06, Director session)
+
+**This session's part is done.** The human gave `EVENTS-013` and the follow-on
+`FRONTEND-037` to another session, so this brief stays until they merge; that
+session deletes it as `Finish` says.
+
+- Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
+  #333, `FRONTEND-035` #336. Open: `FRONTEND-034` #342, `FRONTEND-036` #343
+  (merge spec amendment #340 first).
+- `POSTS-009` #337: merged and deployed (deploy 42165903823, attempt 2, after
+  the `FanwireRoleBoundary` rollout). `Migration` returned head `e6d7328e8881`,
+  recorded on #337.
+- **For `EVENTS-013`:** the rail's slot is the comment after `SearchRail` in
+  `routes/HomeView.tsx`. The entry has 4 B of gzip budget left after
+  `FRONTEND-036`, so rail code belongs in a lazy chunk.
+- Design choices are in each PR body; `FrontendUI/` describes what was built.
+  Follow-ups are in `TODO/02-backlog.md` "UI track".
+
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
 and their deploys. Self-contained: read this file, then what it names.
@@ -32,21 +50,14 @@ body names every restricted-tree edit.
 
 Hand each subagent only its spec's `required_context`, never the whole wiki.
 
-## Where things stand (2026-11-05), so verify before trusting
+## Where things stand
 
-- The five specs are on `main`: `POSTS-009`, `FRONTEND-034`, `FRONTEND-035`,
-  `FRONTEND-036`, `EVENTS-013`. None is started. Check with
-  `python .ai/bin/agentctl.py status`, `gh pr list` and
-  `git branch -r --list "origin/agent/*"`.
-- **Follow-up `FRONTEND-037`** captures the human's 2026-11-05 request to
-  compact NBA game results across Recent Games, Stats seasons, the compose
-  picker and game detail. It is independent of the five-unit UI track and starts
-  only after `EVENTS-013` has merged, so the Recent Games card it reuses exists
-  on `main`. Its spec is a separate task and PR.
-- Track D (`TODO/02-backlog.md` "Launch adjustments") still has `AUTH-001`,
-  `USERS-008`, `FRONTEND-032`, `FEED-001` and `FRONTEND-033` open. Three are this
-  track's gates (below). Another session may be running them, so check before
-  starting one.
+The Update note above is current as of 2026-11-06. Verify with
+`python .ai/bin/agentctl.py status`, `gh pr list` and
+`git branch -r --list "origin/agent/*"` before trusting it. `FRONTEND-037`
+compacts NBA game results across Recent Games, Stats seasons, the compose
+picker and game detail; it reuses `EVENTS-013`'s card, so it starts after that
+merges.
 
 ## Order and gates
 
@@ -66,11 +77,6 @@ FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-0
   from `main` after `EVENTS-013` merges, and use its own task branch. It updates
   the recent-result card from that unit rather than adding another Recent Games
   section.
-- **Gate units from Track D** (`FEED-001`, `FRONTEND-032`, `FRONTEND-033`): if one
-  has no `agent/*` branch, no open PR and `agentctl status` shows it unstarted,
-  run it yourself under its own spec and brief, exactly as a UI-track unit. Leave
-  `AUTH-001` and `USERS-008` alone. They are not gates, and they need the
-  human's own AWS steps.
 
 ## The loop
 

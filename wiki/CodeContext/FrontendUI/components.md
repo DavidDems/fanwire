@@ -121,7 +121,7 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 
 ## 3. Icons
 
-**Copied, not installed.** Eighteen Lucide icons plus two pressed variants (ISC licence, `branding.md` §5)
+**Copied, not installed.** Twenty Lucide icons plus two pressed variants (ISC licence, `branding.md` §5)
 are copied as inline SVG React components into `src/components/ui/icons/`,
 with Lucide's licence text in `src/components/ui/icons/LICENSE`. There is no
 `lucide-react` dependency (so no `package.json` Director PR), no third-party
@@ -129,11 +129,11 @@ request, and only the glyphs in use.
 
 | Icon | Lucide name | Used by |
 |---|---|---|
-| Feed | `house` | nav |
-| Search | `search` | nav |
-| Compose | `square-pen` | nav |
+| Home (was Feed) | `house` | nav |
+| Search | `search` | nav (the sidebar from 640 px) and the header's Search link on phones (`FRONTEND-035`) |
+| Compose | `square-pen` | "Post about this" links (`FRONTEND-017`); no longer in the nav |
 | Notifications | `bell` | nav |
-| Your profile | `user` | nav |
+| (unused) | `user` | no caller since "Your profile" left the nav for the Account menu; kept until a tidy-up deletes it |
 | Stats | `chart-column` | nav (`FRONTEND-009`) |
 | Like | `heart`; pressed: `HeartFilledIcon`, the same path filled with `currentColor` | `PostAction` (`UI-009`) |
 | Reply | `message-circle` | `PostAction` |
@@ -147,13 +147,20 @@ request, and only the glyphs in use.
 | Compose (+) | `circle-plus` | `FloatingButton` in `FRONTEND-020` (added by `UI-010`, no caller yet) |
 | Attach image | `paperclip` | the compose modal's attach button, `FRONTEND-020` (no caller yet) |
 | Refused | `circle-x` | the compose modal's red refusal line, `FRONTEND-020` (no caller yet) |
+| Invite | `link` | `InviteButton` (`FRONTEND-032`) |
+| Sign out | `log-out` | the nav's Sign out, its last item (`FRONTEND-035`) |
 
-**An icon never replaces a label, with one exception.** Every control keeps
+**An icon never replaces a visible label, with two exceptions.** Every control keeps
 its visible text, which is also its accessible name, and that is what the
-tests find. **The exception is the post card's action row** (`UI-009`, the
+tests find. **The first is the post card's action row** (`UI-009`, the
 human 2026-10-14): Like, Reply and Repost are icon-only, named by
 `aria-label`, each followed by its count as visible text ("2 likes"); the card's "More options" menu button (`FRONTEND-012`) is icon-only in the same row. The
-count stays outside the control's name.
+count stays outside the control's name. **The second is the primary nav**
+(`FRONTEND-035`): on phones (the bottom bar) and in the compact sidebar (40em to
+78em) each item shows its icon only, and its label stays in the DOM in the
+shared `.visually-hidden` class, so the accessible name is still the word. From
+78em the sidebar shows the label again. The header's Search link on phones
+works the same way.
 
 ## 4. Sports-specific
 
@@ -258,7 +265,7 @@ to nothing.
 
 | Existing | Uses | Notes |
 |---|---|---|
-| `routes/AppLayout` | header, nav, `buttonClass` (Sign in), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current`. Six items for a signed-in visitor since `FRONTEND-009` (Stats between Search and the profile item); `NavItem`'s `alsoCurrentOn` marks Stats current on `/players/*` too |
+| `routes/AppLayout` | header, nav, `buttonClass` (Sign in), `Menu` (Account menu), icons | `layout.md` §2. `Link` → `NavLink` for `aria-current`; `NavItem`'s `alsoCurrentOn` marks Stats current on `/players/*` too. **`FRONTEND-035`:** the nav is a sibling of `main` (Home, Stats, Search, Notifications, then a Sign out `<button>`), an icon bar on phones and a left sidebar from 640 px; the header holds the brand, then a Search icon link (phones) and the Account menu or Sign in |
 | `routes/guards` `Resolving` / `Unavailable` | `StatusLine` / `InlineAlert` | Same text. **`FRONTEND-012`:** a deactivated account gets `RecoveryScreen` in a `RequireAuth` route's place |
 | `routes/Deactivated` `DeactivatedBanner`, `RecoveryScreen` (`FRONTEND-012`) | banner: a `section` (a named region, not a second `header`) between the header and `main`, `--color-warning-subtle` with a 1 px `--color-warning` edge, `--radius-md`; a 600 title, a muted `--font-size-sm` line, `Button primary` Recover account and `Button secondary` Sign out, wrapping at 360. Recovery screen: page template, `h1`, what recovery restores, the same two buttons | Every page while deactivated. Recover is disabled in flight; a failure is an `InlineAlert` beside it. The banner takes focus (`tabIndex={-1}`) after Deactivate |
 | `routes/views` `NotFoundView` | page template, `EmptyState`, `buttonClass` | The only view left in `views.tsx` |
@@ -284,7 +291,7 @@ to nothing.
 | `auth/SignInPage`, `SignUpPage`, `ConfirmPage`, `ForgotPasswordPage`, `ProfileSetupPage` | narrow `Card`, `InlineAlert`, `StatusLine` (Confirm's notice), `Button primary` (submit), `Button secondary` (Resend code), base form controls | Forgot step two's "We have sent a code to …" is a `StatusLine` look, as a plain `<p>` (it isn't a live update) |
 | `features/feed/FeedPage` | `StatusLine` + 3 × `Skeleton post` (loading), `InlineAlert` (error), `EmptyState` ("There is nothing here yet."), `Button secondary` full width (Load more); cards as `PreparedPostNode` (`FRONTEND-015`) | Load more's disabled-while-fetching state. The list is `aria-busy` only while the first page's in-view image cards are prepared |
 | `features/feed/PreparedPostNode` (`FRONTEND-015`) | `Skeleton post` (with `media` when the card has images) until ready, then `PostNode` | Ready = every image loaded and `decode()` settled, bounded at 4 s; prepared only within one view of the nearest scroll container; a revealed card never returns to a skeleton. **No reveal animation** |
-| `features/feed/PostNode` | `Card as="article"`, `Avatar sm`, author link 600, `<time>` muted tabular inside a link to `/posts/<id>` (24 px minimum), the action row (`PostAction` × 3) | **Since `FRONTEND-010` no Show replies, no inline thread and no `nested` prop**: a click on the card's own surface opens the thread modal (not a focus stop: no `tabindex`, no wrapping link; the timestamp link is the keyboard path), and replies are read only in the modal, where each is again a card. **Reposts (`UI-009`):** a plain repost is a muted "↻ name reposted" line over the original's content and controls; a quote repost embeds the original as a compact box (1 px `--color-border`, `--radius-md`, text clamped to 3 lines, no controls). "This post is unavailable" (muted, italic) for a missing original. **`FRONTEND-014`:** the data-link preview (below) sits after the text, in the original's box too. **`FRONTEND-012`:** `PostMenu` ends the action row; an original that is gone (`reposted_post_deleted`) is a muted, italic "Post deleted" box in its place (`--color-surface-muted`, `--radius-md`, no link, author or media) |
+| `features/feed/PostNode` | `Card as="article"`, `Avatar sm`, author link 600, `<time>` muted tabular inside a link to `/posts/<id>` (24 px minimum), the action row (`PostAction` × 3) | **Since `FRONTEND-010` no Show replies, no inline thread and no `nested` prop**: a click on the card's own surface opens the thread modal (not a focus stop: no `tabindex`, no wrapping link; the timestamp link is the keyboard path), and replies are read only in the modal, where each is again a card. **Reposts (`UI-009`):** a plain repost is a muted "↻ name reposted" line over the original's content and controls; a quote repost embeds the original as a compact box (1 px `--color-border`, `--radius-md`, text clamped to 3 lines, no controls). "This post is unavailable" (muted, italic) for a missing original. **`FRONTEND-014`:** the data-link preview (below) sits after the text, in the original's box too. **`FRONTEND-012`:** `PostMenu` ends the action row; an original that is gone (`reposted_post_deleted`) is a muted, italic "Post deleted" box in its place (`--color-surface-muted`, `--radius-md`, no link, author or media). **`FRONTEND-034`, the reply box:** a reply's card (keyed on the subject, so a plain repost of a reply too) shows its parent from `replied_post` in the quote's box with a `parent` flag: an `Avatar sm`, the author link, the time linked to the parent's thread, text clamped to 4 lines and its link preview, no controls or media. It sits between the reply's content and its action row, and a "Show this thread" link (`--font-size-sm`, 600) to `/posts/<parent id>` ends the card. A deleted or hidden parent uses the "Post deleted" or "This post is unavailable" box. A decorative 2px `--color-border` thread line (`.threaded::before`) runs in the left gutter from under the avatar to Show this thread. `showParent={false}` (the thread modal's Replies list) turns it all off |
 | `features/feed/PostMenu` (`FRONTEND-012`) | `Menu` with `EllipsisIcon` ("More options"), `ConfirmDialog` × 2 (Report; Delete, destructive), a "Link copied" `StatusLine`; the copy fallback a read-only input, selected | Items: Copy link; Report (another's post, active account; then "Reported", disabled) or Delete (own post, never a plain repost). Focus after a delete: the next card's menu, else the previous one's, else the list heading; Close when a thread root goes |
 | `features/feed/PostAction` (`UI-009`) | `Button ghost sm` (or a `Link` with `buttonClass`, for Reply), icon only, square, named by `aria-label`; then its count, `--color-text-muted`, `--font-size-sm`, `tabular-nums` | Like and Repost carry `aria-pressed` and swap to the filled icon when pressed, plus `--color-action`. `TogglePostAction` is the one optimistic pattern for both; failure is an `InlineAlert` on its own row. Replaces `LikeButton`. Since `FRONTEND-010` Reply goes to `/posts/<id>?reply=1` and the reply count is a link (`.countLink`, 24 px minimum) to the thread |
 | `features/thread/DetailModal` (`FRONTEND-014`) | the one `Dialog` of the modal flow, around an `Outlet`: Back at depth > 1, Close/Escape leave the flow | Stays mounted while thread, game and player details switch inside it, so it is one `<dialog>` element for the whole flow; each detail sets its title with `useDetailTitle` ("Thread", "Game", "Player") |

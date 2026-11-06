@@ -216,6 +216,9 @@ constants (§9), not tokens.
 | `--target-min` | `2.75rem` (44 px) | Primary controls and nav items on touch |
 | `--content-max` | `40rem` (640 px) | The content column |
 | `--content-max-wide` (`FRONTEND-030`) | `64rem` (1024 px) | The content column on `/stats/records` only, chosen by `AppLayout` from the route (`layout.md` §2) |
+| `--sidebar-width-compact` (`FRONTEND-035`) | `4.5rem` (72 px) | The icon-only left sidebar, 40em to 78em |
+| `--sidebar-width` (`FRONTEND-035`) | `12rem` (192 px) | The labelled left sidebar from 78em |
+| `--rail-width` (`FRONTEND-035`, used by `FRONTEND-036`) | `18rem` (288 px) | The home page's right column from 72em |
 | `--duration-fast` | `120ms` | Hover, press |
 | `--duration-base` | `200ms` | Disclosure, score highlight |
 | `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | All transitions |
@@ -229,15 +232,17 @@ Components use the tokens, so they get this for free.
 | Constant | Value | What changes |
 |---|---|---|
 | `xs` | below `360px` | The header shows the symbol alone (`layout.md`) |
-| `sm` | `640px` (`40em`) | The bottom tab bar gives way to header navigation |
-| `md` | `960px` (`60em`) | Wider page gutters only. Still one column |
+| `sm` | `640px` (`40em`) | The bottom icon bar gives way to the compact left sidebar; the header's Search link hides (`FRONTEND-035`) |
+| `md` | `960px` (`60em`) | Wider page gutters |
+| `lg` | `1152px` (`72em`) | The home page's right column (`FRONTEND-036`) |
+| `xl` | `1248px` (`78em`) | The sidebar shows its labels (`FRONTEND-035`) |
 
 Write them as `@media (min-width: 40em)` (mobile-first), never `max-width`.
 
 | Token | Value | Layer |
 |---|---|---|
 | `--z-base` | `0` | Content |
-| `--z-sticky` | `10` | Header, bottom tab bar |
+| `--z-sticky` | `10` | Header, bottom icon bar, sidebar |
 | `--z-dropdown` | `20` | Mention suggestions |
 | `--z-toast` | `30` | Reserved; no toast in v1 (`components.md`) |
 | `--z-skip-link` | `40` | The skip link when focused |

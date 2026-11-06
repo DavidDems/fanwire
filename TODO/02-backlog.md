@@ -146,17 +146,31 @@ Track D: `POSTS-009` after `FEED-001` (same feed query), `FRONTEND-035` after
 `FRONTEND-032` and `FRONTEND-033` (same shell and route tests). The stats
 picker's usability is a later spec.
 
-| Order | Task | What |
-|---|---|---|
-| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) |
-| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread |
-| 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones |
-| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results |
-| 5 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) |
+| Order | Task | What | State (2026-11-06) |
+|---|---|---|---|
+| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) | #337 merged, deployed; migration `e6d7328e8881` run |
+| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread | #342 open |
+| 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones | #336 merged, deployed |
+| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 open (#340 merged) |
+| 5 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) | another session, with `FRONTEND-037` |
 
 `FRONTEND-034` and `FRONTEND-035` share no file and can swap order;
 `FRONTEND-036` needs `FRONTEND-035`, and `EVENTS-013` needs `FRONTEND-036`.
 `EVENTS-013`'s browser rows read best after the human's game-data refresh.
+
+Follow-ups found while building it (not specced):
+- The home rail follows the feed in DOM order, so a keyboard reader reaches its
+  search box after about 150 Tabs. A skip link to the rail, or the rail before
+  the feed in DOM order, would fix it (`FRONTEND-036`).
+- `ComposeRoute.test.tsx` "renders the real composer…" races in the local
+  container: `getByRole("textbox")` straight after `findByRole("heading")`
+  should be `findByRole`.
+- An account whose only follows are deactivated still gets the thin follows
+  feed, not the guest selection (`FEED-001`).
+- At 320 px with 200% text the Invite pill's icon still clips by about 37 px
+  (`FRONTEND-032`).
+- `UserIcon` and `ChevronDownIcon` have no caller (`FrontendUI/components.md`
+  §3).
 
 ## Deferred new-device security (outside Track D)
 
