@@ -42,11 +42,10 @@ credential store; fanwire must not store or compare plaintext passwords.
 - Do not turn `email_verified` on when the user resets a password. A reset proves
   control for this recovery transaction; it does not silently change the
   account's verification state.
-- The new password and confirmation must match. Cognito password history must
-  reject the current password. The current auth stack uses `FeaturePlan.LITE`,
-  which lacks this policy; a human-approved Essentials/Plus configuration with
-  `PasswordHistorySize=1` is a start gate. Do not upgrade the pool or write AWS
-  configuration in this task.
+- The new password and confirmation must match. Cognito applies the pool's
+  configured password policy. Password-history enforcement is out of scope; do
+  not compare a new password with the current password in the application or
+  require a paid Cognito feature plan for this task.
 - A separate Director-owned policy/scope prerequisite is required before an
   agent task can write its Alembic migration. A human must review any Cognito,
   SES, IAM-boundary or cost change before it is applied.
@@ -60,14 +59,13 @@ sign out and clear their active session before enabling any recovery request or
 password-change submission. Do not retain authenticated controls or session
 state on the recovery form.
 
-## Password confirmation and reuse
+## Password confirmation
 
 The reset form has New password and Confirm password fields. Mismatch is an
-accessible field error and makes no reset request. The new password cannot equal
-the current password; enforce this at Cognito using the approved password
-history policy rather than reading or storing the existing plaintext password.
-Password and confirmation are never logged or placed in URLs, analytics or
-telemetry.
+accessible field error and makes no reset request. Cognito enforces the pool's
+configured password policy. This task does not implement password-history
+checks or compare the new password to the current password. Password and
+confirmation are never logged or placed in URLs, analytics or telemetry.
 
 Apply the same confirmation rule to sign-up: the Password and Confirm password
 values must match before the Cognito `SignUp` request. Keep the existing optional
