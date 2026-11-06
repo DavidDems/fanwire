@@ -11,25 +11,23 @@ and `FRONTEND-039` #347 merged; both merge commits were verified as ancestors
 of `origin/main`. Deploy 42274743845 (#346) succeeded. Deploy 42276420158
 (#347) succeeded too. Run
 `FRONTEND-037` only after `EVENTS-013` merges. The human merges and approves
-deployments. EVENTS-013 started on `agent/EVENTS-013` (`e100ab1`); tests are delegated in
-`fanwire-EVENTS-013-test`.
+deployments. EVENTS-013 started on `agent/EVENTS-013` (`e100ab1`); red tests committed at `a3a74ab`; implementation reviewed from isolated
+`fanwire-EVENTS-013-impl`. Parent focused backend tests: 29 passed.
 
 - Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
-- Checkpoint `c3c98b4` remains unpushed in `fanwire-ui-track-director`; useful details are reconciled here, preserving newer brief instructions.
+- Checkpoint `c3c98b4` reconciled here; original worktree untouched.
 - `EVENTS-013` goes after `SearchRail` in `routes/HomeView.tsx`; check current budgets and use a lazy chunk (the earlier measurement left 4 B gzip).
-- `FRONTEND-038`: light/dark browser checks at 360/768/1280, signed-in/guest, passed; the + box matches main. See #346.
+- Prior browser evidence: #346 (360/768/1280, both themes, signed-in/guest).
 - `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
 - The combined container suite passed 3,476 tests. Default-parallel local runs exposed an existing intermittent ComposeRoute failure; bounded full suites with two workers and CI passed. Axe remains NOT DONE.
 - Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. No servers or containers started.
+- EVENTS-013 test correction `f4d6044`: await empty-response settlement in two rail assertions; dispatch native cancel in jsdom. All three assertions mutation-checked; real Escape still needs Chromium.
+- EVENTS-013 choice: include season and overall home_record/away_record (wins/losses) from the ranking aggregation, enabling FRONTEND-037 without extra requests or an API change.
 
 **Autonomous Director brief:** worktree subagents, hand-run units and deploys.
 
-**Objective:** build the human's look-and-feel changes of 2026-11-05
-(`CodeContext/FrontendUI/decisions.md`, "Sidebar, search rail and reply
-context"). These are a reply card that shows its parent, liked replies in the
-feed, an icon nav that becomes a left sidebar with Sign out in it, a home page
-with no search bar above the feed and a right rail from 1152 px, and recent
-games in that rail. It closes the `TODO/02-backlog.md` section "UI track".
+**Objective:** finish the UI changes in `CodeContext/FrontendUI/decisions.md`;
+close `TODO/02-backlog.md` "UI track" after both remaining units deploy.
 
 You are a **Director** (`AGENTS.md` "Agent system"). Each unit's code lands on
 `agent/<ID>` and is held by `agent-guard` to its spec. Your own edits (this
@@ -50,7 +48,7 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-Both frontend prerequisites merged and deployed. EVENTS-013 tests are in progress.
+Both frontend prerequisites merged and deployed. EVENTS-013 validation is in progress.
 FRONTEND-037 starts after its merge. Finish follows both deployments.
 
 ## Order and gates
