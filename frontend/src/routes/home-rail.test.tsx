@@ -35,7 +35,7 @@
  * stickiness, width and the three-line clamp are `shell-css.test.ts`'s and the
  * browser rows'.
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -219,7 +219,8 @@ describe("recent games in the mounted home rail", () => {
     expect(backgroundOf(app.router)).toMatchObject({ pathname: "/" });
     await waitFor(() => expect(openDialog()).not.toBeNull());
     expect(heading.isConnected).toBe(true);
-    await user.keyboard("{Escape}");
+    // jsdom does not turn Escape into the native dialog cancel event.
+    fireEvent(openDialog()!, new Event("cancel", { cancelable: true }));
     await waitFor(() => expect(app.router.state.location.pathname).toBe("/"));
   });
 });
@@ -424,7 +425,10 @@ describe("the rail holds the bar, the results, then an empty slot", () => {
 
     const aside = rail();
     const form = within(aside).getByRole("search");
-    expect(within(aside).queryAllByRole("heading")).toEqual([]);
+    // The empty recent-games read hides its section after loading settles.
+    await waitFor(() =>
+      expect(within(aside).queryAllByRole("heading")).toEqual([]),
+    );
     expect(within(aside).queryAllByRole("list")).toEqual([]);
     expect(within(aside).queryAllByRole("region")).toEqual([]);
     // All the rail says is the bar's own text: the slot under it is empty.
@@ -977,6 +981,8 @@ describe("the result count is announced once per search", () => {
     await feedHeading();
 
     // Before any search the rail already holds the region, silent.
+    // The independent recent-games loading status disappears on its empty response.
+    await waitFor(() => expect(politeRegions(rail())).toHaveLength(1));
     const regions = politeRegions(rail());
     expect(regions, "one polite live region in the rail").toHaveLength(1);
     const [announcer] = regions;
