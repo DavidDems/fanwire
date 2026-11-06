@@ -6,28 +6,23 @@ type: prompt
 
 ## Update (2026-11-06, Director session)
 
-**Two more units first (the human, 2026-11-06).** `FRONTEND-038` removes the
-Invite button; `FRONTEND-039` shows the sidebar's labels from about 860 px,
-pulls it toward the left edge on tablets and moves the rail's breakpoint to
-where the labelled sidebar, feed and rail fit. Both run before `EVENTS-013`
-(re-gated on them), in parallel; test their combination. `EVENTS-013` and
-`FRONTEND-037` stay with another session, which deletes this brief at the end.
+**Continuation checkpoint reconciled with current main.** `FRONTEND-038` #346
+and `FRONTEND-039` #347 merged; both merge commits were verified as ancestors
+of `origin/main`. Deploy 42274743845 (#346) succeeded. Deploy 42276420158
+(#347) succeeded too. Run
+`FRONTEND-037` only after `EVENTS-013` merges. The human merges and approves
+deployments. EVENTS-013 started on `agent/EVENTS-013` (`e100ab1`); tests are delegated in
+`fanwire-EVENTS-013-test`.
 
-- Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
-  #333, `FRONTEND-035` #336. `FRONTEND-034` #342 and `FRONTEND-036` #343 (after
-  amendment #340) are merged and deployed too.
-- `POSTS-009` #337: merged and deployed (deploy 42165903823, attempt 2, after
-  the `FanwireRoleBoundary` rollout). `Migration` returned head `e6d7328e8881`,
-  recorded on #337.
-- **For `EVENTS-013`:** the rail's slot is the comment after `SearchRail` in
-  `routes/HomeView.tsx`. The entry has 4 B of gzip budget left after
-  `FRONTEND-036`, so rail code belongs in a lazy chunk.
-- Design choices are in each PR body; `FrontendUI/` describes what was built.
-  Follow-ups are in `TODO/02-backlog.md` "UI track".
+- Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
+- Checkpoint `c3c98b4` remains unpushed in `fanwire-ui-track-director`; useful details are reconciled here, preserving newer brief instructions.
+- `EVENTS-013` goes after `SearchRail` in `routes/HomeView.tsx`; check current budgets and use a lazy chunk (the earlier measurement left 4 B gzip).
+- `FRONTEND-038`: light/dark browser checks at 360/768/1280, signed-in/guest, passed; the + box matches main. See #346.
+- `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
+- The combined container suite passed 3,476 tests. Default-parallel local runs exposed an existing intermittent ComposeRoute failure; bounded full suites with two workers and CI passed. Axe remains NOT DONE.
+- Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. No servers or containers started.
 
-**Brief for a Director session that runs autonomously** (a high-tier model on the
-human's subscription), managing worktree subagents through five hand-run units
-and their deploys. Self-contained: read this file, then what it names.
+**Autonomous Director brief:** worktree subagents, hand-run units and deploys.
 
 **Objective:** build the human's look-and-feel changes of 2026-11-05
 (`CodeContext/FrontendUI/decisions.md`, "Sidebar, search rail and reply
@@ -55,12 +50,8 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-The Update note above is current as of 2026-11-06. Verify with
-`python .ai/bin/agentctl.py status`, `gh pr list` and
-`git branch -r --list "origin/agent/*"` before trusting it. `FRONTEND-037`
-compacts NBA game results across Recent Games, Stats seasons, the compose
-picker and game detail; it reuses `EVENTS-013`'s card, so it starts after that
-merges.
+Both frontend prerequisites merged and deployed. EVENTS-013 tests are in progress.
+FRONTEND-037 starts after its merge. Finish follows both deployments.
 
 ## Order and gates
 
