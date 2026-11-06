@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-039",
+  "objective": "On tablets the left sidebar sits close to the screen's edge and shows its labels as soon as they fit; the home page's right rail appears only from the width where the labelled sidebar, the feed and the rail all fit.",
+  "acceptance_criteria": [
+    "Start gate: FRONTEND-036 has merged to main, and no other open PR writes src/routes/AppLayout.module.css or src/routes/HomeView.tsx. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "Below 40em nothing changes. From 40em to just below the label breakpoint L the sidebar stays icon only at --sidebar-width-compact, as today: at 768 px every nav item's and main's box is unchanged from main before this unit.",
+    "L, the label breakpoint, is an em constant no larger than 54em (864 px, where the human sees the gap appear). From L the sidebar shows its labels at --sidebar-width at every larger width, and the rule that kept it icon only from 72em to 78em is gone. Between L and the width where main reaches --content-max, main may narrow, but never below 36rem, with at least --space-4 outside the group and a classic 17px scrollbar. The unit picks L by measuring in the browser and states the measurement in the PR.",
+    "The gap from the viewport's left edge to the first nav icon shrinks on tablets: at 1032 px it is at most half of what it is on main before this unit (measured before and after), and at 860, 1032 and 1180 px it is never more than the empty space right of main. The shell may trim the sidebar's own outer padding or rebalance the centred group to get there; from 78em the desktop look is unchanged (every box at 1280 and 1920 matches main before this unit, except the home page's when the rail breakpoint moves).",
+    "The rail breakpoint R is the smallest width, written as an em constant, at which the labelled sidebar, the --space-5 gap, main widened for the rail (--content-max + --space-5 + --rail-width) fit with at least --space-4 outside them and a classic 17px scrollbar, with the feed at its full width. The unit measures it (about 76em is expected; R is at most 78em) and states the measurement in the PR. HomeView's useMediaQuery and AppLayout's main widening both use R, so below R the rail is not mounted and makes no requests, and / shows the feed alone, with search reached through the sidebar's Search link.",
+    "Tests that pin 72em or 78em (sidebar-nav.test.tsx, shell-css.test.ts, AppLayout.test.tsx, home-rail.test.tsx, home-search.test.tsx, thread-route.test.tsx and frontend/src/test/search.ts's stubViewport users) change to L and R in the test commit, and still cover both sides of each breakpoint and a resize across R.",
+    "No horizontal overflow: scrollWidth equals clientWidth at 320, 360, 640, 768, 860, 1024, 1032, 1180, R - 1 px, R, 1248, 1280, 1366 and 1920 CSS px, each with a classic 17px scrollbar, signed in and anonymous, on /, /?q=<a 100-character query>, /stats/records and /notifications.",
+    "Browser rows at 768, 860, 1032, 1180, R, 1280 and 1920, light and dark, signed in, reported with measurements or NOT DONE: the left gap to the first icon and the right gap after main, before and after; labels shown or not; the rail mounted or not; a resize across L and across R; keyboard through the sidebar; 200% text size at 1032.",
+    "frontend/src/test/bundle-budgets/FRONTEND-039.ts declares, in the test commit, every output the unit changes. Entry growth is at most 1 KiB raw and 512 B gzip, and no output reaches 500,000 raw bytes.",
+    "No new dependency, third-party request, image file, or raw colour or px font size in module CSS. Breakpoints are em constants in @media rules and in the one useMediaQuery call.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the shell's new breakpoints (L and R, with the measurements) and the tablet sidebar."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/routes/sidebar-nav.test.tsx",
+    "frontend/src/routes/floating-clearance.test.ts",
+    "frontend/src/routes/HomeView.tsx",
+    "frontend/src/routes/HomeView.module.css",
+    "frontend/src/routes/home-rail.test.tsx",
+    "frontend/src/routes/home-search.test.tsx",
+    "frontend/src/routes/thread-route.test.tsx",
+    "frontend/src/test/search.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-039.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/components/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

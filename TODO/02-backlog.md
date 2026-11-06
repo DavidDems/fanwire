@@ -149,13 +149,16 @@ picker's usability is a later spec.
 | Order | Task | What | State (2026-11-06) |
 |---|---|---|---|
 | 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) | #337 merged, deployed; migration `e6d7328e8881` run |
-| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread | #342 open |
+| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread | #342 merged, deployed |
 | 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones | #336 merged, deployed |
-| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 open (#340 merged) |
-| 5 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) | another session, with `FRONTEND-037` |
+| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 merged, deployed |
+| 5 | `FRONTEND-038` | Remove the Invite button, logic and look | not started |
+| 6 | `FRONTEND-039` | Tablet sidebar: labels from about 860 px, closer to the left edge; the rail only where the labelled sidebar, feed and rail fit | not started |
+| 7 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) | another session, with `FRONTEND-037` |
 
 `FRONTEND-034` and `FRONTEND-035` share no file and can swap order;
-`FRONTEND-036` needs `FRONTEND-035`, and `EVENTS-013` needs `FRONTEND-036`.
+`FRONTEND-036` needs `FRONTEND-035`; `FRONTEND-038` and `FRONTEND-039` need
+`FRONTEND-036` and can run together; `EVENTS-013` needs all three.
 `EVENTS-013`'s browser rows read best after the human's game-data refresh.
 
 Follow-ups found while building it (not specced):
@@ -167,8 +170,6 @@ Follow-ups found while building it (not specced):
   should be `findByRole`.
 - An account whose only follows are deactivated still gets the thin follows
   feed, not the guest selection (`FEED-001`).
-- At 320 px with 200% text the Invite pill's icon still clips by about 37 px
-  (`FRONTEND-032`).
 - `UserIcon` and `ChevronDownIcon` have no caller (`FrontendUI/components.md`
   §3).
 

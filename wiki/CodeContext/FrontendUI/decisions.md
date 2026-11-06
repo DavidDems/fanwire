@@ -234,3 +234,21 @@ card), not in the repository.
   there is data for real suggestions. No other change to post cards.
 - `layout.md` and `tokens.md` are updated as built, by the Director PR after
   each unit.
+
+## Invite removed; tablet sidebar and rail breakpoint — decided 2026-11-06
+
+The human, after seeing `FRONTEND-034` to `-036` live (reply card and the home
+search move "perfect").
+
+- **No Invite button** (`FRONTEND-038`). The control `FRONTEND-032` added
+  beside the + goes, logic and look. Copy link stays in each post's menu.
+- **The sidebar shows its labels from about 860 px** (`FRONTEND-039`), not from
+  78em, and sits closer to the left edge on tablets: at 1032 px (an iPad Pro 13)
+  the icon-only sidebar sat about 150 px in. 768 px (an iPad mini) stays as it
+  is, and desktop from 78em is unchanged.
+- **The rail needs the labelled sidebar beside it.** `/` shows the rail only
+  from the width where the labelled sidebar, the feed and the rail all fit
+  (measured by `FRONTEND-039`, about 76em, at most 78em); below that, the feed
+  alone. This replaces "from 72em" in the 2026-11-05 entry.
+- Both land before `EVENTS-013`, which fills the rail.
+
