@@ -11,9 +11,9 @@
  * brand first and, at its end, a Search icon link (phones) immediately before
  * the Account menu or Sign in; and the tab order through all of it.
  *
- * **Two Search links, one visible** (the deliberate exception to `layout.md`
- * §1): jsdom applies no media queries, so it sees both. Every Search query here
- * is scoped with `within()` to the header or the nav.
+ * **Two Search links, one visible** (the deliberate exception to
+ * `layout.md` §1): jsdom applies no media queries, so it sees both. Every
+ * Search query here is scoped with `within()` to the header or the nav.
  *
  * **The CSS at each width.** jsdom computes no styles, so this file resolves
  * them itself, as `AppLayout.test.tsx` resolves `main`'s width: every rule of
