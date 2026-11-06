@@ -35,10 +35,10 @@
  * stickiness, width and the three-line clamp are `shell-css.test.ts`'s and the
  * browser rows'.
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { AccountsPageBody } from "../features/search/api";
 import { accountsKey, postsKey } from "../features/search/api";
@@ -72,7 +72,16 @@ import {
   type ViewportStub,
 } from "../test/search";
 import { backgroundOf, openDialog, threadServer } from "../test/thread";
+import {
+  gameDetailStub,
+  recentGamesAre,
+  testGameDetail,
+  testRecentGame,
+} from "../test/games";
 import shellStyles from "./AppLayout.module.css";
+import { server } from "../test/server";
+
+beforeEach(() => server.use(recentGamesAre([])));
 
 const BOX_NAME = "Search accounts and posts";
 const WIDE = 1280;
@@ -156,8 +165,65 @@ function arrange(
 }
 
 function handlersOf({ feed, accounts, posts }: Arranged) {
-  return [feed.handler, accounts.handler, posts.handler];
+  return [feed.handler, accounts.handler, posts.handler, recentGamesAre([])];
 }
+
+describe("recent games in the mounted home rail", () => {
+  it("makes no read below R and mounts the section when crossing R", async () => {
+    const viewport = at(NARROW);
+    let calls = 0;
+    const app = renderAppAt("/", "anonymous", [
+      http.get("*/events/games/recent", () => {
+        calls += 1;
+        return HttpResponse.json([testRecentGame()]);
+      }),
+      ...handlersOf(arrange()),
+    ]);
+    await feedHeading();
+    expect(calls).toBe(0);
+    expect(screen.queryByRole("heading", { name: "Recent games" })).toBeNull();
+    await act(async () => viewport.setWidth(WIDE));
+    expect(
+      await within(rail()).findByRole("heading", {
+        level: 2,
+        name: "Recent games",
+      }),
+    ).toBeInTheDocument();
+    await within(rail()).findByRole("link", {
+      name: /Toronto Raptors.*117|Phoenix Suns.*109/,
+    });
+    expect(calls).toBe(1);
+    await act(async () => app.router.navigate("/?q=raptors"));
+    await results("raptors");
+    expect(calls).toBe(1);
+  });
+
+  it("a result opens its game over the home page and Escape returns home", async () => {
+    at(WIDE);
+    const game = testGameDetail();
+    const app = renderAppAt("/", "anonymous", [
+      recentGamesAre([testRecentGame()]),
+      gameDetailStub([game]).handler,
+      ...handlersOf(arrange()),
+    ]);
+    const heading = await feedHeading();
+    const link = await within(rail()).findByRole("link", {
+      name: /Toronto Raptors.*117|Phoenix Suns.*109/,
+    });
+    const user = userEvent.setup();
+    link.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(app.router.state.location.pathname).toBe(`/games/${game.id}`),
+    );
+    expect(backgroundOf(app.router)).toMatchObject({ pathname: "/" });
+    await waitFor(() => expect(openDialog()).not.toBeNull());
+    expect(heading.isConnected).toBe(true);
+    // jsdom does not turn Escape into the native dialog cancel event.
+    fireEvent(openDialog()!, new Event("cancel", { cancelable: true }));
+    await waitFor(() => expect(app.router.state.location.pathname).toBe("/"));
+  });
+});
 
 async function feedHeading(): Promise<HTMLElement> {
   return screen.findByRole("heading", { level: 1, name: "Feed" });
@@ -359,7 +425,10 @@ describe("the rail holds the bar, the results, then an empty slot", () => {
 
     const aside = rail();
     const form = within(aside).getByRole("search");
-    expect(within(aside).queryAllByRole("heading")).toEqual([]);
+    // The empty recent-games read hides its section after loading settles.
+    await waitFor(() =>
+      expect(within(aside).queryAllByRole("heading")).toEqual([]),
+    );
     expect(within(aside).queryAllByRole("list")).toEqual([]);
     expect(within(aside).queryAllByRole("region")).toEqual([]);
     // All the rail says is the bar's own text: the slot under it is empty.
@@ -912,6 +981,8 @@ describe("the result count is announced once per search", () => {
     await feedHeading();
 
     // Before any search the rail already holds the region, silent.
+    // The independent recent-games loading status disappears on its empty response.
+    await waitFor(() => expect(politeRegions(rail())).toHaveLength(1));
     const regions = politeRegions(rail());
     expect(regions, "one polite live region in the rail").toHaveLength(1);
     const [announcer] = regions;

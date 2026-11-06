@@ -55,6 +55,33 @@ class TeamRefOut(BaseModel):
     abbreviation: str
 
 
+class RecentRecordOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    wins: int
+    losses: int
+
+
+class RecentGameOut(BaseModel):
+    """A completed matchup, with league ranks and regular records in its season."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: datetime
+    season: str
+    game_type: str | None
+    label: str | None
+    home_team: TeamRefOut
+    away_team: TeamRefOut
+    home_score: int
+    away_score: int
+    home_rank: int
+    away_rank: int
+    home_record: RecentRecordOut
+    away_record: RecentRecordOut
+
+
 class ShootingOut(BaseModel):
     """Counting stats and shooting percentages, shared by a player's line
     and a team's totals. Percentages are a fraction from 0 to 1, three

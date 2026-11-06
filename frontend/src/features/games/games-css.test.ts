@@ -67,3 +67,41 @@ describe(GAME_SCORE_CSS, () => {
     expect(moduleCssViolations(readSrcFile(GAME_SCORE_CSS))).toEqual([]);
   });
 });
+
+describe("RecentGames rail sizing contract", () => {
+  it("permits children to shrink within the rail and reserves a consistent row height", () => {
+    const css = readSrcFile("features/games/RecentGames.module.css");
+    expect(moduleCssViolations(css)).toEqual([]);
+    const blocks = allBlocks(parseCss(css));
+    expect(
+      blocks.some((block) =>
+        block.declarations.some(
+          ({ property, value }) =>
+            /^(min-width|min-inline-size)$/.test(property) &&
+            /^0(?:px)?$/.test(value),
+        ),
+      ),
+      "rail children can shrink with four-letter abbreviations and 100–100 scores",
+    ).toBe(true);
+    expect(
+      blocks.some((block) =>
+        block.declarations.some(
+          ({ property, value }) =>
+            /^(min-height|min-block-size|height|block-size)$/.test(property) &&
+            /var\(--/.test(value),
+        ),
+      ),
+      "loading and final rows reserve a token-based height",
+    ).toBe(true);
+    expect(
+      blocks
+        .flatMap((block) => block.declarations)
+        .filter(
+          ({ property, value }) =>
+            /^(width|inline-size|min-width|min-inline-size)$/.test(property) &&
+            /(?:100vw|100dvw)/.test(value),
+        ),
+      "a rail row must fit the rail rather than the viewport",
+    ).toEqual([]);
+  });
+});

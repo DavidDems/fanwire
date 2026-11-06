@@ -29,6 +29,7 @@ from app.events.schemas import (
     PlayerDetailOut,
     PlayerGameOut,
     PlayerListItemOut,
+    RecentGameOut,
     RecordHoldersOut,
     RecordListOut,
     RecordsCatalogOut,
@@ -99,6 +100,15 @@ def list_games(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/games/recent", response_model=list[RecentGameOut])
+def get_recent_games(
+    limit: int = Query(5, ge=1, le=10),
+    session: Session = Depends(get_session),
+) -> list[service.RecentGame]:
+    """Latest completed dates, strongest league-wide matchups first."""
+    return service.recent_games(session, limit)
 
 
 @router.get("/games/{game_id}", response_model=GameDetailOut)

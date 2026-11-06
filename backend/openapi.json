@@ -2958,6 +2958,109 @@
         "title": "PublicUserOut",
         "type": "object"
       },
+      "RecentGameOut": {
+        "description": "A completed matchup, with league ranks and regular records in its season.",
+        "properties": {
+          "away_rank": {
+            "title": "Away Rank",
+            "type": "integer"
+          },
+          "away_record": {
+            "$ref": "#/components/schemas/RecentRecordOut"
+          },
+          "away_score": {
+            "title": "Away Score",
+            "type": "integer"
+          },
+          "away_team": {
+            "$ref": "#/components/schemas/TeamRefOut"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "game_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game Type"
+          },
+          "home_rank": {
+            "title": "Home Rank",
+            "type": "integer"
+          },
+          "home_record": {
+            "$ref": "#/components/schemas/RecentRecordOut"
+          },
+          "home_score": {
+            "title": "Home Score",
+            "type": "integer"
+          },
+          "home_team": {
+            "$ref": "#/components/schemas/TeamRefOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "season",
+          "game_type",
+          "label",
+          "home_team",
+          "away_team",
+          "home_score",
+          "away_score",
+          "home_rank",
+          "away_rank",
+          "home_record",
+          "away_record"
+        ],
+        "title": "RecentGameOut",
+        "type": "object"
+      },
+      "RecentRecordOut": {
+        "properties": {
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "wins",
+          "losses"
+        ],
+        "title": "RecentRecordOut",
+        "type": "object"
+      },
       "RecordCatalogItemOut": {
         "description": "One record of the catalog (EVENTS-012): what it is, never who holds\nit. `category` is one of the library's seven; `keywords` are the words\na search matches beside the title; `featured_rank` is 1 to 16 for the\nfeatured records, in order, and null for every other.",
         "properties": {
@@ -4797,6 +4900,56 @@
           }
         },
         "summary": "List Games",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/events/games/recent": {
+      "get": {
+        "description": "Latest completed dates, strongest league-wide matchups first.",
+        "operationId": "get_recent_games_events_games_recent_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecentGameOut"
+                  },
+                  "title": "Response Get Recent Games Events Games Recent Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Recent Games",
         "tags": [
           "events"
         ]
