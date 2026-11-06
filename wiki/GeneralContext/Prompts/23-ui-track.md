@@ -79,6 +79,22 @@ type: prompt
 - `FRONTEND-035`: below 40em the header may wrap at large text (end group on a
   second row, still right); one row from 40em. Why: at 200 % text on 320/360 px
   it overflowed by up to 200 px; the sticky sidebar's `top` assumes one row.
+- `POSTS-009`: parents join reposted originals in the one `posts_by_ids` batch;
+  the batch's flat views are already one level deep, so a nested parent is the
+  flat view as is. Why: reuse, a same-page parent built once, order-free.
+- `POSTS-009`: "plain repost" parent = repost with no text and no media (the
+  card's rule); its originals are one more conditional `posts_by_ids`. Why: the
+  card already draws that rule; a fixed statement count would need a new
+  self-referencing query (KISS). The 2-vs-20 tests fire every read on both pages.
+- `POSTS-009`: unspecified edges mirror `reposted_post`: a plain-repost parent
+  with a deleted original gives null + true; a plain repost of a plain repost
+  follows one hop. Why: one rule for the reader.
+- `POSTS-009`: the liked-reply check is a correlated `EXISTS` through
+  `ix_post_likes_post_id`. Why: probed per candidate, so the newest-first scan
+  stops at the limit; the planner picks the index with seqscan on.
+- `POSTS-009`: EVENTS-012's head-pin migration test (`get_heads() == [its
+  revision]`) rewritten in its own commit to "one head, that revision on its
+  line". Why: any later migration broke it; mutation-checked with two heads.
 - Follow-up (test flake, 2026-11-05): `ComposeRoute.test.tsx` "renders the
   real composer…" fails in the local frontend container on `main` itself
   (c4f5a2a) while CI passes it: `getByRole('textbox')` right after
