@@ -10,23 +10,14 @@ type: prompt
 success 2026-11-06 20:51Z). The owner ran Migration (the auto-mode classifier
 refused the session's own invoke): head `b9f4c7e2d610`, recorded on #351;
 `/api/health` and `/api/events/games/recent` answered 200.
-**FRONTEND-037 prerequisite:** Director branch
-`director/bundle-fold-before-frontend037` (worktree `fanwire-f037-fold`) folds
-every merged unit's bundle file into `BASE` (re-measured at `2e29dac`;
-FRONTEND-031 and EVENTS-013 claimed outputs 037 changes) and amends the tab
-criterion: a `?line=` address starts on that line's team. It must merge
-before the unit PR. Test agent works in `fanwire-FRONTEND-037-test`.
 - FRONTEND-037 choices: short names from `teamShortName` in
   `features/games/format.ts` (last word; "Trail Blazers" kept whole); season
   carried as `/games/<id>?season=` (team cards always send the level's season,
   Recent Games the game's); team tabs reuse `SegmentedTabs` ("Team box
   scores"); cumulative chart is wins above / losses below a baseline with a
   `<details>` table equivalent; two-column cards via a container query.
-- Earlier merged/deployed units: FEED-001 #332; FRONTEND-032/033/034/035/036 #331/#333/#342/#336/#343; POSTS-009 #337 (migration head `e6d7328e8881`).
 - `EVENTS-013` is lazy, after SearchRail in `routes/HomeView.tsx`; bundle measurements: #351.
-- Prior browser evidence: #346 (360/768/1280, both themes, signed-in/guest).
 - `FRONTEND-039`: L=53.75em (860px); R=76.0625em (1217px), the first width fitting 952px main with 16px outer gaps and simulated 17px scrollbar. At 1032px the left gap is 16px; bounded main minimum permits 200% text without overflow. All 280 browser rows passed. See #347.
-- The combined container suite passed 3,476 tests. Default-parallel local runs exposed an existing intermittent ComposeRoute failure; bounded full suites with two workers and CI passed. Axe remains NOT DONE.
 - EVENTS-013 design, test correction `ce6e244` and evidence: #351 (axe NOT DONE).
 
 **Autonomous Director brief:** worktree subagents, hand-run units and deploys.
@@ -53,9 +44,17 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 
 ## Where things stand
 
-EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). FRONTEND-037 is
-in its test stage; its prerequisite Director PR (bundle fold + `?line=`
-amendment) must merge first. Then the unit's PR, its deploy, and Finish.
+EVENTS-013 is merged, deployed and migrated (`b9f4c7e2d610`). Prerequisite
+Director PR #353 (bundle fold + `?line=` amendment) is green, awaiting merge.
+FRONTEND-037: tests committed locally as `d78fdac` (detached, worktree
+`fanwire-FRONTEND-037-test`, on top of #353's `43e7c80`, unpushed). The
+implementation is uncommitted in worktree `fanwire-FRONTEND-037-impl`, with
+a reviewed test correction (TeamSearch path compare, mutation-checked) and a
+new `unplayed-games.test.tsx` (red before, green after, mutation-checked).
+Typecheck and lint are clean; the full suite was stopped for low host memory
+and is still to run. Once #353 merges: cut `agent/FRONTEND-037` from
+origin/main, hand start, cherry-pick `d78fdac`, then commit the correction,
+the implementation and the wiki separately, then run gates, browser rows and the PR.
 
 ## Order and gates
 
