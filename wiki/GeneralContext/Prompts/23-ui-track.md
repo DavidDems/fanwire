@@ -4,133 +4,25 @@ type: prompt
 
 # 23 — UI track: sidebar, search rail, reply context and recent games
 
-## Update (2026-11-05, Director session)
+## Update (2026-11-06, Director session)
 
-**Progress.** Gate units unstarted at session start, so this session runs them.
-- `FEED-001`: PR #332 merged 2026-11-06 02:31Z; deploy 42150873983 succeeded (no migration). Root cause: a signed-in viewer gets
-  `FollowsAndPreferredTeamStrategy` (followed + self + preferred team), so an
-  account that follows nobody saw an empty feed (reproduced on localhost).
-- `FRONTEND-032`: PR #331 merged 2026-11-06 01:54Z; deploy 42146851577 succeeded (no migration), `/api/health` ok, the Invite code is in the production bundle.
-- `FRONTEND-033`: PR #333 merged 2026-11-06 02:37Z; deploy 42151564004 succeeded (no migration). Before timings (localhost, throttled
-  400 ms / 1.6 Mbps / CPU 4x): URL at ~25 ms, old page visible ~500 ms while
-  the lazy chunk loads, "Loading this profile…" ~430 ms, content ~960 ms.
-  Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
-  ~57 ms throttled, 3 stale frames instead of 31.
-- 2026-11-06 ~03:10Z: host memory freed (vite previews and 8011 stopped, Docker restarted at the human's request). `POSTS-009` (worktree fw-POSTS-009) and `FRONTEND-035` (fw-FRONTEND-035) hand-started from origin/main 85ede3d; test subagents running.
-- `FRONTEND-035`: PR #336 merged 2026-11-06 ~04:47Z; deploy 42164566522 succeeded (no migration).
-- `POSTS-009`: PR #337 merged 2026-11-06 ~05:01Z. **Deploy 42165903823 failed** at
-  "Check the live IAM matches the repo": live `FanwireRoleBoundary` (default v1)
-  differs from `infra/iam/fanwire-role-boundary-policy.json`, changed by #338
-  (Track D, another session). The human rolls IAM out, then re-runs the deploy;
-  only then invoke Migration for `e6d7328e8881` and record it on #337.
-- 2026-11-06: the human merged both and asked this session to finish the track
-  without waiting, except `EVENTS-013` and `FRONTEND-037` (another agent's).
-- `FRONTEND-034`: PR #342 open, no migration; container 3408/3408; all browser
-  rows measured. Dev DB seeded posts 27–32 (replies, a deleted parent, likes).
-- `FRONTEND-036`: tests committed; #340 (spec amendment: `thread-route.test.tsx`)
-  must merge before 036's PR; implementation subagent running.
+**This session's part is done.** The human gave `EVENTS-013` and the follow-on
+`FRONTEND-037` to another session, so this brief stays until they merge; that
+session deletes it as `Finish` says.
 
-**Design-choice log** (unit, choice, why):
-- `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
-  one who follows anyone keeps today's feed. Why: the smallest change that
-  meets "same eligible posts as the guest feed" without changing the
-  established follows feed.
-- `FRONTEND-032`: Invite is fixed on its own (compose's bottom; right = the
-  +'s offset + 3.5rem + `--space-3`), not in a shared container. Why: compose's
-  markup and its dialog-anchor and clearance tests stay untouched.
-- `FRONTEND-032`: a pill as tall as the + (3.5rem, `--radius-full`,
-  `--shadow-2`) carrying Button secondary md's classes. Why: the two sit on one
-  line top and bottom, and colours, edge, focus ring and forced colours are
-  exactly Button secondary's.
-- `FRONTEND-032`: "Link copied" is a visually hidden status; the label itself
-  reads "Copied". Why: a visible second message would repeat the label.
-- `FRONTEND-032`: the clipboard fallback is a raised card above the button
-  with a read-only field, focused and selected, "Copy this link"; no timer, it
-  goes on the next successful copy or Escape. Why: copying by hand needs time,
-  and the card can't reach the + at 320 px.
-- `FRONTEND-032`: the label keeps one width for "Invite" and "Copied", and the
-  pill was narrowed (inline padding `--space-3`) after the 200 % row at 360 px
-  clipped it by 30 px. Why: no jump on copy, and it must fit at large text.
-- `FEED-001`: the fallback lives inside `FollowsAndPreferredTeamStrategy` and
-  ignores the preferred team when there are no follows. Why: the guest
-  selection already includes team posts, and `strategy_for` stays unchanged
-  (an existing test pins its return type).
-- `FRONTEND-033`: the profile route gets its own Suspense with a
-  `ProfileLoading` fallback (header-card skeleton + "Loading this profile…"),
-  and `ProfilePage` shows the same while data loads. Why: a newly mounted
-  boundary shows its fallback even inside the router's transition, and one
-  look covers both waits.
-- `FRONTEND-033`: the skeleton copies the header card's grid with no
-  description lines and no reserved Follow row; the status sits under the card.
-  Why: nothing promised that may not come, and the own profile has no Follow.
-  At 360 a public card still grows 98 → 154 px as Follow wraps.
-- `FRONTEND-033`: a new Retry button under the profile's error alert. Why: the
-  criterion asks for error/retry, and the page had no retry.
-- `FRONTEND-035`: one `.headerEnd` group pushed right with `margin-left: auto`
-  at every width. Why: the end is pushed once, whatever it holds.
-- `FRONTEND-035`: nav and header-Search icons at 24 px. Why: Lucide's own grid;
-  icon-only controls need the weight.
-- `FRONTEND-035`: the current bar is a `::after` border (top, inset `--space-3`,
-  in the bar; inline-start, inset `--space-2`, in the sidebar). Why: a border
-  survives forced colours, and an inset reads as a marker.
-- `FRONTEND-035`: `outline-offset: -2px` on nav items. Why: cells touch each
-  other and the viewport edge, so an outer ring would be clipped.
-- `FRONTEND-035`: hover goes to `--color-text`, plus a `--color-surface-muted`
-  fill from 40em. Why: matches secondary Button.
-- `FRONTEND-035`: the sidebar is transparent with no edge, `padding-top`
-  `--space-5`. Why: it reads as part of the page, first item level with main.
-- `FRONTEND-035`: non-current items regular weight. Why: the old rule made all
-  links semibold, so the current item's 600 would not stand out.
-- `FRONTEND-035`: the 28 px wordmark at every width. Why: the 40–44em shrink
-  existed only to fit the nav into the header.
-- `FRONTEND-035`: below 40em the header may wrap at large text (end group on a
-  second row, still right); one row from 40em. Why: at 200 % text on 320/360 px
-  it overflowed by up to 200 px; the sticky sidebar's `top` assumes one row.
-- `POSTS-009`: parents join reposted originals in the one `posts_by_ids` batch;
-  the batch's flat views are already one level deep, so a nested parent is the
-  flat view as is. Why: reuse, a same-page parent built once, order-free.
-- `POSTS-009`: "plain repost" parent = repost with no text and no media (the
-  card's rule); its originals are one more conditional `posts_by_ids`. Why: the
-  card already draws that rule; a fixed statement count would need a new
-  self-referencing query (KISS). The 2-vs-20 tests fire every read on both pages.
-- `POSTS-009`: unspecified edges mirror `reposted_post`: a plain-repost parent
-  with a deleted original gives null + true; a plain repost of a plain repost
-  follows one hop. Why: one rule for the reader.
-- `POSTS-009`: the liked-reply check is a correlated `EXISTS` through
-  `ix_post_likes_post_id`. Why: probed per candidate, so the newest-first scan
-  stops at the limit; the planner picks the index with seqscan on.
-- `POSTS-009`: EVENTS-012's head-pin migration test (`get_heads() == [its
-  revision]`) rewritten in its own commit to "one head, that revision on its
-  line". Why: any later migration broke it; mutation-checked with two heads.
-- `FRONTEND-034`: parent box = `QuotedOriginal` with a `parent` flag, `Avatar
-  sm` (2rem, same as the reply's) from the parent's keys, quote spacing kept.
-  Why: `Avatar` has only sm/lg and takes no class; the brief says reuse.
-- `FRONTEND-034`: the parent clamps to four lines, the quote stays at three.
-  Why: the parent is the reply's context.
-- `FRONTEND-034`: the thread line is `.threaded::before`, a 2px `--color-border`
-  border centred in the card's left padding, from under the avatar to the
-  middle of the Show this thread row. Why: a wrapper excludes a repost's
-  "reposted" line; content isn't indented, so a line at the avatar's centre
-  would cross the text; a border survives forced colours.
-- `FRONTEND-034`: Show this thread at `--font-size-sm`, weight 600, link colour,
-  underline on hover, 1.5rem min-height, only as wide as its words. Why: like
-  the time link; WCAG 2.5.8; the rest of the row still opens the reply.
-- Follow-up (test flake, 2026-11-05): `ComposeRoute.test.tsx` "renders the
-  real composer…" fails in the local frontend container on `main` itself
-  (c4f5a2a) while CI passes it: `getByRole('textbox')` right after
-  `findByRole('heading')` races the lazy composer. Should be `findByRole`.
-  Two delete-focus tests flaked once under the same load.
-- `FEED-001` follow-up (not built): an account whose only follows are
-  deactivated still counts as following someone, so its feed stays thin.
-
-**Spec amendments:**
-- #335 (2026-11-06): `FRONTEND-035` `allowed_paths` gains
-  `features/account/account-menu.test.tsx` and `routes/compose-modal.test.tsx`;
-  `frontend/src/features/**` leaves `forbidden_paths` (forbidden wins). Why: both
-  tests pin the old nav and break by design; must merge before 035's PR.
-- #340 (2026-11-06): `FRONTEND-036` `allowed_paths` gains
-  `routes/thread-route.test.tsx`, whose typed-text test used the removed home
-  bar. Must merge before 036's PR.
+- Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
+  #333, `FRONTEND-035` #336. Open: `FRONTEND-034` #342, `FRONTEND-036` #343
+  (merge spec amendment #340 first).
+- `POSTS-009` #337 is merged, but **deploy 42165903823 failed** at "Check the
+  live IAM matches the repo": live `FanwireRoleBoundary` v1 lacks
+  `cognito-idp:AdminDeleteUser`, added by #338 (Track D). After the human rolls
+  it out and re-runs the deploy, invoke `Migration` and record head
+  `e6d7328e8881` on #337.
+- **For `EVENTS-013`:** the rail's slot is the comment after `SearchRail` in
+  `routes/HomeView.tsx`. The entry has 4 B of gzip budget left after
+  `FRONTEND-036`, so rail code belongs in a lazy chunk.
+- Design choices are in each PR body; `FrontendUI/` describes what was built.
+  Follow-ups are in `TODO/02-backlog.md` "UI track".
 
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
@@ -160,21 +52,14 @@ body names every restricted-tree edit.
 
 Hand each subagent only its spec's `required_context`, never the whole wiki.
 
-## Where things stand (2026-11-05), so verify before trusting
+## Where things stand
 
-- The five specs are on `main`: `POSTS-009`, `FRONTEND-034`, `FRONTEND-035`,
-  `FRONTEND-036`, `EVENTS-013`. None is started. Check with
-  `python .ai/bin/agentctl.py status`, `gh pr list` and
-  `git branch -r --list "origin/agent/*"`.
-- **Follow-up `FRONTEND-037`** captures the human's 2026-11-05 request to
-  compact NBA game results across Recent Games, Stats seasons, the compose
-  picker and game detail. It is independent of the five-unit UI track and starts
-  only after `EVENTS-013` has merged, so the Recent Games card it reuses exists
-  on `main`. Its spec is a separate task and PR.
-- Track D (`TODO/02-backlog.md` "Launch adjustments") still has `AUTH-001`,
-  `USERS-008`, `FRONTEND-032`, `FEED-001` and `FRONTEND-033` open. Three are this
-  track's gates (below). Another session may be running them, so check before
-  starting one.
+The Update note above is current as of 2026-11-06. Verify with
+`python .ai/bin/agentctl.py status`, `gh pr list` and
+`git branch -r --list "origin/agent/*"` before trusting it. `FRONTEND-037`
+compacts NBA game results across Recent Games, Stats seasons, the compose
+picker and game detail; it reuses `EVENTS-013`'s card, so it starts after that
+merges.
 
 ## Order and gates
 
@@ -194,11 +79,6 @@ FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-0
   from `main` after `EVENTS-013` merges, and use its own task branch. It updates
   the recent-result card from that unit rather than adding another Recent Games
   section.
-- **Gate units from Track D** (`FEED-001`, `FRONTEND-032`, `FRONTEND-033`): if one
-  has no `agent/*` branch, no open PR and `agentctl status` shows it unstarted,
-  run it yourself under its own spec and brief, exactly as a UI-track unit. Leave
-  `AUTH-001` and `USERS-008` alone. They are not gates, and they need the
-  human's own AWS steps.
 
 ## The loop
 
