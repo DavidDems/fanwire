@@ -30,6 +30,7 @@ import {
   isAtRule,
   parseCss,
   readSrcFile,
+  selectors,
   type CssBlock,
 } from "../test/css";
 import {
@@ -311,5 +312,184 @@ describe("every *.module.css under src/routes (criterion 9)", () => {
     );
 
     expect(problems).toEqual([]);
+  });
+});
+
+/**
+ * FRONTEND-036: the home page's right rail, as source. jsdom lays nothing
+ * out, so what is pinned is what the modules must say by name; whether it
+ * looks right (and that nothing overflows at 320 to 1920 px) is the browser
+ * rows'.
+ *
+ * - `main` on `/` is widened, from 72em only, to the feed's `--content-max`
+ *   plus `--space-5` plus the rail's `--rail-width`, by a rule in the shell's
+ *   module (where `main`'s other widths are). Which routes' `main` it reaches
+ *   is `home-rail.test.tsx`'s, which renders them. `.main` itself keeps
+ *   `--content-max` (above), so every other route keeps its width.
+ * - The rail is `--rail-width` wide, sticky at the header's height (the
+ *   sidebar's own `top`), and scrolls on its own when taller than the
+ *   viewport: a height or max-height under `100vh`/`dvh`/`svh` and an `auto`
+ *   overflow. These rules may sit in `routes/HomeView.module.css` or a
+ *   `features/search/*.module.css`, wherever the rail's markup is.
+ * - A post row's text is clamped to three lines.
+ */
+describe("the home page's rail (FRONTEND-036)", () => {
+  const FROM_72EM = /^@media\b.*\(\s*min-width\s*:\s*72em\s*\)/i;
+  const RAIL_SOURCES = (): string[] => [
+    "routes/HomeView.module.css",
+    ...moduleCssFiles(join(SRC_DIR, "features", "search")).map((file) =>
+      relative(SRC_DIR, file).split(sep).join("/"),
+    ),
+  ];
+
+  function railRules(): { file: string; rule: CssBlock }[] {
+    return RAIL_SOURCES().flatMap((file) =>
+      allBlocks(parseCss(readSrcFile(file)))
+        .filter((block) => !isAtRule(block))
+        .map((rule) => ({ file, rule })),
+    );
+  }
+
+  function compact(value: string | undefined): string {
+    return (value ?? "").replace(/\s+/g, "");
+  }
+
+  /** The shell's rules inside a (min-width: 72em) query, at any depth. */
+  function shellRulesFrom72em(): CssBlock[] {
+    return allBlocks(shellBlocks())
+      .filter((block) => isAtRule(block) && FROM_72EM.test(block.prelude))
+      .flatMap((media) => allBlocks(media.children))
+      .filter((block) => !isAtRule(block));
+  }
+
+  it("widens main from 72em to --content-max + --space-5 + --rail-width", () => {
+    const widened = shellRulesFrom72em().filter((rule) => {
+      const value = compact(
+        declared(rule, "max-width") ?? declared(rule, "max-inline-size"),
+      );
+      return (
+        value.includes("var(--content-max)") &&
+        value.includes("var(--space-5)") &&
+        value.includes("var(--rail-width)")
+      );
+    });
+
+    expect(
+      widened.map((rule) => rule.prelude),
+      "no rule under @media (min-width: 72em) in AppLayout.module.css widens main by the rail",
+    ).not.toEqual([]);
+    for (const rule of widened) {
+      expect(
+        rule.prelude,
+        "the widening is for main, not every route's column",
+      ).toMatch(/\.main\b/);
+      expect(selectors(rule)).not.toContain(".main");
+    }
+  });
+
+  it("keeps the other columns as they were", () => {
+    const main = shellBlocks().find(
+      (block) => !isAtRule(block) && selectorSet(block).has(".main"),
+    );
+    expect(declared(main as CssBlock, "max-width")).toBe("var(--content-max)");
+    for (const rule of shellRulesFrom72em()) {
+      if (!selectorSet(rule).has(".main")) continue;
+      expect(
+        declared(rule, "max-width"),
+        "@media (min-width: 72em) must not widen every route's .main",
+      ).toBeUndefined();
+    }
+  });
+
+  it("sets the rail's width by --rail-width, never as a number", () => {
+    const sized = railRules().filter(({ rule }) =>
+      rule.declarations.some(
+        ({ property, value }) =>
+          /^(width|inline-size|flex|flex-basis|max-width|min-width)$/.test(
+            property,
+          ) && /var\(\s*--rail-width\s*\)/.test(value),
+      ),
+    );
+    expect(
+      sized.map(({ file, rule }) => `${file}: ${rule.prelude}`),
+      "no rail rule sizes it by var(--rail-width)",
+    ).not.toEqual([]);
+
+    const numbers = railRules().filter(({ rule }) =>
+      rule.declarations.some(({ value }) => /(?<![\d.])18rem\b/.test(value)),
+    );
+    expect(numbers.map(({ rule }) => rule.prelude)).toEqual([]);
+  });
+
+  it("makes the rail sticky at the header's height, as the sidebar is", () => {
+    const sidebarTop = allBlocks(shellBlocks())
+      .filter((block) => !isAtRule(block) && selectorSet(block).has(".nav"))
+      .map((rule) => declared(rule, "top"))
+      .filter(
+        (top): top is string => top !== undefined && /target-min/.test(top),
+      )
+      .pop();
+    expect(sidebarTop, "the sidebar's sticky top").toBeDefined();
+
+    const sticky = railRules().filter(
+      ({ rule }) => declared(rule, "position") === "sticky",
+    );
+    expect(
+      sticky.map(({ rule }) => rule.prelude),
+      "no rail rule is position: sticky",
+    ).not.toEqual([]);
+    expect(
+      sticky.some(
+        ({ rule }) => compact(declared(rule, "top")) === compact(sidebarTop),
+      ),
+      `a sticky rail rule's top is the sidebar's: ${sidebarTop ?? ""}`,
+    ).toBe(true);
+  });
+
+  it("scrolls the rail on its own when it is taller than the viewport", () => {
+    const VIEWPORT_TALL = /\b100(vh|dvh|svh|lvh)\b/;
+    const scrolls = railRules().filter(({ rule }) => {
+      if (declared(rule, "position") !== "sticky") return false;
+      const height = [
+        "max-height",
+        "height",
+        "max-block-size",
+        "block-size",
+      ].some((property) => VIEWPORT_TALL.test(declared(rule, property) ?? ""));
+      const overflow = [
+        declared(rule, "overflow-y"),
+        declared(rule, "overflow"),
+        declared(rule, "overflow-block"),
+      ].some((value) => value !== undefined && /\bauto\b/.test(value));
+      return height && overflow;
+    });
+
+    expect(
+      scrolls.map(({ rule }) => rule.prelude),
+      "the sticky rail needs a viewport-bounded height and overflow auto",
+    ).not.toEqual([]);
+  });
+
+  it("clamps a post row's text to three lines", () => {
+    const clamped = railRules().filter(({ rule }) =>
+      ["-webkit-line-clamp", "line-clamp"].some(
+        (property) => declared(rule, property) === "3",
+      ),
+    );
+
+    expect(
+      clamped.map(({ rule }) => rule.prelude),
+      "no rule clamps to three lines",
+    ).not.toEqual([]);
+  });
+
+  it("uses no max-width media query in the rail's modules", () => {
+    const media = RAIL_SOURCES().flatMap((file) =>
+      allBlocks(parseCss(readSrcFile(file)))
+        .filter((block) => /^@media\b/i.test(block.prelude))
+        .map((block) => block.prelude),
+    );
+
+    expect(media.filter((prelude) => MAX_WIDTH.test(prelude))).toEqual([]);
   });
 });

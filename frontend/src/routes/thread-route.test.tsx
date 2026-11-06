@@ -30,6 +30,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { renderAppAt } from "../test/app-route";
+import { stubViewport } from "../test/search";
 import {
   feedPage,
   feedStub,
@@ -130,23 +131,34 @@ describe("opening a thread from the feed (criterion 1)", () => {
     expect(feed.requests).toHaveLength(feedReads);
   });
 
-  it("keeps the page underneath's own state: the search bar's typed text survives", async () => {
-    const user = userEvent.setup();
-    const { handlers } = arrangeThread();
-    renderAppAt("/", "anonymous", handlers);
-    await screen.findByText(ROOT_TEXT);
-    const box = screen.getByRole("searchbox");
-    await user.type(box, "kawhi");
+  it("keeps the page underneath's own state: the rail's typed text survives", async () => {
+    // FRONTEND-036: the home page's search box is in the right rail, mounted
+    // from 72em only, so the viewport is stubbed wide for this test.
+    const viewport = stubViewport(1280);
+    try {
+      const user = userEvent.setup();
+      const { handlers } = arrangeThread();
+      renderAppAt("/", "anonymous", handlers);
+      await screen.findByText(ROOT_TEXT);
+      const rail = screen.getByRole("complementary");
+      const box = within(rail).getByRole("searchbox");
+      await user.type(box, "kawhi");
 
-    await user.click(timestampLink(cardUnderneath(ROOT_TEXT)));
-    const dialog = await threadDialog();
-    await within(dialog).findByText(ROOT_TEXT);
-    expect(screen.getByRole("searchbox")).toHaveValue("kawhi");
+      await user.click(timestampLink(cardUnderneath(ROOT_TEXT)));
+      const dialog = await threadDialog();
+      await within(dialog).findByText(ROOT_TEXT);
+      expect(box.isConnected).toBe(true);
+      expect(box).toHaveValue("kawhi");
 
-    await user.click(within(dialog).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(openDialog()).toBeNull());
-    expect(screen.getByRole("searchbox")).toBe(box);
-    expect(box).toHaveValue("kawhi");
+      await user.click(within(dialog).getByRole("button", { name: "Close" }));
+      await waitFor(() => expect(openDialog()).toBeNull());
+      expect(
+        within(screen.getByRole("complementary")).getByRole("searchbox"),
+      ).toBe(box);
+      expect(box).toHaveValue("kawhi");
+    } finally {
+      viewport.restore();
+    }
   });
 
   it("opens another post's thread in the same modal, keeping the original background", async () => {

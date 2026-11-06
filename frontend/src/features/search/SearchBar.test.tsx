@@ -1,11 +1,12 @@
 /**
  * FRONTEND-007 — the free-text bar itself (criterion 8's control).
  *
- * The bar is one component used in two places, the home page and `/search`,
- * and both reach the same results view by *address*: submitting goes to
- * `/search?q=<text>`, and `SearchPage` reads `q` from there. That makes the
- * URL the seam, so what is pinned here is where a submit navigates to, and
- * that the box shows the `q` it was opened with.
+ * The bar is one component used in two places, the home page's right rail
+ * and `/search`, and the address is the seam: on `/search` submitting goes to
+ * `/search?q=<text>`, which `SearchPage` reads; on `/` (FRONTEND-036, the
+ * rail) it stays on the page and writes `/?q=<text>`, a new history entry,
+ * which the rail reads. What is pinned here is where a submit navigates to,
+ * and that the box shows the `q` it was opened with.
  *
  * The backend validates `q` as 1–100 characters, stripped ([[0x07-search]]
  * Routes), so the box caps at 100, the submit trims, and an empty or
@@ -68,9 +69,23 @@ describe("the search bar", () => {
     expect(button).toHaveAttribute("type", "submit");
   });
 
-  it("goes to /search?q= with the trimmed text on submit", async () => {
+  it("on /, stays on / and writes ?q= with the trimmed text on submit (FRONTEND-036)", async () => {
     const user = userEvent.setup();
-    renderBar();
+    renderBar("/");
+
+    await user.type(
+      screen.getByRole("searchbox", { name: BOX_NAME }),
+      "  raptors in six  ",
+    );
+    await user.click(screen.getByRole("button", { name: "Search" }));
+
+    expect(currentPath()).toBe("/");
+    expect(currentQuery().get("q")).toBe("raptors in six");
+  });
+
+  it("on /search, goes to /search?q= with the trimmed text on submit", async () => {
+    const user = userEvent.setup();
+    renderBar("/search");
 
     await user.type(
       screen.getByRole("searchbox", { name: BOX_NAME }),
@@ -84,7 +99,7 @@ describe("the search bar", () => {
 
   it("submits from the keyboard too", async () => {
     const user = userEvent.setup();
-    renderBar();
+    renderBar("/search");
 
     await user.type(
       screen.getByRole("searchbox", { name: BOX_NAME }),
@@ -113,6 +128,38 @@ describe("the search bar", () => {
 
     expect(currentPath()).toBe("/");
     expect(currentQuery().has("q")).toBe(false);
+  });
+
+  it("goes nowhere on an empty or whitespace-only submit on /search either", async () => {
+    const user = userEvent.setup();
+    renderBar("/search");
+
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(currentPath()).toBe("/search");
+    expect(currentQuery().has("q")).toBe(false);
+
+    await user.type(screen.getByRole("searchbox", { name: BOX_NAME }), "    ");
+    await user.click(screen.getByRole("button", { name: "Search" }));
+    expect(currentPath()).toBe("/search");
+    expect(currentQuery().has("q")).toBe(false);
+  });
+
+  it("shows the q it was opened with on /, and follows it when q changes", async () => {
+    const user = userEvent.setup();
+    renderBar("/?q=raptors");
+    expect(screen.getByRole("searchbox", { name: BOX_NAME })).toHaveValue(
+      "raptors",
+    );
+
+    const box = screen.getByRole("searchbox", { name: BOX_NAME });
+    await user.clear(box);
+    await user.type(box, "suns{Enter}");
+
+    expect(currentPath()).toBe("/");
+    expect(currentQuery().get("q")).toBe("suns");
+    expect(screen.getByRole("searchbox", { name: BOX_NAME })).toHaveValue(
+      "suns",
+    );
   });
 
   it("shows the q it was opened with on /search", () => {

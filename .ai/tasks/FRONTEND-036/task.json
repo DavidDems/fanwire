@@ -30,6 +30,7 @@
     "frontend/src/routes/AppLayout.tsx",
     "frontend/src/routes/AppLayout.module.css",
     "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/routes/thread-route.test.tsx",
     "frontend/src/features/search/**",
     "frontend/src/test/search.ts",
     "frontend/src/test/bundle-budgets/FRONTEND-036.ts",
