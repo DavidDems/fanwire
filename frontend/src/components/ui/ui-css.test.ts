@@ -314,6 +314,12 @@ describe("every *.module.css under src/components/ui", () => {
     ).toContain("Button.module.css");
   });
 
+  it("scans the Invite button's module too (FRONTEND-032)", () => {
+    expect(
+      files.map((file) => relative(UI_DIR, file).split(sep).join("/")),
+    ).toContain("InviteButton.module.css");
+  });
+
   it("uses only var(--color-…), rem font sizes and a visible focus", () => {
     const problems = files.flatMap((file) =>
       violations(readFileSync(file, "utf8")).map(
@@ -388,6 +394,8 @@ describe("no runtime styling work (UI-010 Baseline d)", () => {
     "components/ui/SearchInput.tsx",
     "components/ui/SegmentedTabs.tsx",
     "components/ui/FloatingButton.tsx",
+    // FRONTEND-032: the Invite button beside it, placed by CSS alone.
+    "components/ui/InviteButton.tsx",
     "components/FormField.tsx",
   ];
 

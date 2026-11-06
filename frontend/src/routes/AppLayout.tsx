@@ -16,6 +16,7 @@ import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { Button, buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
+import { InviteButton } from "../components/ui/InviteButton";
 import { Avatar } from "../components/ui/Avatar";
 import { Menu } from "../components/ui/Menu";
 import {
@@ -112,6 +113,10 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * Compose nav item. A button (FloatingButton's `onClick` form), because its
  * link form carries no history state. It sits outside `main`, so the compose
  * dialog, shown modally, takes it out of the tab order while it is open.
+ *
+ * **The Invite button** (`FRONTEND-032`) is rendered immediately before the +,
+ * under the same gate and outside `main` for the same reason: it copies the
+ * site's root, the guest feed, for a friend. It places itself, by CSS alone.
  *
  * "Sign in" is offered to an anonymous visitor only, and not on `/sign-in`
  * itself, where it would be a link to the page already open.
@@ -234,14 +239,17 @@ export function AppLayout() {
         </ShellAccountStatus.Provider>
       </main>
       {ownUserId === null ? null : (
-        <FloatingButton
-          aria-label="Compose a post"
-          onClick={() => {
-            void navigate("/compose", { state: composeState });
-          }}
-        >
-          <CirclePlusIcon />
-        </FloatingButton>
+        <>
+          <InviteButton />
+          <FloatingButton
+            aria-label="Compose a post"
+            onClick={() => {
+              void navigate("/compose", { state: composeState });
+            }}
+          >
+            <CirclePlusIcon />
+          </FloatingButton>
+        </>
       )}
     </>
   );
