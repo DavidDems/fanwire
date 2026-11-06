@@ -32,6 +32,35 @@ export type DidNotPlayOut = components["schemas"]["DidNotPlayOut"];
 export type ShootingOut = components["schemas"]["ShootingOut"];
 export type TeamRefOut = components["schemas"]["TeamRefOut"];
 
+export type RecentGameOut = components["schemas"]["RecentGameOut"];
+
+export function testRecentGame(
+  overrides: Partial<RecentGameOut> = {},
+): RecentGameOut {
+  return {
+    id: 501,
+    season: "2023-24",
+    date: "2024-01-15T22:30:00",
+    game_type: "regular",
+    label: null,
+    home_team: TEST_HOME_TEAM,
+    away_team: TEST_AWAY_TEAM,
+    home_score: 117,
+    away_score: 109,
+    home_rank: 3,
+    away_rank: 8,
+    home_record: { wins: 12, losses: 4 },
+    away_record: { wins: 8, losses: 8 },
+    ...overrides,
+  };
+}
+
+export function recentGamesAre(items: RecentGameOut[]): RequestHandler {
+  return http.get("*/events/games/recent", () =>
+    HttpResponse.json<RecentGameOut[]>(items),
+  );
+}
+
 export const TEST_HOME_TEAM: TeamRefOut = {
   id: 1,
   name: "Toronto Raptors",

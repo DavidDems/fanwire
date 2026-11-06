@@ -295,6 +295,12 @@ export function textOf(element: HTMLElement): string {
 /** A game choice for game 501, by its two scores. */
 export const COMPLETED_GAME_NAME = /(?=.*\b117\b)(?=.*\b109\b)/;
 
+/**
+ * A game choice for game 502, by its 0-0 score. FRONTEND-037: a game choice
+ * is a result card named by its matchup, result and score, not its date.
+ */
+export const UNPLAYED_GAME_NAME = /\b0\s*[-–]\s*0\b/;
+
 export async function openPicker(user: User): Promise<void> {
   await user.click(attachStatsButton());
 }
@@ -308,7 +314,7 @@ export async function pickerShown(): Promise<HTMLElement> {
 
 export async function openGame(
   user: User,
-  gameName: RegExp = /Jan.*15|15.*Jan/,
+  gameName: RegExp = COMPLETED_GAME_NAME,
 ) {
   const dialog = await pickerShown();
   await user.click(

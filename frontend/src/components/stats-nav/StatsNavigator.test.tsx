@@ -89,7 +89,7 @@ import {
   testTeamSeason,
   type PlayerListItemOut,
 } from "../../test/stats";
-import { bodyRows, rowText, tableProblems } from "../../test/tables";
+import { rowText, tableProblems } from "../../test/tables";
 import { PlayerResults } from "./PlayerResults";
 import {
   StatsNavigator,
@@ -399,10 +399,27 @@ describe("Season → Team season → Back, through a state adapter", () => {
     expect(hrefs).toEqual(
       testTeamSeason().games.map((g) => `#game-${g.game_id}`),
     );
-    const table = within(main).getByRole("table", {
-      name: /Boston Celtics games, 2023-24, newest first/i,
-    });
-    expect(bodyRows(table as HTMLTableElement)).toHaveLength(3);
+    // FRONTEND-037 changed this: the games were a table captioned "Boston
+    // Celtics games, 2023-24, newest first"; they are now a list of result
+    // cards, one adapter game link per item, newest first.
+    const list = within(main)
+      .getAllByRole("list")
+      .find((candidate) =>
+        within(candidate)
+          .queryAllByRole("link")
+          .some((link) =>
+            (link.getAttribute("href") ?? "").startsWith("#game-"),
+          ),
+      );
+    if (list === undefined) throw new Error("the games are in no list");
+    const items = within(list).getAllByRole("listitem");
+    expect(
+      items.map((item) =>
+        within(item)
+          .getAllByRole("link")
+          .map((link) => link.getAttribute("href")),
+      ),
+    ).toEqual(testTeamSeason().games.map((g) => [`#game-${g.game_id}`]));
     expect(tableProblems(main)).toEqual([]);
   });
 

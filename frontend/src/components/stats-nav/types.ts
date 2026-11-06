@@ -33,8 +33,12 @@ export type StatsLevel =
 
 /** What the caller decides: how a game, a player and a level are reached. */
 export interface StatsNavAdapter {
-  /** A game's link; `children` is its text. */
-  gameLink(gameId: number, children: ReactNode): ReactNode;
+  /**
+   * A game's link; `children` is its text. `season`, when given, is the
+   * season it was reached from (a team level's), which a route adapter may
+   * carry to the game page so its team links return to that season.
+   */
+  gameLink(gameId: number, children: ReactNode, season?: string): ReactNode;
   /** A player's link; `children` is its text. */
   playerLink(playerId: number, children: ReactNode): ReactNode;
   /**

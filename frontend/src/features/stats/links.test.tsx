@@ -4,6 +4,9 @@
  * and `ROUTE_LINKS` gives the navigator's new optional `teamLink(teamId,
  * season | null, children)` through `teamHref`: the Seasons tab filtered to
  * that team, for that season when there is one.
+ *
+ * FRONTEND-037: `gameLink(gameId, children, season?)` takes an optional
+ * season; with one, the link is `/games/<id>?season=<season>`.
  */
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -37,6 +40,31 @@ describe("ROUTE_LINKS", () => {
       "href",
       "/players/2544",
     );
+  });
+
+  // FRONTEND-037: a game link may carry the season it was opened from, so the
+  // game page's team links return to that season; the game's path is the same.
+  it("carries a game link's season as ?season=, and none without one", () => {
+    renderWithProviders(
+      <>
+        {ROUTE_LINKS.gameLink(9101, "Celtics vs Mavericks", "2023-24")}
+        {ROUTE_LINKS.gameLink(9102, "Celtics at Suns")}
+      </>,
+    );
+
+    const withSeason = new URL(
+      screen
+        .getByRole("link", { name: "Celtics vs Mavericks" })
+        .getAttribute("href") ?? "",
+      "http://x.test",
+    );
+    expect(withSeason.pathname).toBe("/games/9101");
+    expect(withSeason.searchParams.get("season")).toBe("2023-24");
+    expect([...withSeason.searchParams.keys()]).toEqual(["season"]);
+
+    expect(
+      screen.getByRole("link", { name: "Celtics at Suns" }),
+    ).toHaveAttribute("href", "/games/9102");
   });
 
   it("gives teamLink, through teamHref, with and without a season", () => {
