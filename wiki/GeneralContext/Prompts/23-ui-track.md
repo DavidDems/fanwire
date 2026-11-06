@@ -17,15 +17,11 @@ type: prompt
   Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
   ~57 ms throttled, 3 stale frames instead of 31.
 - 2026-11-06 ~03:10Z: host memory freed (vite previews and 8011 stopped, Docker restarted at the human's request). `POSTS-009` (worktree fw-POSTS-009) and `FRONTEND-035` (fw-FRONTEND-035) hand-started from origin/main 85ede3d; test subagents running.
-- Paused ~03:50Z for the human's PC restart. Both test commits are made
-  locally (not pushed), guard OK: `POSTS-009` test commit on agent/POSTS-009
-  (worktree fw-POSTS-009; 49 red / 175 green; tests ran against fw-ui-pg via the
-  scratchpad plugin `pgplug/devpg_plugin.py`), `FRONTEND-035` test commit on
-  agent/FRONTEND-035 (fw-FRONTEND-035; 125 red / 405 green on touched files).
-  Next on resume: `docker start fw-ui-pg`; delegate both implementations; for
-  FRONTEND-035, after #335 merges, rebase the unpushed branch onto main and add a
-  second test commit fixing `account-menu.test.tsx` and `compose-modal.test.tsx`
-  (they pin the nav in the banner and the name "Feed").
+- `FRONTEND-035`: PR #336 open (needs #335, merged), no migration; 48/48
+  overflow rows clean, 200 % text fixed by a wrap commit.
+- `POSTS-009`: tests committed (5444611 after rebase); implementation subagent
+  running in fw-POSTS-009. Dev stack: fw-ui-pg (55432), uvicorn 8011 from
+  fw-FEED-001/backend, preview 5212 from fw-FRONTEND-035.
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
@@ -63,6 +59,26 @@ type: prompt
   At 360 a public card still grows 98 → 154 px as Follow wraps.
 - `FRONTEND-033`: a new Retry button under the profile's error alert. Why: the
   criterion asks for error/retry, and the page had no retry.
+- `FRONTEND-035`: one `.headerEnd` group pushed right with `margin-left: auto`
+  at every width. Why: the end is pushed once, whatever it holds.
+- `FRONTEND-035`: nav and header-Search icons at 24 px. Why: Lucide's own grid;
+  icon-only controls need the weight.
+- `FRONTEND-035`: the current bar is a `::after` border (top, inset `--space-3`,
+  in the bar; inline-start, inset `--space-2`, in the sidebar). Why: a border
+  survives forced colours, and an inset reads as a marker.
+- `FRONTEND-035`: `outline-offset: -2px` on nav items. Why: cells touch each
+  other and the viewport edge, so an outer ring would be clipped.
+- `FRONTEND-035`: hover goes to `--color-text`, plus a `--color-surface-muted`
+  fill from 40em. Why: matches secondary Button.
+- `FRONTEND-035`: the sidebar is transparent with no edge, `padding-top`
+  `--space-5`. Why: it reads as part of the page, first item level with main.
+- `FRONTEND-035`: non-current items regular weight. Why: the old rule made all
+  links semibold, so the current item's 600 would not stand out.
+- `FRONTEND-035`: the 28 px wordmark at every width. Why: the 40–44em shrink
+  existed only to fit the nav into the header.
+- `FRONTEND-035`: below 40em the header may wrap at large text (end group on a
+  second row, still right); one row from 40em. Why: at 200 % text on 320/360 px
+  it overflowed by up to 200 px; the sticky sidebar's `top` assumes one row.
 - Follow-up (test flake, 2026-11-05): `ComposeRoute.test.tsx` "renders the
   real composer…" fails in the local frontend container on `main` itself
   (c4f5a2a) while CI passes it: `getByRole('textbox')` right after
