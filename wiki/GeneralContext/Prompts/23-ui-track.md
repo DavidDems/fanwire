@@ -128,7 +128,9 @@ type: prompt
   `features/account/account-menu.test.tsx` and `routes/compose-modal.test.tsx`;
   `frontend/src/features/**` leaves `forbidden_paths` (forbidden wins). Why: both
   tests pin the old nav and break by design; must merge before 035's PR.
-- #340 (2026-11-06): `FRONTEND-036` `allowed_paths` gains\n  `routes/thread-route.test.tsx`, whose typed-text test used the removed home\n  bar. Must merge before 036's PR.
+- #340 (2026-11-06): `FRONTEND-036` `allowed_paths` gains
+  `routes/thread-route.test.tsx`, whose typed-text test used the removed home
+  bar. Must merge before 036's PR.
 
 **Brief for a Director session that runs autonomously** (a high-tier model on the
 human's subscription), managing worktree subagents through five hand-run units
