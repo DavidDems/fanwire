@@ -17,13 +17,17 @@ type: prompt
   Production unthrottled: cold 99–227 ms, warm ~5 ms. After: loading at
   ~57 ms throttled, 3 stale frames instead of 31.
 - 2026-11-06 ~03:10Z: host memory freed (vite previews and 8011 stopped, Docker restarted at the human's request). `POSTS-009` (worktree fw-POSTS-009) and `FRONTEND-035` (fw-FRONTEND-035) hand-started from origin/main 85ede3d; test subagents running.
-- `FRONTEND-035`: PR #336 open (needs #335, merged), no migration; 48/48
-  overflow rows clean, 200 % text fixed by a wrap commit.
-- `POSTS-009`: PR #337 open. **Deploy adds migration `e6d7328e8881`**: invoke
-  Migration after it, record the head on the PR, curl `/api/health` and
-  `/api/feed`. Backend container 2152 passed; combo with #336 frontend 3371/3372
-  (known ComposeRoute flake). Security review: no findings.
-- Next: `FRONTEND-036` after #336 merges; `FRONTEND-034` after #337 merges.
+- `FRONTEND-035`: PR #336 merged 2026-11-06 ~04:47Z; deploy 42164566522 succeeded (no migration).
+- `POSTS-009`: PR #337 merged 2026-11-06 ~05:01Z. **Deploy 42165903823 failed** at
+  "Check the live IAM matches the repo": live `FanwireRoleBoundary` (default v1)
+  differs from `infra/iam/fanwire-role-boundary-policy.json`, changed by #338
+  (Track D, another session). The human rolls IAM out, then re-runs the deploy;
+  only then invoke Migration for `e6d7328e8881` and record it on #337.
+- 2026-11-06: the human merged both and asked this session to finish the track
+  without waiting, except `EVENTS-013` and `FRONTEND-037` (another agent's).
+  `FRONTEND-036` (fw-FRONTEND-036) and `FRONTEND-034` (fw-FRONTEND-034)
+  hand-started from origin/main b7f1029; test subagents running. Dev servers
+  stopped at the human's request (other agents share the host).
 
 **Design-choice log** (unit, choice, why):
 - `FEED-001`: a signed-in viewer who follows nobody gets the guest selection;
