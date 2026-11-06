@@ -373,6 +373,45 @@ def test_post_created_for_a_post_that_no_longer_exists_is_a_no_op(session_factor
         assert sender.sent == []
 
 
+def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(session_factory):
+    from app.notifications import consumer
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    records: list[logging.LogRecord] = []
+
+    class _Recording(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Recording()
+    consumer.logger.addHandler(handler)
+    try:
+        with session_factory() as session:
+            author = _make_user(session, username="deleted_post_event_author")
+            deleted_post = Post(author_id=author.id, text="deleted before notification")
+            session.add(deleted_post)
+            session.commit()
+            deleted_post_id, author_id = deleted_post.id, author.id
+            session.delete(deleted_post)
+            session.commit()
+
+            result = consumer.handle_domain_event(
+                session,
+                event_name="PostCreated",
+                detail={"post_id": deleted_post_id, "author_id": author_id},
+                email_sender=RecordingEmailSender(),
+            )
+
+            assert result is None
+            assert session.scalars(select(Notification)).first() is None
+    finally:
+        consumer.logger.removeHandler(handler)
+
+    assert records
+    assert any("no longer exists" in record.getMessage() for record in records)
+
+
 def test_the_no_op_logs_at_most_info_and_no_ids(session_factory):
     from app.notifications import consumer
     from app.notifications.email import RecordingEmailSender
@@ -420,23 +459,51 @@ def test_post_created_with_no_post_id_key_still_fails(session_factory):
         )
 
 
-def test_user_followed_for_a_nonexistent_user_fails_before_any_row(session_factory):
-    from app.notifications.consumer import MissingReferenceError, handle_domain_event
+def test_user_followed_for_a_nonexistent_recipient_is_dropped(session_factory):
+    from app.notifications.consumer import handle_domain_event
     from app.notifications.email import RecordingEmailSender
     from app.notifications.models import Notification
 
     with session_factory() as session:
         follower = _make_user(session, username="missing_followed_follower")
+        followed = _make_user(session, username="deleted_followed_recipient")
+        followed_id = followed.id
+        session.delete(followed)
+        session.commit()
         sender = RecordingEmailSender()
 
-        with pytest.raises(MissingReferenceError):
-            handle_domain_event(
-                session,
-                event_name="UserFollowed",
-                detail={"follower_user_id": follower.id, "followed_user_id": 999_999_999},
-                email_sender=sender,
-            )
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed_id},
+            email_sender=sender,
+        )
 
-        session.rollback()
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []
+
+
+def test_user_followed_for_a_nonexistent_actor_is_dropped(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        follower = _make_user(session, username="deleted_follow_actor")
+        follower_id = follower.id
+        session.delete(follower)
+        session.commit()
+        followed = _make_user(session, username="missing_actor_followed")
+        sender = RecordingEmailSender()
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower_id, "followed_user_id": followed.id},
+            email_sender=sender,
+        )
+
+        assert result is None
         assert session.scalars(select(Notification)).first() is None
         assert sender.sent == []

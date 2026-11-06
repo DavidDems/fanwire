@@ -178,13 +178,41 @@ describe('App stack: least privilege', () => {
     expect(JSON.stringify(raw())).not.toContain(id);
   });
 
-  test('API role: presign quarantine uploads, PutEvents; no live-score cache, nothing from the media pipeline', () => {
+  test('API role: presign quarantine uploads, delete account media, PutEvents; no live-score cache', () => {
     const actions = actionsForRole(roleOf(fn('api')[1]));
-    expect(actions).toEqual(expect.arrayContaining(['s3:PutObject', 'events:PutEvents']));
+    expect(actions).toEqual(expect.arrayContaining(['s3:PutObject', 's3:DeleteObject', 'cognito-idp:AdminDeleteUser', 'events:PutEvents']));
     expect(actions.filter((a) => a.startsWith('dynamodb:'))).toEqual([]);
     expect(statementsForRole(roleOf(fn('api')[1])).map((st) => st.Sid)).not.toContain('LiveScoreCache');
-    expect(actions).not.toContain('s3:DeleteObject');
     expect(actions).not.toContain('secretsmanager:GetSecretValue');
+  });
+
+  test('account deletion grants are scoped to the two media buckets and this user pool', () => {
+    const statements = statementsForRole(roleOf(fn('api')[1]));
+    const exportedArn = (stackName: string, resourceType: string, prefix: string) => {
+      const template = synth().json(stackName);
+      const ids = Object.keys(resourcesOfType(template, resourceType)).filter((id) => id.startsWith(prefix));
+      expect(ids).toHaveLength(1);
+      const outputs = Object.values(template.Outputs ?? {}) as { Value: unknown; Export?: { Name: unknown } }[];
+      const output = outputs.find((item) =>
+        JSON.stringify(item.Value) === JSON.stringify({ 'Fn::GetAtt': [ids[0], 'Arn'] }),
+      );
+      expect(output?.Export?.Name).toBeDefined();
+      return { 'Fn::ImportValue': output!.Export!.Name };
+    };
+    // Compare complete resource sets; a correct ARN beside an unrelated ARN
+    // must fail. Permit grouping actions or splitting equivalent statements.
+    const resourcesFor = (action: string) => statements
+      .filter((st) => (Array.isArray(st.Action) ? st.Action : [st.Action]).includes(action))
+      .flatMap((st) => Array.isArray(st.Resource) ? st.Resource : [st.Resource])
+      .map((resource) => JSON.stringify(resource))
+      .sort();
+    const bucketObjects = ['QuarantineBucket', 'PublicMediaBucket'].map((prefix) => ({
+      'Fn::Join': ['', [exportedArn(STACK_NAMES.storage, 'AWS::S3::Bucket', prefix), '/*']],
+    }));
+    expect(resourcesFor('s3:DeleteObject')).toEqual(bucketObjects.map((arn) => JSON.stringify(arn)).sort());
+    expect(resourcesFor('cognito-idp:AdminDeleteUser')).toEqual([
+      JSON.stringify(exportedArn(STACK_NAMES.auth, 'AWS::Cognito::UserPool', 'UserPool')),
+    ]);
   });
 
   test('no function sets an API-SPORTS, idempotency or live-score-cache variable (EVENTS-003)', () => {
