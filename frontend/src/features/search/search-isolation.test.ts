@@ -22,7 +22,7 @@
  * vacuously, the way `features/feed/feed-isolation.test.ts` does it.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -203,6 +203,28 @@ describe("posts render through the feed's PostNode (criterion 3)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("imports no feature but feed, resolved from every relative path (FRONTEND-036)", () => {
+    // The home page's rail sits above EVENTS-013's recent games: routes/
+    // HomeView composes the two, and neither feature imports the other.
+    const FEATURES_DIR = join(SRC_DIR, "features");
+    const offenders: string[] = [];
+    for (const file of searchSources()) {
+      for (const { specifier } of importStatements(read(file))) {
+        if (!specifier.startsWith(".")) continue;
+        const target = relative(
+          FEATURES_DIR,
+          resolve(dirname(file), specifier),
+        );
+        if (target.startsWith("..")) continue;
+        const feature = target.split(sep)[0];
+        if (feature !== "search" && feature !== "feed")
+          offenders.push(`${posix(file)} imports ${specifier}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it("imports no other sibling feature", () => {
     const sibling = /(^|\/)(features\/)?(compose|profile|notifications)(\/|$)/;
     const offenders: string[] = [];
@@ -216,12 +238,17 @@ describe("posts render through the feed's PostNode (criterion 3)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("renders no post itself: no search source reads a post's text or like data", () => {
+  it("renders no post itself: the search page's modules read no post's text or like data", () => {
     // A property read, not a call: `.text(` (a response body) is not a post,
     // and a CSS module's own `styles.text` class is not one either.
+    //
+    // FRONTEND-036 scoped this to the `/search` page's own modules on
+    // purpose: the home page's rail shows a compact post row (author, time,
+    // text clamped to three lines, no controls), which reads a post's text by
+    // design. Like and repost data stay unread by every search source, below.
     const POST_FIELDS =
       /(?<!\bstyles)\.(text|like_count|liked_by_viewer|live_scores)\b(?!\s*\()/;
-    const offenders = searchSources()
+    const offenders = MODULES.map((module) => join(SEARCH_DIR, module))
       .filter((file) => POST_FIELDS.test(withoutComments(read(file))))
       .map(posix);
 
@@ -229,6 +256,16 @@ describe("posts render through the feed's PostNode (criterion 3)", () => {
       offenders,
       "a post result is PostNode's to render, not this unit's",
     ).toEqual([]);
+  });
+
+  it("no search source reads a post's like, repost or reply data: a row has no controls", () => {
+    const CONTROL_FIELDS =
+      /(?<!\bstyles)\.(like_count|liked_by_viewer|reposted_by_viewer|repost_count|reply_count)\b/;
+    const offenders = searchSources()
+      .filter((file) => CONTROL_FIELDS.test(withoutComments(read(file))))
+      .map(posix);
+
+    expect(offenders).toEqual([]);
   });
 
   it("parsed imports out of the sources it checked", () => {

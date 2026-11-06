@@ -1,21 +1,15 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Avatar } from "../../components/ui/Avatar";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { InlineAlert } from "../../components/ui/InlineAlert";
-import { StatusLine } from "../../components/ui/StatusLine";
 import { PreparedPostNode } from "../feed/PreparedPostNode";
+import { ResultSection } from "./ResultSection";
 import { SearchBar } from "./SearchBar";
 import styles from "./Search.module.css";
-import {
-  accountsKey,
-  fetchAccountsPage,
-  fetchPostsPage,
-  postsKey,
-} from "./api";
+import { accountsQuery, postsQuery } from "./api";
 
 /**
  * `/search` — the free-text bar and its two result sections (`layout.md` §3).
@@ -48,72 +42,74 @@ export function SearchPage() {
   );
 }
 
-/** "Accounts": one list card with dividers, as the notifications list is. */
-function AccountResults({ q }: { q: string }) {
-  const accounts = useInfiniteQuery({
-    queryKey: accountsKey(q),
-    queryFn: ({ pageParam }) => fetchAccountsPage(q, pageParam),
-    initialPageParam: 0,
-    // `next_offset` straight through: `null` is react-query's own "no further page".
-    getNextPageParam: (lastPage) => lastPage.next_offset,
-  });
-  const items = (accounts.data?.pages ?? []).flatMap((page) => page.items);
+/**
+ * "Accounts": one list card with dividers, as the notifications list is.
+ *
+ * The home page's rail (`FRONTEND-036`) shows the same section as a preview,
+ * by passing `showAll`: an h3 under its own h2, the first five of the first
+ * page only, Retry beside a failure, and its Show all link in place of Load
+ * more.
+ */
+export function AccountResults({
+  q,
+  showAll,
+}: {
+  q: string;
+  showAll?: ReactNode;
+}) {
+  const accounts = useInfiniteQuery(accountsQuery(q));
+  const pages = accounts.data?.pages ?? [];
+  const items = showAll
+    ? (pages[0]?.items.slice(0, 5) ?? [])
+    : pages.flatMap((page) => page.items);
 
   return (
-    <section className={styles.section} aria-labelledby="search-accounts">
-      <h2 id="search-accounts">Accounts</h2>
-
-      {accounts.isPending ? <StatusLine>Searching accounts…</StatusLine> : null}
-      {accounts.isError ? (
-        <InlineAlert>
-          We could not search accounts just now. Please try again.
-        </InlineAlert>
-      ) : null}
-      {accounts.isSuccess && items.length === 0 ? (
-        <EmptyState>No accounts match “{q}”.</EmptyState>
-      ) : null}
-
-      {items.length === 0 ? null : (
-        <Card>
-          <ul className={styles.list}>
-            {items.map((account) => (
-              <li key={account.id} className={styles.row}>
-                <Avatar
-                  username={account.username}
-                  size="sm"
-                  avatarKey={account.profile_avatar_key}
-                  pictureKey={account.profile_picture_key}
-                />
-                <div className={styles.body}>
-                  <Link
-                    to={`/profile/${account.id}`}
-                    className={styles.username}
-                  >
-                    {account.username}
-                  </Link>
-                  {account.description === null ? null : (
-                    <p className={styles.muted}>{account.description}</p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {!accounts.hasNextPage ? null : (
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className={styles.more}
-          onClick={() => void accounts.fetchNextPage()}
-          disabled={accounts.isFetchingNextPage}
-        >
-          Load more accounts
-        </Button>
-      )}
-    </section>
+    <ResultSection
+      title="Accounts"
+      level={showAll ? 3 : 2}
+      q={q}
+      query={accounts}
+      count={items.length}
+      retry={Boolean(showAll)}
+      footer={
+        showAll ??
+        (!accounts.hasNextPage ? null : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className={styles.more}
+            onClick={() => void accounts.fetchNextPage()}
+            disabled={accounts.isFetchingNextPage}
+          >
+            Load more accounts
+          </Button>
+        ))
+      }
+    >
+      <Card>
+        <ul className={styles.list}>
+          {items.map((account) => (
+            <li key={account.id} className={styles.row}>
+              <Avatar
+                username={account.username}
+                size="sm"
+                avatarKey={account.profile_avatar_key}
+                pictureKey={account.profile_picture_key}
+              />
+              <div className={styles.body}>
+                <Link to={`/profile/${account.id}`} className={styles.username}>
+                  {account.username}
+                </Link>
+                {account.description === null ? null : (
+                  <p className={styles.muted}>{account.description}</p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </ResultSection>
   );
 }
 
@@ -124,50 +120,38 @@ function AccountResults({ q }: { q: string }) {
  * (`FRONTEND-015`).
  */
 function PostResults({ q }: { q: string }) {
-  const posts = useInfiniteQuery({
-    queryKey: postsKey(q),
-    queryFn: ({ pageParam }) => fetchPostsPage(q, pageParam),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => lastPage.next_offset,
-  });
+  const posts = useInfiniteQuery(postsQuery(q));
   const items = (posts.data?.pages ?? []).flatMap((page) => page.items);
 
   return (
-    <section className={styles.section} aria-labelledby="search-posts">
-      <h2 id="search-posts">Posts</h2>
-
-      {posts.isPending ? <StatusLine>Searching posts…</StatusLine> : null}
-      {posts.isError ? (
-        <InlineAlert>
-          We could not search posts just now. Please try again.
-        </InlineAlert>
-      ) : null}
-      {posts.isSuccess && items.length === 0 ? (
-        <EmptyState>No posts match “{q}”.</EmptyState>
-      ) : null}
-
-      {items.length === 0 ? null : (
-        <ol className={styles.stream}>
-          {items.map((post) => (
-            <li key={post.id}>
-              <PreparedPostNode post={post} />
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {!posts.hasNextPage ? null : (
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className={styles.more}
-          onClick={() => void posts.fetchNextPage()}
-          disabled={posts.isFetchingNextPage}
-        >
-          Load more posts
-        </Button>
-      )}
-    </section>
+    <ResultSection
+      title="Posts"
+      level={2}
+      q={q}
+      query={posts}
+      count={items.length}
+      footer={
+        !posts.hasNextPage ? null : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            className={styles.more}
+            onClick={() => void posts.fetchNextPage()}
+            disabled={posts.isFetchingNextPage}
+          >
+            Load more posts
+          </Button>
+        )
+      }
+    >
+      <ol className={styles.stream}>
+        {items.map((post) => (
+          <li key={post.id}>
+            <PreparedPostNode post={post} />
+          </li>
+        ))}
+      </ol>
+    </ResultSection>
   );
 }

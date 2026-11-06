@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -10,15 +10,18 @@ import styles from "./Search.module.css";
 /** The backend's own cap on `q` ([[0x07-search]] Routes). */
 const MAX_QUERY_LENGTH = 100;
 
-const BOX_ID = "search-bar-q";
+/** The box's id: the rail moves focus back to it after Clear search. */
+export const BOX_ID = "search-bar-q";
 
 /**
- * The free-text bar over accounts and posts — one component, on the home page
- * and on `/search`.
+ * The free-text bar over accounts and posts — one component, in the home
+ * page's right rail and on `/search`.
  *
- * **The address is the seam.** Submitting goes to `/search?q=<text>` and
- * `SearchPage` reads `q` from there, so both entry points reach the same results
- * view by construction, and a result is a link someone can share or reload.
+ * **The address is the seam.** On `/search` submitting goes to
+ * `/search?q=<text>`, which `SearchPage` reads. On `/` (`FRONTEND-036`) it
+ * stays on the page and writes `/?q=<text>`, a new history entry, which the
+ * rail reads, so the feed beside it is not reloaded. Either way a search is a
+ * link someone can share or reload, and Back undoes it.
  *
  * It searches accounts and posts only. Sports data (seasons, teams, games and
  * players) is the Stats page's, since `FRONTEND-009`, and shares nothing with
@@ -34,6 +37,7 @@ export function SearchBar() {
 
 function SearchForm({ initial }: { initial: string }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [text, setText] = useState(initial);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -42,7 +46,8 @@ function SearchForm({ initial }: { initial: string }) {
     // The route answers 422 for an empty `q`, so an empty search is not a
     // request worth sending — or an address worth going to.
     if (q === "") return;
-    navigate(`/search?${new URLSearchParams({ q }).toString()}`);
+    const target = pathname === "/" ? "/" : "/search";
+    navigate(`${target}?${new URLSearchParams({ q }).toString()}`);
   }
 
   return (
