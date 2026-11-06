@@ -1,3 +1,5 @@
+import { infiniteQueryOptions } from "@tanstack/react-query";
+
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
 import { FEED_KEY_ROOT } from "../feed/api";
@@ -62,4 +64,28 @@ export async function fetchPostsPage(
     throw new Error(`GET /search/posts answered ${response.status}`);
   }
   return data;
+}
+
+/**
+ * The two searches as infinite queries, one definition each: `/search` pages
+ * through them, and the home page's rail (`FRONTEND-036`) reads the first page
+ * of the same entries, so opening `/search?q=` after the rail reuses its cache.
+ */
+export function accountsQuery(q: string) {
+  return infiniteQueryOptions({
+    queryKey: accountsKey(q),
+    queryFn: ({ pageParam }) => fetchAccountsPage(q, pageParam),
+    initialPageParam: 0,
+    // `next_offset` straight through: `null` is react-query's own "no further page".
+    getNextPageParam: (lastPage: AccountsPageBody) => lastPage.next_offset,
+  });
+}
+
+export function postsQuery(q: string) {
+  return infiniteQueryOptions({
+    queryKey: postsKey(q),
+    queryFn: ({ pageParam }) => fetchPostsPage(q, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage: PostsPageBody) => lastPage.next_offset,
+  });
 }

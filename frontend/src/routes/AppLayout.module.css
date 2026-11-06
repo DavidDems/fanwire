@@ -310,6 +310,18 @@
   }
 }
 
+/*
+ * From 72em (1152 px): the home page's right rail (FRONTEND-036) sits beside
+ * the feed, so main on / is the feed's column plus a gap plus the rail. Keyed
+ * on the rail itself (HomeView mounts it on / from 72em, the only aside in
+ * main), so every other route keeps its own width.
+ */
+@media (min-width: 72em) {
+  .main:has(aside) {
+    max-width: calc(var(--content-max) + var(--space-5) + var(--rail-width));
+  }
+}
+
 /* From 78em (1248 px): the sidebar is wider and shows each label. */
 @media (min-width: 78em) {
   .nav {
