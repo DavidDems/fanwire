@@ -44,6 +44,9 @@ governance files.
   left; its selected appearance is the only win/loss-related lighting cue.
   Selecting a team shows that team's player list and result context. A tie or
   unfinished result starts on the home team.
+  A `?line=` address (a post preview's marked player line) starts on that
+  line's team instead, so the marked row is not hidden behind the other tab
+  (Director amendment, 2026-11-06).
 - The compose picker reuses the same result-card design and makes the matchup
   row the game link. Preserve the picker's existing radio/select behavior for
   attaching a final score or a player line.
