@@ -1,7 +1,7 @@
 /*
  * The home page (wiki/CodeContext/FrontendUI/layout.md §3): the feed, and
- * from 72em the right rail beside it (FRONTEND-036). The rail is mounted from
- * 72em only (HomeView's useMediaQuery), so below that the feed is alone.
+ * from 76.0625em the right rail beside it (FRONTEND-036). The rail is mounted
+ * from 76.0625em only (HomeView's useMediaQuery), so below that the feed is alone.
  * AppLayout.module.css widens main on / to make room for it. Values come from
  * tokens.css by name only.
  */
