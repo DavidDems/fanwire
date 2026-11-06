@@ -1001,7 +1001,9 @@ describe("the floating compose control", () => {
   it("tabs from the last nav item into main, then reaches compose after main", async () => {
     await renderVisit(visit("/search", "member"));
     const main = screen.getByRole("main");
-    const mainTabStops = [...main.querySelectorAll(FOCUSABLE)].filter(
+    const mainTabStops = [
+      ...main.querySelectorAll<HTMLElement>(FOCUSABLE),
+    ].filter(
       (element) =>
         element.getAttribute("tabindex") !== "-1" &&
         !element.hasAttribute("disabled"),
