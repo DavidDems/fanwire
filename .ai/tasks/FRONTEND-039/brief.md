@@ -62,4 +62,4 @@ item's own inset. Labels make the sidebar 192 px, which takes up 120 px of that.
 
 ## Later Director PR, not this spec
 
-`FrontendUI/layout.md` §2 and §3 and `tokens.md` §9 for L and R.
+`FrontendUI/layout.md` §2, `FrontendUI/layout.md` §3 and `tokens.md` §9 for L and R.

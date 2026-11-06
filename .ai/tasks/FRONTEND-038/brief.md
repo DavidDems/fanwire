@@ -33,4 +33,4 @@ Nothing new. Delete; keep the compose button's tests.
 
 ## Later Director PR, not this spec
 
-`FrontendUI/components.md` (§3's `link` row and the `InviteButton` mentions).
+`FrontendUI/components.md` §3 (the `link` row) and its `InviteButton` mentions.
