@@ -18,11 +18,12 @@ the selected team tab.
 
 ## Dependency
 
-PR #329 adds the Recent Games section in the UI track. It must merge to `main`
-before this task starts. Inspect its merged component and use that component
-where appropriate; do not assume its final paths or props before the merge.
-This task's `allowed_paths` includes the existing feature trees that may contain
-that section, but excludes its own spec and all repo governance files.
+`EVENTS-013` adds the Recent Games section in the UI track. Its implementation
+must merge to `main` before this task starts. Inspect its merged component and
+use that component where appropriate; do not assume its final paths or props
+before the merge. This task's `allowed_paths` includes the existing feature
+trees that may contain that section, but excludes its own spec and all repo
+governance files.
 
 ## Decided behavior
 
