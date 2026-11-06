@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import { HttpResponse, http, type RequestHandler } from "msw";
 
 import type { components } from "../api/schema";
@@ -217,4 +218,145 @@ export function gamesStub(
   answer: (params: URLSearchParams) => GamesPageBody | null = () => gamesPage(),
 ): EndpointStub {
   return endpointStub("*/search/games", answer);
+}
+
+/**
+ * FRONTEND-036: a stand-in for `window.matchMedia`, which jsdom does not
+ * implement, so a test can say how wide the viewport is and then resize it.
+ *
+ * The home page's right rail is mounted from 72em through
+ * `routes/useMediaQuery`, and that hook must never stub `matchMedia` itself:
+ * the stub lives here, installed per test and removed by `restore()`.
+ *
+ * A query is evaluated against the stubbed width, `1em` being 16 px: each
+ * `(min-width: …)` and `(max-width: …)` in it (em, rem or px) must hold, and
+ * a query with neither matches nothing. `setWidth` fires `change` on every
+ * list whose answer flipped, inside `act`, as a real resize would.
+ */
+export interface ViewportStub {
+  /** Resize to `px` CSS pixels; lists whose answer flips get a `change`. */
+  setWidth(px: number): void;
+  /** Every query string `matchMedia` was asked, in order. */
+  readonly queries: string[];
+  /** How many `change` listeners are attached across every list right now. */
+  listenerCount(): number;
+  /** Put `window.matchMedia` back the way it was (absent, in jsdom). */
+  restore(): void;
+}
+
+const PX_PER_EM = 16;
+
+function lengthInPx(value: string, unit: string): number {
+  const amount = Number(value);
+  return unit.toLowerCase() === "px" ? amount : amount * PX_PER_EM;
+}
+
+/** Does `query` hold at `width` px? Only min-width and max-width are understood. */
+export function queryHolds(query: string, width: number): boolean {
+  const bounds = [
+    ...query.matchAll(
+      /\(\s*(min|max)-width\s*:\s*([\d.]+)\s*(em|rem|px)\s*\)/gi,
+    ),
+  ];
+  if (bounds.length === 0) return false;
+  return bounds.every(([, kind, value, unit]) => {
+    const px = lengthInPx(value, unit);
+    return kind.toLowerCase() === "min" ? width >= px : width <= px;
+  });
+}
+
+type ChangeListener =
+  | ((event: MediaQueryListEvent) => void)
+  | { handleEvent(event: MediaQueryListEvent): void };
+
+export function stubViewport(initialWidth: number): ViewportStub {
+  let width = initialWidth;
+  const queries: string[] = [];
+  const lists: {
+    media: string;
+    last: boolean;
+    listeners: Set<ChangeListener>;
+    list: MediaQueryList;
+  }[] = [];
+  const had = Object.getOwnPropertyDescriptor(window, "matchMedia");
+
+  function matchMedia(media: string): MediaQueryList {
+    queries.push(media);
+    const listeners = new Set<ChangeListener>();
+    const entry = {
+      media,
+      last: queryHolds(media, width),
+      listeners,
+      list: undefined as unknown as MediaQueryList,
+    };
+    const list = {
+      media,
+      get matches(): boolean {
+        return queryHolds(media, width);
+      },
+      onchange: null as ((event: MediaQueryListEvent) => void) | null,
+      addEventListener(type: string, listener: ChangeListener | null): void {
+        if (type === "change" && listener !== null) listeners.add(listener);
+      },
+      removeEventListener(type: string, listener: ChangeListener | null): void {
+        if (type === "change" && listener !== null) listeners.delete(listener);
+      },
+      addListener(listener: ChangeListener | null): void {
+        if (listener !== null) listeners.add(listener);
+      },
+      removeListener(listener: ChangeListener | null): void {
+        if (listener !== null) listeners.delete(listener);
+      },
+      dispatchEvent(): boolean {
+        return true;
+      },
+    };
+    entry.list = list as unknown as MediaQueryList;
+    lists.push(entry);
+    return entry.list;
+  }
+
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: matchMedia,
+  });
+
+  return {
+    queries,
+    setWidth(px: number): void {
+      act(() => {
+        width = px;
+        for (const entry of lists) {
+          const now = queryHolds(entry.media, width);
+          if (now === entry.last) continue;
+          entry.last = now;
+          const event = {
+            matches: now,
+            media: entry.media,
+          } as unknown as MediaQueryListEvent;
+          for (const listener of [...entry.listeners]) {
+            if (typeof listener === "function") listener(event);
+            else listener.handleEvent(event);
+          }
+          const onchange = (
+            entry.list as unknown as {
+              onchange: ((event: MediaQueryListEvent) => void) | null;
+            }
+          ).onchange;
+          onchange?.(event);
+        }
+      });
+    },
+    listenerCount(): number {
+      return lists.reduce((sum, entry) => sum + entry.listeners.size, 0);
+    },
+    restore(): void {
+      if (had === undefined) {
+        delete (window as unknown as Record<string, unknown>).matchMedia;
+      } else {
+        Object.defineProperty(window, "matchMedia", had);
+      }
+    },
+  };
 }
