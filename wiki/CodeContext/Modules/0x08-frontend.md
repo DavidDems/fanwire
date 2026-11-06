@@ -26,7 +26,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query, and `account.ts` (`useAccount()`, the one account-state hook, and the deactivate / recover / sign-out actions, `FRONTEND-012`) |
-| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` after the header, sharing a parent with `main`, that CSS makes the bottom icon bar on phones and a left sidebar from 40em (`FRONTEND-035`, below); `NavLink` sets `aria-current`; the header's end holds a phone-only Search icon link, then the active-profile Account menu described below, or Sign in for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the feed, and from 72em the right rail, `FRONTEND-036`), `useMediaQuery.ts`, `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` after the header, sharing a parent with `main`, that CSS makes the bottom icon bar on phones and a left sidebar from 40em (`FRONTEND-035`, below); `NavLink` sets `aria-current`; the header's end holds a phone-only Search icon link, then the active-profile Account menu described below, or Sign in for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the feed, and from 76.0625em the right rail, `FRONTEND-036`/`FRONTEND-039`), `useMediaQuery.ts`, `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/account/` | `AccountSettings.tsx` at `/settings` (`RequireAuth`): email verification, the disabled notifications setting and password-reauthenticated deactivation (`USERS-006`) |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
@@ -1157,7 +1157,7 @@ is recorded so the second copy is a known state rather than a discovery.
 
 ## Search (`FRONTEND-007`)
 
-`src/features/search/`, wired at `/search`, and from 72em in the home page's
+`src/features/search/`, wired at `/search`, and from 76.0625em in the home page's
 right rail too. **Public**,
 like the feed: every search route is a read path ([[0x07-search]]).
 
@@ -1175,14 +1175,14 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
   A search is a link either way, and Back undoes it. An empty or
   whitespace-only submit goes nowhere (the route 422s on an empty `q`). The
   bar's input is `maxLength` 100, the route's own cap.
-- **No search bar above the feed, at any width (`FRONTEND-036`).** From 72em
+- **No search bar above the feed, at any width (`FRONTEND-036`).** From 76.0625em
   `routes/HomeView.tsx` mounts an `<aside>` after `FeedPage`, through
-  `routes/useMediaQuery('(min-width: 72em)')`: below it the rail is not
+  `routes/useMediaQuery('(min-width: 76.0625em)')`: below it the rail is not
   mounted, so a phone makes none of its requests and searches on `/search`
   (`FRONTEND-035`'s Search links). The rail is `SearchRail`, then an empty
   slot for `EVENTS-013`'s recent games; HomeView composes the features and
   none imports another. Mounting the rail, or a change of `q`, never remounts
-  `FeedPage`. `AppLayout.module.css` widens `main` from 72em by
+  `FeedPage`. `AppLayout.module.css` widens `main` from 76.0625em by
   `.main:has(aside)` to `--content-max` + `--space-5` + `--rail-width`, so no
   other route changes width; the rail is sticky at the sidebar's `top` and
   scrolls on its own.
@@ -1563,16 +1563,24 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   app: a mounted public page reads again as a guest with its old result already
   gone, while a guarded page and a disabled signed-in-only query ask nothing.
   `useReported` is not query data and survives a sign-out on the same tab.
-- **The shell's shape** (`FRONTEND-035`, `decisions.md` 2026-11-05). The
+- **The shell's shape** (`FRONTEND-035` and `FRONTEND-039`; decisions dated 2026-11-05 and 2026-11-06). The
   header: the brand at the start; at the end (`.headerEnd`, `margin-left:
   auto`) a Search icon link, then the Account menu or Sign in. The nav is
   Home, Stats, Search, Notifications, then Sign out; each item an
   `aria-hidden` icon and its label in `.visually-hidden`, so the name is the
   word at every width. Below 40em it is the bottom icon bar, the nav's Search
-  `display: none` and the header's shown; from 40em the reverse, and the nav
-  and `main` share `.body`, a flex group centred with `--space-5` between, the
-  nav a sticky sidebar under the header, `--sidebar-width-compact` and icon
-  only; from 78em `--sidebar-width` with the labels shown at `--font-size-md`.
+  `display: none` and the header's shown; from 40em the reverse. The nav and
+  `main` share `.body`, a flex group with `--space-5` between, and the nav is a
+  sticky sidebar under the header. From 40em to 53.75em it stays icon-only at
+  `--sidebar-width-compact`; at 768px the sidebar and main boxes are unchanged
+  from before `FRONTEND-039`. From 53.75em (860px) labels appear at
+  `--sidebar-width`, and the group sits at `--space-4` from the viewport edge;
+  `main` uses a 36rem minimum when it fits, bounded by available space for
+  enlarged text. From 78em the centred desktop geometry is restored. The home
+  rail mounts from 76.0625em (1217px): with a simulated 17px classic scrollbar,
+  1216px leaves 1199px and narrows the 952px rail main to 951px, while 1217px
+  leaves 1200px and fits the full rail with 16px outer gaps. At 1280px and
+  1920px the shell boxes match the previous desktop layout.
   `main` keeps `--content-max` (`--content-max-wide` on `/stats/records`). The
   current item is 600, `--color-text`, with a 3px `--color-action` border on a
   `::after`, top in the bar and inline-start in the sidebar. **Two Search

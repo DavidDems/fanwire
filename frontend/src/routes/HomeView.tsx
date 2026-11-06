@@ -4,15 +4,15 @@ import styles from "./HomeView.module.css";
 import { useDetailLinkState } from "./modal-flow";
 import { useMediaQuery } from "./useMediaQuery";
 
-/** Where the home page gains its right rail: 1152 px. */
-const RAIL_FROM = "(min-width: 72em)";
+/** Where the home page gains its right rail: 76.0625em (1217 px). */
+const RAIL_FROM = "(min-width: 76.0625em)";
 
 /**
- * `/` — the feed, and from 72em a right rail beside it (`FRONTEND-036`).
+ * `/` — the feed, and from 76.0625em a right rail beside it (`FRONTEND-036`).
  *
  * There is no search bar above the feed at any width. The rail holds the
  * search bar and, on `/?q=`, a preview of its results, then a slot that
- * `EVENTS-013`'s recent games fill. Below 72em the rail is **not mounted**,
+ * `EVENTS-013`'s recent games fill. Below 76.0625em the rail is **not mounted**,
  * not hidden, so a phone makes none of its requests; search there is the
  * Search link (`FRONTEND-035`) to `/search`. The rail follows the feed, so
  * mounting or unmounting it never remounts `FeedPage`, which keeps its pages
