@@ -114,6 +114,9 @@ _POST_VIEW_FIELDS = {
     # POSTS-006: the post's sports-data attachment and its assembled preview.
     "data_link",
     "data_link_preview",
+    # POSTS-009: a reply's parent, one level deep, and its placeholder flag.
+    "replied_post",
+    "replied_post_deleted",
 }
 
 

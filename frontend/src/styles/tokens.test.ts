@@ -136,6 +136,11 @@ const TYPE_SPACE_SHAPE: Record<string, string> = {
   "--content-max": "40rem",
   // FRONTEND-030: the records home's column, for three cards to a row.
   "--content-max-wide": "64rem",
+  // FRONTEND-035: the left sidebar, icon only from 40em and labelled from
+  // 78em; and the right rail, declared here for FRONTEND-036.
+  "--sidebar-width-compact": "4.5rem",
+  "--sidebar-width": "12rem",
+  "--rail-width": "18rem",
   "--duration-fast": "120ms",
   "--duration-base": "200ms",
   "--ease-out": "cubic-bezier(0.2, 0, 0, 1)",

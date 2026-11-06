@@ -206,6 +206,9 @@ class PostLike(Base):
             sql_text("created_at DESC"),
             sql_text("post_id DESC"),
         ),
+        # POSTS-009: the primary key leads with user_id, so a lookup by post
+        # alone -- GET /feed's "has a like" check, like_counts -- needs its own.
+        Index("ix_post_likes_post_id", "post_id"),
     )
 
 

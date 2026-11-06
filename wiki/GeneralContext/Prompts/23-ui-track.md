@@ -166,6 +166,11 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
   `FRONTEND-036`, `EVENTS-013`. None is started. Check with
   `python .ai/bin/agentctl.py status`, `gh pr list` and
   `git branch -r --list "origin/agent/*"`.
+- **Follow-up `FRONTEND-037`** captures the human's 2026-11-05 request to
+  compact NBA game results across Recent Games, Stats seasons, the compose
+  picker and game detail. It is independent of the five-unit UI track and starts
+  only after `EVENTS-013` has merged, so the Recent Games card it reuses exists
+  on `main`. Its spec is a separate task and PR.
 - Track D (`TODO/02-backlog.md` "Launch adjustments") still has `AUTH-001`,
   `USERS-008`, `FRONTEND-032`, `FEED-001` and `FRONTEND-033` open. Three are this
   track's gates (below). Another session may be running them, so check before
@@ -176,7 +181,7 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 ```
 FEED-001 ──▶ POSTS-009 ──▶ FRONTEND-034
 FRONTEND-032 ┐
-FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-013
+FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-013 ──▶ FRONTEND-037
 ```
 
 - A unit starts only when every unit before it has **merged to `main`**.
@@ -185,6 +190,10 @@ FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-0
 - **The two chains are independent.** Run them in parallel, one unit per chain at
   a time, each in its own worktree. While two PRs are open, test their
   combination as `director-sessions.md` "Sibling PRs" says.
+- `FRONTEND-037` is a follow-on, not a sixth unit in either chain. Start it
+  from `main` after `EVENTS-013` merges, and use its own task branch. It updates
+  the recent-result card from that unit rather than adding another Recent Games
+  section.
 - **Gate units from Track D** (`FEED-001`, `FRONTEND-032`, `FRONTEND-033`): if one
   has no `agent/*` branch, no open PR and `agentctl status` shows it unstarted,
   run it yourself under its own spec and brief, exactly as a UI-track unit. Leave

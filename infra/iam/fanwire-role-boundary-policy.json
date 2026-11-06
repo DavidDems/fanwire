@@ -31,7 +31,8 @@
         "kms:Decrypt",
         "kms:GenerateDataKey",
         "secretsmanager:GetSecretValue",
-        "cognito-idp:AdminGetUser"
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminDeleteUser"
       ],
       "Resource": "*"
     },

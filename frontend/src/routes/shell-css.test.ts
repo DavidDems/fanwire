@@ -7,7 +7,8 @@
  * - the primary nav is `position: fixed; bottom: 0` by default, outside every
  *   media query (mobile-first, `layout.md` §2);
  * - the same rule is no longer fixed under `@media (min-width: 40em)`, which
- *   is where it sits inline in the header;
+ *   is where it becomes the sticky left sidebar (`FRONTEND-035`; it sat
+ *   inline in the header before);
  * - there is no `max-width` media query (or the range form `width <`) anywhere.
  *
  * Criterion 9 — every `*.module.css` under `src/routes/`: no hex, `rgb()`,
@@ -97,7 +98,7 @@ describe("the shell's CSS module (criterion 8)", () => {
     ).not.toEqual([]);
   });
 
-  it("stops fixing it from 40em, where it sits in the header", () => {
+  it("stops fixing it from 40em, where it becomes the sidebar", () => {
     const blocks = shellBlocks();
     const fixed = topLevelFixedBottomRules(blocks);
     expect(fixed, "no top-level fixed-to-bottom rule").not.toEqual([]);
@@ -142,10 +143,16 @@ describe("the shell's CSS module (criterion 8)", () => {
  * 28 px cursive wordmark (105 px wide) wraps "Your profile"; at 18 px (68 px
  * wide) the header holds one line, so the wordmark shrinks from 40em until 44em.
  * It is never hidden: there is no symbol beside it any more.
+ *
+ * FRONTEND-035 changed what this block pins. The bar shows icons only, its
+ * labels visually hidden, so no label wraps a cell any more and the cell's
+ * padding and the 55 px figure are no longer pinned; the nav and Sign out left
+ * the header, so neither is the header's 18 px wordmark from 40em to 44em, nor
+ * Sign out's place at its right edge (the header's two ends are resolved per
+ * width in `sidebar-nav.test.tsx`). The 28 px wordmark on phones and from 44em,
+ * and the scroll padding that clears the bar, still hold.
  */
 describe("the bottom bar and the header's room", () => {
-  const FROM_44EM = /^@media\b.*\(\s*min-width\s*:\s*44em\s*\)/i;
-
   function topLevelRule(selector: string): CssBlock {
     const rule = shellBlocks().find(
       (block) => !isAtRule(block) && selectorSet(block).has(selector),
@@ -164,13 +171,6 @@ describe("the bottom bar and the header's room", () => {
     return rule;
   }
 
-  it("gives a phone cell no inline padding, and the header's links keep theirs", () => {
-    expect(declared(topLevelRule(".link"), "padding")).toBe("var(--space-2) 0");
-    expect(declared(ruleInMedia(FROM_40EM, ".link"), "padding")).toBe(
-      "var(--space-2) var(--space-3)",
-    );
-  });
-
   it("sizes scroll-padding-bottom for the bar's two-line height, and 0 from 40em", () => {
     // Whitespace out: Prettier breaks a calc this long over three lines.
     expect(
@@ -187,15 +187,10 @@ describe("the bottom bar and the header's room", () => {
     ).toBe("0");
   });
 
-  it("says the bar's real height in the comment at the top", () => {
+  it("does not call the bar under space-8 tall in the comment at the top", () => {
     const comment = readSrcFile(SHELL_CSS).split("*/")[0];
 
     expect(comment).not.toMatch(/under\s+space-8\s+tall/);
-    expect(comment).toMatch(/55\s*px/);
-  });
-
-  it("pushes Sign out to the header's right edge", () => {
-    expect(declared(topLevelRule(".signOut"), "margin-left")).toBe("auto");
   });
 
   it("never hides the wordmark", () => {
@@ -208,14 +203,18 @@ describe("the bottom bar and the header's room", () => {
     }
   });
 
-  it("draws the wordmark 28 px tall, 18 px from 40em, and 28 px again from 44em", () => {
+  it("draws the wordmark 28 px tall on phones, and 28 px in every query from 44em up", () => {
     expect(declared(topLevelRule(".wordmark img"), "height")).toBe("1.75rem");
-    expect(declared(ruleInMedia(FROM_40EM, ".wordmark img"), "height")).toBe(
-      "1.125rem",
-    );
-    expect(declared(ruleInMedia(FROM_44EM, ".wordmark img"), "height")).toBe(
-      "1.75rem",
-    );
+    const wide = shellBlocks().filter((block) => {
+      const em = /\(\s*min-width\s*:\s*([\d.]+)em\s*\)/i.exec(block.prelude);
+      return isAtRule(block) && em !== null && Number(em[1]) >= 44;
+    });
+    for (const media of wide) {
+      for (const rule of media.children) {
+        if (!selectorSet(rule).has(".wordmark img")) continue;
+        expect(declared(rule, "height"), media.prelude).toBe("1.75rem");
+      }
+    }
   });
 });
 
@@ -255,6 +254,38 @@ describe("the content column (FRONTEND-030)", () => {
     // A width of its own, never a number written into the module.
     expect(
       maxWidths().filter(({ value }) => /\d+(rem|em|px)/.test(value)),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * FRONTEND-035: the sidebar's widths and breakpoints, as source. What each
+ * element gets at each width is resolved against the rendered shell in
+ * `sidebar-nav.test.tsx`; this pins only what the module must say by name.
+ */
+describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
+  const FROM_78EM = /^@media\b.*78em/i;
+
+  it("has a 40em query and a 78em query", () => {
+    const media = allBlocks(shellBlocks()).filter((block) =>
+      /^@media\b/i.test(block.prelude),
+    );
+    expect(media.some(isFrom40em), "a (min-width: 40em) query").toBe(true);
+    expect(
+      media.some((block) => FROM_78EM.test(block.prelude)),
+      "a 78em query",
+    ).toBe(true);
+  });
+
+  it("names the sidebar's widths by token, never as numbers", () => {
+    const css = readSrcFile(SHELL_CSS);
+    expect(css).toMatch(/var\(\s*--sidebar-width-compact\s*\)/);
+    expect(css).toMatch(/var\(\s*--sidebar-width\s*\)/);
+    const values = allBlocks(shellBlocks())
+      .flatMap((block) => block.declarations)
+      .map(({ value }) => value);
+    expect(
+      values.filter((value) => /(?<![\d.])(4\.5|12)rem\b/.test(value)),
     ).toEqual([]);
   });
 });

@@ -17,7 +17,7 @@ import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SRC_DIR } from "../../test/css";
+import { SRC_DIR, stripComments } from "../../test/css";
 import { moduleCssFiles, moduleCssViolations } from "../../test/module-css";
 
 const PROFILE_DIR = join(SRC_DIR, "features", "profile");
@@ -41,6 +41,25 @@ describe("every *.module.css under src/features/profile", () => {
         (problem) => `${names[index]}: ${problem}`,
       ),
     );
+
+    expect(problems).toEqual([]);
+  });
+
+  // FRONTEND-033: the profile's loading state is static, like the shared
+  // Skeleton (accessibility.md A8: no shimmer in either motion setting), so
+  // there is nothing for prefers-reduced-motion to switch off.
+  it("animates nothing, so the loading state is static in either motion setting", () => {
+    // Assembled from fragments so styles/base.test.ts's tree scan does not match this file.
+    const keyframes = new RegExp(["@", "key", "frames"].join(""), "i");
+    const problems = files.flatMap((file, index) => {
+      const css = stripComments(readFileSync(file, "utf8"));
+      const found: string[] = [];
+      if (keyframes.test(css)) found.push(`${names[index]}: defines keyframes`);
+      if (/(^|[;{\s])animation(-[a-z-]+)?\s*:/i.test(css)) {
+        found.push(`${names[index]}: declares an animation`);
+      }
+      return found;
+    });
 
     expect(problems).toEqual([]);
   });

@@ -128,6 +128,11 @@ def test_follows_and_preferred_team_strategy_includes_preferred_team_mentions(se
     with session_factory() as session:
         viewer = _make_user(session, username="fpts_v2")
         stranger = _make_user(session, username="fpts_stranger2")
+        # FEED-001: a viewer who follows nobody gets the guest selection, so
+        # the viewer follows someone here to keep the personalised feed.
+        friend = _make_user(session, username="fpts_friend2")
+        session.add(Follow(follower_user_id=viewer.id, followed_user_id=friend.id))
+        session.commit()
         home = _make_team(session, nba_team_id=201)
         away = _make_team(session, nba_team_id=202)
         game = _make_game(session, home, away, nba_game_id=6001)
@@ -152,6 +157,10 @@ def test_follows_and_preferred_team_strategy_without_preferred_team_ignores_ment
     with session_factory() as session:
         viewer = _make_user(session, username="fpts_v3")
         stranger = _make_user(session, username="fpts_stranger3")
+        # FEED-001: as above, a viewer with a follow keeps the personalised feed.
+        friend = _make_user(session, username="fpts_friend3")
+        session.add(Follow(follower_user_id=viewer.id, followed_user_id=friend.id))
+        session.commit()
         home = _make_team(session, nba_team_id=301)
         away = _make_team(session, nba_team_id=302)
         game = _make_game(session, home, away, nba_game_id=7001)

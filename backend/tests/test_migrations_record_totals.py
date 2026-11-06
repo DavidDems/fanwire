@@ -139,11 +139,16 @@ def _insert_history(conn) -> None:
             )
 
 
-def test_the_revision_is_the_single_head_and_chains_onto_the_parent():
-    """Reads the scripts only, no database: one head, EVENTS-012's, whose
-    parent is the head before it, so the history stays linear."""
+def test_the_revision_is_on_the_single_heads_line_and_chains_onto_the_parent():
+    """Reads the scripts only, no database: the history has one head,
+    EVENTS-012's revision is that head or one of its ancestors (a later
+    migration may sit on top of it), and its parent is the head before it,
+    so the history stays linear."""
     scripts = ScriptDirectory.from_config(Config(str(_BACKEND_DIR / "alembic.ini")))
-    assert scripts.get_heads() == [_REVISION]
+    heads = scripts.get_heads()
+    assert len(heads) == 1, heads
+    [head] = heads
+    assert _REVISION in {rev.revision for rev in scripts.walk_revisions("base", head)}
     assert scripts.get_revision(_REVISION).down_revision == _PARENT_REVISION
 
 

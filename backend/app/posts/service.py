@@ -202,9 +202,11 @@ def query_feed_posts(
     before_id: int | None,
     limit: int,
 ) -> list[Post]:
-    """Top-level posts only (`is_reply=False`; reposts included -- a repost
-    row also has `is_reply=False`), newest first by id, `id < before_id`
-    when given. `mentioned_game_ids` are the games a post is relevant
+    """Top-level posts (`is_reply=False`; reposts included -- a repost row
+    also has `is_reply=False`) and replies with at least one like
+    (POSTS-009; any like, the author's own included, as like_counts counts
+    them), newest first by id, `id < before_id` when given: a liked reply
+    sits at its own id, so a like moves nothing. `mentioned_game_ids` are the games a post is relevant
     through (POSTS-006): a legacy EventMention of one, a game_final link to
     one (`linked_game_id`) or a player_game link to a line in one
     (`linked_line_game_id`); a player_career link never counts. They are
@@ -213,7 +215,10 @@ def query_feed_posts(
     specifically to avoid row multiplication from a post with several
     EventMention rows). Both None means no filter at all (the guest feed:
     all posts). Only _visible() posts."""
-    stmt = select(Post).where(Post.is_reply.is_(False), _visible())
+    # A correlated EXISTS, probed per candidate row through
+    # ix_post_likes_post_id, so the newest-first scan stops at `limit`.
+    has_a_like = select(PostLike.post_id).where(PostLike.post_id == Post.id).exists()
+    stmt = select(Post).where(or_(Post.is_reply.is_(False), has_a_like), _visible())
 
     conditions = []
     if author_ids is not None:
@@ -454,8 +459,9 @@ def reposted_post_ids(session: Session, user_id: int, post_ids: Collection[int])
 
 def posts_by_ids(session: Session, post_ids: Collection[int]) -> dict[int, Post]:
     """Batch Post lookup keyed by id, only _visible() posts -- for feed/'s
-    `reposted_post`, one query for a page's originals (deleted_post_ids
-    tells a deleted original from one hidden by its author)."""
+    `reposted_post` and `replied_post`, one query for a page's originals
+    and parents (deleted_post_ids tells a deleted one from one hidden by its
+    author)."""
     if not post_ids:
         return {}
 

@@ -26,7 +26,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/api/client.ts` | `createClient<paths>` + an auth middleware fed by an injected provider |
 | `src/config.ts` | The one reader of `import.meta.env` |
 | `src/auth/` | `AuthService` + its one Cognito implementation, the session context, the five auth pages (since `UI-004`: h1, request alert and form in one `Card`, request failures through `InlineAlert`, Confirm's resend notice through `StatusLine`), the shared profile query, and `account.ts` (`useAccount()`, the one account-state hook, and the deactivate / recover / sign-out actions, `FRONTEND-012`) |
-| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` that CSS moves from the bottom bar into the header at 40em; `NavLink` sets `aria-current`; it adds the active-profile Account menu described below; Sign in shows for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
+| `src/routes/` | `routes.tsx` (the table: `pages`, and `overlays` opened over them, `FRONTEND-010`), `BackgroundRoutes.tsx` (renders the page and any overlay, below), `AppLayout.tsx` (the shell, `UI-003`: a skip link to `main#main`, the brand link named `fanwire` built from `src/assets/brand/`, and **one** `<nav aria-label="Primary">` after the header, sharing a parent with `main`, that CSS makes the bottom icon bar on phones and a left sidebar from 40em (`FRONTEND-035`, below); `NavLink` sets `aria-current`; the header's end holds a phone-only Search icon link, then the active-profile Account menu described below, or Sign in for an anonymous visitor except on `/sign-in` itself), `guards.tsx`, `HomeView.tsx` (`/`: the search bar above the feed, `FRONTEND-007`), `views.tsx` (only the catch-all now) |
 | `src/features/profile/` | `/profile/:userId` — both variants, the settings form and the follow control |
 | `src/features/account/` | `AccountSettings.tsx` at `/settings` (`RequireAuth`): email verification, the disabled notifications setting and password-reauthenticated deactivation (`USERS-006`) |
 | `src/features/compose/` | `/compose` — the four patterns, the three mediated controls and the media widget; `InlineComposer`, the thread modal's reply box built from the same parts (`FRONTEND-010`) |
@@ -38,7 +38,7 @@ hidden from assistive technology and uses the semantic theme tokens.
 | `src/features/games/` | `/games/:gameId` — the game page: heading, line score and both box scores (`FRONTEND-008`); box-score names link to `/players/<id>` (`FRONTEND-009`) |
 | `src/features/stats/` | `/stats/seasons` and `/stats/players` — the Stats page, its two tabs, the team combobox and the player search (`FRONTEND-009`) |
 | `src/features/players/` | `/players/:playerId` — the player page: attributes, career and season lines, the game log (`FRONTEND-009`) |
-| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) `Menu` (`FRONTEND-012`: a button and a `popover` list), and `SearchInput`, `SegmentedTabs` and `FloatingButton` (`UI-010`, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`) |
+| `src/components/` | `FormField.tsx` — the label / `aria-invalid` / `aria-describedby` wiring the forms share; since `UI-004` its error `<p>` starts with an `aria-hidden` alert icon and keeps the message as its own direct text, so the accessible description and `getByText` are unchanged, and it is still not an alert. `ui/` (`UI-002`): `Button`/`buttonClass`, `Card`, `InlineAlert`, `StatusLine`, `EmptyState`, `Skeleton`, `Avatar`, `Badge`, `GameScore` (the game-state mapping: a code it doesn't know is shown as given and never called Live; since `FRONTEND-008` an optional `to` makes the whole block one link, named from optional `homeTeam`/`awayTeam`) `VisuallyHidden`, `Tabs` (`FRONTEND-009`: links that look like tabs, below), `Dialog` (`FRONTEND-010`: the native-`<dialog>` modal, below; since `FRONTEND-012` also `role="alertdialog"` and `ConfirmDialog`) `Menu` (`FRONTEND-012`: a button and a `popover` list), and `SearchInput`, `SegmentedTabs` and `FloatingButton` (`UI-010`, below), plus fourteen Lucide icons copied into `ui/icons/` with Lucide's licence (no dependency), and two pressed variants of them (`HeartFilledIcon`, `Repeat2FilledIcon`, `UI-009`), `EllipsisIcon` (`FRONTEND-012`), `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), and `LinkIcon` and `InviteButton` (`FRONTEND-032`, below), and `LogOutIcon` (`FRONTEND-035`) |
 | `src/test/` | `server.ts` (msw), `render.tsx` (`renderWithProviders`), `auth.tsx` (the `AuthService` double and `renderWithAuth`), `users.ts`, `compose.ts`, `notifications.ts`, `feed.ts`, `search.ts`, `games.ts` and `stats.ts` (the per-unit network fixtures; `stats.ts`'s stubs also record each request's path parameters and query), and `tables.ts` (reads a table's caption and header scopes) |
 | `public/` | Served at fixed URLs, unhashed: the favicons, app icons, `og-image.png` and `manifest.webmanifest` (`D1`), copied unchanged from `brand/out/` and declared in `index.html`'s head. `src/brand-assets.test.ts` pins sizes, manifest and head tags without reading `brand/`, which the test container doesn't have |
 
@@ -243,6 +243,21 @@ profile fields; account lifecycle controls live on the separate, guarded
   belongs to `FRONTEND-004`, which has not landed; a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would
   need deleting rather than merging. `profile_picture_media_id` is never sent.
+- **A profile that is not ready shows `ProfileLoading` (`FRONTEND-033`).**
+  React Router navigates in a transition, and React keeps an already-revealed
+  Suspense boundary's content during one, so behind `BackgroundRoutes`' shared
+  boundary the previous page stayed on screen, with no feedback, until the
+  profile chunk arrived. The profile route therefore has a `<Suspense>` of its
+  own in `routes.tsx`: mounted fresh by the navigation, it shows its fallback
+  at once, on a direct load too. `ProfilePage` renders the same component while
+  its data is pending, so the chunk wait and the data wait read as one, and a
+  new `:userId` never shows the previous profile. `ProfileLoading` is a
+  `role="status"` "Loading this profile…" line under an `aria-hidden` header
+  card skeleton (shared `Skeleton` bars, laid out as `ProfileSummary`, so the
+  card revealed in its place moves nothing); no heading, no focus movement, no
+  animation. It lives in its own module because the route table imports it
+  statically and `ProfilePage` must stay lazy. A failed read shows the
+  existing alert with HistoryPage's secondary `Retry`, which refetches.
 - **`AppLayout` links "Your profile" by id**, because the route has no fixed
   address for "me". It renders only for a visitor who has a profile, and reads
   it through the same shared query gated on the same session the guards use —
@@ -603,6 +618,15 @@ over the page you are on.
   post", and shown only to an active account. `main` is padded at the bottom
   so the last card's controls scroll clear of it: 8.5rem on phones and 5rem
   from 40em (`floating-clearance.test.ts`).
+- **The Invite button** (`FRONTEND-032`, `components/ui/InviteButton.tsx`)
+  is rendered immediately before the +, outside `main`, under the same
+  gate, so Tab reaches Invite then compose and the open dialog inerts both.
+  It is fixed on the +'s baseline, `3.5rem` plus `--space-3` further left,
+  a Button secondary pill as tall as the +. It copies
+  `window.location.origin + "/"`, the guest feed, with no query and no
+  request; it reads "Copied" for 2 s and a hidden polite region says "Link
+  copied". With no clipboard, or a refusal, a read-only field above it
+  holds the address, focused and selected, until the next press or Escape.
 - **A published post closes the modal**, the same way Close does, and
   invalidates the `["feed"]` prefix. Compose spells the key and doesn't
   import the feed feature. A failed post keeps the draft and the modal.
@@ -1120,7 +1144,8 @@ is recorded so the second copy is a known state rather than a discovery.
   for the game and player details, which resolves to the same chunks. The
   feed, search, the thread modal, `DetailModal` and the shell stay eager.
   `BackgroundRoutes` wraps the page alone in one
-  `<Suspense fallback={<StatusLine>…}>`. `DetailModal` has its own around
+  `<Suspense fallback={<StatusLine>…}>`; the profile route adds its own
+  (`FRONTEND-033`, under Profile and follow). `DetailModal` has its own around
   its `<Outlet />`, so a lazy detail never unmounts the dialog. The main
   chunk was 454 kB after the split (it had been 513 kB), so the build no
   longer warns. `lazy-routes.test.ts` pins this through the static import
@@ -1223,12 +1248,10 @@ the generated schema. The players feature has its own `api.ts`; since
   `aria-current="page"`, deliberately not an ARIA `tablist`, which promises
   arrow-key switching between panels of one page. Its doc comment says so;
   don't "fix" it to `role="tab"`.
-- **The nav's Stats item** (lucide `chart-column`) sits between Search and
-  the profile item and is current on `/stats/*` and `/players/*`. `NavLink`
-  can only mark its own address, so `NavItem` takes `alsoCurrentOn`
-  patterns and renders a plain `Link` with `aria-current="page"` on them.
-  The phone bar holds five items for a signed-in visitor since `FRONTEND-020`
-  moved Compose to the floating + (`grid-auto-columns: 1fr`).
+- **The nav's Stats item** (lucide `chart-column`) follows Home and is
+  current on `/stats/*` and `/players/*`. `NavLink` can only mark its own
+  address, so `NavItem` takes `alsoCurrentOn` patterns and renders a plain
+  `Link` with `aria-current="page"` on them.
 - **URL state.** `?season=`, `?team=` and `?q=` live in the address through
   `useSearchParams`. The season defaults to the newest from
   `GET /events/seasons` **without being written to the URL** until the user
@@ -1504,9 +1527,9 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
 - **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
   every query is invalidated. **Sign out** from the banner also leaves the
   cache empty of that account, as the header's does (next entry).
-- **The header's Sign out** (`FRONTEND-027`): a secondary `Button` in
-  `AppLayout`, after the primary nav and outside it, at the header's right
-  edge. Shown when `useAuth().status` is `authenticated`, whatever the profile
+- **Sign out** (`FRONTEND-027`; in the nav since `FRONTEND-035`): a
+  `<button>` styled like the nav links, the list's last item, never current.
+  Shown when `useAuth().status` is `authenticated`, whatever the profile
   says, so a visitor with no profile yet or an unavailable one has a way out;
   not to a deactivated account, whose banner and recovery screen offer it. A
   public route stays where it is, `RequireAuth` sends a guarded one to
@@ -1517,13 +1540,22 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   app: a mounted public page reads again as a guest with its old result already
   gone, while a guarded page and a disabled signed-in-only query ask nothing.
   `useReported` is not query data and survives a sign-out on the same tab.
-- **The bottom bar is one line tall** (`FRONTEND-027`): a phone cell has no
-  inline padding, so "Your profile" (61 px, 63 px as the current page) fits a
-  69 px cell, measured with a classic scrollbar: a 55.4 px bar down to 330 px of
-  content. It wrapped before, which made the bar 69.8 px against a 64 px
-  `scroll-padding-bottom`. Under 330 px it can still wrap, so that padding is
-  now `--space-8` + `--space-2`, 72 px. From 40em until 44em the wordmark is
-  visually hidden, because Sign out needs about 682 px of content beside it.
+- **The shell's shape** (`FRONTEND-035`, `decisions.md` 2026-11-05). The
+  header: the brand at the start; at the end (`.headerEnd`, `margin-left:
+  auto`) a Search icon link, then the Account menu or Sign in. The nav is
+  Home, Stats, Search, Notifications, then Sign out; each item an
+  `aria-hidden` icon and its label in `.visually-hidden`, so the name is the
+  word at every width. Below 40em it is the bottom icon bar, the nav's Search
+  `display: none` and the header's shown; from 40em the reverse, and the nav
+  and `main` share `.body`, a flex group centred with `--space-5` between, the
+  nav a sticky sidebar under the header, `--sidebar-width-compact` and icon
+  only; from 78em `--sidebar-width` with the labels shown at `--font-size-md`.
+  `main` keeps `--content-max` (`--content-max-wide` on `/stats/records`). The
+  current item is 600, `--color-text`, with a 3px `--color-action` border on a
+  `::after`, top in the bar and inline-start in the sidebar. **Two Search
+  links** are the one exception to `layout.md` §1: one is `display: none` at
+  any width, so tests scope Search with `within()` the header or the nav.
+  `scroll-padding-bottom` stays `--space-8` + `--space-2` on phones.
 - **The post menu** (`features/feed/PostMenu.tsx`, on `components/ui/Menu`):
   one "More options" per card, at the end of the action row, rendered only
   while open. Copy link for everyone (`navigator.clipboard.writeText` of

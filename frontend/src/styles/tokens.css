@@ -88,6 +88,9 @@
   --target-min: 2.75rem;
   --content-max: 40rem;
   --content-max-wide: 64rem; /* FRONTEND-030: the records home, three cards a row */
+  --sidebar-width-compact: 4.5rem; /* FRONTEND-035: the icon-only left sidebar */
+  --sidebar-width: 12rem; /* FRONTEND-035: the labelled sidebar, from 78em */
+  --rail-width: 18rem; /* FRONTEND-036: the right rail */
 
   /* §8 Motion and state. */
   --duration-fast: 120ms;

@@ -20,6 +20,14 @@
  * UI-010 adds three for the stats and compose redesign, copied from Lucide like
  * the others: `circle-plus` (the floating new-post button), `paperclip` (attach)
  * and `circle-x` (clear). Same frame, same `size` and `className` props.
+ *
+ * FRONTEND-032 adds lucide `link` for the Invite button beside compose:
+ * `LinkIcon`, copied the same way and under the same licence, its two paths
+ * pinned below as Lucide draws them.
+ *
+ * FRONTEND-035 adds lucide `log-out` for Sign out, the nav's last item:
+ * `LogOutIcon`, copied the same way from the same commit and under the same
+ * licence, its three paths pinned below as Lucide draws them.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -40,6 +48,8 @@ import {
   HeartIcon,
   HouseIcon,
   ImageIcon,
+  LinkIcon,
+  LogOutIcon,
   MessageCircleIcon,
   PaperclipIcon,
   Repeat2FilledIcon,
@@ -72,6 +82,8 @@ const ICONS: [string, ComponentType][] = [
   ["circle-plus (UI-010)", CirclePlusIcon],
   ["paperclip (UI-010)", PaperclipIcon],
   ["circle-x (UI-010)", CircleXIcon],
+  ["link (FRONTEND-032)", LinkIcon],
+  ["log-out (FRONTEND-035)", LogOutIcon],
 ];
 
 const SHAPES = "path, circle, line, rect, polyline, polygon, ellipse";
@@ -111,25 +123,30 @@ describe.each([
   ["circle-plus", CirclePlusIcon],
   ["paperclip", PaperclipIcon],
   ["circle-x", CircleXIcon],
-] as [string, ComponentType<IconProps>][])("%s (UI-010)", (_name, Icon) => {
-  it("is 20 px by default, like the others", () => {
-    const { container } = render(<Icon />);
+  ["link", LinkIcon],
+  ["log-out", LogOutIcon],
+] as [string, ComponentType<IconProps>][])(
+  "%s (UI-010, FRONTEND-032, FRONTEND-035)",
+  (_name, Icon) => {
+    it("is 20 px by default, like the others", () => {
+      const { container } = render(<Icon />);
 
-    const svg = container.querySelector("svg") as SVGSVGElement;
-    expect(svg).toHaveAttribute("width", "20");
-    expect(svg).toHaveAttribute("height", "20");
-    expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
-  });
+      const svg = container.querySelector("svg") as SVGSVGElement;
+      expect(svg).toHaveAttribute("width", "20");
+      expect(svg).toHaveAttribute("height", "20");
+      expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
+    });
 
-  it("takes size and className", () => {
-    const { container } = render(<Icon size={24} className="lead" />);
+    it("takes size and className", () => {
+      const { container } = render(<Icon size={24} className="lead" />);
 
-    const svg = container.querySelector("svg") as SVGSVGElement;
-    expect(svg).toHaveAttribute("width", "24");
-    expect(svg).toHaveAttribute("height", "24");
-    expect(svg).toHaveClass("lead");
-  });
-});
+      const svg = container.querySelector("svg") as SVGSVGElement;
+      expect(svg).toHaveAttribute("width", "24");
+      expect(svg).toHaveAttribute("height", "24");
+      expect(svg).toHaveClass("lead");
+    });
+  },
+);
 
 describe("chart-column (FRONTEND-009)", () => {
   it("draws Lucide's four paths: the axes, then three bars", () => {
@@ -146,6 +163,58 @@ describe("chart-column (FRONTEND-009)", () => {
     ]);
   });
 });
+
+describe("link (FRONTEND-032)", () => {
+  it("draws Lucide's two paths, unchanged", () => {
+    const { container } = render(<LinkIcon />);
+
+    const paths = [...container.querySelectorAll("svg > *")].map(
+      (shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`,
+    );
+    expect(paths).toEqual([
+      "path M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71",
+      "path M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
+    ]);
+  });
+
+  it("is documented in the index's header with the others", () => {
+    const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
+
+    expect(index).toMatch(/lucide: link(?![\w-])/);
+  });
+});
+
+describe("log-out (FRONTEND-035)", () => {
+  it("draws Lucide's three paths, unchanged", () => {
+    const { container } = render(<LogOutIcon />);
+
+    const paths = [...container.querySelectorAll("svg > *")].map(
+      (shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`,
+    );
+    // icons/log-out.svg at the commit the index's header names.
+    expect(paths).toEqual([
+      "path m16 17 5-5-5-5",
+      "path M21 12H9",
+      "path M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
+    ]);
+  });
+
+  it("is documented in the index's header with the others", () => {
+    const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
+
+    expect(index).toMatch(/lucide: log-out(?![\w-])/);
+  });
+});
+
+function findSrcDirForIcons(): string {
+  for (const candidate of [
+    join(process.cwd(), "src", "components", "ui", "icons"),
+    join(process.cwd(), "frontend", "src", "components", "ui", "icons"),
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`cannot locate the icons folder from ${process.cwd()}`);
+}
 
 /** Each child shape as `<name> <d>`, the way the chart-column test reads them. */
 function shapesOf(Component: ComponentType): string[] {
