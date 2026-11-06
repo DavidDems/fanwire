@@ -373,11 +373,12 @@ def test_post_created_for_a_post_that_no_longer_exists_is_a_no_op(session_factor
         assert sender.sent == []
 
 
-def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(session_factory):
+def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(session_factory, caplog):
     from app.notifications import consumer
     from app.notifications.email import RecordingEmailSender
     from app.notifications.models import Notification
 
+    caplog.set_level(logging.INFO, logger=consumer.logger.name)
     records: list[logging.LogRecord] = []
 
     class _Recording(logging.Handler):

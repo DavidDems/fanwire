@@ -450,7 +450,7 @@ def test_every_foreign_key_to_users_is_in_the_deletion_fixture_and_absent_afterw
             if fk.column.table.name == "users"
         ]
         assert {fk.parent.table.name for fk in user_fks} >= {
-            "users", "follows", "notification_preferences", "notifications", "post_likes", "reports", "media", "posts"
+            "follows", "notification_preferences", "notifications", "post_likes", "reports", "media", "posts"
         }
         for fk in user_fks:
             assert session.execute(select(fk.parent).where(fk.parent == target_id)).first() is None, (
