@@ -24,6 +24,10 @@
  * FRONTEND-032 adds lucide `link` for the Invite button beside compose:
  * `LinkIcon`, copied the same way and under the same licence, its two paths
  * pinned below as Lucide draws them.
+ *
+ * FRONTEND-035 adds lucide `log-out` for Sign out, the nav's last item:
+ * `LogOutIcon`, copied the same way from the same commit and under the same
+ * licence, its three paths pinned below as Lucide draws them.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,6 +49,7 @@ import {
   HouseIcon,
   ImageIcon,
   LinkIcon,
+  LogOutIcon,
   MessageCircleIcon,
   PaperclipIcon,
   Repeat2FilledIcon,
@@ -78,6 +83,7 @@ const ICONS: [string, ComponentType][] = [
   ["paperclip (UI-010)", PaperclipIcon],
   ["circle-x (UI-010)", CircleXIcon],
   ["link (FRONTEND-032)", LinkIcon],
+  ["log-out (FRONTEND-035)", LogOutIcon],
 ];
 
 const SHAPES = "path, circle, line, rect, polyline, polygon, ellipse";
@@ -118,8 +124,9 @@ describe.each([
   ["paperclip", PaperclipIcon],
   ["circle-x", CircleXIcon],
   ["link", LinkIcon],
+  ["log-out", LogOutIcon],
 ] as [string, ComponentType<IconProps>][])(
-  "%s (UI-010, FRONTEND-032)",
+  "%s (UI-010, FRONTEND-032, FRONTEND-035)",
   (_name, Icon) => {
     it("is 20 px by default, like the others", () => {
       const { container } = render(<Icon />);
@@ -174,6 +181,28 @@ describe("link (FRONTEND-032)", () => {
     const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
 
     expect(index).toMatch(/lucide: link(?![\w-])/);
+  });
+});
+
+describe("log-out (FRONTEND-035)", () => {
+  it("draws Lucide's three paths, unchanged", () => {
+    const { container } = render(<LogOutIcon />);
+
+    const paths = [...container.querySelectorAll("svg > *")].map(
+      (shape) => `${shape.localName} ${shape.getAttribute("d") ?? ""}`,
+    );
+    // icons/log-out.svg at the commit the index's header names.
+    expect(paths).toEqual([
+      "path m16 17 5-5-5-5",
+      "path M21 12H9",
+      "path M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
+    ]);
+  });
+
+  it("is documented in the index's header with the others", () => {
+    const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
+
+    expect(index).toMatch(/lucide: log-out(?![\w-])/);
   });
 });
 

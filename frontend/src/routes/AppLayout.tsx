@@ -14,7 +14,7 @@ import wordmarkDark from "../assets/brand/wordmark-dark.png";
 import wordmarkLight from "../assets/brand/wordmark-light.png";
 import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
-import { Button, buttonClass } from "../components/ui/Button";
+import { buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
 import { InviteButton } from "../components/ui/InviteButton";
 import { Avatar } from "../components/ui/Avatar";
@@ -24,6 +24,7 @@ import {
   ChartColumnIcon,
   CirclePlusIcon,
   HouseIcon,
+  LogOutIcon,
   SearchIcon,
   type IconProps,
 } from "../components/ui/icons";
@@ -50,27 +51,53 @@ interface NavItemProps {
    * reached from the Stats page's Players tab and belongs to that section.
    */
   alsoCurrentOn?: string[];
+  /** A class for the item's `<li>`: the nav's Search is hidden on phones. */
+  itemClassName?: string;
+}
+
+/** Icons in the nav and the header's Search: Lucide's own 24 px grid. */
+const NAV_ICON_SIZE = 24;
+
+/**
+ * An item's content: its `aria-hidden` icon, then its label in the shared
+ * `.visually-hidden` class (icons only in the bar and the compact sidebar),
+ * which `styles.label` shows again in the labelled sidebar from 78em. The label
+ * is the control's accessible name at every width.
+ */
+function ItemContent({
+  label,
+  Icon,
+}: {
+  label: string;
+  Icon: ComponentType<IconProps>;
+}) {
+  return (
+    <>
+      <Icon className={styles.icon} size={NAV_ICON_SIZE} />
+      <span className={`visually-hidden ${styles.label}`}>{label}</span>
+    </>
+  );
 }
 
 /**
- * One primary-nav item: an `aria-hidden` icon above (phones) or hidden beside
- * (from 40em) its unchanged text label, which is the link's accessible name.
- * `NavLink` sets `aria-current="page"`, which is what the CSS keys the
- * current-item bar and weight on.
+ * One primary-nav item. `NavLink` sets `aria-current="page"`, which is what the
+ * CSS keys the current-item bar and weight on.
  */
-function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
+function NavItem({
+  to,
+  label,
+  Icon,
+  end,
+  alsoCurrentOn = [],
+  itemClassName,
+}: NavItemProps) {
   const { pathname } = useLocation();
   const elsewhere = alsoCurrentOn.some(
     (pattern) => matchPath(pattern, pathname) !== null,
   );
-  const content = (
-    <>
-      <Icon className={styles.icon} />
-      {label}
-    </>
-  );
+  const content = <ItemContent label={label} Icon={Icon} />;
   return (
-    <li>
+    <li className={itemClassName}>
       {elsewhere ? (
         // NavLink sets aria-current only on its own address, so a page of the
         // same section outside it says so itself.
@@ -91,10 +118,19 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  * §2): a skip link, the sticky header with the brand, the one primary nav, and
  * the one `main` landmark the route's view is rendered into.
  *
- * **One nav, moved by CSS.** On phones `AppLayout.module.css` fixes the nav to
- * the bottom of the viewport; from 40em it sits inline in the header. The DOM
- * never changes shape between breakpoints, because jsdom applies no media
- * queries and a second nav would double every nav link the tests look for.
+ * **One nav, moved by CSS** (`FRONTEND-035`). It follows the header and shares
+ * a parent with `main`. On phones `AppLayout.module.css` fixes it to the bottom
+ * of the viewport as an icon bar; from 40em the parent lays it and `main` out
+ * as one centred group, the nav a sticky left sidebar, icon only until 78em and
+ * labelled from there. The DOM never changes shape between breakpoints,
+ * because jsdom applies no media queries and a second nav would double every
+ * nav link the tests look for.
+ *
+ * **Two Search links, one shown** (the exception to `layout.md` §1,
+ * `decisions.md` 2026-11-05): the bar has no room for Search, so on phones it
+ * is an icon link in the header, left of the Account menu or Sign in, and the
+ * nav's own Search is `display: none`; from 40em the reverse. A hidden link
+ * leaves the accessibility tree, so a reader meets one.
  *
  * The account menu is rendered only for an active profile. Its own-profile
  * destination uses the id from the one shared account query; anonymous,
@@ -123,9 +159,10 @@ function NavItem({ to, label, Icon, end, alsoCurrentOn = [] }: NavItemProps) {
  *
  * "Sign out" (`FRONTEND-027`) is offered for any restored session, profile or
  * not, because a visitor with no profile yet has no other way out. Not to a
- * deactivated account: its banner and recovery screen already offer it. It sits
- * after the nav, outside it. Guards handle a signed-in-only route, and a public
- * page stays where it is, read again as a guest (`useSignOut`).
+ * deactivated account: its banner and recovery screen already offer it. It is
+ * the nav list's last item (`FRONTEND-035`), a button styled like the links and
+ * never current. Guards handle a signed-in-only route, and a public page stays
+ * where it is, read again as a guest (`useSignOut`).
  */
 export function AppLayout() {
   const { status } = useAuth();
@@ -161,83 +198,92 @@ export function AppLayout() {
             <img src={wordmarkLight} alt="fanwire" width={105} height={28} />
           </picture>
         </Link>
+        <div className={styles.headerEnd}>
+          <NavLink to="/search" className={styles.headerSearch}>
+            <ItemContent label="Search" Icon={SearchIcon} />
+          </NavLink>
+          {!accountIsActive ? null : (
+            <Menu
+              label="Account menu"
+              buttonClassName={styles.accountMenuButton}
+              icon={
+                <Avatar
+                  username={account.profile.username}
+                  size="sm"
+                  avatarKey={account.profile.profile_avatar_key}
+                  pictureKey={account.profile.profile_picture_key}
+                />
+              }
+              items={(
+                [
+                  ["Profile", `/profile/${account.profile.id}`],
+                  ["History", "/history"],
+                  ["Account settings", "/settings"],
+                ] as const
+              ).map(([label, to]) => ({ label, onSelect: () => navigate(to) }))}
+            />
+          )}
+          {status === "anonymous" && !onSignInPage ? (
+            <Link to="/sign-in" className={buttonClass("secondary", "md")}>
+              Sign in
+            </Link>
+          ) : null}
+        </div>
+      </header>
+      {account.status === "deactivated" ? <DeactivatedBanner /> : null}
+      <div className={styles.body}>
         <nav aria-label="Primary" className={styles.nav}>
           <ul className={styles.list}>
-            <NavItem to="/" label="Feed" Icon={HouseIcon} end />
-            <NavItem
-              to="/notifications"
-              label="Notifications"
-              Icon={BellIcon}
-            />
-            <NavItem to="/search" label="Search" Icon={SearchIcon} />
+            <NavItem to="/" label="Home" Icon={HouseIcon} end />
             <NavItem
               to="/stats"
               label="Stats"
               Icon={ChartColumnIcon}
               alsoCurrentOn={["/players/*"]}
             />
+            <NavItem
+              to="/search"
+              label="Search"
+              Icon={SearchIcon}
+              itemClassName={styles.sidebarOnly}
+            />
+            <NavItem
+              to="/notifications"
+              label="Notifications"
+              Icon={BellIcon}
+            />
+            {status === "authenticated" && account.status !== "deactivated" ? (
+              <li>
+                <button
+                  type="button"
+                  className={styles.link}
+                  onClick={() => {
+                    signOut();
+                    // This button has just gone: without this, focus falls to the body.
+                    mainRef.current?.focus();
+                  }}
+                >
+                  <ItemContent label="Sign out" Icon={LogOutIcon} />
+                </button>
+              </li>
+            ) : null}
           </ul>
         </nav>
-        {!accountIsActive ? null : (
-          <Menu
-            label="Account menu"
-            buttonClassName={styles.accountMenuButton}
-            icon={
-              <Avatar
-                username={account.profile.username}
-                size="sm"
-                avatarKey={account.profile.profile_avatar_key}
-                pictureKey={account.profile.profile_picture_key}
-              />
-            }
-            items={(
-              [
-                ["Profile", `/profile/${account.profile.id}`],
-                ["History", "/history"],
-                ["Account settings", "/settings"],
-              ] as const
-            ).map(([label, to]) => ({ label, onSelect: () => navigate(to) }))}
-          />
-        )}
-        {status === "anonymous" && !onSignInPage ? (
-          <Link
-            to="/sign-in"
-            className={`${buttonClass("secondary", "md")} ${styles.signIn}`}
-          >
-            Sign in
-          </Link>
-        ) : null}
-        {status === "authenticated" && account.status !== "deactivated" ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            className={styles.signOut}
-            onClick={() => {
-              signOut();
-              // This button has just gone: without this, focus falls to the body.
-              mainRef.current?.focus();
-            }}
-          >
-            Sign out
-          </Button>
-        ) : null}
-      </header>
-      {account.status === "deactivated" ? <DeactivatedBanner /> : null}
-      <main
-        id="main"
-        tabIndex={-1}
-        ref={mainRef}
-        className={wide ? `${styles.main} ${styles.wide}` : styles.main}
-      >
-        <ShellAccountStatus.Provider value={account.status}>
-          {location.pathname === "/" && account.status === "no-profile" ? (
-            <Navigate to="/create-profile" replace />
-          ) : (
-            <Outlet />
-          )}
-        </ShellAccountStatus.Provider>
-      </main>
+        <main
+          id="main"
+          tabIndex={-1}
+          ref={mainRef}
+          className={wide ? `${styles.main} ${styles.wide}` : styles.main}
+        >
+          <ShellAccountStatus.Provider value={account.status}>
+            {location.pathname === "/" && account.status === "no-profile" ? (
+              <Navigate to="/create-profile" replace />
+            ) : (
+              <Outlet />
+            )}
+          </ShellAccountStatus.Provider>
+        </main>
+      </div>
       {ownUserId === null ? null : (
         <>
           <InviteButton />
