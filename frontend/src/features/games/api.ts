@@ -31,3 +31,5 @@ export async function fetchGame(gameId: number): Promise<GameDetailOut | null> {
   }
   return data;
 }
+
+export type RecentGameOut = components["schemas"]["RecentGameOut"];

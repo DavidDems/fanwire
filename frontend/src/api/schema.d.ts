@@ -26,6 +26,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/games/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Recent Games
+         * @description Latest completed dates, strongest league-wide matchups first.
+         */
+        get: operations["get_recent_games_events_games_recent_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events/games/{game_id}": {
         parameters: {
             query?: never;
@@ -1786,6 +1806,44 @@ export interface components {
             username: string;
         };
         /**
+         * RecentGameOut
+         * @description A completed matchup, with league ranks and regular records in its season.
+         */
+        RecentGameOut: {
+            /** Away Rank */
+            away_rank: number;
+            away_record: components["schemas"]["RecentRecordOut"];
+            /** Away Score */
+            away_score: number;
+            away_team: components["schemas"]["TeamRefOut"];
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Game Type */
+            game_type: string | null;
+            /** Home Rank */
+            home_rank: number;
+            home_record: components["schemas"]["RecentRecordOut"];
+            /** Home Score */
+            home_score: number;
+            home_team: components["schemas"]["TeamRefOut"];
+            /** Id */
+            id: number;
+            /** Label */
+            label: string | null;
+            /** Season */
+            season: string;
+        };
+        /** RecentRecordOut */
+        RecentRecordOut: {
+            /** Losses */
+            losses: number;
+            /** Wins */
+            wins: number;
+        };
+        /**
          * RecordCatalogItemOut
          * @description One record of the catalog (EVENTS-012): what it is, never who holds
          *     it. `category` is one of the library's seven; `keywords` are the words
@@ -2389,6 +2447,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GameOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_recent_games_events_games_recent_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentGameOut"][];
                 };
             };
             /** @description Validation Error */
