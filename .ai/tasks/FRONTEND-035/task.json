@@ -31,6 +31,8 @@
     "frontend/src/routes/routes.test.tsx",
     "frontend/src/routes/auth-flow.test.tsx",
     "frontend/src/routes/sidebar-nav.test.tsx",
+    "frontend/src/routes/compose-modal.test.tsx",
+    "frontend/src/features/account/account-menu.test.tsx",
     "frontend/src/components/ui/icons/**",
     "frontend/src/styles/tokens.css",
     "frontend/src/styles/tokens.test.ts",
@@ -50,8 +52,7 @@
     "docker-compose.yml",
     "backend/**",
     "infra/**",
-    "frontend/src/auth/**",
-    "frontend/src/features/**"
+    "frontend/src/auth/**"
   ],
   "required_context": [
     "wiki/CodeContext/Modules/0x08-frontend.md",
