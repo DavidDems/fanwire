@@ -8,6 +8,7 @@
  * cell. The rest of the box score is `GamePage.test.tsx`'s, unchanged.
  */
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { renderAppAt } from "../../test/app-route";
@@ -30,11 +31,24 @@ function fullName(player: BoxScorePlayerOut): string {
 
 async function openGame() {
   const game = testGameDetail();
-  renderAppAt(`/games/${game.id}`, "anonymous", [gameDetailStub([game]).handler]);
+  renderAppAt(`/games/${game.id}`, "anonymous", [
+    gameDetailStub([game]).handler,
+  ]);
   await screen.findByRole("heading", {
     level: 1,
     name: new RegExp(game.home_team.name),
   });
+}
+
+/**
+ * FRONTEND-037: each team's box score is behind its tab in the "Team box
+ * scores" tablist, named "<short name> <score>"; select it first.
+ */
+async function showTeam(team: TeamRefOut): Promise<void> {
+  const short = team.name.split(" ").slice(-1)[0];
+  const tab = screen.getByRole("tab", { name: new RegExp(`^${short} `) });
+  if (tab.getAttribute("aria-selected") !== "true")
+    await userEvent.setup().click(tab);
 }
 
 function boxScoreFor(team: TeamRefOut): HTMLTableElement {
@@ -57,6 +71,7 @@ describe("box-score names link to the player page", () => {
     "%s: every played row's name is one link to /players/<id>, in its row header",
     async (_name, team, players) => {
       await openGame();
+      await showTeam(team);
       const table = boxScoreFor(team);
 
       for (const player of players) {
@@ -66,9 +81,14 @@ describe("box-score names link to the player page", () => {
         expect(link).toHaveAttribute("href", `/players/${player.player_id}`);
 
         const cell = link.closest("th");
-        expect(cell, `${fullName(player)}'s link is not in a th`).not.toBeNull();
+        expect(
+          cell,
+          `${fullName(player)}'s link is not in a th`,
+        ).not.toBeNull();
         expect(cell).toHaveAttribute("scope", "row");
-        expect(within(cell as HTMLElement).getAllByRole("link")).toHaveLength(1);
+        expect(within(cell as HTMLElement).getAllByRole("link")).toHaveLength(
+          1,
+        );
       }
     },
   );
@@ -77,6 +97,7 @@ describe("box-score names link to the player page", () => {
     await openGame();
 
     for (const team of [TEST_HOME_TEAM, TEST_AWAY_TEAM]) {
+      await showTeam(team);
       const foot = boxScoreFor(team).tFoot;
       expect(foot).not.toBeNull();
       expect(within(foot as HTMLElement).queryAllByRole("link")).toEqual([]);

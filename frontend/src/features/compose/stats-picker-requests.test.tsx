@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { renderAppAt } from "../../test/app-route";
 import {
   attachServer,
+  COMPLETED_GAME_NAME,
   openPicker,
   pickerShown,
   openLebron,
@@ -55,7 +56,9 @@ describe("picker API request counts and private navigation", () => {
       await openLebron(flow.user);
       const before = flow.events.length;
       clock.mockReturnValue(Date.now() + 31_000);
-      await flow.user.click(within(dialog).getByRole("button", { name: "Back" }));
+      await flow.user.click(
+        within(dialog).getByRole("button", { name: "Back" }),
+      );
       expect(await findPlayerSearch()).toHaveValue("James");
       await within(dialog).findByRole("button", { name: /LeBron James/ });
       await waitFor(() => expect(flow.queryClient.isFetching()).toBe(0));
@@ -74,7 +77,9 @@ describe("picker API request counts and private navigation", () => {
       await rootSettled(dialog);
       await openLebron(flow.user);
       const before = flow.events.length;
-      await flow.user.click(within(dialog).getByRole("button", { name: "Back" }));
+      await flow.user.click(
+        within(dialog).getByRole("button", { name: "Back" }),
+      );
       expect(await findPlayerSearch()).toHaveValue("James");
       await within(dialog).findByRole("button", { name: /LeBron James/ });
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -109,11 +114,11 @@ describe("picker API request counts and private navigation", () => {
       await flow.user.click(
         within(dialog).getByRole("button", { name: /^Toronto Raptors$/ }),
       );
-      await within(dialog).findByRole("button", { name: /Jan.*15|15.*Jan/ });
+      await within(dialog).findByRole("button", { name: COMPLETED_GAME_NAME });
       expect(flow.events).toHaveLength(4);
       expect(flow.events[3]).toBe("/api/events/teams/1/seasons/2023-24");
       await flow.user.click(
-        within(dialog).getByRole("button", { name: /Jan.*15|15.*Jan/ }),
+        within(dialog).getByRole("button", { name: COMPLETED_GAME_NAME }),
       );
       const radio = await within(dialog).findByRole("radio", {
         name: /Final score/,
@@ -222,7 +227,7 @@ describe("picker API request counts and private navigation", () => {
       await flow.user.click(
         within(dialog).getByRole("button", { name: /^Toronto Raptors$/ }),
       );
-      await within(dialog).findByRole("button", { name: /Jan.*15|15.*Jan/ });
+      await within(dialog).findByRole("button", { name: COMPLETED_GAME_NAME });
       expect(
         flow.events.filter(
           (path) => path === "/api/events/teams/1/seasons/2023-24",
@@ -250,7 +255,7 @@ describe("picker API request counts and private navigation", () => {
       await flow.user.click(
         within(again).getByRole("button", { name: /^Toronto Raptors$/ }),
       );
-      await within(again).findByRole("button", { name: /Jan.*15|15.*Jan/ });
+      await within(again).findByRole("button", { name: COMPLETED_GAME_NAME });
       expect(
         flow.events.filter(
           (path) => path === "/api/events/teams/1/seasons/2023-24",
