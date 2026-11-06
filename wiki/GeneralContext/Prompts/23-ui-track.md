@@ -23,6 +23,7 @@ deployments. EVENTS-013 started on `agent/EVENTS-013` (`e100ab1`); red tests com
 - Director worktree: `fanwire-ui-remaining-director`; unit worktree: `fanwire-EVENTS-013`. No servers or containers started.
 - EVENTS-013 test correction `f4d6044`: await empty-response settlement in two rail assertions; dispatch native cancel in jsdom. All three assertions mutation-checked; real Escape still needs Chromium.
 - EVENTS-013 choice: include season and overall home_record/away_record (wins/losses) from the ranking aggregation, enabling FRONTEND-037 without extra requests or an API change.
+- EVENTS-013 design: stacked icons/abbreviations then shared score, quiet dividers, 128px minimum rows matching lazy/request placeholders; rows grow with text. Chromium: 24 rows passed, axe NOT DONE. Migration cycle passed.
 
 **Autonomous Director brief:** worktree subagents, hand-run units and deploys.
 
