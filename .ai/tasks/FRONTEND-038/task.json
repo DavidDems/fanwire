@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-038",
+  "objective": "Remove the Invite button entirely, its logic and its look, leaving the compose + button as the only floating control.",
+  "acceptance_criteria": [
+    "Start gate: FRONTEND-036 has merged to main. Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "components/ui/InviteButton.tsx, InviteButton.module.css and InviteButton.test.tsx are deleted, and AppLayout renders no Invite control: no element named Invite, Copied or Link copied, no clipboard call and no copy-fallback card, signed in or not, at any route.",
+    "No file under frontend/src imports or names InviteButton. LinkIcon is deleted from components/ui/icons with its test cases if nothing else uses it, and the icons file's header count is corrected.",
+    "The compose + button keeps its markup, accessible name, position and stacking exactly as on main before this unit, its dialog anchor and its focus behaviour; tests that pinned Invite's place beside it (AppLayout.test.tsx, floating-clearance.test.ts, ui-css.test.ts) drop the Invite cases and keep every compose case. main's bottom padding still clears the + button and, below 40em, the bar.",
+    "Tab order: from the last nav item straight to main's content; the + button stays where it was in the order.",
+    "frontend/src/test/bundle-budgets/FRONTEND-038.ts declares, in the test commit, every output the unit changes: the entry shrinks, and no output grows. FRONTEND-032.ts is removed or emptied only if the budget tests require it.",
+    "Browser rows at 360, 768 and 1280, light and dark, signed in and anonymous, reported with measurements or NOT DONE: no Invite control; the + button's box (x, y, width, height) unchanged from production before this unit; the compose dialog opening from it; keyboard through nav to main.",
+    "No new dependency, third-party request, image file, or raw colour or px font size in module CSS.",
+    "wiki/CodeContext/Modules/0x08-frontend.md records the removal: the Invite entry is deleted and the components row no longer lists InviteButton or LinkIcon."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/ui/InviteButton.tsx",
+    "frontend/src/components/ui/InviteButton.module.css",
+    "frontend/src/components/ui/InviteButton.test.tsx",
+    "frontend/src/components/ui/FloatingButton.module.css",
+    "frontend/src/components/ui/FloatingButton.test.tsx",
+    "frontend/src/components/ui/ui-css.test.ts",
+    "frontend/src/components/ui/icons/**",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/AppLayout.test.tsx",
+    "frontend/src/routes/floating-clearance.test.ts",
+    "frontend/src/routes/sidebar-nav.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-032.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-038.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "backend/**",
+    "infra/**",
+    "frontend/src/auth/**",
+    "frontend/src/features/**",
+    "frontend/src/styles/tokens.css"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

@@ -6,13 +6,16 @@ type: prompt
 
 ## Update (2026-11-06, Director session)
 
-**This session's part is done.** The human gave `EVENTS-013` and the follow-on
-`FRONTEND-037` to another session, so this brief stays until they merge; that
-session deletes it as `Finish` says.
+**Two more units first (the human, 2026-11-06).** `FRONTEND-038` removes the
+Invite button; `FRONTEND-039` shows the sidebar's labels from about 860 px,
+pulls it toward the left edge on tablets and moves the rail's breakpoint to
+where the labelled sidebar, feed and rail fit. Both run before `EVENTS-013`
+(re-gated on them), in parallel; test their combination. `EVENTS-013` and
+`FRONTEND-037` stay with another session, which deletes this brief at the end.
 
 - Merged and deployed: `FEED-001` #332, `FRONTEND-032` #331, `FRONTEND-033`
-  #333, `FRONTEND-035` #336. Open: `FRONTEND-034` #342, `FRONTEND-036` #343
-  (merge spec amendment #340 first).
+  #333, `FRONTEND-035` #336. `FRONTEND-034` #342 and `FRONTEND-036` #343 (after
+  amendment #340) are merged and deployed too.
 - `POSTS-009` #337: merged and deployed (deploy 42165903823, attempt 2, after
   the `FanwireRoleBoundary` rollout). `Migration` returned head `e6d7328e8881`,
   recorded on #337.
@@ -64,7 +67,8 @@ merges.
 ```
 FEED-001 ──▶ POSTS-009 ──▶ FRONTEND-034
 FRONTEND-032 ┐
-FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ──▶ EVENTS-013 ──▶ FRONTEND-037
+FRONTEND-033 ┴──▶ FRONTEND-035 ──▶ FRONTEND-036 ─┬▶ FRONTEND-038 ─┬▶ EVENTS-013 ──▶ FRONTEND-037
+                                                 └▶ FRONTEND-039 ─┘
 ```
 
 - A unit starts only when every unit before it has **merged to `main`**.
