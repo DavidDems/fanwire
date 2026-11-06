@@ -736,11 +736,13 @@ describe("the + button", () => {
     const names = within(primaryNav())
       .getAllByRole("link")
       .map((link) => textOf(link));
+    // FRONTEND-035: Feed is renamed Home, in the order Home, Stats, Search,
+    // Notifications. A label is visually hidden, but still the link's text.
     expect(names).toEqual([
-      "Feed",
-      "Notifications",
-      "Search",
+      "Home",
       "Stats",
+      "Search",
+      "Notifications",
     ]);
     expect(screen.getByRole("button", { name: "Account menu" })).toBeInTheDocument();
     expect(
