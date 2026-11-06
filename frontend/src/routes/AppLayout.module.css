@@ -6,8 +6,9 @@
  * FRONTEND-035: the header holds the brand at its start and, at its end, the
  * phone-only Search icon link and the Account menu or Sign in. The primary nav
  * follows the header and shares `.body` with main: an icon bar fixed to the
- * bottom on phones, a sticky icon-only left sidebar from 40em, labelled from
- * 78em, the sidebar and main one centred group.
+ * bottom on phones and a sticky left sidebar from 40em. From 53.75em the
+ * labelled sidebar and main align to the tablet shell's outer spacing; from
+ * 78em they return to the centred desktop group.
  *
  * The header is target-min tall plus space-2 above and below, which is also
  * the sticky sidebar's top. The bottom bar is one row of target-min cells plus
@@ -311,26 +312,31 @@
 }
 
 /*
- * From 72em (1152 px): the home page's right rail (FRONTEND-036) sits beside
+ * From 76.0625em (1217 px): the home page's right rail (FRONTEND-036) sits beside
  * the feed, so main on / is the feed's column plus a gap plus the rail. Keyed
- * on the rail itself (HomeView mounts it on / from 72em, the only aside in
+ * on the rail itself (HomeView mounts it on / from 76.0625em, the only aside in
  * main), so every other route keeps its own width.
  */
-@media (min-width: 72em) {
+@media (min-width: 76.0625em) {
   .main:has(aside) {
     max-width: calc(var(--content-max) + var(--space-5) + var(--rail-width));
   }
 }
 
-/* From 78em (1248 px): the sidebar is wider and shows each label. */
-@media (min-width: 78em) {
+/* From 53.75em (860 px): the tablet sidebar is labelled and near the edge. */
+@media (min-width: 53.75em) {
+  .body {
+    justify-content: flex-start;
+    padding-inline: var(--space-4);
+  }
+
   .nav {
     width: var(--sidebar-width);
   }
 
   .link {
     justify-content: flex-start;
-    padding-inline: var(--space-3);
+    padding-inline: 0;
   }
 
   .link .label {
@@ -341,5 +347,25 @@
     overflow: visible;
     clip: auto;
     font-size: var(--font-size-md);
+  }
+
+  .main {
+    min-width: min(36rem, calc(100% - var(--sidebar-width) - var(--space-5)));
+  }
+}
+
+/* From 78em (1248 px): preserve the established centred desktop geometry. */
+@media (min-width: 78em) {
+  .body {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .link {
+    padding-inline: var(--space-3);
+  }
+
+  .main {
+    min-width: 0;
   }
 }
