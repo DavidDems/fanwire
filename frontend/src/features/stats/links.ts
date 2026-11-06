@@ -8,8 +8,14 @@ import type { StatsNavAdapter } from "../../components/stats-nav/types";
  * reached by address only; a team is this page's own Seasons tab, filtered.
  */
 
-export function gameHref(gameId: number): string {
-  return `/games/${gameId}`;
+/**
+ * A game's page; `season`, when given, rides along as `?season=` so the game
+ * page's team links return to the season it was opened from (FRONTEND-037).
+ */
+export function gameHref(gameId: number, season?: string): string {
+  return season === undefined
+    ? `/games/${gameId}`
+    : `/games/${gameId}?${new URLSearchParams({ season }).toString()}`;
 }
 
 export function playerHref(playerId: number): string {
@@ -30,8 +36,8 @@ export function teamHref(teamId: number, season: string | null): string {
 
 /** The stats navigator's game, player and team links, as router links. */
 export const ROUTE_LINKS: StatsNavAdapter = {
-  gameLink: (gameId: number, children: ReactNode) =>
-    createElement(Link, { to: gameHref(gameId) }, children),
+  gameLink: (gameId: number, children: ReactNode, season?: string) =>
+    createElement(Link, { to: gameHref(gameId, season) }, children),
   playerLink: (playerId: number, children: ReactNode) =>
     createElement(Link, { to: playerHref(playerId) }, children),
   teamLink: (teamId: number, season: string | null, children: ReactNode) =>

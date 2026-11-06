@@ -128,9 +128,6 @@ export function StatsNavigator({
           <TeamLevel
             level={top}
             adapter={adapter}
-            onTeam={(teamId) =>
-              move(() => replace({ kind: "team", season: top.season, teamId }))
-            }
             onGame={
               selectMode
                 ? (gameId) => move(() => open({ kind: "game", gameId }))

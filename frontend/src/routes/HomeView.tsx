@@ -63,8 +63,9 @@ function RecentGamesLoading() {
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
-              minHeight: "calc(4 * var(--space-6))",
-              paddingBlock: "var(--space-2)",
+              minHeight:
+                "calc(2 * var(--space-6) + var(--space-1) + 2 * var(--space-2))",
+              padding: "var(--space-2)",
               borderBottom: "1px solid var(--color-border)",
             }}
           >

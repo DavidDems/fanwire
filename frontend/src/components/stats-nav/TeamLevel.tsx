@@ -17,7 +17,8 @@ import { InlineAlert } from "../ui/InlineAlert";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
 import { TeamIcon } from "../ui/TeamIcon";
-import { formatGameDate } from "../../features/games/format";
+import { VisuallyHidden } from "../ui/VisuallyHidden";
+import { teamShortName } from "../../features/games/format";
 import { formatGameType, formatRecord } from "./labels";
 import { LevelLink } from "./LevelLink";
 import { ColumnHeader, ScrollTable } from "./ScrollTable";
@@ -70,19 +71,18 @@ export function TeamNameIcon({
 }
 
 /**
- * The team season level: the team's record and home and away splits, then
- * its games from its own side, newest first (the API's order). An opponent
- * opens its own team level in this one's place.
+ * The team season level: the team's record and home and away splits, the
+ * cumulative record chart, then its games as result cards from its own side,
+ * newest first (the API's order). Each card is one control: the game's link,
+ * carrying the level's season, or in select mode the game's level.
  */
 export function TeamLevel({
   level,
   adapter,
-  onTeam,
   onGame,
 }: {
   level: TeamLevelData;
   adapter: StatsNavAdapter;
-  onTeam: (teamId: number) => void;
   onGame?: (gameId: number) => void;
 }) {
   const teamSeason = useQuery({
@@ -113,12 +113,7 @@ export function TeamLevel({
       {teamSeason.isPlaceholderData ? (
         <StatusLine>Updating the team season...</StatusLine>
       ) : null}
-      <TeamSeason
-        data={teamSeason.data}
-        adapter={adapter}
-        onTeam={onTeam}
-        onGame={onGame}
-      />
+      <TeamSeason data={teamSeason.data} adapter={adapter} onGame={onGame} />
     </>
   );
 }
@@ -126,12 +121,10 @@ export function TeamLevel({
 function TeamSeason({
   data,
   adapter,
-  onTeam,
   onGame,
 }: {
   data: TeamSeasonOut;
   adapter: StatsNavAdapter;
-  onTeam: (teamId: number) => void;
   onGame?: (gameId: number) => void;
 }) {
   const { team, record, season, games } = data;
@@ -153,41 +146,113 @@ function TeamSeason({
         </div>
       </dl>
 
-      <TeamMarginChart games={games} teamName={team.name} season={season} />
-
       {games.length === 0 ? (
         <EmptyState>
           {team.name} played no games in {season}.
         </EmptyState>
       ) : (
-        <ScrollTable caption={`${team.name} games, ${season}, newest first`}>
-          <thead>
-            <tr>
-              <ColumnHeader label="Date" name />
-              <ColumnHeader label="Opponent" name />
-              <ColumnHeader label="Result" name />
-              <ColumnHeader label="Game" name />
-            </tr>
-          </thead>
-          <tbody>
-            {games.map((game) => (
-              <GameRow
-                key={game.game_id}
-                game={game}
-                season={season}
-                adapter={adapter}
-                onTeam={onTeam}
-                onGame={onGame}
-              />
-            ))}
-          </tbody>
-        </ScrollTable>
+        <>
+          {games.some(isPlayed) ? (
+            <RecordChart
+              games={games.filter(isPlayed)}
+              teamName={team.name}
+              season={season}
+            />
+          ) : null}
+          <div className={styles.resultsWrap}>
+            <ul className={styles.results}>
+              {games.map((game) => {
+                const card = <ResultCard game={game} teamName={team.name} />;
+                return (
+                  <li key={game.game_id}>
+                    {onGame ? (
+                      <LevelLink
+                        level={{ kind: "game", gameId: game.game_id }}
+                        adapter={adapter}
+                        onGo={() => onGame(game.game_id)}
+                      >
+                        {card}
+                      </LevelLink>
+                    ) : (
+                      adapter.gameLink(game.game_id, card, season)
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
       )}
     </>
   );
 }
 
-function TeamMarginChart({
+/**
+ * Whether a game has been played: 0-0 is a scheduled game (the API sends it
+ * as `won: false`), so it has no result and adds nothing to the record.
+ */
+function isPlayed(game: TeamSeasonGameOut): boolean {
+  return game.team_score !== 0 || game.opponent_score !== 0;
+}
+
+/**
+ * A game's result card, its control's content: the matchup in short names
+ * with the selected team first, a W or L chip (its word in hidden text, so
+ * the result is never the chip's look alone), then the score from the
+ * selected team's side and the game's label, else its type.
+ */
+function ResultCard({
+  game,
+  teamName,
+}: {
+  game: TeamSeasonGameOut;
+  teamName: string;
+}) {
+  const label = [game.label, game.sub_label]
+    .filter((part): part is string => part !== null && part !== "")
+    .join(", ");
+
+  return (
+    <>
+      <span className={styles.matchup}>
+        {teamShortName(teamName)} {game.is_home ? "vs" : "at"}{" "}
+        {teamShortName(game.opponent.name)}
+      </span>
+      {isPlayed(game) ? (
+        <>
+          <span
+            className={game.won ? styles.win : styles.loss}
+            aria-hidden="true"
+          >
+            {game.won ? "W" : "L"}
+          </span>
+          <VisuallyHidden>, {game.won ? "Won" : "Lost"}, </VisuallyHidden>
+        </>
+      ) : (
+        <VisuallyHidden>, Not played yet, </VisuallyHidden>
+      )}
+      <span className={styles.resultLine}>
+        <span className={styles.resultScore}>
+          {game.team_score}–{game.opponent_score}
+        </span>{" "}
+        <span>{label || formatGameType(game.game_type)}</span>
+      </span>
+    </>
+  );
+}
+
+/** The chart's frame, in viewBox units: the plot, its baseline, a bar's cap. */
+const CHART = { left: 64, right: 592, top: 8, base: 92, bottom: 176 };
+
+/**
+ * The team's record after each game, oldest first: a wins bar rising above
+ * the baseline and a losses bar falling below it, each as tall as its count
+ * on one scale (0 to the larger final count). Position, not colour, carries
+ * the meaning, and the axis says which side is which. Its `games` are the
+ * played ones only. The x-axis names each
+ * month at its first game. Its values are the table in the <details> below.
+ */
+function RecordChart({
   games,
   teamName,
   season,
@@ -196,142 +261,109 @@ function TeamMarginChart({
   teamName: string;
   season: string;
 }) {
-  const plotted = [...games].sort(
+  const { left, right, top, base, bottom } = CHART;
+  const ordered = [...games].sort(
     (a, b) => a.date.localeCompare(b.date) || a.game_id - b.game_id,
   );
-  const margins = plotted.map((game) => game.team_score - game.opponent_score);
-  const bound = Math.max(5, Math.ceil(Math.max(0, ...margins.map(Math.abs)) / 5) * 5);
-  const ticks = Array.from({ length: (bound * 2) / 5 + 1 }, (_, index) => -bound + index * 5);
-  const left = 48;
-  const right = 584;
-  const top = 12;
-  const bottom = 142;
-  const points = plotted.map((game, index) => ({
-    game,
-    margin: margins[index],
-    x: plotted.length < 2 ? (left + right) / 2 : left + ((right - left) * index) / (plotted.length - 1),
-    y: top + ((bound - margins[index]!) / (2 * bound)) * (bottom - top),
-  }));
-  const labelEvery = Math.max(1, Math.ceil((points.length - 1) / 6));
-  const dateLabels = points.filter(
-    (_, index) =>
-      index === 0 || index === points.length - 1 || index % labelEvery === 0,
-  );
+  let wins = 0;
+  let losses = 0;
+  const rows = ordered.map((game) => {
+    if (game.won) wins += 1;
+    else losses += 1;
+    return { game, wins, losses, month: format(parseISO(game.date), "MMM") };
+  });
+  const scale = Math.max(wins, losses, 1);
+  const slot = (right - left) / rows.length;
+  const width = Math.min(24, Math.max(1, slot * 0.7));
+  const height = (count: number) => (count / scale) * (base - top);
+
+  // A month's name at its first game, unless it would crowd the last one.
+  const months: { key: number; x: number; month: string }[] = [];
+  rows.forEach((row, index) => {
+    const x = left + slot * index;
+    const last = months[months.length - 1];
+    if (
+      rows[index - 1]?.game.date.slice(0, 7) !== row.game.date.slice(0, 7) &&
+      (last === undefined || x - last.x >= 36)
+    )
+      months.push({ key: row.game.game_id, x, month: row.month });
+  });
 
   return (
     <div className={styles.chart}>
-      {points.length >= 2 ? (
-        <svg
-          className={styles.chartSvg}
-          viewBox="0 0 600 184"
-          role="img"
-          aria-label={`Point margin for ${teamName}, ${season}`}
-        >
-          {ticks.map((tick) => {
-            const y = top + ((bound - tick) / (2 * bound)) * (bottom - top);
-            return (
-              <g key={tick}>
-                <line className={tick === 0 ? styles.chartZero : styles.chartGrid} x1={left} x2={right} y1={y} y2={y} />
-                <text className={styles.chartAxis} x={left - 8} y={y + 4} textAnchor="end"> {tick} </text>
-              </g>
-            );
-          })}
-          <polyline
-            className={styles.chartLine}
-            points={points.map(({ x, y }) => `${x},${y}`).join(" ")}
-          />
-          {points.map(({ x, y }, index) => (
-            <circle key={index} className={styles.chartPoint} cx={0} cy={0} r={4} transform={`translate(${x} ${y})`} />
-          ))}
-          {dateLabels.map(({ game, x }) => (
-            <text key={game.game_id} className={styles.chartAxis} x={x} y={166} textAnchor="middle">{format(parseISO(game.date), "MMM d")}</text>
-          ))}
-        </svg>
-      ) : (
-        <p className={styles.chartNote}>
-          {points.length === 0
-            ? `There are no games for ${teamName} in ${season}.`
-            : "At least two games are needed to draw a line."}
-        </p>
-      )}
-      <ScrollTable caption={`Point margin for ${teamName}, ${season} (all ${plotted.length} games)`}>
-        <thead>
-          <tr>
-            <ColumnHeader label="Date" name />
-            <ColumnHeader label="Opponent" name />
-            <ColumnHeader label="Result" name />
-            <ColumnHeader label="Margin" />
-          </tr>
-        </thead>
-        <tbody>
-          {points.map(({ game, margin }) => (
-            <tr key={game.game_id}>
-              <th scope="row" className={styles.name}>{formatGameDate(game.date)}</th>
-              <td className={styles.name}>{game.opponent.name}</td>
-              <td className={styles.name}>
-                <abbr title={game.won ? "Won" : "Lost"}>
-                  {game.won ? "W" : "L"}
-                </abbr>
-              </td>
-              <td>{margin > 0 ? `+${margin}` : String(margin)}</td>
+      <svg
+        className={styles.chartSvg}
+        viewBox="0 0 600 200"
+        role="img"
+        aria-label={`Wins and losses after each game, ${teamName}, ${season}`}
+      >
+        <text className={styles.chartAxis} x={0} y={top + 12}>
+          Wins
+        </text>
+        <text className={styles.chartAxis} x={0} y={bottom}>
+          Losses
+        </text>
+        {rows.map((row, index) => {
+          const x = left + slot * index + (slot - width) / 2;
+          return (
+            <g key={row.game.game_id}>
+              <rect
+                className={styles.chartWin}
+                x={x}
+                y={base - height(row.wins)}
+                width={width}
+                height={height(row.wins)}
+              />
+              <rect
+                className={styles.chartLoss}
+                x={x}
+                y={base}
+                width={width}
+                height={height(row.losses)}
+              />
+            </g>
+          );
+        })}
+        <line
+          className={styles.chartZero}
+          x1={left}
+          x2={right}
+          y1={base}
+          y2={base}
+        />
+        {months.map(({ key, x, month }) => (
+          <text key={key} className={styles.chartAxis} x={x} y={196}>
+            {month}
+          </text>
+        ))}
+      </svg>
+      <details className={styles.chartTable}>
+        <summary>Record after each game</summary>
+        <ScrollTable caption={`Record after each game, ${teamName}, ${season}`}>
+          <thead>
+            <tr>
+              <ColumnHeader label="Game" />
+              <ColumnHeader label="Month" name />
+              <ColumnHeader label="Result" name />
+              <ColumnHeader label="Record" />
             </tr>
-          ))}
-        </tbody>
-      </ScrollTable>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row.game.game_id}>
+                <th scope="row">{index + 1}</th>
+                <td className={styles.name}>{row.month}</td>
+                <td className={styles.name}>
+                  <abbr title={row.game.won ? "Won" : "Lost"}>
+                    {row.game.won ? "W" : "L"}
+                  </abbr>
+                </td>
+                <td>{formatRecord(row.wins, row.losses)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </ScrollTable>
+      </details>
     </div>
-  );
-}
-
-function GameRow({
-  game,
-  season,
-  adapter,
-  onTeam,
-  onGame,
-}: {
-  game: TeamSeasonGameOut;
-  season: string;
-  adapter: StatsNavAdapter;
-  onTeam: (teamId: number) => void;
-  onGame?: (gameId: number) => void;
-}) {
-  const label = [game.label, game.sub_label]
-    .filter((part): part is string => part !== null && part !== "")
-    .join(", ");
-
-  return (
-    <tr>
-      <th scope="row" className={styles.name}>
-        {onGame ? (
-          <LevelLink
-            level={{ kind: "game", gameId: game.game_id }}
-            adapter={adapter}
-            onGo={() => onGame(game.game_id)}
-          >
-            {formatGameDate(game.date)}
-          </LevelLink>
-        ) : (
-          adapter.gameLink(game.game_id, formatGameDate(game.date))
-        )}
-      </th>
-      <td className={styles.name}>
-        {game.is_home ? "vs " : "at "}
-        <LevelLink
-          level={{ kind: "team", season, teamId: game.opponent.id }}
-          adapter={adapter}
-          onGo={() => onTeam(game.opponent.id)}
-        >
-          {game.opponent.name}
-        </LevelLink>
-      </td>
-      <td className={styles.name}>
-        {/* The result in a letter and a word, never by colour alone. */}
-        <abbr title={game.won ? "Won" : "Lost"}>
-          {game.won ? "W" : "L"}
-        </abbr>{" "}
-        {`${game.team_score}-${game.opponent_score}`}
-      </td>
-      <td className={styles.name}>{label || formatGameType(game.game_type)}</td>
-    </tr>
   );
 }
