@@ -1125,7 +1125,7 @@ describe("from 40em: the left sidebar", () => {
     }
   });
 
-  it("sits with main as one group centred in the viewport, --space-5 between them", async () => {
+  it("uses the tablet edge inset and restores the centred desktop group, with --space-5 between them", async () => {
     await show("/", "member");
     const group = nav().parentElement as HTMLElement;
     expect(group).toBe(main().parentElement);
@@ -1149,10 +1149,18 @@ describe("from 40em: the left sidebar", () => {
       const centredByMargin =
         marginStart(group, width) === "auto" &&
         marginEnd(group, width) === "auto";
-      expect(
-        (justify ?? "").replace(/^safe\s+/, "") === "center" || centredByMargin,
-        `the group is centred at ${width}em`,
-      ).toBe(true);
+      const shouldCenter = width < FROM_LABEL || width >= FROM_78;
+      if (shouldCenter) {
+        expect(
+          (justify ?? "").replace(/^safe\s+/, "") === "center" ||
+            centredByMargin,
+          `the group is centred at ${width}em`,
+        ).toBe(true);
+      } else {
+        expect(justify, `the tablet group starts at its inset at ${width}em`).toBe(
+          "flex-start",
+        );
+      }
     }
   });
 

@@ -264,7 +264,7 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
   const FROM_LABEL = /^@media\b.*\(\s*min-width\s*:\s*53\.75em\s*\)/i;
   const FROM_RAIL = /^@media\b.*\(\s*min-width\s*:\s*76em\s*\)/i;
 
-  it("has a 40em query, labels from 53.75em, and widens the home rail at 76em", () => {
+  it("pins the sidebar, rail and desktop restoration breakpoints", () => {
     const media = allBlocks(shellBlocks()).filter((block) =>
       /^@media\b/i.test(block.prelude),
     );
@@ -277,11 +277,35 @@ describe("the sidebar's widths and breakpoints (FRONTEND-035)", () => {
       media.some((block) => FROM_RAIL.test(block.prelude)),
       "a (min-width: 76em) rail query",
     ).toBe(true);
+    const desktop = allBlocks(shellBlocks())
+      .filter(
+        (block) =>
+          isAtRule(block) && /\(\s*min-width\s*:\s*78em\s*\)/i.test(block.prelude),
+      )
+      .flatMap((media) => allBlocks(media.children))
+      .filter((block) => !isAtRule(block));
     expect(
-      media.some((block) =>
-        /\(\s*min-width\s*:\s*78em\s*\)/i.test(block.prelude),
+      desktop.some(
+        (block) =>
+          selectorSet(block).has(".body") &&
+          block.declarations.some(
+            ({ property, value }) =>
+              property === "justify-content" && value === "center",
+          ),
       ),
-      "the old 78em label breakpoint is gone",
+      "78em restores the centred desktop group",
+    ).toBe(true);
+    expect(
+      desktop.some(
+        (block) =>
+          selectorSet(block).has(".nav") &&
+          block.declarations.some(
+            ({ property, value }) =>
+              property === "width" &&
+              /--sidebar-width-compact/.test(value),
+          ),
+      ),
+      "78em keeps the labelled sidebar instead of restoring icon-only nav",
     ).toBe(false);
   });
 
