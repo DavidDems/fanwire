@@ -1691,6 +1691,12 @@ export interface components {
          *     deleted" placeholder); false everywhere else, including a repost whose
          *     original is hidden only because its author is deactivated.
          *
+         *     `replied_post` / `replied_post_deleted` (POSTS-009) are the same pair
+         *     for a reply's parent: the parent's own view (its counts and viewer
+         *     flags), one level deep (its own `replied_post` and `reposted_post` are
+         *     null). A plain repost parent stands for its original; a quote parent is
+         *     the quote. Null and false on every post that is not a reply.
+         *
          *     `data_link` is the post's own attachment in PostOut's shape (a plain
          *     repost has none; its `reposted_post` carries the original's), and
          *     `data_link_preview` that attachment's events/ preview: null without a
@@ -1725,6 +1731,9 @@ export interface components {
             original_post_id: number | null;
             /** Parent Post Id */
             parent_post_id: number | null;
+            replied_post: components["schemas"]["PostView"] | null;
+            /** Replied Post Deleted */
+            replied_post_deleted: boolean;
             /** Reply Count */
             reply_count: number;
             /** Repost Count */
