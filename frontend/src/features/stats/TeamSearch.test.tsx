@@ -375,7 +375,13 @@ describe("the team view (criteria 5, 6)", () => {
       expect(
         within(main)
           .queryAllByRole("link")
-          .some((link) => link.getAttribute("href") === "/games/9101"),
+          .some(
+            // FRONTEND-037 correction: the card's link carries ?season=, so
+            // compare the path, as the team-view test above does.
+            (link) =>
+              new URL(link.getAttribute("href") ?? "", "http://x.test")
+                .pathname === "/games/9101",
+          ),
       ).toBe(true),
     );
 
