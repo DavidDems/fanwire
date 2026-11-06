@@ -64,6 +64,8 @@ Per [[wiki/CodeContext/Standards/security|Security]] "User-generated content" an
 - **Fail-closed cleanup**: anything failing scan or validation is deleted outright, never retained "for review."
 - **Per-user rate limiting**: uploads are rate-limited the same way posts are (API Gateway usage plan + app-level check), independent of the malware question — an open upload endpoint is a storage-cost/abuse vector on its own.
 
+**Permanent account removal (`USERS-008`).** `account_media_objects` collects quarantine, public and thumbnail keys for the account's uploads and owned posts. The orchestrator batch-deletes objects before removing media rows; per-object S3 errors stop database and Cognito removal. `remove_account_media` never commits independently. The API role has `s3:DeleteObject` on only the two media buckets' object ARNs. CloudFront may serve an already-cached public image until expiry; origin deletion is not cache invalidation. Retry contract: [[0x01-users]].
+
 ## Open decisions
 
 Not yet decided — flag rather than assume when implementing:
