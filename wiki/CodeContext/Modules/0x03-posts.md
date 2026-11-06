@@ -71,6 +71,7 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 - `post_id` — FK → `posts.Post`.
 - `created_at` — timestamptz.
 - Unique constraint on `(user_id, post_id)` — one like per user per post.
+- `ix_post_likes_post_id(post_id)` (`POSTS-009`, revision `e6d7328e8881`): the primary key and `ix_post_likes_user_created_post` both lead with `user_id`, so a lookup by post alone (`GET /feed`'s "reply has a like" `EXISTS`, `like_counts`) had no index. On the dev database the feed query's like probe moved from a seq scan of `post_likes` to an index-only scan of it.
 - No `like_count` column on `Post` — count is derived from this table, not duplicated.
 
 **Design principles**
@@ -79,7 +80,7 @@ Covers original posts, replies, and reposts as **one** table, distinguished by f
 
 **Pattern tie-in** — none of Composite/Interpreter/Facade apply; a like is a pure fact table, not a domain object needing a structural or behavioral pattern. **Implemented**: `app.posts.service.like_post`/`unlike_post`, same fail-fast-on-duplicate shape as `app.users.service.follow`/`unfollow`. No `PostEventBus` publish — liking isn't in [[0x00-architecture]]'s list of published events, not invented here.
 
-**AWS mapping** — RDS Postgres, table `post_likes`, unique index on `(user_id, post_id)`.
+**AWS mapping** — RDS Postgres, table `post_likes`, unique index on `(user_id, post_id)`, plus `ix_post_likes_user_created_post` and `ix_post_likes_post_id`.
 
 **Security** — no free-text input, so no injection surface. [[wiki/CodeContext/Standards/security|Security]] only explicitly calls out rate-limiting for posting and reporting, not liking — see Open decisions.
 

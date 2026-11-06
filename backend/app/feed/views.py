@@ -20,6 +20,14 @@ statements as a page of 2. Which of those originals their owner deleted
 (POSTS-004's `reposted_post_deleted`) is one more batched read,
 app.posts.service.deleted_post_ids, in the same pass.
 
+A reply's `replied_post` (POSTS-009) mirrors it: the page's parents join the
+originals in that one posts_by_ids read and the same batch set. A parent
+that is a plain repost stands for its original, as the post card shows it,
+so the originals behind text-less repost parents are one more posts_by_ids
+read, skipped when they are all already in the set; whether such a parent
+carries media (and so is a quote, not a plain repost) comes from the same
+batched media read. deleted_post_ids covers parents and those originals too.
+
 A post's sports-data attachment (POSTS-006) is carried as `data_link`, read
 from the Post row itself, and `data_link_preview`, assembled from events/'
 batch reads: the links of every post in the pass, reposted originals
@@ -191,6 +199,12 @@ class PostView(BaseModel):
     deleted" placeholder); false everywhere else, including a repost whose
     original is hidden only because its author is deactivated.
 
+    `replied_post` / `replied_post_deleted` (POSTS-009) are the same pair
+    for a reply's parent: the parent's own view (its counts and viewer
+    flags), one level deep (its own `replied_post` and `reposted_post` are
+    null). A plain repost parent stands for its original; a quote parent is
+    the quote. Null and false on every post that is not a reply.
+
     `data_link` is the post's own attachment in PostOut's shape (a plain
     repost has none; its `reposted_post` carries the original's), and
     `data_link_preview` that attachment's events/ preview: null without a
@@ -214,6 +228,8 @@ class PostView(BaseModel):
     mentioned_game_ids: list[int]
     reposted_post: PostView | None
     reposted_post_deleted: bool
+    replied_post: PostView | None
+    replied_post_deleted: bool
     data_link: DataLinkOut | None
     data_link_preview: DataLinkPreview | None
 
@@ -272,10 +288,24 @@ def assemble_post_views(
         for post in posts
         if post.is_repost and post.original_post_id is not None
     }
+    parent_ids = {
+        post.parent_post_id for post in posts if post.is_reply and post.parent_post_id is not None
+    }
     # The page's own rows win over a refetched copy of the same id.
-    every_post: dict[int, Post] = {**posts_by_ids(session, original_ids)}
+    every_post: dict[int, Post] = {**posts_by_ids(session, original_ids | parent_ids)}
     every_post.update({post.id: post for post in posts})
-    deleted_originals = deleted_post_ids(session, original_ids)
+    # A text-less repost parent may be a plain repost, which stands for its
+    # original: fetch those originals before the batched reads, so they are
+    # in the same set. Media, read below, settles which ones are plain.
+    stand_in_ids = {
+        parent.original_post_id
+        for parent_id in parent_ids
+        if (parent := every_post.get(parent_id)) is not None
+        and _is_text_less_repost(parent)
+        and parent.original_post_id is not None
+    }
+    every_post.update(posts_by_ids(session, stand_in_ids - every_post.keys()))
+    deleted = deleted_post_ids(session, original_ids | parent_ids | stand_in_ids)
 
     post_ids = list(every_post)
     author_ids = {post.author_id for post in every_post.values()}
@@ -331,9 +361,29 @@ def assemble_post_views(
             mentioned_game_ids=mentions_by_post.get(post.id, []),
             reposted_post=None,
             reposted_post_deleted=False,
+            replied_post=None,
+            replied_post_deleted=False,
             data_link=None if link is None else DataLinkOut.model_validate(link),
             data_link_preview=previews.for_link(link),
         )
+
+    def shown_as_parent(parent_id: int) -> tuple[PostView | None, bool]:
+        """A reply's (replied_post, replied_post_deleted). `flat` views are
+        already cut at one level, so they nest as they are."""
+        if parent_id in deleted:
+            return None, True
+        parent = every_post.get(parent_id)
+        if parent is None:  # hidden: its author is deactivated
+            return None, False
+        if (
+            _is_text_less_repost(parent)
+            and parent.original_post_id is not None
+            and not media_by_post.get(parent.id)
+        ):
+            if parent.original_post_id in deleted:
+                return None, True
+            return flat.get(parent.original_post_id), False
+        return flat.get(parent_id), False
 
     views: list[PostView] = []
     for post in posts:
@@ -341,9 +391,20 @@ def assemble_post_views(
         if view is None:
             continue
         if post.is_repost and post.original_post_id is not None:
-            if post.original_post_id in deleted_originals:
+            if post.original_post_id in deleted:
                 view = view.model_copy(update={"reposted_post_deleted": True})
             elif (inner := flat.get(post.original_post_id)) is not None:
                 view = view.model_copy(update={"reposted_post": inner})
+        if post.is_reply and post.parent_post_id is not None:
+            replied, replied_deleted = shown_as_parent(post.parent_post_id)
+            view = view.model_copy(
+                update={"replied_post": replied, "replied_post_deleted": replied_deleted}
+            )
         views.append(view)
     return views
+
+
+def _is_text_less_repost(post: Post) -> bool:
+    """A repost with no text: plain unless it carries media (the card's
+    isPlainRepost rule, and app.posts.service's)."""
+    return post.is_repost and not post.text

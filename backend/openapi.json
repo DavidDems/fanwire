@@ -2654,7 +2654,7 @@
         "type": "object"
       },
       "PostView": {
-        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original is hidden.\n`reposted_post_deleted` is true on a repost whose original its owner\ndeleted (its `reposted_post` is then null, and the client shows a \"Post\ndeleted\" placeholder); false everywhere else, including a repost whose\noriginal is hidden only because its author is deactivated.\n\n`data_link` is the post's own attachment in PostOut's shape (a plain\nrepost has none; its `reposted_post` carries the original's), and\n`data_link_preview` that attachment's events/ preview: null without a\nlink, or when its target has no preview. Legacy EventMention rows\nproduce `mentioned_game_ids` only, never either field.",
+        "description": "feed/'s (and, per this unit's brief, search/'s) response shape for a\nsingle post. Deliberately its own schema, not app.posts.schemas.PostOut\n-- it carries fields (author, like_count, media, mentioned_game_ids)\nPostOut doesn't, assembled from other modules' read interfaces rather\nthan the Post row alone.\n\n`reply_count` counts direct replies, `repost_count` reposts plain and\nquote, both leaving out soft-deleted authors. `reposted_by_viewer` is\nwhether the viewer has a *plain* repost of this post (false for a\nguest). `reposted_post` is, on a repost, the view of the post it\nreposts, one level deep (its own `reposted_post` is always null); null\non every other post and when the original is hidden.\n`reposted_post_deleted` is true on a repost whose original its owner\ndeleted (its `reposted_post` is then null, and the client shows a \"Post\ndeleted\" placeholder); false everywhere else, including a repost whose\noriginal is hidden only because its author is deactivated.\n\n`replied_post` / `replied_post_deleted` (POSTS-009) are the same pair\nfor a reply's parent: the parent's own view (its counts and viewer\nflags), one level deep (its own `replied_post` and `reposted_post` are\nnull). A plain repost parent stands for its original; a quote parent is\nthe quote. Null and false on every post that is not a reply.\n\n`data_link` is the post's own attachment in PostOut's shape (a plain\nrepost has none; its `reposted_post` carries the original's), and\n`data_link_preview` that attachment's events/ preview: null without a\nlink, or when its target has no preview. Legacy EventMention rows\nproduce `mentioned_game_ids` only, never either field.",
         "properties": {
           "author": {
             "$ref": "#/components/schemas/AuthorView"
@@ -2759,6 +2759,20 @@
             ],
             "title": "Parent Post Id"
           },
+          "replied_post": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replied_post_deleted": {
+            "title": "Replied Post Deleted",
+            "type": "boolean"
+          },
           "reply_count": {
             "title": "Reply Count",
             "type": "integer"
@@ -2815,6 +2829,8 @@
           "mentioned_game_ids",
           "reposted_post",
           "reposted_post_deleted",
+          "replied_post",
+          "replied_post_deleted",
           "data_link",
           "data_link_preview"
         ],
