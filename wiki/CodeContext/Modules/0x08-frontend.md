@@ -1580,14 +1580,15 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   stays checked and disabled without requests. Deactivation reauthenticates before
   `DELETE /users/me`; wrong passwords send nothing. Its 204 resets caches and
   focuses the deactivated banner while retaining the session for recovery.
-- **Delete my data** opens the destructive "Delete all your data?" dialog. It
-  lists removed data, irreversibility, retained replies by others, and seven-day
-  backup expiry. A nonempty password enables confirmation; reauthentication must
-  finish before `DELETE /users/me/data`. Failure stays retryable in the dialog.
-  Success cancels queries, signs out, clears cache and replaces the route with `/`.
-  The hook requests synchronous React/router commits.
-  `auth/account.ts` owns validated notice state; `AppLayout` renders "Your account
-  and data have been deleted." through `StatusLine`. Backend: [[0x01-users]].
+- **Delete my data** opens destructive "Delete all your data?": removed data,
+  irreversibility, others' retained replies and seven-day backup expiry.
+  A nonempty password enables confirmation; reauthentication precedes
+  `DELETE /users/me/data`. Failure remains retryable. After 204, cancel queries
+  and synchronously retire the protected `Outlet` through
+  `AccountDeletionNavigation`, then sign out, clear cache and replace with `/`.
+  The shell resets finishing state at home commit. `auth/account.ts` validates
+  `accountDeleted` notice state; `AppLayout` displays "Your account and data have
+  been deleted." via `StatusLine`. Backend: [[0x01-users]].
 - **Recover** sends one disabled-in-flight `POST /users/me/recover`; success
   invalidates queries. Banner Sign out clears the account cache too.
 - **Sign out** is the nav's last button, never current (`FRONTEND-027`,
