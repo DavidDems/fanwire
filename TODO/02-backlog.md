@@ -154,6 +154,7 @@ manual steps are `wiki/GeneralContext/Prompts/24-ui-track.md`. Every unit is
 | B2 | `EVENTS-016` | Records holders read returns each record's top three | not started |
 | B3 | `EVENTS-017` | One read for eleven season boards; in-season on-pace qualifier | not started |
 | B4 | `EVENTS-014` | Season schedule load and route (backend; adds a migration) | specced (#352) |
+| Last | `FRONTEND-044` | Schedule page: day cells (5/3/1 by width) centred on today, arrows, nav link after Stats | after every unit above and the schedule upload |
 
 The F and B chains run in parallel, one unit each at a time. `FRONTEND-042`
 also needs `FRONTEND-041`; `FRONTEND-043` needs `FRONTEND-042`.

@@ -256,7 +256,7 @@ search move "perfect").
 ## UI adjustments after the track — decided 2026-11-07
 
 The human, after seeing `FRONTEND-037` and `EVENTS-013` live ("the changes fit
-my requests perfectly"). Specs: `FRONTEND-040` to `-043`, `EVENTS-015` to
+my requests perfectly"). Specs: `FRONTEND-040` to `-044`, `EVENTS-015` to
 `-017`.
 
 - **Sidebar bar.** From 860 px to 1248 px the current page's bar overlaps the
@@ -277,3 +277,8 @@ my requests perfectly"). Specs: `FRONTEND-040` to `-043`, `EVENTS-015` to
   with its top three and a View all opening the top ten in a modal. A season in
   progress shows leaders as it goes; a season with a champion uses the
   65-game minimum (`EVENTS-017`, `FRONTEND-043`).
+- **A Schedule page** (`FRONTEND-044`), a nav link after Stats: day cells of
+  played and upcoming games in the Recent Games card, 5 days from 1248 px, 3
+  from 860 px, 1 below, the middle cell on today; arrows and the day itself
+  move through the season. No filters yet. Built last, after `EVENTS-014` and
+  `EVENTS-015` and the schedule files' upload.

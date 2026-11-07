@@ -28,7 +28,7 @@ Hand each subagent only its spec's `required_context`, never the whole wiki.
 ## Where things stand
 
 The first UI track is finished and deployed (index "Deleted 2026-11-06").
-Production migration head: `b9f4c7e2d610`. The seven new specs and this brief
+Production migration head: `b9f4c7e2d610`. The eight new specs and this brief
 are the only changes so far; no unit has started.
 
 ## Order and gates
@@ -37,6 +37,8 @@ are the only changes so far; no unit has started.
 F: FRONTEND-040 ──▶ FRONTEND-041 ──▶ FRONTEND-042 ──▶ FRONTEND-043
                                         ▲                 ▲
 B: EVENTS-015 ──▶ EVENTS-016 ───────────┘──▶ EVENTS-017 ──┘──▶ EVENTS-014
+                                                                    │
+                       both chains merged + schedule uploaded ──▶ FRONTEND-044
 ```
 
 - A unit starts only when every unit before it has **merged to `main`**.
@@ -48,8 +50,12 @@ B: EVENTS-015 ──▶ EVENTS-016 ───────────┘──▶
 - The B units run in sequence: each edits `routes.py`, `schemas.py`,
   `openapi.json` and `schema.d.ts`.
 - `EVENTS-014` (season schedule, #352) is last in B: it adds a migration and
-  its frontend spec is written after it merges, which is outside this track.
-  Run `Migration` after its deploy.
+  `FRONTEND-044` is its page. Run `Migration` after its deploy.
+- **`FRONTEND-044` (Schedule page) is the very last unit.** It also needs
+  production to hold the 2026-27 schedule: the human uploads the
+  LeagueSchedule CSV files and a load runs. Before starting it, check that
+  `/api/events/seasons/2026-27/schedule` returns `scheduled` games; if not,
+  ask the human (an ordered list) and stop there.
 
 ## The loop
 
@@ -106,8 +112,9 @@ Only the human can merge and approve the `production` deploy.
 ## Finish
 
 1. A Director PR that brings `FrontendUI/components.md` (Historical and
-   Seasonal cards, the leader dialog, GamePage without the artwork, the
-   composer without quick posts), `layout.md` and `typography.md` (the
+   Seasonal cards, the leader dialog, the shared game card, GamePage without
+   the artwork, the composer without quick posts), `layout.md` (the Schedule
+   page and its nav item) and `typography.md` (the
    composer's "Quick posts" `h2`) and `Standards/gof-patterns.md` (the
    Prototype line named `PostTemplate.clone()`) up to what was built. It also
    removes "UI track (2026-11-07)" from `TODO/02-backlog.md`, deletes this file

@@ -76,7 +76,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 Live:
 
-- **`24-ui-track.md`** (2026-11-07): the human's adjustments after the first UI track: sidebar bar padding, no matchup artwork, no Quick posts, Stats links in the modal, Recent Games newest day first, top-three record cards and eleven Seasonal leader cards with an in-season qualifier (`FRONTEND-040` to `-043`, `EVENTS-015` to `-017`), plus `EVENTS-014` (season schedule). Order and gates are in the brief.
+- **`24-ui-track.md`** (2026-11-07): the human's adjustments after the first UI track: sidebar bar padding, no matchup artwork, no Quick posts, Stats links in the modal, Recent Games newest day first, top-three record cards and eleven Seasonal leader cards with an in-season qualifier (`FRONTEND-040` to `-043`, `EVENTS-015` to `-017`), `EVENTS-014` (season schedule) and last the Schedule page (`FRONTEND-044`). Order and gates are in the brief.
 - **`22-launch-adjustments.md`** (2026-11-02): ten hand-run units before the site is shared publicly: records library and search, team icons, avatar colours, History, the account menu and Account settings, sign-up without verification, delete my data, Invite. Order and manual steps are in the brief.
 
 - **`02-agent-workflow-continue.md`**: the review's fix queue is done (D1–D7 merged by 2026-10-12); what remains of it is `jev` as a shadow decision layer, the model upgrade and CLI pin, and bug 17's CI half. `MEDIA-002` has run (handoff §10.5).
