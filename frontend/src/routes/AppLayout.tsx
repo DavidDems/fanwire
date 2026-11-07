@@ -1,4 +1,10 @@
-import { createContext, useRef, type ComponentType } from "react";
+import {
+  createContext,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import {
   Link,
   Navigate,
@@ -13,6 +19,7 @@ import {
 import wordmarkDark from "../assets/brand/wordmark-dark.png";
 import wordmarkLight from "../assets/brand/wordmark-light.png";
 import {
+  AccountDeletionNavigation,
   useAccount,
   useAccountDeletionNotice,
   useSignOut,
@@ -179,6 +186,13 @@ export function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const composeState = useComposeLinkState();
+  const [finishingDeletion, setFinishingDeletion] = useState(false);
+
+  useEffect(() => {
+    if (finishingDeletion && location.pathname === "/") {
+      setFinishingDeletion(false);
+    }
+  }, [finishingDeletion, location.pathname]);
 
   return (
     <>
@@ -281,11 +295,18 @@ export function AppLayout() {
             <StatusLine>Your account and data have been deleted.</StatusLine>
           ) : null}
           <ShellAccountStatus.Provider value={account.status}>
-            {location.pathname === "/" && account.status === "no-profile" ? (
-              <Navigate to="/create-profile" replace />
-            ) : (
-              <Outlet />
-            )}
+            <AccountDeletionNavigation.Provider
+              value={() => setFinishingDeletion(true)}
+            >
+              {finishingDeletion && location.pathname !== "/" ? (
+                <StatusLine>Finishing account deletion…</StatusLine>
+              ) : location.pathname === "/" &&
+                account.status === "no-profile" ? (
+                <Navigate to="/create-profile" replace />
+              ) : (
+                <Outlet />
+              )}
+            </AccountDeletionNavigation.Provider>
           </ShellAccountStatus.Provider>
         </main>
       </div>

@@ -5,6 +5,7 @@ import {
   type UseMutationResult,
 } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
+import { createContext, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { apiClient } from "../api/client";
@@ -167,24 +168,30 @@ export async function deleteAccountData(): Promise<void> {
   if (!response.ok) throw new Error("Account deletion failed");
 }
 
+/** The shell can retire a protected route before its session is cleared. */
+export const AccountDeletionNavigation = createContext<(() => void) | null>(
+  null,
+);
+
 export function useDeleteAccount(): () => Promise<void> {
   const { signOut } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const retireProtectedRoute = useContext(AccountDeletionNavigation);
   return async () => {
+    if (retireProtectedRoute === null) {
+      throw new Error("Account deletion requires its application shell");
+    }
     await deleteAccountData();
     await queryClient.cancelQueries();
-    // Both React and the data router must commit synchronously: React alone
-    // would render the anonymous settings guard while navigation is still
-    // queued as a router transition, letting its sign-in redirect win.
-    flushSync(() => {
-      signOut();
-      queryClient.clear();
-      void navigate("/", {
-        replace: true,
-        state: { accountDeleted: true },
-        flushSync: true,
-      });
+    // Unmount the settings guard while the session still exists. Navigation
+    // can then finish asynchronously without that guard redirecting to sign-in.
+    flushSync(retireProtectedRoute);
+    flushSync(signOut);
+    queryClient.clear();
+    await navigate("/", {
+      replace: true,
+      state: { accountDeleted: true },
     });
   };
 }

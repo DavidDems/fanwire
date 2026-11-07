@@ -63,14 +63,17 @@ def processed_media_for_posts(
 def account_media_objects(
     session: Session, user_id: int, post_ids: Collection[int]
 ) -> tuple[list[str], list[str]]:
-    """All stored keys to remove before deleting these media rows."""
+    """Lock and snapshot stored keys after any in-flight publication commits."""
     rows = session.scalars(
-        select(Media).where(
+        select(Media)
+        .where(
             or_(
                 Media.uploader_id == user_id,
                 Media.post_id.in_(post_ids),
             )
         )
+        .order_by(Media.id)
+        .with_for_update()
     ).all()
     quarantine = sorted({row.s3_key_quarantine for row in rows if row.s3_key_quarantine})
     public = sorted(

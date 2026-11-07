@@ -57,6 +57,7 @@ from app.notifications.channels import NotificationFactory
 from app.notifications.email import EmailSender
 from app.notifications.models import Notification, NotificationPreference, NotificationType
 from app.posts.models import Post  # read-only lookup only, see module docstring
+from app.posts.service import deleted_post_ids
 from app.users.models import User
 
 POST_CREATED = "PostCreated"
@@ -98,9 +99,9 @@ def handle_domain_event(
     Email is a best-effort side channel: the committed Notification row is
     the durable outcome, so any exception from email delivery (e.g. SES
     MessageRejected) is logged -- notification type and id only, no PII --
-    and swallowed, and the notification is still returned. Failures before
-    the commit still propagate, MissingReferenceError among them; a PostCreated
-    whose new post has no row is not one of them (see the module docstring).
+    and swallowed, and the notification is still returned. Missing referenced
+    rows are successful no-ops; malformed payloads and storage failures before
+    the commit still propagate (see the module docstring).
     """
     try:
         if event_name == POST_CREATED:
@@ -169,7 +170,7 @@ def _resolve_post_created(
     post = session.get(Post, detail["post_id"])
     actor_id = detail["author_id"]
 
-    if post is None or post.deleted_at is not None or post.author_id is None:
+    if post is None or post.author_id is None or post.id in deleted_post_ids(session, [post.id]):
         logger.info("post created event names a post that no longer exists")
         return None, actor_id, None, None
     if post.is_reply:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useDeactivateAccount, useDeleteAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
@@ -50,6 +50,13 @@ export function AccountSettings() {
   const { authService } = useAuth();
   const deactivate = useDeactivateAccount();
   const deleteAccount = useDeleteAccount();
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [confirmingDeletion, setConfirmingDeletion] = useState(false);
   const [deletionPassword, setDeletionPassword] = useState("");
   const [deletionFailure, setDeletionFailure] = useState<string | null>(null);
@@ -169,6 +176,7 @@ export function AccountSettings() {
       await authService.reauthenticate(deletionPassword);
       await deleteAccount();
     } catch (cause) {
+      if (!mounted.current) return;
       setDeletionFailure(
         authCode(cause) === "NotAuthorizedException"
           ? "That password is incorrect. Please try again."
