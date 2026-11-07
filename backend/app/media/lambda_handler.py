@@ -110,7 +110,10 @@ def _process_record(
     scan_result_status = detail["scanResultDetails"]["scanResultStatus"]
 
     media = session.execute(
-        select(Media).where(Media.s3_key_quarantine == object_key)
+        # Publication and permanent removal share this row lock. Hold it
+        # through the pipeline's object writes and commit, so deletion cannot
+        # snapshot keys before a scan finishes publishing its variants.
+        select(Media).where(Media.s3_key_quarantine == object_key).with_for_update()
     ).scalar_one_or_none()
     if media is None:
         logger.info(

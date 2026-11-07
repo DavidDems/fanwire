@@ -171,6 +171,19 @@ export class AppStack extends cdk.Stack {
           actions: ['s3:PutObject'],
           resources: [storage.quarantineBucket.arnForObjects(`${StorageStack.UPLOAD_PREFIX}*`)],
         }),
+        new iam.PolicyStatement({
+          sid: 'DeleteAccountMedia',
+          actions: ['s3:DeleteObject'],
+          resources: [
+            storage.quarantineBucket.arnForObjects('*'),
+            storage.publicMediaBucket.arnForObjects('*'),
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'DeleteAccountIdentity',
+          actions: ['cognito-idp:AdminDeleteUser'],
+          resources: [auth.userPool.userPoolArn],
+        }),
         this.kmsStatement('SseKmsForUploads', ['kms:GenerateDataKey']),
         this.putEventsStatement(),
       ],

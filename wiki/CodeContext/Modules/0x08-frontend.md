@@ -1574,30 +1574,31 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
 - **The account menu** in `AppLayout` is for active profiles only. Its Avatar
   button opens `Menu` with Profile (`/profile/<own id>`), History (`/history`)
   and Account settings (`/settings`).
-- **Account settings** (`features/account/AccountSettings.tsx`) is a
-  `RequireAuth` page ordered Verify this account, Notifications, Deactivate
-  account. Code confirmation refreshes the session before reading verified
-  state; Verified is disabled. Notifications stays checked and disabled, with
-  no request. Deactivation reauthenticates the current password before
-  `DELETE /users/me`; a wrong password makes no request. The server recent-auth
-  rule is in [[0x01-users]]. On 204, caches reset and focus moves to the
-  deactivated banner; the session stays signed in for recovery.
-- **Recover** is one `POST /users/me/recover` (disabled in flight); on 200
-  every query is invalidated. **Sign out** from the banner also leaves the
-  cache empty of that account, as the header's does (next entry).
-- **Sign out** (`FRONTEND-027`; in the nav since `FRONTEND-035`): a
-  `<button>` styled like the nav links, the list's last item, never current.
-  Shown when `useAuth().status` is `authenticated`, whatever the profile
-  says, so a visitor with no profile yet or an unavailable one has a way out;
-  not to a deactivated account, whose banner and recovery screen offer it. A
-  public route stays where it is, `RequireAuth` sends a guarded one to
-  `/sign-in`, and focus moves to `main` because the button has gone.
-- **`useSignOut` leaves nothing of the account** (`FRONTEND-027`): no feed key
-  carries a viewer, so it removes the profile entry and resets every other
-  query. It signs out inside `flushSync` first, so the reset sees a signed-out
-  app: a mounted public page reads again as a guest with its old result already
-  gone, while a guarded page and a disabled signed-in-only query ask nothing.
-  `useReported` is not query data and survives a sign-out on the same tab.
+- **Account settings** (`features/account/AccountSettings.tsx`) requires auth and
+  orders Verify this account, Notifications, Deactivate account, Delete my data.
+  Confirmation refreshes verification state; Verified is disabled. Notifications
+  stays checked and disabled without requests. Deactivation reauthenticates before
+  `DELETE /users/me`; wrong passwords send nothing. Its 204 resets caches and
+  focuses the deactivated banner while retaining the session for recovery.
+- **Delete my data** opens destructive "Delete all your data?": removed data,
+  irreversibility, others' retained replies and seven-day backup expiry.
+  A nonempty password enables confirmation; reauthentication precedes
+  `DELETE /users/me/data`. Failure remains retryable. After 204, cancel queries
+  and synchronously retire the protected `Outlet` through
+  `AccountDeletionNavigation`, then sign out, clear cache and replace with `/`.
+  The shell resets finishing state at home commit. `auth/account.ts` validates
+  `accountDeleted` notice state; `AppLayout` displays "Your account and data have
+  been deleted." via `StatusLine`. Backend: [[0x01-users]].
+- **Recover** sends one disabled-in-flight `POST /users/me/recover`; success
+  invalidates queries. Banner Sign out clears the account cache too.
+- **Sign out** is the nav's last button, never current (`FRONTEND-027`,
+  `FRONTEND-035`). Any authenticated profile state can use it except deactivated
+  accounts, whose banner/recovery screen owns it. Public pages stay; guarded pages
+  go to `/sign-in`; focus moves to `main` after the button disappears.
+- **`useSignOut`** removes the profile query and resets every other query because
+  feed keys carry no viewer. `flushSync` commits anonymous auth first: public pages
+  refetch as guests; guards and disabled private queries make no requests.
+  `useReported` is outside query data and survives same-tab sign-out.
 - **The shell's shape** (`FRONTEND-035` and `FRONTEND-039`; decisions dated 2026-11-05 and 2026-11-06). The
   header: the brand at the start; at the end (`.headerEnd`, `margin-left:
   auto`) a Search icon link, then the Account menu or Sign in. The nav is

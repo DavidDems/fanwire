@@ -53,12 +53,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_event_bus, get_session
+from app import account_deletion
+from app.dependencies import get_event_bus, get_session, get_settings
 from app.eventbus import PostEventBus
 from app.users.auth import VerifiedIdentity
 from app.users.dependencies import get_current_identity, get_current_user, get_own_account
@@ -194,9 +196,7 @@ def get_my_following(
     responses={
         status.HTTP_403_FORBIDDEN: {
             "description": "Recent authentication is required to deactivate an account.",
-            "content": {
-                "application/json": {"example": {"detail": "recent_auth_required"}}
-            },
+            "content": {"application/json": {"example": {"detail": "recent_auth_required"}}},
         }
     },
 )
@@ -221,6 +221,38 @@ def recover_me(
     session: Session = Depends(get_session),
 ) -> MeOut:
     return _me_out(session, recover_user(session, own_account.id))
+
+
+@router.delete(
+    "/me/data",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        403: {"description": "recent_auth_required: authenticate within the last five minutes."}
+    },
+)
+def delete_my_data(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_session),
+) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    age = None if identity.auth_time is None else now - identity.auth_time
+    if age is None or age < 0 or age > 5 * 60:
+        raise HTTPException(status_code=403, detail="recent_auth_required")
+    settings = get_settings()
+    try:
+        account_deletion.delete_account_data(
+            session,
+            cognito_sub=identity.sub,
+            user_pool_id=settings.cognito_user_pool_id,
+            quarantine_bucket=settings.media_quarantine_bucket,
+            public_bucket=settings.media_public_bucket,
+        )
+    except (BotoCoreError, ClientError, SQLAlchemyError, RuntimeError):
+        # Do not propagate SQL/SDK exception text, parameters or traceback into
+        # request logs: any of these can contain account identifiers.
+        raise HTTPException(
+            status_code=500, detail="Account deletion failed; retry safely"
+        ) from None
 
 
 # --- /{user_id} routes ------------------------------------------------

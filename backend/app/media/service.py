@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.media.models import Media, MediaStatus
@@ -58,3 +58,36 @@ def processed_media_for_posts(
             )
         )
     return result
+
+
+def account_media_objects(
+    session: Session, user_id: int, post_ids: Collection[int]
+) -> tuple[list[str], list[str]]:
+    """Lock and snapshot stored keys after any in-flight publication commits."""
+    rows = session.scalars(
+        select(Media)
+        .where(
+            or_(
+                Media.uploader_id == user_id,
+                Media.post_id.in_(post_ids),
+            )
+        )
+        .order_by(Media.id)
+        .with_for_update()
+    ).all()
+    quarantine = sorted({row.s3_key_quarantine for row in rows if row.s3_key_quarantine})
+    public = sorted(
+        {key for row in rows for key in (row.s3_key_public, row.s3_key_thumbnail) if key}
+    )
+    return quarantine, public
+
+
+def remove_account_media(session: Session, user_id: int, post_ids: Collection[int]) -> None:
+    session.execute(
+        delete(Media).where(
+            or_(
+                Media.uploader_id == user_id,
+                Media.post_id.in_(post_ids),
+            )
+        )
+    )

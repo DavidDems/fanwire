@@ -24,6 +24,10 @@ describe("Account settings", () => {
   it("shows verification, notifications and deactivation in that order", async () => {
     renderSettingsApp("active", new FakeAuthService({ session: testSession() }));
 
+    // Let the shell's profile request finish before a missing new control can
+    // fail this test and reset its MSW handlers during teardown.
+    await screen.findByRole("button", { name: "Account menu" });
+
     expect(
       await screen.findByRole("heading", { name: "Account settings" }),
     ).toBeInTheDocument();
@@ -34,8 +38,10 @@ describe("Account settings", () => {
     const deactivate = screen.getByRole("button", {
       name: "Deactivate account",
     });
+    const deleteData = screen.getByRole("button", { name: "Delete my data" });
     expect(before(verify, notifications)).toBe(true);
     expect(before(notifications, deactivate)).toBe(true);
+    expect(before(deactivate, deleteData)).toBe(true);
   });
 
   it("offers email verification to an unverified account and refreshes after confirmation", async () => {

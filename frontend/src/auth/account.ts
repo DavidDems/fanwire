@@ -5,6 +5,8 @@ import {
   type UseMutationResult,
 } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
+import { createContext, useContext } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
@@ -158,4 +160,53 @@ export function useSignOut(): () => void {
     queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY, exact: true });
     void queryClient.resetQueries();
   };
+}
+
+/** The permanent-removal path; only a successful 204 may clear the session. */
+export async function deleteAccountData(): Promise<void> {
+  const { response } = await apiClient.DELETE("/users/me/data");
+  if (!response.ok) throw new Error("Account deletion failed");
+}
+
+/** The shell can retire a protected route before its session is cleared. */
+export const AccountDeletionNavigation = createContext<(() => void) | null>(
+  null,
+);
+
+export function useDeleteAccount(): () => Promise<void> {
+  const { signOut } = useAuth();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const retireProtectedRoute = useContext(AccountDeletionNavigation);
+  return async () => {
+    if (retireProtectedRoute === null) {
+      throw new Error("Account deletion requires its application shell");
+    }
+    await deleteAccountData();
+    await queryClient.cancelQueries();
+    // Unmount the settings guard while the session still exists. Navigation
+    // can then finish asynchronously without that guard redirecting to sign-in.
+    flushSync(retireProtectedRoute);
+    flushSync(signOut);
+    queryClient.clear();
+    await navigate("/", {
+      replace: true,
+      state: { accountDeleted: true },
+    });
+  };
+}
+
+/** Only the account domain interprets its own navigation-state notice. */
+export function useAccountDeletionNotice(): boolean {
+  const location = useLocation();
+  const { status } = useAuth();
+  const state: unknown = location.state;
+  return (
+    status === "anonymous" &&
+    location.pathname === "/" &&
+    typeof state === "object" &&
+    state !== null &&
+    "accountDeleted" in state &&
+    state.accountDeleted === true
+  );
 }
