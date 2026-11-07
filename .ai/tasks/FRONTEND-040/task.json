@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-040",
+  "objective": "Three fixes the human asked for on 2026-11-07: the labelled sidebar's current-page bar no longer overlaps its icon, the game view loses its matchup artwork, and the composer loses its Quick posts section.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "Sidebar, from 53.75em (860 px) to below 78em (1248 px): the current page's bar (the 3 px inline-start border on .link[aria-current=page]) and that link's icon do not overlap, with at least 8 px (--space-2) between the bar's inline end and the icon's inline start. Measured in Chrome at 860, 1000, 1217 and 1247 px on the current link.",
+    "The sidebar's geometry is otherwise unchanged: every label still fits on one line inside --sidebar-width at 860 px and 200 % text keeps no horizontal overflow; below 53.75em (icon-only sidebar, bottom bar) and from 78em nothing moves (positions compared before and after at 640, 800 and 1280 px).",
+    "The game view, page and modal alike, no longer renders the matchup artwork: features/games/MatchupArtwork.tsx is deleted, its CSS rules (.matchupArtwork, .artLabels, .artTeam, .artDate) are removed, and nothing imports or names it. The article's children are, in order: the header, the line score (when the game has one) and the Team box scores tabs. Nothing else changes in them.",
+    "The composer (page and modal) no longer has a Quick posts section: no 'Quick posts' heading and no template buttons. features/compose/PostTemplate.ts and its test are deleted, the section's CSS rules are removed, and ComposeMediator.loadDraft is removed if nothing else calls it. Code comments that describe the templates are corrected.",
+    "Every other composer path is unchanged: typing, mentions, images, the stats attachment, 'Post about this game' prefill, the rate-limit message and posting. Existing tests for them pass unedited, except tests whose only subject is the removed artwork or templates, which are deleted in the test commit.",
+    "wiki/CodeContext/Modules/0x08-frontend.md no longer describes MatchupArtwork or the quick-post templates (Prototype row included). The Standards gof-patterns.md Prototype line is a Director follow-up, named in the PR.",
+    "The full frontend suite (vitest --maxWorkers=2), npm run typecheck, npm run lint and npm run build pass. The bundle-budget test passes with this unit's own file in frontend/src/test/bundle-budgets/ declaring every output it changes; no other unit's file is edited.",
+    "Browser rows (FrontendUI/verification.md), Chrome, light and dark, at 320, 360, 768 and 1280 px unless a criterion names other widths: each row measured or reported NOT DONE in the PR, with no document-level horizontal overflow and no page error. Rows: the sidebar bar at the widths above; a game with a line score and one without, page and modal; the composer page and modal, signed in on localhost."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/**",
+    "frontend/src/features/games/**",
+    "frontend/src/features/compose/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/layout.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

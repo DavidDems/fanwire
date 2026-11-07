@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-041",
+  "objective": "On the Stats page, a game or player link opens that game or player in the detail modal over the Stats page, as Recent Games does, so closing it returns to the Stats page exactly as it was.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "Every game link and every player link the Stats page renders (Seasons, Players and Records tabs: the navigator's levels through features/stats/links.ts, and Records > Seasonal's leaders) carries the modal flow's link state from routes/modal-flow (useDetailLinkState), as RecentGames does. Clicking one opens /games/<id> or /players/<id> as the flowOnly overlay over the Stats page; the href is unchanged (a game link keeps ?season=).",
+    "The Stats page underneath is not re-mounted: its tab, picked season, team, record, search text, Load more pages and scroll position are the same after the modal closes (close button, Escape, or Back) as before it opened. A test pins it on the team level: open a game card, close, the same team level and season are shown with no new team-season request.",
+    "In the modal, the game's heading team links keep the ?season= the game was opened with (FRONTEND-037); links inside the modal continue the flow as FRONTEND-014 defined.",
+    "Loading /games/<id>?season=\u2026 or /players/<id> directly, or opening it in a new tab, is still the full page. Team links on the Stats page stay ordinary navigation within the page.",
+    "The compose stats picker is unchanged (its gameLink still renders words, not links). No API, request-count or dependency change.",
+    "0x08-frontend.md states that Stats game and player links open the modal flow.",
+    "The full frontend suite (vitest --maxWorkers=2), npm run typecheck, npm run lint and npm run build pass. The bundle-budget test passes with this unit's own file in frontend/src/test/bundle-budgets/ declaring every output it changes; no other unit's file is edited.",
+    "Browser rows (FrontendUI/verification.md), Chrome, light and dark, at 320, 360, 768 and 1280 px unless a criterion names other widths: each row measured or reported NOT DONE in the PR, with no document-level horizontal overflow and no page error. Rows: team level -> game -> close; Players tab -> player -> close; Records record level -> game -> Back; scroll position kept; focus returns to the activating link on close."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/stats/**",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/routes/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

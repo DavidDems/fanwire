@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-044",
+  "objective": "A Schedule page, linked from the main navigation after Stats, shows today's games, played and upcoming, in a row of day cells (5, 3 or 1 by width) centred on today, with arrows and day buttons to move through the season.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test. Start gate: the last unit of the track. Start only after EVENTS-014, EVENTS-015 and FRONTEND-043 have merged, and production holds the 2026-27 schedule (the human has uploaded the LeagueSchedule files and a load has run; check GET /api/events/seasons/2026-27/schedule returns scheduled games).",
+    "A new page, Schedule, at /schedule, lazy-loaded like the other pages, with an h1 'Schedule' and the document title set as the other pages set theirs. It is public, like the /events reads.",
+    "A 'Schedule' nav item with a calendar icon (added to components/ui/icons from the same Lucide set and licence) sits after Stats and before Search in the sidebar, and after Stats and before Notifications in the phone bottom bar. It is current on /schedule. The bar still fits at 320 px with no overflow and every item keeps --target-min.",
+    "The page shows day cells side by side: 5 from 78em (1248 px), 3 from 53.75em (860 px) to below 78em, and 1 below 53.75em. The middle cell is the centre day; the others are the days before and after it in order (5: centre -2 to +2; 3: -1 to +1). Today is the current date in US Eastern time, the time zone game dates are stored in.",
+    "The centre day is today when the address has no ?date=; /schedule?date=YYYY-MM-DD centres that day (a malformed date falls back to today), so Back, reload and a shared link keep the place. Previous day and Next day arrow buttons move the centre by one day. Each visible day's heading is a button that makes that day the centre. A Today button, shown when the centre is not today, returns to it.",
+    "Each cell has the day as its heading (for example 'Today', 'Yesterday', 'Tomorrow', otherwise 'Sat 7 Nov') and lists that day's games in the route's order using the compact card RecentGames uses, extracted into one shared component that both render (Recent Games looks and reads exactly as before, pinned by its existing tests). A final game shows scores as Recent Games does and opens /games/<id> in the detail modal flow. A scheduled game shows both teams (an undecided team reads 'TBD') and its start time in Eastern time with 'ET', or 'Time TBD' when time_tbd; it is not a link. Team records are not shown (the route has none). A day with no game reads 'No games'.",
+    "Data: one GET /events/seasons/{season}/schedule read per season shown, the season derived from the date (a date from 1 August belongs to the season starting that year), cached so moving between days of a season makes no new request; staleTime at most 5 minutes so today's finished games appear. A season with no schedule (404) shows its days as 'No games', not an error; any other failure is one InlineAlert with a retry.",
+    "Accessibility: the arrows are named 'Previous day' and 'Next day'; a polite live region announces the new centre day after a move; each cell is a section labelled by its heading; the centre cell is marked (aria-current='date' on today's heading when shown). Reduced motion: no animated slide.",
+    "0x08-frontend.md documents the Schedule page and the shared card.",
+    "The full frontend suite (vitest --maxWorkers=2), npm run typecheck, npm run lint and npm run build pass. The bundle-budget test passes with this unit's own file in frontend/src/test/bundle-budgets/ declaring every output it changes; the entry chunk grows only by the route and nav item.",
+    "Browser rows (FrontendUI/verification.md), Chrome, light and dark, on production-shaped schedule data: 320, 360, 768, 859, 860, 1247, 1248 and 1440 px show 1, 1, 1, 1, 3, 3, 5, 5 cells; today centred on first load; arrows, a day heading and Today each move as specified; a final game opens in the modal and closing returns to the same days; a TBD team and a Time TBD game; no document-level horizontal overflow and no page error. Each row measured or reported NOT DONE."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/schedule/**",
+    "frontend/src/features/games/**",
+    "frontend/src/routes/**",
+    "frontend/src/components/ui/icons/**",
+    "frontend/src/api/**",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
