@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-017",
+  "objective": "One read serves a season's eleven regular-season leader boards, and a season still in progress qualifies players on pace for the games rule instead of hiding everyone until they reach it.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test. Start gate: after EVENTS-016 merges (both edit routes.py, schemas.py, openapi.json and schema.d.ts).",
+    "GET /events/seasons/{season}/leader-boards (public, like the other /events reads; limit 1-10, default 10) returns {season, complete, rule, minimum_games, boards}. boards holds exactly these, in this order: points, assists, rebounds, blocks, steals, field_goals_made, threes, field_goal_pct, three_point_pct, field_goals_attempted, three_pointers_attempted. Each board is {stat, rule, minimum_made, leaders}. Regular season only.",
+    "Count boards rank by per-game average over played rows (as GET .../leaders), then player id. Percentage boards rank by total made / total attempted (exact, then player id), returned as a fraction 0-1 to three places, each leader carrying made and attempted. Each leader carries player_id, first_name, last_name, teams (abbreviations), games_played and value.",
+    "A season is complete when it has a champion (the rule GET .../champion uses). Games minimum from 2023-24: complete -> 65; in progress -> ceil(65 x T / 82), at most 65, where T is the most regular-season games any team has played; the rule text names it (for example 'On pace for 65 games: 41, with 52 team games played'). Before 2023-24 the existing 70 % of T rule is unchanged.",
+    "Percentage boards also need a made minimum: 300 field goals for field_goal_pct, 82 threes for three_point_pct when complete; in progress ceil(base x T / 82), at most the base. The board's rule says it.",
+    "GET /events/seasons/{season}/leaders uses the same games rule for the regular season (an in-progress season is no longer empty); its schema and playoffs behaviour are unchanged.",
+    "At most five statements whatever the number of boards: season check, champion, team games, and one GROUP BY per player over the season with every summed column; boards are ranked from that one result. Pinned by a statement count test. The PR records the route's time on the dev fixture.",
+    "404 for a well-formed season with no stored game; 422 for a malformed season or limit outside 1-10.",
+    "The containerized backend suite, ruff and mypy pass. backend/openapi.json and frontend/src/api/schema.d.ts are regenerated from the app and committed with the implementation; wiki/CodeContext/Modules/0x02-events.md is updated where this unit changes a documented fact.",
+    "No migration."
+  ],
+  "allowed_paths": [
+    "backend/app/events/routes.py",
+    "backend/app/events/service.py",
+    "backend/app/events/schemas.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/app/events/nba_history.py",
+    "backend/app/events/load_handler.py",
+    "frontend/src/components/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

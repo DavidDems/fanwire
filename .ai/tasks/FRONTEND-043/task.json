@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-043",
+  "objective": "Records > Seasonal shows eleven leader cards in the Historical card style, each with its top three and a View all that opens the top ten in a dialog.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test. Start gate: after EVENTS-017 and FRONTEND-042 merge.",
+    "The season's three leader tables are replaced by cards, in EVENTS-017's board order: points, assists, rebounds, blocks, steals (per game), field goals made, threes made (per game), field goal %, three-point %, field goals attempted, threes attempted (per game). The card component and grid are shared with the Historical cards (FRONTEND-042), not copied.",
+    "Each card lists the top three: line 1 the player's name (a link that opens the modal flow, FRONTEND-041) and the value (averages one place; percentages as 0.0 %); line 2, muted and smaller, the team abbreviations and games played, plus made-attempted for a percentage board. The leader and anyone tied with them are semibold; the rest regular.",
+    "Each card has a 'View all' button (named for its board, for example 'View all points per game leaders') that opens a Dialog (components/ui) titled with the board and season: a table of the top ten (rank, player, team, GP, value; made and attempted for percentages). Escape and the close button close it, and focus returns to the button.",
+    "One leader-boards read per season (limit 10), cached; the cards and every dialog are drawn from it; opening a dialog makes no request. GET .../leaders is no longer read by the Stats page; client code left without a caller is removed.",
+    "Above the cards, one muted line states the qualifier from the response; a season still in progress says so ('Season in progress: ...'). A board with no qualifier reads 'No player qualifies yet.'",
+    "0x08-frontend.md describes the Seasonal cards.",
+    "The full frontend suite (vitest --maxWorkers=2), npm run typecheck, npm run lint and npm run build pass. The bundle-budget test passes with this unit's own file in frontend/src/test/bundle-budgets/ declaring every output it changes; no other unit's file is edited.",
+    "Browser rows (FrontendUI/verification.md), Chrome, light and dark, at 320, 360, 768 and 1280 px unless a criterion names other widths: each row measured or reported NOT DONE in the PR, with no document-level horizontal overflow and no page error. Rows: the current season (in progress) and a complete season; a dialog at 320 and 1280 (no overflow, focus trap, Escape); keyboard order through the cards."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/stats/**",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/api/stats.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

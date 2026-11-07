@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-042",
+  "objective": "Each Historical record card shows the record's top three, the holder's name in bold, each entry in at most two lines.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test. Start gate: after EVENTS-016 and FRONTEND-041 merge.",
+    "A card keeps its title (and its category line) and lists the holder's `top` entries (EVENTS-016) in order as a list. Each entry is line 1: the team icon (team records, and a player's single-game record: the team they played for), the name (a team's short name from teamShortName; a player's full name) and the value (RecordValue, as today); line 2: the season or game date in --font-size-sm and --color-text-muted.",
+    "No entry takes more than two lines at 320 px: line 1 does not wrap and is cut with an ellipsis, the full text staying in the DOM for assistive technology.",
+    "The holder's name and value are --font-weight-semibold; so is any entry tied with it (equal value: also a holder). Every other entry is regular weight. When more entries share the record than the card shows, a muted line says how many more.",
+    "Fewer than three entries shows what there is; none shows 'Nothing qualifies yet.' The loading placeholder keeps the card's final height (no layout shift when holders arrive).",
+    "On a record's own level (its ranked list), the names of rank-1 entries are semibold too.",
+    "Requests unchanged: one holders read per page of 24 cards; no per-card read.",
+    "0x08-frontend.md describes the cards.",
+    "The full frontend suite (vitest --maxWorkers=2), npm run typecheck, npm run lint and npm run build pass. The bundle-budget test passes with this unit's own file in frontend/src/test/bundle-budgets/ declaring every output it changes; no other unit's file is edited.",
+    "Browser rows (FrontendUI/verification.md), Chrome, light and dark, at 320, 360, 768 and 1280 px unless a criterion names other widths: each row measured or reported NOT DONE in the PR, with no document-level horizontal overflow and no page error. Rows: Best regular season (Warriors 73-9 2015-16 first), a player single-game record, a tied record; light/dark contrast of the muted line measured."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/stats/**",
+    "frontend/src/components/stats-nav/**",
+    "frontend/src/api/stats.ts",
+    "frontend/src/test/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "wiki/CodeContext/Standards/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/src/styles/tokens.css",
+    "frontend/public/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/FrontendUI/decisions.md",
+    "wiki/CodeContext/FrontendUI/tokens.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

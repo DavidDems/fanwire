@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-015",
+  "objective": "GET /events/games/recent lists the newest games first by calendar day, and ranks games by standings only within a day.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "The list is ordered by the game's calendar date (the date part of games.date, as stored), newest first; within one date, by the sum of the two teams' current-season standings ranks, ascending (EVENTS-013's rank); then start time, newest first; then id, descending.",
+    "Candidates are every completed game on the most recent N completed dates, where N is the request's limit (each date has at least one game, so the list fills whenever at least limit completed games exist). Example pinned by a test: limit 5, 3 games on the newest date and 8 on the day before gives the newest date's 3 in rank order, then the day before's best-ranked 2.",
+    "The statement count stays three whatever the limit (candidates with their dates subquery, teams, batched records), pinned by the existing count test.",
+    "The response schema, the limit bounds (1-10, default 5), ranks and records are unchanged; only the order and the candidate window change. The route's docstring and 0x02-events.md say the new order.",
+    "The containerized backend suite, ruff and mypy pass. backend/openapi.json and frontend/src/api/schema.d.ts are regenerated from the app and committed with the implementation; wiki/CodeContext/Modules/0x02-events.md is updated where this unit changes a documented fact.",
+    "No migration and no frontend change beyond the regenerated schema.d.ts (Recent Games renders the API's order)."
+  ],
+  "allowed_paths": [
+    "backend/app/events/routes.py",
+    "backend/app/events/service.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/app/events/nba_history.py",
+    "backend/app/events/load_handler.py",
+    "frontend/src/components/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

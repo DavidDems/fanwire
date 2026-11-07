@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "EVENTS-016",
+  "objective": "GET /events/records/holders also returns each record's top three entries, so a Historical card can show the top three without another read.",
+  "acceptance_criteria": [
+    "Test-first: commit the failing tests alone before the implementation; the implementation commit edits no test.",
+    "Each non-null holder gains `top`: the record list's first three entries (fewer when the list holds fewer), each a RecordEntryOut exactly as GET /events/records/{id} returns it at the same positions (rank, value, figures, team, player, season, game), in list order. A test compares `top` with the list route's first page of limit 3 for a team record, a player single-game record and a player season record, including a tie at rank 1.",
+    "Every existing holder field (the first entry and tied_count) is unchanged; null holders stay null.",
+    "Still at most one statement per asked id, each fetching at most three rows; the Cache-Control header, the 24-id limit and the 422 rules are unchanged.",
+    "The PR records the route's time for 24 ids on the dev fixture before and after (median of 5).",
+    "The containerized backend suite, ruff and mypy pass. backend/openapi.json and frontend/src/api/schema.d.ts are regenerated from the app and committed with the implementation; wiki/CodeContext/Modules/0x02-events.md is updated where this unit changes a documented fact.",
+    "No migration."
+  ],
+  "allowed_paths": [
+    "backend/app/events/routes.py",
+    "backend/app/events/records.py",
+    "backend/app/events/record_totals.py",
+    "backend/app/events/schemas.py",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x02-events.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml",
+    "infra/**",
+    "backend/app/users/**",
+    "backend/app/posts/**",
+    "backend/app/feed/**",
+    "backend/app/events/nba_history.py",
+    "backend/app/events/load_handler.py",
+    "frontend/src/components/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x02-events.md",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

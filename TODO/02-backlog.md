@@ -137,6 +137,27 @@ current queue and order for Track D. Every unit is `hand`.
 | 12 | `FEED-001` | Keep public guest-feed posts visible to new signed-in accounts |
 | 13 | `FRONTEND-033` | Profile-route loading feedback and measured navigation delay |
 
+## UI track (2026-11-07)
+
+The human's adjustments after the first UI track (`FrontendUI/decisions.md`,
+2026-11-07). Specs are in `.ai/tasks/`; the live brief, order, gates and
+manual steps are `wiki/GeneralContext/Prompts/24-ui-track.md`. Every unit is
+`hand`.
+
+| Order | Task | What | State (2026-11-07) |
+|---|---|---|---|
+| F1 | `FRONTEND-040` | Sidebar bar clear of the icon (860-1248 px); no matchup artwork; no Quick posts | not started |
+| F2 | `FRONTEND-041` | Stats game and player links open the detail modal | not started |
+| F3 | `FRONTEND-042` | Historical cards: top three, holder bold, two lines each | after `EVENTS-016` |
+| F4 | `FRONTEND-043` | Seasonal: eleven leader cards, View all top ten in a dialog | after `EVENTS-017` |
+| B1 | `EVENTS-015` | Recent Games: newest day first, then rank sum | not started |
+| B2 | `EVENTS-016` | Records holders read returns each record's top three | not started |
+| B3 | `EVENTS-017` | One read for eleven season boards; in-season on-pace qualifier | not started |
+| B4 | `EVENTS-014` | Season schedule load and route (backend; adds a migration) | specced (#352) |
+
+The F and B chains run in parallel, one unit each at a time. `FRONTEND-042`
+also needs `FRONTEND-041`; `FRONTEND-043` needs `FRONTEND-042`.
+
 ## Deferred new-device security (outside Track D)
 
 `AUTH-001` is now part of Track D, immediately after `USERS-007`. `USERS-007`
