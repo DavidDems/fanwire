@@ -23,6 +23,7 @@ from app.db import make_engine
 
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _PARENT_REVISION = "c7e3a5d9f1b4"  # add_posts_data_link_columns, head before POSTS-006
+_TARGET_REVISION = "d4f8b2e6a1c3"  # POSTS-006 alone, excluding later migrations' CHECKs
 
 _COLUMN = "linked_line_game_id"
 _CHECK = "ck_posts_line_game_pairing"
@@ -209,7 +210,7 @@ def test_upgrade_adds_the_pairing_check_and_nothing_else_of_its_kind(alembic_con
     _at_parent(alembic_config)
     before = _posts_checks(engine)
 
-    command.upgrade(alembic_config, "head")
+    command.upgrade(alembic_config, _TARGET_REVISION)
 
     after = _posts_checks(engine)
     assert set(after) - set(before) == {_CHECK}
