@@ -137,42 +137,6 @@ current queue and order for Track D. Every unit is `hand`.
 | 12 | `FEED-001` | Keep public guest-feed posts visible to new signed-in accounts |
 | 13 | `FRONTEND-033` | Profile-route loading feedback and measured navigation delay |
 
-## UI track (2026-11-05)
-
-The human's look-and-feel changes (`FrontendUI/decisions.md`, 2026-11-05). Specs
-are in `.ai/tasks/`; the live brief, order, gates and manual steps are
-`wiki/GeneralContext/Prompts/23-ui-track.md`. Every unit is `hand`. Gates on
-Track D: `POSTS-009` after `FEED-001` (same feed query), `FRONTEND-035` after
-`FRONTEND-032` and `FRONTEND-033` (same shell and route tests). The stats
-picker's usability is a later spec.
-
-| Order | Task | What | State (2026-11-06) |
-|---|---|---|---|
-| 1 | `POSTS-009` | A reply's `PostView` carries its parent, one level deep; the feed includes replies with at least one like (adds a migration: run `Migration` after the deploy) | #337 merged, deployed; migration `e6d7328e8881` run |
-| 2 | `FRONTEND-034` | A reply's card shows its parent, smaller, and Show this thread | #342 merged, deployed |
-| 3 | `FRONTEND-035` | Icon bottom bar on phones, icon left sidebar from 640 px with Sign out; Search in the header on phones | #336 merged, deployed |
-| 4 | `FRONTEND-036` | No search bar above the feed; from 1152 px a right rail with search and results | #343 merged, deployed |
-| 5 | `FRONTEND-038` | Remove the Invite button, logic and look | not started |
-| 6 | `FRONTEND-039` | Tablet sidebar: labels from about 860 px, closer to the left edge; the rail only where the labelled sidebar, feed and rail fit | not started |
-| 7 | `EVENTS-013` | Recent games in the rail, best-ranked matchups first (backend route and section) | another session, with `FRONTEND-037` |
-
-`FRONTEND-034` and `FRONTEND-035` share no file and can swap order;
-`FRONTEND-036` needs `FRONTEND-035`; `FRONTEND-038` and `FRONTEND-039` need
-`FRONTEND-036` and can run together; `EVENTS-013` needs all three.
-`EVENTS-013`'s browser rows read best after the human's game-data refresh.
-
-Follow-ups found while building it (not specced):
-- The home rail follows the feed in DOM order, so a keyboard reader reaches its
-  search box after about 150 Tabs. A skip link to the rail, or the rail before
-  the feed in DOM order, would fix it (`FRONTEND-036`).
-- `ComposeRoute.test.tsx` "renders the real composer…" races in the local
-  container: `getByRole("textbox")` straight after `findByRole("heading")`
-  should be `findByRole`.
-- An account whose only follows are deactivated still gets the thin follows
-  feed, not the guest selection (`FEED-001`).
-- `UserIcon` and `ChevronDownIcon` have no caller (`FrontendUI/components.md`
-  §3).
-
 ## Deferred new-device security (outside Track D)
 
 `AUTH-001` is now part of Track D, immediately after `USERS-007`. `USERS-007`
@@ -194,7 +158,12 @@ succeeds. See each task brief for security constraints and approval gates.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore` and `ChevronDownIcon`; a scrim token for `Dialog`'s backdrop (it uses the `--neutral-950` primitive); stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the "for the Director" lists of `FRONTEND-008`/`009`/`010` and `UI-009` | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
+| **The home rail after the feed in DOM order**: a keyboard reader reaches the rail's search box after about 150 Tabs | `hand` | — | `FRONTEND-036` (UI track) | A skip link to the rail, or the rail before the feed in DOM order. Writes `src/routes/**`. Browser check |
+| **`ComposeRoute.test.tsx` "renders the real composer…" races** in the local container | `hand` | — | UI track, default-parallel local runs | `getByRole("textbox")` straight after `findByRole("heading")` should be `findByRole`. Test-only |
+| **Deactivated-only follows still get the thin follows feed**, not the guest selection | `hand` | — | `FEED-001` (UI track) | Backend feed query; its own red test |
+| **UI-track browser rows left NOT DONE**: axe and forced colors on the shell, rail, Recent Games, result cards, team tabs and chart; a full 82-game season chart (label density); the picker at 320/768 | `hand` | — | #346, #347, #351, `FRONTEND-037` PR | Browser-only, on real data after the human's game-data refresh |
+| **`0x08-frontend.md` is ~17,250 words** against the 2,500 reference budget | `director` | — | `FRONTEND-037` PR (doc debt) | Split by responsibility (shell, stats, games, compose, feed) with links; no fact dropped |
+| **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore`, `ChevronDownIcon` and `UserIcon`; a scrim token for `Dialog`'s backdrop (it uses the `--neutral-950` primitive); stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the "for the Director" lists of `FRONTEND-008`/`009`/`010` and `UI-009` | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
 | **No sign-out control anywhere.** `useAuth().signOut` works; nothing calls it | `hand` | — | `UI-004`/`UI-008` browser pass | A "Sign out" button in the shell header for signed-in visitors. Writes `src/routes/**`. Browser check |
 | **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
 | **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
