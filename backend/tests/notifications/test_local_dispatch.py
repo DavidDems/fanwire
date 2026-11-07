@@ -507,17 +507,46 @@ def test_a_consumer_failure_leaves_the_request_its_usual_status(
 
 
 def test_a_real_consumer_failure_does_not_reach_the_caller(session_factory, people, dispatch_log):
-    """No mock: the real consumer raises MissingReferenceError for an event
-    naming no such user."""
+    """No mock: malformed payloads still raise in the real consumer, while
+    local dispatch isolates that failure from the publishing caller.
+
+    Missing referenced rows are successful drops under USERS-008; omitting
+    the required actor key retains this test's genuine exception boundary.
+    """
     bus = get_event_bus()
 
     bus.publish(
+        "UserFollowed", {"followed_user_id": _USER_ID}
+    )
+
+    assert _rows(session_factory) == []
+    assert "KeyError" in dispatch_log.getvalue()
+    assert str(_USER_ID) not in dispatch_log.getvalue()
+
+
+def test_a_missing_recipient_is_dropped_without_a_dispatch_failure(
+    session_factory, people, dispatch_log, caplog, monkeypatch
+):
+    from app.notifications import consumer
+
+    monkeypatch.setattr(logging.getLogger(consumer.logger.name), "disabled", False)
+    caplog.set_level(logging.INFO, logger=consumer.logger.name)
+    get_event_bus().publish(
         "UserFollowed", {"followed_user_id": _USER_ID, "follower_user_id": people["bob"].id}
     )
 
     assert _rows(session_factory) == []
-    assert "MissingReferenceError" in dispatch_log.getvalue()
-    assert str(_USER_ID) not in dispatch_log.getvalue()
+    dropped = [
+        record for record in caplog.records
+        if record.name == consumer.logger.name and "no longer exists" in record.getMessage()
+    ]
+    assert dropped
+    assert all(record.levelno == logging.INFO for record in dropped)
+    logged = dispatch_log.getvalue()
+    assert "MissingReferenceError" not in logged
+    assert "local notification dispatch failed" not in logged
+    rendered = logged + "\n".join(str(record.__dict__) for record in dropped)
+    assert str(_USER_ID) not in rendered
 
 
 def test_no_aws_client_and_no_email_even_with_a_from_address(

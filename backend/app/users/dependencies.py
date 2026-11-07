@@ -36,7 +36,9 @@ from __future__ import annotations
 import json
 from functools import cache
 from pathlib import Path
+from typing import Any
 
+import boto3  # type: ignore[import-untyped]
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -209,3 +211,9 @@ def get_optional_current_user(
     return session.scalar(
         select(User).where(User.cognito_sub == identity.sub, User.deleted_at.is_(None))
     )
+
+
+@cache
+def get_cognito_client() -> Any:
+    settings = get_settings()
+    return boto3.client("cognito-idp", region_name=settings.cognito_region)

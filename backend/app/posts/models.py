@@ -60,7 +60,7 @@ class Post(Base):
     __tablename__ = "posts"
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    author_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    author_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_reply: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
@@ -119,6 +119,10 @@ class Post(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "author_id IS NOT NULL OR deleted_at IS NOT NULL",
+            name="ck_posts_anonymous_requires_deleted",
+        ),
         CheckConstraint(
             "NOT is_reply OR parent_post_id IS NOT NULL",
             name="ck_posts_reply_requires_parent",

@@ -38,6 +38,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # Deactivates the caller's own account; a repeat by the now-deactivated
     # caller is a 204 no-op (get_own_account).
     ("DELETE", "/users/me"): "own-account path: a repeat deactivation is a no-op",
+    # Permanently deletes the caller's own data; profile rows may already be
+    # gone after a partial failure, so the verified identity is the retry key.
+    ("DELETE", "/users/me/data"): "identity path: retries can have no local user row",
 }
 
 

@@ -12,7 +12,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.eventbus import PostEventBus
@@ -316,8 +316,7 @@ def get_public_profiles(session: Session, user_ids: Collection[int]) -> dict[int
         select(User, Media.s3_key_public)
         .outerjoin(
             Media,
-            (Media.id == User.profile_picture_media_id)
-            & (Media.status == MediaStatus.PROCESSED),
+            (Media.id == User.profile_picture_media_id) & (Media.status == MediaStatus.PROCESSED),
         )
         .where(User.id.in_(user_ids), User.deleted_at.is_(None))
     ).all()
@@ -425,3 +424,26 @@ def search_users(session: Session, query: str, *, limit: int, offset: int) -> li
         .offset(offset)
     )
     return list(session.scalars(stmt).all())
+
+
+def deletion_account_id(session: Session, cognito_sub: str) -> int | None:
+    """Resolve and lock the identity's local account for permanent removal."""
+    return session.scalar(select(User.id).where(User.cognito_sub == cognito_sub).with_for_update())
+
+
+def clear_account_picture(session: Session, user_id: int) -> None:
+    """Break the user/media FK cycle without committing."""
+    session.execute(update(User).where(User.id == user_id).values(profile_picture_media_id=None))
+
+
+def remove_account_user(session: Session, user_id: int) -> None:
+    """Remove follows and the account after other modules remove their references."""
+    session.execute(
+        delete(Follow).where(
+            or_(
+                Follow.follower_user_id == user_id,
+                Follow.followed_user_id == user_id,
+            )
+        )
+    )
+    session.execute(delete(User).where(User.id == user_id))

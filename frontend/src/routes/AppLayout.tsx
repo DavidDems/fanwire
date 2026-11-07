@@ -1,4 +1,10 @@
-import { createContext, useRef, type ComponentType } from "react";
+import {
+  createContext,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import {
   Link,
   Navigate,
@@ -12,12 +18,19 @@ import {
 
 import wordmarkDark from "../assets/brand/wordmark-dark.png";
 import wordmarkLight from "../assets/brand/wordmark-light.png";
-import { useAccount, useSignOut, type AccountStatus } from "../auth/account";
+import {
+  AccountDeletionNavigation,
+  useAccount,
+  useAccountDeletionNotice,
+  useSignOut,
+  type AccountStatus,
+} from "../auth/account";
 import { useAuth } from "../auth/AuthContext";
 import { buttonClass } from "../components/ui/Button";
 import { FloatingButton } from "../components/ui/FloatingButton";
 import { Avatar } from "../components/ui/Avatar";
 import { Menu } from "../components/ui/Menu";
+import { StatusLine } from "../components/ui/StatusLine";
 import {
   BellIcon,
   ChartColumnIcon,
@@ -162,6 +175,7 @@ function NavItem({
 export function AppLayout() {
   const { status } = useAuth();
   const account = useAccount();
+  const showAccountDeletionNotice = useAccountDeletionNotice();
   const location = useLocation();
   const signOut = useSignOut();
   const accountIsActive = account.status === "active";
@@ -172,6 +186,13 @@ export function AppLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const composeState = useComposeLinkState();
+  const [finishingDeletion, setFinishingDeletion] = useState(false);
+
+  useEffect(() => {
+    if (finishingDeletion && location.pathname === "/") {
+      setFinishingDeletion(false);
+    }
+  }, [finishingDeletion, location.pathname]);
 
   return (
     <>
@@ -270,12 +291,22 @@ export function AppLayout() {
           ref={mainRef}
           className={wide ? `${styles.main} ${styles.wide}` : styles.main}
         >
+          {showAccountDeletionNotice ? (
+            <StatusLine>Your account and data have been deleted.</StatusLine>
+          ) : null}
           <ShellAccountStatus.Provider value={account.status}>
-            {location.pathname === "/" && account.status === "no-profile" ? (
-              <Navigate to="/create-profile" replace />
-            ) : (
-              <Outlet />
-            )}
+            <AccountDeletionNavigation.Provider
+              value={() => setFinishingDeletion(true)}
+            >
+              {finishingDeletion && location.pathname !== "/" ? (
+                <StatusLine>Finishing account deletion…</StatusLine>
+              ) : location.pathname === "/" &&
+                account.status === "no-profile" ? (
+                <Navigate to="/create-profile" replace />
+              ) : (
+                <Outlet />
+              )}
+            </AccountDeletionNavigation.Provider>
           </ShellAccountStatus.Provider>
         </main>
       </div>

@@ -308,7 +308,11 @@ def assemble_post_views(
     deleted = deleted_post_ids(session, original_ids | parent_ids | stand_in_ids)
 
     post_ids = list(every_post)
-    author_ids = {post.author_id for post in every_post.values()}
+    author_ids = {
+        post.author_id
+        for post in every_post.values()
+        if post.author_id is not None and post.deleted_at is None
+    }
     links = {post.id: post.data_link for post in every_post.values()}
 
     authors = get_public_profiles(session, author_ids)
@@ -325,6 +329,8 @@ def assemble_post_views(
     # views and the one-level-deep inner views.
     flat: dict[int, PostView] = {}
     for post in every_post.values():
+        if post.author_id is None or post.deleted_at is not None:
+            continue
         author = authors.get(post.author_id)
         if author is None:
             continue
