@@ -103,9 +103,11 @@ describe("Delete my data", () => {
       expect(requests).toHaveLength(1);
       expect(auth.callsTo("signOut")).toHaveLength(1);
     });
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Your account and data have been deleted.",
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Your account and data have been deleted.",
+      );
+    });
     expect(app.router.state.location.pathname).toBe("/");
     expect(
       app.queryClient.getQueryData(["USERS-008-private-cache-sentinel"]),

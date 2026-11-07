@@ -373,11 +373,14 @@ def test_post_created_for_a_post_that_no_longer_exists_is_a_no_op(session_factor
         assert sender.sent == []
 
 
-def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(session_factory, caplog):
+def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(session_factory, caplog, monkeypatch):
     from app.notifications import consumer
     from app.notifications.email import RecordingEmailSender
     from app.notifications.models import Notification
 
+    # Alembic's fileConfig may have disabled this existing logger in a prior
+    # test; restore its enabled state only for this test's logging contract.
+    monkeypatch.setattr(logging.getLogger(consumer.logger.name), "disabled", False)
     caplog.set_level(logging.INFO, logger=consumer.logger.name)
     records: list[logging.LogRecord] = []
 

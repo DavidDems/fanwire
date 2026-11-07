@@ -345,9 +345,12 @@ def test_s3_success_response_with_object_errors_stops_later_stages_and_retries(f
         assert all(session.get(Media, media_id) is None for media_id in media_ids)
 
 
-def test_deletion_logs_local_id_and_counts_without_identity_pii(factory):
+def test_deletion_logs_local_id_and_counts_without_identity_pii(factory, caplog, monkeypatch):
     from app import account_deletion
 
+    # Isolate the logging contract from Alembic fileConfig in earlier tests.
+    monkeypatch.setattr(logging.getLogger(account_deletion.logger.name), "disabled", False)
+    caplog.set_level(logging.INFO, logger=account_deletion.logger.name)
     records: list[logging.LogRecord] = []
 
     class _Recording(logging.Handler):
