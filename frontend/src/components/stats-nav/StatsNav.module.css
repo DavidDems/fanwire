@@ -42,6 +42,10 @@
   margin: 0;
 }
 
+/*
+ * The team's cumulative record (FRONTEND-037): wins bars above the baseline,
+ * losses below it. The side carries the meaning; the two fills only help.
+ */
 .chart {
   display: flex;
   flex-direction: column;
@@ -57,11 +61,6 @@
   font-size: var(--font-size-sm);
 }
 
-.chartGrid {
-  stroke: var(--color-border);
-  stroke-width: 1;
-}
-
 .chartZero {
   stroke: var(--color-border-strong);
   stroke-width: 1.5;
@@ -72,25 +71,21 @@
   font-size: var(--font-size-sm);
 }
 
-.chartLine {
-  fill: none;
-  stroke: var(--color-accent);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.chartWin {
+  fill: var(--color-text);
 }
 
-.chartPoint {
-  fill: var(--color-surface);
-  stroke: var(--color-accent);
-  stroke-width: 2;
-  transition: transform var(--duration-fast) var(--ease-out);
+.chartLoss {
+  fill: var(--color-text-muted);
 }
 
-.chartNote {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+.chartTable > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--color-link);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
 }
 
 /*
@@ -382,4 +377,116 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/*
+ * The team level's result cards (FRONTEND-037): one list, newest first, in
+ * one column, two where its own box is 36em wide (a container query, so the
+ * narrow compose picker stays at one). The grid never reorders: the DOM order
+ * is the reading, keyboard and visual order, row by row.
+ */
+.resultsWrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (min-width: 36em) {
+  .results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * A card is its one control, a link or (in the picker) a button: the matchup
+ * and the W/L chip on the first line, the score and the game below.
+ */
+.results > li > :is(a, button) {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  /* The global reduced-motion rule zeros this token. */
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.results > li > :is(a, button):hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-muted);
+}
+
+.results > li > :is(a, button):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.matchup {
+  font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * The result chip: a win solid (text colour behind surface-colour text), a
+ * loss outlined. The letter is the result; the contrast only helps.
+ */
+.win,
+.loss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.win {
+  background-color: var(--color-text);
+  color: var(--color-surface);
+}
+
+.loss {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.resultLine {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.resultScore {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
 }

@@ -73,3 +73,15 @@ export function formatGameDate(value: string): string {
   const parsed = parseISO(value);
   return Number.isNaN(parsed.getTime()) ? value : format(parsed, "d MMM yyyy");
 }
+
+/**
+ * A team's name without its city, the scoreboard form of every compact game
+ * result (FRONTEND-037): the last word, "Boston Celtics" → "Celtics", except
+ * the one two-word nickname, "Portland Trail Blazers" → "Trail Blazers". A
+ * one-word name is itself.
+ */
+export function teamShortName(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const keep = words.slice(-2).join(" ") === "Trail Blazers" ? 2 : 1;
+  return words.slice(-keep).join(" ");
+}

@@ -216,9 +216,9 @@ constants (§9), not tokens.
 | `--target-min` | `2.75rem` (44 px) | Primary controls and nav items on touch |
 | `--content-max` | `40rem` (640 px) | The content column |
 | `--content-max-wide` (`FRONTEND-030`) | `64rem` (1024 px) | The content column on `/stats/records` only, chosen by `AppLayout` from the route (`layout.md` §2) |
-| `--sidebar-width-compact` (`FRONTEND-035`) | `4.5rem` (72 px) | The icon-only left sidebar, 40em to 78em |
-| `--sidebar-width` (`FRONTEND-035`) | `12rem` (192 px) | The labelled left sidebar from 78em |
-| `--rail-width` (`FRONTEND-035`, used by `FRONTEND-036`) | `18rem` (288 px) | The home page's right column from 72em |
+| `--sidebar-width-compact` (`FRONTEND-035`) | `4.5rem` (72 px) | The icon-only left sidebar, 40em to 53.75em |
+| `--sidebar-width` (`FRONTEND-035`) | `12rem` (192 px) | The labelled left sidebar from 53.75em (`FRONTEND-039`) |
+| `--rail-width` (`FRONTEND-035`, used by `FRONTEND-036`) | `18rem` (288 px) | The home page's right column from 76.0625em (`FRONTEND-039`) |
 | `--duration-fast` | `120ms` | Hover, press |
 | `--duration-base` | `200ms` | Disclosure, score highlight |
 | `--ease-out` | `cubic-bezier(0.2, 0, 0, 1)` | All transitions |
@@ -234,8 +234,9 @@ Components use the tokens, so they get this for free.
 | `xs` | below `360px` | The header shows the symbol alone (`layout.md`) |
 | `sm` | `640px` (`40em`) | The bottom icon bar gives way to the compact left sidebar; the header's Search link hides (`FRONTEND-035`) |
 | `md` | `960px` (`60em`) | Wider page gutters |
-| `lg` | `1152px` (`72em`) | The home page's right column (`FRONTEND-036`) |
-| `xl` | `1248px` (`78em`) | The sidebar shows its labels (`FRONTEND-035`) |
+| `tablet` | `860px` (`53.75em`) | The sidebar shows its labels and moves `--space-4` from the left edge (`FRONTEND-039`) |
+| `lg` | `1217px` (`76.0625em`) | The home page's right column (`FRONTEND-036`, `FRONTEND-039`): the first width that fits the labelled sidebar, the 640 px feed and the rail with 16 px outer gaps beside a 17 px classic scrollbar |
+| `xl` | `1248px` (`78em`) | The sidebar and main are centred again, the desktop geometry from before `FRONTEND-039` |
 
 Write them as `@media (min-width: 40em)` (mobile-first), never `max-width`.
 

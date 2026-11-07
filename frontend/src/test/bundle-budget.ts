@@ -45,50 +45,51 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main 9d0012f, with
- * FRONTEND-030 folded in (EVENTS-012 was folded at 4d714ef; EVENTS-011 and
- * POSTS-008 at b1dfa99; USERS-004 and FRONTEND-023, 024, 026 and 027 at
- * 4795f19). One tree, so every number is its single measurement. The entry,
- * its stylesheet, and every lazy output → gzip bytes. Measure with the test's
- * build, not `npm run build`: under Vitest the build inlines `test.env`'s
- * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
- * USERS-006's AccountSettings JS/CSS alone were folded from origin/main
- * 17f1803 using the same build environment; all other base values and unit
- * allowances remain unchanged by that partial fold.
+ * The base, measured by this test's own build on origin/main 2e29dac (after
+ * EVENTS-013, #351), folding in every unit whose file was still here:
+ * FRONTEND-031, 034, 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013
+ * and the records-tab-header change, all merged. One tree, so every number
+ * is its single measurement. Earlier folds: FRONTEND-030 at 9d0012f,
+ * EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99, USERS-004 and
+ * FRONTEND-023, 024, 026 and 027 at 4795f19. The entry, its stylesheet, and
+ * every lazy output → gzip bytes. Measure with the test's build, not
+ * `npm run build`: under Vitest the build inlines `test.env`'s `VITE_*`
+ * values, which makes the entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 148_665,
-  entryJsRaw: 468_154,
-  entryCssGzip: 5_831,
+  entryJsGzip: 151_669,
+  entryJsRaw: 477_274,
+  entryCssGzip: 7_023,
   lazy: {
     AccountSettings: 1_890,
     "AuthPage.module": 158,
-    ComposePage: 3_883,
-    ConfirmPage: 1_053,
-    errors: 240,
-    ForgotPasswordPage: 1_084,
-    format: 430,
-    GamePage: 4_049,
-    HistoryPage: 1_046,
+    ComposePage: 3_878,
+    ConfirmPage: 1_054,
+    errors: 239,
+    ForgotPasswordPage: 1_082,
+    format: 433,
+    GamePage: 4_080,
+    HistoryPage: 1_048,
     NotificationsPage: 1_741,
-    PeriodScores: 470,
-    PlayerPage: 3_833,
-    PlayerResults: 822,
-    PlayersTab: 577,
-    ProfilePage: 3_121,
+    PeriodScores: 471,
+    PlayerPage: 3_932,
+    PlayerResults: 819,
+    PlayersTab: 573,
+    ProfilePage: 2_836,
     ProfileSetupPage: 1_412,
-    RecordsTab: 6_270,
-    SeasonsTab: 1_663,
-    SegmentedTabs: 585,
-    SignInPage: 986,
-    SignUpPage: 875,
-    stats: 761,
-    "Stats.module": 373,
-    "StatsNav.module": 472,
-    StatsNavigator: 3_681,
-    StatsPage: 400,
-    StatsPicker: 2_206,
-    VisuallyHidden: 139,
+    RecentGames: 1_417,
+    RecordsTab: 6_394,
+    SeasonsTab: 1_701,
+    SegmentedTabs: 701,
+    SignInPage: 988,
+    SignUpPage: 920,
+    stats: 760,
+    "Stats.module": 377,
+    "StatsNav.module": 485,
+    StatsNavigator: 3_762,
+    StatsPage: 401,
+    StatsPicker: 2_224,
+    VisuallyHidden: 140,
     "css:AccountSettings.css": 403,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 411,
@@ -96,10 +97,11 @@ export const BASE = {
     "css:HistoryPage.css": 174,
     "css:NotificationsPage.css": 496,
     "css:PlayerPage.css": 879,
-    "css:ProfilePage.css": 813,
-    "css:SegmentedTabs.css": 364,
+    "css:ProfilePage.css": 724,
+    "css:RecentGames.css": 760,
+    "css:SegmentedTabs.css": 432,
     "css:Stats.css": 490,
-    "css:StatsNav.css": 1_427,
+    "css:StatsNav.css": 1_446,
     "css:StatsPage.css": 398,
     "css:StatsPicker.css": 466,
   } as Record<string, number>,

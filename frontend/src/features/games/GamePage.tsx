@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { SquarePenIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import { SegmentedTabs } from "../../components/ui/SegmentedTabs";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { TeamIcon } from "../../components/ui/TeamIcon";
 import { VisuallyHidden } from "../../components/ui/VisuallyHidden";
 import { offersMemberLinks, useAccount } from "../../auth/account";
 import { useComposeLinkState } from "../../routes/modal-flow";
-import { fetchGame, gameKey, type GameDetailOut } from "./api";
+import { fetchGame, gameKey, type GameDetailOut, type TeamRefOut } from "./api";
 import { BoxScore } from "./BoxScore";
-import { formatGameDate } from "./format";
+import { formatGameDate, teamShortName } from "./format";
 import styles from "./Games.module.css";
 import { LineScore } from "./LineScore";
 import { MatchupArtwork } from "./MatchupArtwork";
@@ -30,6 +32,10 @@ import { postAboutGameHref } from "./postLinks";
  * box-score row. Each goes to the composer's pre-filled address
  * (`postLinks.ts`); a guest sees none, since compose would send them through
  * sign-in first.
+ *
+ * FRONTEND-037: each team in the heading links to its Stats > Seasons page,
+ * for the `?season=` the game was opened with (none: the default season),
+ * and the two box scores are team tabs, one shown at a time.
  */
 export function GamePage() {
   const { gameId: raw } = useParams();
@@ -62,7 +68,8 @@ export function GamePage() {
     );
   }
 
-  return <Game game={game.data} />;
+  // Keyed, so another game starts on its own default team tab.
+  return <Game key={game.data.id} game={game.data} />;
 }
 
 function GameNotFound() {
@@ -89,8 +96,6 @@ function Game({ game }: { game: GameDetailOut }) {
   const label = [game.label, game.sub_label]
     .filter((part): part is string => part !== null && part !== "")
     .join(", ");
-  const winner =
-    homeScore > awayScore ? home : awayScore > homeScore ? away : null;
   const hasLineScore =
     game.home_line_score !== null && game.away_line_score !== null;
   // A signed-in account that is not deactivated (`FRONTEND-012`): a
@@ -100,6 +105,24 @@ function Game({ game }: { game: GameDetailOut }) {
   const composeState = useComposeLinkState();
   // 0-0 is a game not yet played: there is no result to post about.
   const completed = homeScore !== 0 || awayScore !== 0;
+  const [searchParams] = useSearchParams();
+  const season = searchParams.get("season");
+  const sides = {
+    away: { team: away, score: awayScore, boxScore: game.away_box_score },
+    home: { team: home, score: homeScore, boxScore: game.home_box_score },
+  };
+  // The winner's tab first; a tie or an unplayed game puts the home team's.
+  const order: Side[] =
+    awayScore > homeScore ? ["away", "home"] : ["home", "away"];
+  // A ?line= player line starts on its team, so the marked row is shown.
+  const line = Number(searchParams.get("line") ?? Number.NaN);
+  const [selected, setSelected] = useState<Side>(
+    () =>
+      order.find((side) =>
+        sides[side].boxScore.players.some((player) => player.line_id === line),
+      ) ?? order[0],
+  );
+  const shown = sides[selected];
 
   return (
     <article className={styles.page}>
@@ -108,13 +131,13 @@ function Game({ game }: { game: GameDetailOut }) {
         <h1 className={styles.heading}>
           <span className={styles.side}>
             <TeamIcon abbreviation={away.abbreviation} size="sm" />{" "}
-            <span>{away.name}</span>{" "}
+            <Link to={seasonTeamHref(away, season)}>{away.name}</Link>{" "}
             <span className={styles.score}>{awayScore}</span>
           </span>{" "}
           <span className={styles.at}>at</span>{" "}
           <span className={styles.side}>
             <TeamIcon abbreviation={home.abbreviation} size="sm" />{" "}
-            <span>{home.name}</span>{" "}
+            <Link to={seasonTeamHref(home, season)}>{home.name}</Link>{" "}
             <span className={styles.score}>{homeScore}</span>
           </span>
         </h1>
@@ -130,12 +153,6 @@ function Game({ game }: { game: GameDetailOut }) {
             </Link>
           </p>
         ) : null}
-        {winner === null ? null : (
-          <p className={styles.result}>
-            Final: {winner.name} won, {Math.max(homeScore, awayScore)}–
-            {Math.min(homeScore, awayScore)}
-          </p>
-        )}
         <p className={styles.muted}>
           <time dateTime={game.date}>{formatGameDate(game.date)}</time>
           {game.venue === null || game.venue === "" ? null : (
@@ -166,18 +183,37 @@ function Game({ game }: { game: GameDetailOut }) {
         />
       )}
 
-      <BoxScore
-        team={away}
-        boxScore={game.away_box_score}
-        gameId={game.id}
-        canPost={canPost}
-      />
-      <BoxScore
-        team={home}
-        boxScore={game.home_box_score}
-        gameId={game.id}
-        canPost={canPost}
-      />
+      <SegmentedTabs
+        label="Team box scores"
+        tabs={order.map((side) => ({
+          id: side,
+          label: `${teamShortName(sides[side].team.name)} ${sides[side].score}`,
+        }))}
+        value={selected}
+        onChange={(id) => setSelected(id === "away" ? "away" : "home")}
+      >
+        <BoxScore
+          key={selected}
+          team={shown.team}
+          boxScore={shown.boxScore}
+          gameId={game.id}
+          canPost={canPost}
+        />
+      </SegmentedTabs>
     </article>
   );
+}
+
+type Side = "away" | "home";
+
+/**
+ * A team's Stats > Seasons page, for the season the game was opened with, or
+ * none (the Seasons tab's default). Built here, not imported from the stats
+ * feature: features reach each other by address only.
+ */
+function seasonTeamHref(team: TeamRefOut, season: string | null): string {
+  const params = new URLSearchParams();
+  if (season !== null) params.set("season", season);
+  params.set("team", String(team.id));
+  return `/stats/seasons?${params.toString()}`;
 }

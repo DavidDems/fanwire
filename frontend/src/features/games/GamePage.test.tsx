@@ -20,10 +20,14 @@
  *   direction moves one of them to the 16th or the 14th whatever zone the
  *   test process runs in. Any common date spelling passes (`15 Jan 2024`,
  *   `January 15, 2024`, `2024-01-15`…).
- * - **Winner**: some element whose text (or an icon's accessible name) says
- *   win/winner/won names the winning team and not the losing one — and no
- *   such element names the loser. Checked with the home side winning and with
- *   the away side winning, so marking a fixed side fails.
+ * - **Winner** (FRONTEND-037 changed this): the "Final: <team> won" sentence
+ *   is gone; the winner's team tab comes first and starts selected. Checked
+ *   with the home side winning and with the away side winning. The tabs
+ *   themselves are `game-tabs.test.tsx`'s.
+ * - **One box score at a time** (FRONTEND-037): each team's box score is
+ *   behind its tab in a "Team box scores" tablist, so a test of a team's box
+ *   score selects that team's tab first (`showTeam`), and a count of what the
+ *   page shows counts the one panel.
  * - **Line score**: the table whose column headers start at `Q1`; from `Q1`
  *   on the headers are the periods then one total header (T, Tot, Total,
  *   Final or PTS), last. Each team's row is its first cell (naming the team by
@@ -144,26 +148,6 @@ async function openGame(
   return { stub, heading };
 }
 
-/** Text plus the accessible names of icons (aria-label, alt, title). */
-function accessibleText(element: Element): string {
-  const parts: string[] = [];
-  const walk = (node: Node): void => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      parts.push(node.textContent ?? "");
-      return;
-    }
-    if (!(node instanceof Element)) return;
-    if (node.getAttribute("aria-hidden") === "true") return;
-    for (const attribute of ["aria-label", "alt", "title"]) {
-      const value = node.getAttribute(attribute);
-      if (value) parts.push(` ${value} `);
-    }
-    node.childNodes.forEach(walk);
-  };
-  walk(element);
-  return norm(parts.join(" "));
-}
-
 function names(team: TeamRefOut, text: string): boolean {
   return (
     text.includes(team.name) ||
@@ -171,14 +155,25 @@ function names(team: TeamRefOut, text: string): boolean {
   );
 }
 
-const WIN = /\bwin(ner|s)?\b|\bwon\b|\bvictor(y|ious)?\b/i;
+/** The team's tab in the "Team box scores" tablist ("Raptors 117"). */
+function teamTab(team: TeamRefOut): HTMLElement {
+  const short = team.name.split(" ").slice(-1)[0];
+  return within(
+    within(main()).getByRole("tablist", { name: "Team box scores" }),
+  ).getByRole("tab", { name: new RegExp(`^${escapeRegExp(short)} \\d+$`) });
+}
 
-/** Elements whose accessible text marks a win and names `team` but not `other`. */
-function winMarksFor(team: TeamRefOut, other: TeamRefOut): Element[] {
-  return Array.from(main().querySelectorAll("*")).filter((element) => {
-    const text = accessibleText(element);
-    return WIN.test(text) && names(team, text) && !names(other, text);
-  });
+/** FRONTEND-037: select `team`'s tab, so its box score is the one shown. */
+async function showTeam(team: TeamRefOut): Promise<void> {
+  const tab = teamTab(team);
+  if (tab.getAttribute("aria-selected") !== "true")
+    await userEvent.setup().click(tab);
+  expect(teamTab(team)).toHaveAttribute("aria-selected", "true");
+}
+
+/** The one box-score panel the tabs show. */
+function teamPanel(): HTMLElement {
+  return within(main()).getByRole("tabpanel");
 }
 
 function tables(): HTMLTableElement[] {
@@ -381,15 +376,21 @@ describe("the heading, date, label and venue", () => {
   });
 });
 
-describe("the winner is marked in words or a named icon, not colour alone", () => {
-  it("marks the home team when it won", async () => {
+// FRONTEND-037 changed both tests: the winner was marked by the "Final: <team>
+// won" sentence, which is gone; the winner's team tab now comes first and
+// starts selected, and its tab names it with its score.
+describe("the winner's team tab comes first and starts selected", () => {
+  it("puts the home team first when it won", async () => {
     await openGame();
 
-    expect(winMarksFor(TEST_HOME_TEAM, TEST_AWAY_TEAM)).not.toEqual([]);
-    expect(winMarksFor(TEST_AWAY_TEAM, TEST_HOME_TEAM)).toEqual([]);
+    const tabs = within(main()).getAllByRole("tab");
+    expect(tabs[0]).toBe(teamTab(TEST_HOME_TEAM));
+    expect(teamTab(TEST_HOME_TEAM)).toHaveAttribute("aria-selected", "true");
+    expect(teamTab(TEST_AWAY_TEAM)).toHaveAttribute("aria-selected", "false");
+    expect(spacedText(main())).not.toMatch(/\bFinal:/);
   });
 
-  it("marks the away team when it won", async () => {
+  it("puts the away team first when it won", async () => {
     await openGame(
       testGameDetail({
         home_score: 101,
@@ -399,8 +400,11 @@ describe("the winner is marked in words or a named icon, not colour alone", () =
       }),
     );
 
-    expect(winMarksFor(TEST_AWAY_TEAM, TEST_HOME_TEAM)).not.toEqual([]);
-    expect(winMarksFor(TEST_HOME_TEAM, TEST_AWAY_TEAM)).toEqual([]);
+    const tabs = within(main()).getAllByRole("tab");
+    expect(tabs[0]).toBe(teamTab(TEST_AWAY_TEAM));
+    expect(teamTab(TEST_AWAY_TEAM)).toHaveAttribute("aria-selected", "true");
+    expect(teamTab(TEST_HOME_TEAM)).toHaveAttribute("aria-selected", "false");
+    expect(spacedText(main())).not.toMatch(/\bFinal:/);
   });
 });
 
@@ -520,9 +524,12 @@ describe("the line score", () => {
 
       expect(lineScoreTable()).toBeUndefined();
       expect(within(main()).queryByText("Q1")).toBeNull();
-      expect(boxScoreTables()).toHaveLength(2);
-      boxScoreFor(TEST_HOME_TEAM);
-      boxScoreFor(TEST_AWAY_TEAM);
+      // FRONTEND-037: one box score at a time, each behind its team's tab.
+      for (const team of [TEST_HOME_TEAM, TEST_AWAY_TEAM]) {
+        await showTeam(team);
+        expect(boxScoreTables()).toHaveLength(1);
+        boxScoreFor(team);
+      }
     },
   );
 });
@@ -535,6 +542,7 @@ describe("each team's box score", () => {
     "%s: a table captioned with the team, every column th scope=col, in order",
     async (_name, team) => {
       await openGame();
+      await showTeam(team);
       const table = boxScoreFor(team);
 
       const headers = within(table).getAllByRole("columnheader");
@@ -548,10 +556,16 @@ describe("each team's box score", () => {
     },
   );
 
-  it("is one table per team", async () => {
+  // FRONTEND-037 changed this: both tables were shown at once ("is one table
+  // per team"); each team's table is now behind its tab.
+  it("is one table per team, the selected team's shown", async () => {
     await openGame();
 
-    expect(boxScoreTables()).toHaveLength(2);
+    expect(boxScoreTables()).toHaveLength(1);
+    boxScoreFor(TEST_HOME_TEAM);
+    await showTeam(TEST_AWAY_TEAM);
+    expect(boxScoreTables()).toHaveLength(1);
+    boxScoreFor(TEST_AWAY_TEAM);
   });
 
   it.each([
@@ -561,6 +575,7 @@ describe("each team's box score", () => {
     "%s: names each player in a th scope=row, starters then bench, in API order",
     async (_name, team, players) => {
       await openGame();
+      await showTeam(team);
       const table = boxScoreFor(team);
       const expected = players.map(fullName);
 
@@ -633,6 +648,7 @@ describe("each team's box score", () => {
 
   it("formats the away side the same way", async () => {
     await openGame();
+    await showTeam(TEST_AWAY_TEAM);
     const cells = cellsByColumn(
       playerRow(boxScoreFor(TEST_AWAY_TEAM), "Devin Booker"),
     );
@@ -664,6 +680,7 @@ describe("players who did not play", () => {
     "%s: listed under its own table, with the reason or 'Did not play'",
     async (_name, team, didNotPlay) => {
       await openGame();
+      await showTeam(team);
       const [withReason, withoutReason] = didNotPlay;
       const reason = withReason.dnp_reason ?? "";
 
@@ -699,16 +716,27 @@ describe("a game with no box score", () => {
     );
 
     expect(lineScoreTable()).toBeDefined();
-    expect(boxScoreTables()).toEqual([]);
-    expect(within(main()).getAllByText(/no box score/i)).toHaveLength(2);
+    // FRONTEND-037 changed this: both notes were shown at once; each team's
+    // note is now behind its tab.
+    for (const team of [TEST_HOME_TEAM, TEST_AWAY_TEAM]) {
+      await showTeam(team);
+      expect(boxScoreTables()).toEqual([]);
+      expect(within(teamPanel()).getAllByText(/no box score/i)).toHaveLength(1);
+    }
   });
 
+  // FRONTEND-037 changed this: it counted both sides on one screen; each side
+  // is now behind its tab.
   it("says so only for the side that has none", async () => {
     await openGame(testGameDetail({ home_box_score: emptyBoxScore() }));
 
+    await showTeam(TEST_HOME_TEAM);
+    expect(boxScoreTables()).toEqual([]);
+    expect(within(teamPanel()).getAllByText(/no box score/i)).toHaveLength(1);
+    await showTeam(TEST_AWAY_TEAM);
     expect(boxScoreTables()).toHaveLength(1);
     boxScoreFor(TEST_AWAY_TEAM);
-    expect(within(main()).getAllByText(/no box score/i)).toHaveLength(1);
+    expect(within(teamPanel()).queryAllByText(/no box score/i)).toEqual([]);
   });
 });
 
@@ -747,6 +775,7 @@ describe("the box-score scroll containers", () => {
     await openGame();
 
     for (const team of [TEST_HOME_TEAM, TEST_AWAY_TEAM]) {
+      await showTeam(team);
       const table = boxScoreFor(team);
       const region = scrollRegionFor(table);
 
@@ -765,11 +794,13 @@ describe("the box-score scroll containers", () => {
   it("is reachable with Tab, as is every link on the page", async () => {
     await openGame();
     const user = userEvent.setup();
+    // FRONTEND-037 changed this: both teams' regions were on the page; the
+    // selected team's is, and the selected team tab is a tab stop too.
+    const region = scrollRegionFor(boxScoreFor(TEST_HOME_TEAM));
     const targets: HTMLElement[] = [
       ...within(main()).queryAllByRole("link"),
-      ...[TEST_HOME_TEAM, TEST_AWAY_TEAM]
-        .map((team) => scrollRegionFor(boxScoreFor(team)))
-        .filter((region): region is HTMLElement => region !== undefined),
+      teamTab(TEST_HOME_TEAM),
+      ...(region === undefined ? [] : [region]),
     ];
     expect(targets.length).toBeGreaterThanOrEqual(2);
 
@@ -815,8 +846,11 @@ describe("the box-score scroll containers", () => {
   it("shows a visible instruction for the horizontally scrollable columns", async () => {
     await openGame();
 
+    // FRONTEND-037 changed this from 2: one box score is shown at a time.
     expect(
-      within(main()).getAllByText(/scroll horizontally to see all columns/i),
-    ).toHaveLength(2);
+      within(teamPanel()).getAllByText(
+        /scroll horizontally to see all columns/i,
+      ),
+    ).toHaveLength(1);
   });
 });
