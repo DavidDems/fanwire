@@ -29,7 +29,7 @@ what it proved are in `wiki/CodeContext/Modules/0x00c-architecture-aws-account.m
 ## `github-actions-deploy-role-trust-policy.json`
 
 The trust policy for the same role. It admits one OIDC subject,
-`repo:DavidDems@71515505/fanwire@1373722771:environment:production`, which is a job that declares
+`repo:DavidDems@71515505/fanwire@1457277496:environment:production`, which is a job that declares
 the GitHub environment `production`. It does **not** admit a branch.
 
 The subject is GitHub's **immutable** form: the repository has
