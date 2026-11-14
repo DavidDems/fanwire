@@ -1,0 +1,375 @@
+/*
+ * The app shell (wiki/CodeContext/FrontendUI/layout.md §2, §5). Mobile-first:
+ * every rule outside a media query is the phone layout, and only min-width
+ * queries widen it. Values come from tokens.css by name only.
+ *
+ * FRONTEND-035: the header holds the brand at its start and, at its end, the
+ * phone-only Search icon link and the Account menu or Sign in. The primary nav
+ * follows the header and shares `.body` with main: an icon bar fixed to the
+ * bottom on phones and a sticky left sidebar from 40em. From 53.75em the
+ * labelled sidebar and main align to the tablet shell's outer spacing; from
+ * 78em they return to the centred desktop group.
+ *
+ * The header is target-min tall plus space-2 above and below, which is also
+ * the sticky sidebar's top. The bottom bar is one row of target-min cells plus
+ * its 1 px edge and the safe area, about 45 px, which scroll-padding-bottom
+ * (space-8 + space-2, 72 px) clears. scroll-padding and main's bottom padding
+ * are sized from those so nothing focused or last in the list is hidden under
+ * either bar (accessibility.md A5). main's bottom padding also reaches past
+ * the floating + (FRONTEND-020: FloatingButton, 3.5rem, its bottom space-8 +
+ * space-4 above the viewport's on phones and space-5 from 40em), so the last
+ * card's controls scroll fully clear of it.
+ */
+
+:global(html) {
+  scroll-padding-top: calc(var(--target-min) + 3 * var(--space-2));
+  scroll-padding-bottom: calc(
+    var(--space-8) + var(--space-2) + env(safe-area-inset-bottom)
+  );
+}
+
+/* Skip link: visually hidden until focused, then above everything. */
+.skipLink {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skipLink:focus {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip-link);
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  overflow: visible;
+  clip: auto;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Header: sticky, surface, a shadow in light and a border edge in dark. */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  /*
+   * At 200% text a phone has no room for one row: the end group wraps under
+   * the brand, still at the right. At normal size everything fits one row.
+   */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+/* Brand: the cursive wordmark alone, 28 px tall at every width. */
+.brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-height: var(--target-min);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.brand img,
+.wordmark {
+  display: block;
+}
+
+.wordmark img {
+  width: auto;
+  height: 1.75rem;
+}
+
+/* The header's end: Search (phones), then the Account menu or Sign in. */
+.headerEnd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.header .accountMenuButton {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0;
+}
+
+/* The header's Search: an icon link, phones only (the nav's from 40em). */
+.headerSearch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.headerSearch:hover {
+  background-color: var(--color-surface-muted);
+}
+
+/* Primary nav, phone: an icon bar fixed to the bottom of the viewport. */
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-sticky);
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.list {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The nav's Search: the header has it on phones. */
+.sidebarOnly {
+  display: none;
+}
+
+/*
+ * One item, a link or the Sign out button: an icon cell, its label visually
+ * hidden. The button's native face (base.css) is undone so both look alike.
+ */
+.link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--target-min);
+  margin: 0;
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-tight);
+  text-decoration: none;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  color: var(--color-text);
+}
+
+/* Inside the cell, so the ring is not cut off by the viewport's bottom edge. */
+.link:focus-visible {
+  outline-offset: -2px;
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+/* Current page: weight and colour, plus a bar (a border, so forced colors keep it). */
+.link[aria-current="page"] {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--space-3);
+  right: var(--space-3);
+  border-top: 3px solid var(--color-action);
+}
+
+/* main: the content column, clear of the bottom bar on phones. */
+.main {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-4)
+    calc(
+      var(--space-8) + var(--space-4) + 3.5rem + var(--space-4) +
+        env(safe-area-inset-bottom)
+    );
+}
+
+/* The records home's wider column (FRONTEND-030): three cards to a row. */
+.main.wide {
+  max-width: var(--content-max-wide);
+}
+
+/* From 40em (640 px): the nav is a sticky icon-only sidebar beside main. */
+@media (min-width: 40em) {
+  :global(html) {
+    scroll-padding-bottom: 0;
+  }
+
+  /* One row from 40em: the sticky sidebar's top is that row's height. */
+  .header {
+    flex-wrap: nowrap;
+  }
+
+  .headerSearch {
+    display: none;
+  }
+
+  /* The sidebar and main: one group, centred, space-5 apart. */
+  .body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-5);
+  }
+
+  .nav {
+    position: sticky;
+    top: calc(var(--target-min) + 2 * var(--space-2));
+    flex: none;
+    width: var(--sidebar-width-compact);
+    padding: var(--space-5) 0 0;
+    background-color: transparent;
+    border-top: 0;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .sidebarOnly {
+    display: block;
+  }
+
+  .link {
+    min-width: var(--target-min);
+    border-radius: var(--radius-md);
+  }
+
+  .link:hover {
+    background-color: var(--color-surface-muted);
+  }
+
+  /* The bar moves to the inline-start edge. */
+  .link[aria-current="page"]::after {
+    top: var(--space-2);
+    bottom: var(--space-2);
+    left: 0;
+    right: auto;
+    border-top: 0;
+    border-inline-start: 3px solid var(--color-action);
+  }
+
+  .main {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-inline: 0;
+    padding-bottom: calc(var(--space-5) + 3.5rem + var(--space-4));
+  }
+}
+
+@media (min-width: 60em) {
+  .header {
+    padding-inline: var(--space-5);
+  }
+
+  .main {
+    padding-inline: var(--space-5);
+  }
+}
+
+/*
+ * From 76.0625em (1217 px): the home page's right rail (FRONTEND-036) sits beside
+ * the feed, so main on / is the feed's column plus a gap plus the rail. Keyed
+ * on the rail itself (HomeView mounts it on / from 76.0625em, the only aside in
+ * main), so every other route keeps its own width.
+ */
+@media (min-width: 76.0625em) {
+  .main:has(aside) {
+    max-width: calc(var(--content-max) + var(--space-5) + var(--rail-width));
+  }
+}
+
+/* From 53.75em (860 px): the tablet sidebar is labelled and near the edge. */
+@media (min-width: 53.75em) {
+  .body {
+    justify-content: flex-start;
+    padding-inline: var(--space-4);
+  }
+
+  .nav {
+    width: var(--sidebar-width);
+  }
+
+  /*
+   * The inline-start padding is the current page's 3 px bar (at left: 0) plus
+   * space-2, so the icon never meets the bar (FRONTEND-040).
+   */
+  .link {
+    justify-content: flex-start;
+    padding-inline: calc(3px + var(--space-2)) 0;
+  }
+
+  .link .label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    font-size: var(--font-size-md);
+  }
+
+  .main {
+    min-width: min(36rem, calc(100% - var(--sidebar-width) - var(--space-5)));
+  }
+}
+
+/* From 78em (1248 px): preserve the established centred desktop geometry. */
+@media (min-width: 78em) {
+  .body {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .link {
+    padding-inline: var(--space-3);
+  }
+
+  .main {
+    min-width: 0;
+  }
+}

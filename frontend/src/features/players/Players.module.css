@@ -1,0 +1,204 @@
+/*
+ * The player page (/players/:playerId): the name, the attributes, then the
+ * career, season and game-log sections. Mobile-first and one column: the
+ * tables are wider than a phone, so each scrolls sideways inside its own
+ * focusable container and the page itself never does. Values come from
+ * tokens.css by name only.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+/* The attributes: label over value, in a grid that wraps on a phone. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+}
+
+.facts dt {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* One section: its h2, its state line, its table, its Load more. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.section h2 {
+  margin: 0;
+}
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chartSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.chartGrid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.chartAxis {
+  fill: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.chartLine {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transform-origin: 0 0;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.chartPoint {
+  fill: var(--color-surface);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.chartNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+/*
+ * The scroll container. Focusable (tabIndex 0) so a keyboard user can scroll
+ * it with the arrow keys; the ring below is what shows it has focus.
+ */
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.scroll:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caption {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+}
+
+.table thead th {
+  border-bottom: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--color-border);
+}
+
+.table abbr {
+  text-decoration: none;
+}
+
+/* Names, teams and words read left to right; figures stay right-aligned. */
+.table .name {
+  text-align: left;
+}
+
+.table tbody th.name {
+  font-weight: var(--font-weight-regular);
+}
+
+.figure {
+  font-weight: var(--font-weight-semibold);
+}
+
+.more {
+  width: 100%;
+}
+
+/*
+ * The signed-in "Post about this" column (FRONTEND-017): a compact pen icon
+ * and "Post", its full name for assistive technology in hidden text. Inline
+ * and no taller than a line of the table's text, so a row with a link is the
+ * same height as one without.
+ */
+/*
+ * The containing block for the cell's hidden name: `.visually-hidden` is
+ * absolutely positioned, and without a positioned ancestor inside the scroll
+ * region it escapes the region's overflow clip and widens the page.
+ */
+.table .postCell {
+  position: relative;
+  width: 1%;
+  text-align: left;
+}
+
+.postLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-link);
+  border-radius: var(--radius-sm);
+}
+
+.postLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

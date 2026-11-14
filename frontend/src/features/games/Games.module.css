@@ -1,0 +1,216 @@
+/*
+ * The game page (/games/:gameId): the heading block, the line score, then each
+ * team's box score. Mobile-first and one column: the tables are wider than a
+ * phone, so each scrolls sideways inside its own focusable container and the
+ * page itself never does. Values come from tokens.css by name only.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.heading {
+  margin: 0;
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+/* A team and its score stay together; the two sides wrap apart on a phone. */
+.side {
+  white-space: nowrap;
+}
+
+.score {
+  font-variant-numeric: tabular-nums;
+}
+
+.at {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.label {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* One team: its heading, its table (or the empty state), who did not play. */
+.team {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.team h2 {
+  margin: 0;
+}
+
+.scrollHint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The scroll container. Focusable (tabIndex 0) so a keyboard user can scroll
+ * it with the arrow keys; the ring below is what shows it has focus.
+ */
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.scroll:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caption {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+}
+
+.table thead th {
+  border-bottom: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--color-border);
+}
+
+.table abbr {
+  text-decoration: none;
+}
+
+/* The first column, player or team, reads left to right. */
+.table .name {
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+}
+
+.table tbody .name {
+  font-weight: var(--font-weight-regular);
+}
+
+.position {
+  color: var(--color-text-muted);
+}
+
+/* A heavier rule where the starters end and the bench begins. */
+.table tbody .benchStart {
+  border-top: 2px solid var(--color-border-strong);
+}
+
+.totals {
+  border-top: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+}
+
+.total {
+  font-weight: var(--font-weight-bold);
+}
+
+.dnp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+}
+
+.dnpName {
+  font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * The row a player-game link names (?line=, FRONTEND-014), aria-current: a
+ * rule on its leading edge and a heavier name, not the tint alone, plus a
+ * tint of the accent behind it.
+ */
+.table tbody .current {
+  background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.table tbody .current > th {
+  box-shadow: inset 0.25rem 0 0 var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+
+/**
+ * "Post about this" (FRONTEND-017, signed in only): one link by the score
+ * header, and a compact pen-and-"Post" link in the box score's trailing
+ * column, its full name for assistive technology in hidden text. Inline and
+ * no taller than a line of the table's text, so a played row is the same
+ * height as a did-not-play one.
+ */
+.postGame {
+  margin: 0;
+}
+
+/*
+ * The containing block for the cell's hidden name: `.visually-hidden` is
+ * absolutely positioned, and without a positioned ancestor inside the scroll
+ * region it escapes the region's overflow clip and widens the page.
+ */
+.table .postCell {
+  position: relative;
+  width: 1%;
+  text-align: left;
+}
+
+.postLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: middle;
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-link);
+  border-radius: var(--radius-sm);
+}
+
+.postLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

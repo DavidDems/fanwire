@@ -1,0 +1,90 @@
+---
+type: reference
+---
+
+# 0x06 — Feed
+
+**Agent-facing.** Current-state only — see [[wiki/GeneralContext/index|index]] for how this wiki is organized and [[0x00-architecture]] for module boundaries/connection rule (not repeated here).
+
+`feed/` **owns no tables.** It is a computation layer, not a data owner: it assembles a timeline by querying other modules' data through the module boundary and ranking the result. There is no `Feed` schema to document here — see [[0x01a-users-schema]] for `User`, [[0x01d-users-follow]] for `Follow`, [[0x03a-posts-post]] for `Post` and [[0x03c-posts-likes-mentions]] for `PostLike`.
+
+## What it computes, and from where
+Per [[wiki/GeneralContext/Architecture/business-rules|Projects]] ("Feed": "the feed should draw from user likes, user follows and things like preferred team"), `feed/` reads:
+- `Post` — owned by `posts/`, see [[0x03a-posts-post]].
+- `Follow` — owned by `users/`, see [[0x01d-users-follow]].
+- `PostLike` — owned by `posts/`, see [[0x03c-posts-likes-mentions]].
+- `User.preferred_team_id` — column on `User`, owned by `users/`, see [[0x01a-users-schema]].
+
+All four are queried through the module boundary (typed interfaces / read APIs), not by `feed/` reaching into another module's tables directly — this is the same connection rule as everywhere else in the app ([[0x00-architecture]] "Connection rule").
+
+## Read interface (implemented, Phase 3)
+Per the connection rule, `feed/` never queries another module's tables directly. Each read it needs is a small, typed, tested public function added to the owning module instead:
+- `app.posts.service.query_feed_posts(session, *, author_ids, mentioned_game_ids, before_id, limit) -> list[Post]` — top-level posts (`is_reply=False`; reposts included, since a repost row also has `is_reply=False`) and replies with at least one like (`POSTS-009`, see "Liked replies" below), newest first by id, `id < before_id` when given. `mentioned_game_ids` match a legacy `EventMention`, a `game_final` link (`Post.linked_game_id`) or a `player_game` link's line game (`Post.linked_line_game_id`), never a career link (`POSTS-006`); `author_ids` and that are OR'd without duplicates (the mention side is a `Post.id.in_(subquery)`, not a join, specifically to avoid row multiplication from a post with several `EventMention` rows); both `None` means no filter at all (the guest feed: every post). Posts whose author is soft-deleted are excluded.
+- `app.posts.service.like_counts(session, post_ids) -> dict[int, int]`, `app.posts.service.liked_post_ids(session, user_id, post_ids) -> set[int]`, `app.posts.service.mentioned_game_ids_by_post(session, post_ids) -> dict[int, list[int]]` — batch lookups keyed by post id (absent means zero/none), one call per page rather than one per post.
+- `app.posts.service.reply_counts(session, post_ids) -> dict[int, int]` (direct replies), `repost_counts(session, post_ids) -> dict[int, int]` (plain and quote reposts), `reposted_post_ids(session, user_id, post_ids) -> set[int]` (the ones `user_id` has a *plain* repost of) and `posts_by_ids(session, post_ids) -> dict[int, Post]` (`POSTS-001`). One `GROUP BY` or query each per page; every one leaves out soft-deleted authors, as `replies_to` does, so a count matches what the thread shows. `reposted_post_ids` also makes one media lookup, since a repost with media is not plain ([[0x03b-posts-actions]] "The repost toggle").
+- `app.posts.service.replies_to(session, post_id) -> list[Post]` — direct replies only, oldest first, excluding soft-deleted authors. Also behind `GET /posts/{id}/replies` (`app.posts.routes.list_replies`).
+- `app.media.service.processed_media_for_posts(session, post_ids) -> dict[int, list[MediaView]]` — `Processed` media per post; contract in [[0x04-media]] "Resolved decisions".
+- `app.events.service.game_ids_for_team(session, team_id) -> list[int]` (home or away), for the preferred-team feed ([[0x02-events]]).
+
+## Ranking strategy (implemented, Phase 3)
+[[wiki/GeneralContext/Architecture/business-rules|Projects]] is explicit: "the feed can be simple." Per [[wiki/CodeContext/Standards/design-principles|Design principles]] **YAGNI** ("do not build for hypothetical future requirements") and **KISS** ("the simplest design that meets the actual requirement wins"), `feed/` ships one simple default strategy per surface, not a scored/tuned ranking algorithm. Both live in `app.feed.strategies`, built entirely on the read interface above:
+
+- **Authenticated default** — `FollowsAndPreferredTeamStrategy(viewer_id, preferred_team_id)`: reverse-chronological `Post` feed. **A viewer who follows nobody gets exactly the `GuestRecentStrategy` selection** (`FEED-001`): preferred team ignored, since the global selection already includes its posts. Otherwise `author_ids` = the viewer's followed ids (`app.users.service.followed_user_ids`) **plus the viewer themself** — a viewer sees their own posts in their own feed, since excluding them isn't specified anywhere and would be a surprising default. `mentioned_game_ids` = `game_ids_for_team(preferred_team_id)` when one is set (so a post is relevant through a legacy mention, a game-result link or a player's-game link to one of the team's games, `POSTS-006`), else `None` (mentions aren't filtered on at all, not "match nothing"). `PostLike` is not read by this strategy directly — see PostView below for where like data actually surfaces.
+- **Guest default — `GuestRecentStrategy`.** Most-recent top-level posts globally (`query_feed_posts(author_ids=None, mentioned_game_ids=None, ...)`): the KISS reading of "a guest feed must exist" per Projects, since there's no `Follow`/`PostLike`/`preferred_team` to personalize from for an unauthenticated visitor.
+- `app.feed.strategies.strategy_for(viewer: User | None) -> FeedRankingStrategy` picks between them — callers (feed/'s routes) never branch on the concrete type themselves.
+
+Engagement-weighted ranking (scoring by likes/reposts/recency decay) is **not built now**. It is the documented extension point, not a requirement — see GoF tie-in.
+
+## View assembly (implemented, Phase 3)
+`app.feed.views.assemble_post_views(session, posts, *, viewer_id) -> list[PostView]` is shared by feed, thread, history and search reads. It batches every cross-module read into exactly one call per read function per page (no N+1).
+
+**`PostView`** (Pydantic, `app.feed.views`):
+```
+id, text, is_reply, parent_post_id, is_repost, original_post_id, created_at
+author: { id, username, profile_picture_media_id, profile_avatar_key, profile_picture_key }
+like_count, liked_by_viewer   # liked_by_viewer is always false for a guest
+reply_count, repost_count, reposted_by_viewer   # reposted_by_viewer: a plain repost; false for a guest
+reposted_post: PostView | null   # one level deep: its own reposted_post is always null
+reposted_post_deleted: bool      # POSTS-004: the original was deleted by its owner (reposted_post is then null)
+replied_post: PostView | null    # POSTS-009: on a reply, its parent, one level deep (own replied_post and reposted_post null)
+replied_post_deleted: bool       # POSTS-009: the parent was deleted by its owner (replied_post is then null)
+media: [ { id, s3_key_public, s3_key_thumbnail } ]
+mentioned_game_ids: [int]       # legacy EventMention rows only; new posts create none (POSTS-006)
+data_link: { type, ref_id, scope } | null   # POSTS-006: PostOut's shape; null on a plain repost (its reposted_post has the original's)
+data_link_preview: GameFinalPreviewView | PlayerGamePreviewView | PlayerCareerPreviewView | null   # discriminated on type
+```
+**Attachment previews (`POSTS-006`).** `data_link_preview` has `type` plus every field of the matching `app.events.service` preview dataclass, so the client has the destination ids: `game_id` for a game result; `line_id`, `game_id` and `player_id` for a player's game; `player_id` and `scope` for a career. A game-final preview also carries nullable `away_line_score` and `home_line_score` arrays from the existing game row. Teams are nested `{id, name, abbreviation}`. A DNP line is as stored, and career figures are computed at read time, not snapshotted. It is null without a link, or when the target has no preview row. `assemble_post_views` gathers the links of the whole pass, reposted originals included, and calls `game_final_previews`, `player_game_previews` and `player_career_previews` once each, skipping a call whose key set is empty. A page with links costs the same number of statements at 2 posts as at 20, and a page without links reads no `events/` table (`tests/feed/test_data_link_queries.py`).
+**`reposted_post` without N+1 (`POSTS-001`).** The page's `original_post_id`s are fetched in one `posts_by_ids` query, every batched read then runs once over the page and those originals together, and the reposts' `reposted_post` is filled from the views built in that same pass. It is null for a non-repost, for a repost whose original's author is soft-deleted, and for one whose original is deleted, which alone also sets `reposted_post_deleted` (one `deleted_post_ids` query for the page, `POSTS-004`). The statement count for a page of 2 posts equals that for 20 (`tests/feed/test_post_view_queries.py`, `before_cursor_execute`).
+**`replied_post` (`POSTS-009`)** mirrors it for a reply's parent, so a reply card shows what it answers without a request per card. The page's `parent_post_id`s join the originals in the same `posts_by_ids` read and batch set. A **plain repost** parent (no text, no media) stands for its original, as the card shows it; the originals behind text-less repost parents are one more `posts_by_ids` read, skipped when already in the set, and the batched media read settles which are plain. A quote parent is the quote, its `reposted_post` cut. A parent (or a plain repost parent's original) its owner deleted gives null and `replied_post_deleted` true; one hidden by a deactivated author gives null and false. Every nested view is cut at one level, also when the parent is on the same page; the page's own copy keeps its fields. Null and false on non-replies. Statement count fixed for 2 vs 20 posts (`tests/feed/test_replied_post_queries.py`).
+
+`assemble_post_views` excludes deleted/anonymous rows before collecting author ids and before profile lookup. An unresolved author is silently omitted, including deactivation racing the read. Anonymous tombstones ([[0x03a-posts-post]]) never become `PostView`s: surviving replies remain, a deleted thread root gives `root_deleted`, and quote/plain reposts retain deleted-original flags and existing "Post deleted" presentation. No nullable author reaches the users interface.
+
+**No live scores.** `PostView` has no live scores; a post's mentioned games are ids the frontend links to the game.
+
+**Liked replies in the feed, viewer's own posts included.** `query_feed_posts` returns `is_reply=False` rows (reposts included) **and replies with at least one like** (`POSTS-009`, the human's placeholder rule until a suggestion feed exists): any like counts, the author's own included, matching `like_count`; the check is a correlated `EXISTS` on `post_likes` over `ix_post_likes_post_id` ([[0x03c-posts-likes-mentions]]). A liked reply passes the same author, mention and visibility rules as a top-level post and sits at its own id, so a like moves nothing and the `before_id` cursor is unchanged; a reply whose last like is removed drops out on the next read. History, thread and search selection does not use this rule. Separately, `FollowsAndPreferredTeamStrategy` folds the viewer's own id into `author_ids` (see Ranking strategy above).
+
+## Routes (implemented, Phase 3)
+`app.feed.routes` (`APIRouter(prefix="/feed")`), wired into `app.main`. Feed and thread use `get_optional_current_user`: no `Authorization` header is a guest request, a valid token personalizes, and a *present but invalid* token still 401s. History requires an active account.
+- `GET /feed?before_id=&limit=` → `FeedPage { items: [PostView], next_before_id: int | None }`. `limit` defaults to 20, max 50, validated by FastAPI's `Query(ge=1, le=50)`. `next_before_id` is the last *queried* post's id when a full page came back (`len(posts) == limit`), else `null` — the cursor is keyed off the underlying query page, not however many `PostView`s survived view assembly, so it stays correct even if a soft-delete race silently drops one.
+- `GET /feed/thread/{post_id}` → `ThreadView { root: PostView | null, root_deleted: bool, replies: [PostView] }` — direct replies only (`replies_to`), 404 if the post doesn't exist or its author is deactivated. **A root its owner deleted is `root` null and `root_deleted` true, with the surviving replies** (`POSTS-004`, the human's decision): the conversation stays readable under a "Post deleted" card. The frontend renders `Post`/`Thread` via one Composite interface (see GoF tie-in) and lazily expands deeper replies by calling this endpoint again on a reply's id.
+- `GET /feed/history?tab=posts|replies|likes|reposts&cursor=&limit=` → `HistoryPage { items: [PostView], next_cursor: string | null }`, through `get_current_user`: 401 without a token, 403 `account_deactivated` when deactivated. The caller's identity supplies the user id; none is accepted from the query. `tab` defaults to posts; invalid tabs/cursors and limits outside 1–50 are 422 (default limit 20). The query is `app.posts.service.query_history_posts` ([[0x03a-posts-post]] owns its filtering, ordering and indexes). The opaque cursor includes its tab and position; one extra row determines whether `next_cursor` is null. Assembly supplies the feed's batched cards/flags and deleted-original repost placeholder.
+
+## Design principles tie-ins
+- **YAGNI** ([[wiki/CodeContext/Standards/design-principles|Design principles]]): no scored/weighted ranking algorithm, no denormalized feed table — both would be building for a scale/complexity this project doesn't have yet.
+- **KISS** ([[wiki/CodeContext/Standards/design-principles|Design principles]]): reverse-chronological-from-follows-and-preferred-team is the simplest design that satisfies [[wiki/GeneralContext/Architecture/business-rules|Projects]]'s literal feed requirement.
+- **Stateless services** ([[wiki/CodeContext/Standards/design-principles|Design principles]] "12-factor app" / "Stateless services"): feed computation happens per-request against `RDS Postgres` via the other modules' read APIs. `feed/` holds no session-held feed state on the server — a page-2 request recomputes from current data, it does not resume from a stored feed.
+- **Single source of truth** ([[wiki/CodeContext/Standards/design-principles|Design principles]]): `Post`, `Follow`, `PostLike`, and `preferred_team_id` each have exactly one owner (`posts/`, `users/`); `feed/` reads, it never copies or duplicates that state.
+
+## GoF tie-in
+`FeedRankingStrategy` (Strategy pattern, [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] "Behavioral patterns") is the extension point: chronological, engagement-weighted, and following-only variants are swappable at runtime without branching in `feed/`. Per the business rule and YAGNI above, only the chronological/follows-and-preferred-team variant is implemented now; engagement-weighted is a strategy that **can** be swapped in later without a rewrite of `feed/` — it is deliberately not built today.
+
+[[0x00-architecture]] also lists `feed/` as a `PostEventBus` subscriber ([[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] "Observer"). Given the stateless, no-owned-table design above, `feed/` has no current material use for that subscription — there is no cache or materialized view to invalidate yet. This only becomes load-bearing if/when a materialized feed table is introduced (see Open decisions).
+
+## AWS mapping
+Per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]] and [[0x00-architecture]] "AWS topology": `feed/` runs as part of the same Mangum-wrapped FastAPI app on **Lambda**, behind **API Gateway HTTP API** — no dedicated infrastructure of its own at this scale. Reads go straight to **RDS Postgres** (the system of record for `Post`, `Follow`, `PostLike`, `User`) through the owning modules' read paths.
+
+## Security
+The guest feed draws only from public posts already readable without authentication ([[wiki/GeneralContext/Architecture/business-rules|Projects]], [[0x01-users]] Security). History is a private activity list: its active-account dependency and server-selected user id enforce the boundary, independently of the page guard. The guest feed never exposes it. See [[wiki/CodeContext/Standards/security|Security]] for the shared security baseline.
+
+## Open decisions
+- **Materialized feed table**: not built now (YAGNI, no owned table per [[0x00-architecture]]'s connection rule). If per-request computation over `Post`/`Follow`/`PostLike` stops performing at RDS Postgres scale, a denormalized/precomputed feed table is the deferred option — this would also be the point at which `feed/`'s currently-unused `PostEventBus` subscription (see GoF tie-in) becomes necessary, to keep that table invalidated/updated on `PostCreated`. Not needed at current expected scale ([[wiki/CodeContext/Standards/aws-stack|AWS Stack]] "Cheap & Low-Traffic").

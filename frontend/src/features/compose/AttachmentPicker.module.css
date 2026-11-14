@@ -1,0 +1,44 @@
+/*
+ * The attachment picker (FRONTEND-013; wiki/CodeContext/FrontendUI/components-map-posts.md
+ * §5): the summary of what is attached, the Attach stats button, and the
+ * disclosure panel it opens. Values come from tokens.css by name only.
+ *
+ * The panel stays in the flow of the form card instead of floating over it,
+ * for the reasons the old suggestions panel did: an overlay would need a
+ * positioned ancestor this control does not own, would cover the image field
+ * at 360 px, and would need its own clipping for a long game list. In the
+ * flow it pushes the image field down and works at any width. Mobile-first,
+ * with no media query: every row wraps on its own.
+ */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* What is attached: one line, then Remove, wrapping under it if it must. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+}
+
+.summaryText {
+  flex: 1 1 16rem;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* Attach stats in the attach row: icon-only, a 44 px square at least. */
+.toggle {
+  min-width: var(--target-min);
+  padding: 0;
+}

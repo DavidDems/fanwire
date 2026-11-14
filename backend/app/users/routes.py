@@ -1,0 +1,321 @@
+"""users/ HTTP routes.
+
+Security (wiki/CodeContext/Modules/0x01b-users-auth.md Security section):
+all writes require a Cognito token verified server-side on every request;
+GET /users/{user_id} (viewing another user's account page) is a public
+read path, per the guest-feed requirement (0x01-users.md Security).
+
+Route order matters: every `/me...` route is declared BEFORE
+`/{user_id}` in this file. FastAPI/Starlette matches routes in
+registration order against a dynamic path segment regardless of type
+annotation (the `int` conversion for `user_id` only rejects "me" *after*
+the route already matched), so `/{user_id}` registered first would swallow
+`GET /users/me`/`PATCH /users/me`/`GET /users/me/following` as a 422
+("me" isn't a valid int) instead of ever reaching the real /me handlers --
+see tests/users/test_routes.py's route-ordering regression test.
+
+POST /users is the profile-creation endpoint called right after a Cognito
+signup confirms -- it depends on get_current_identity (not get_current_user
+-- there's no User row yet, that's the point), and the verified token's
+`sub` *is* the cognito_sub used to create the row. This is deliberate
+(judgment call from the unit's manager): simpler than a separate Cognito
+Post-Confirmation Lambda trigger, keeps everything in the one
+Mangum-wrapped app.
+
+GET /users/me is on the active-account path (get_current_user), so it
+answers 404 for a verified token with no matching User row -- the frontend
+uses that 404 to route a freshly-confirmed signup to profile creation --
+and 403 {"detail": "account_deactivated"} for a deactivated account, which
+the frontend uses to show recovery instead.
+
+DELETE /users/me and POST /users/me/recover are the only routes on the
+own-account path (get_own_account, see app.users.dependencies): a
+deactivated caller must reach recovery, and a repeat deactivation is a 204
+no-op that keeps the first deleted_at. Both act only on the *caller's own*
+row -- there is no DELETE /users/{id} or recover-by-id, and neither reads a
+user id from the path, query or body. Least-privilege: nothing lets one
+user deactivate or recover another's row. `{user_id}` in the follow routes is
+always the *target* of the action, never the actor -- who is acting always
+comes from get_current_user (the verified token), never a client-supplied
+id.
+
+PublicUserOut/MeOut construction: follower_count/following_count aren't
+ORM attributes, so these routes build the response schema explicitly from
+a User row + app.users.service's count helpers rather than returning a bare
+User for `response_model` to convert (the pattern every other route in this
+file still uses for its own ORM row). Per this codebase's existing layering
+(schemas are only ever imported into routes.py, never service.py -- see
+app.posts.facade/app.events.routes for the same split), that assembly lives
+here, not in app.users.service.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app import account_deletion
+from app.dependencies import get_event_bus, get_session, get_settings
+from app.eventbus import PostEventBus
+from app.users.auth import VerifiedIdentity
+from app.users.dependencies import get_current_identity, get_current_user, get_own_account
+from app.users.lifecycle import LifecycleUnavailable, deletion_status
+from app.users.models import User
+from app.users.schemas import (
+    AccountDataOperationOut,
+    CreateUserRequest,
+    MeOut,
+    PublicUserOut,
+    UpdateMeRequest,
+)
+from app.users.service import (
+    AlreadyFollowingError,
+    InvalidPreferredTeamError,
+    InvalidProfileAvatarError,
+    InvalidProfilePictureError,
+    NotFollowingError,
+    SelfFollowError,
+    create_user,
+    follow,
+    followed_user_ids,
+    follower_count,
+    following_count,
+    public_profile_picture_key,
+    recover_user,
+    soft_delete_user,
+    unfollow,
+    update_profile,
+)
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _public_out(session: Session, user: User) -> PublicUserOut:
+    return PublicUserOut(
+        id=user.id,
+        username=user.username,
+        description=user.description,
+        preferred_team_id=user.preferred_team_id,
+        profile_picture_media_id=user.profile_picture_media_id,
+        profile_avatar_key=user.profile_avatar_key,
+        profile_picture_key=public_profile_picture_key(session, user),
+        created_at=user.created_at,
+        follower_count=follower_count(session, user.id),
+        following_count=following_count(session, user.id),
+    )
+
+
+def _me_out(session: Session, user: User) -> MeOut:
+    return MeOut(**_public_out(session, user).model_dump(), date_of_birth=user.date_of_birth)
+
+
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=MeOut)
+def create_profile(
+    body: CreateUserRequest,
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_session),
+) -> MeOut:
+    try:
+        user = create_user(
+            session,
+            cognito_sub=identity.sub,
+            username=body.username,
+            date_of_birth=body.date_of_birth,
+            description=body.description,
+            preferred_team_id=body.preferred_team_id,
+        )
+    except LifecycleUnavailable:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Account temporarily unavailable") from None
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A profile already exists for this account, the username is taken, "
+            "or preferred_team_id does not reference an existing team",
+        ) from exc
+    return _me_out(session, user)
+
+
+# --- /me routes: declared before /{user_id} — see module docstring --------
+
+
+_ACCOUNT_DEACTIVATED_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_403_FORBIDDEN: {
+        "description": 'Account deactivated: {"detail": "account_deactivated"}. '
+        "POST /users/me/recover reactivates it."
+    }
+}
+
+
+@router.get("/me", response_model=MeOut, responses=_ACCOUNT_DEACTIVATED_RESPONSE)
+def get_me(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> MeOut:
+    return _me_out(session, current_user)
+
+
+@router.patch("/me", response_model=MeOut)
+def patch_me(
+    body: UpdateMeRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> MeOut:
+    try:
+        updated = update_profile(
+            session,
+            current_user.id,
+            fields_set=body.model_fields_set,
+            description=body.description,
+            preferred_team_id=body.preferred_team_id,
+            profile_picture_media_id=body.profile_picture_media_id,
+            profile_avatar_key=body.profile_avatar_key,
+        )
+    except InvalidPreferredTeamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except InvalidProfilePictureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    except InvalidProfileAvatarError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+    return _me_out(session, updated)
+
+
+@router.get("/me/following", response_model=list[int])
+def get_my_following(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[int]:
+    return followed_user_ids(session, current_user.id)
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Recent authentication is required to deactivate an account.",
+            "content": {"application/json": {"example": {"detail": "recent_auth_required"}}},
+        }
+    },
+)
+def delete_me(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    own_account: User = Depends(get_own_account),
+    session: Session = Depends(get_session),
+) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    auth_age = None if identity.auth_time is None else now - identity.auth_time
+    if auth_age is None or auth_age < 0 or auth_age > 5 * 60:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="recent_auth_required",
+        )
+    soft_delete_user(session, own_account.id)
+
+
+@router.post("/me/recover", response_model=MeOut)
+def recover_me(
+    own_account: User = Depends(get_own_account),
+    session: Session = Depends(get_session),
+) -> MeOut:
+    return _me_out(session, recover_user(session, own_account.id))
+
+
+@router.delete(
+    "/me/data",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        403: {"description": "recent_auth_required: authenticate within the last five minutes."},
+        503: {"description": "Deletion unfinished or unavailable; retry after Retry-After. Owner status is at Location."}
+    },
+)
+def delete_my_data(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_session),
+) -> None:
+    now = int(datetime.now(UTC).timestamp())
+    age = None if identity.auth_time is None else now - identity.auth_time
+    if age is None or age < 0 or age > 5 * 60:
+        raise HTTPException(status_code=403, detail="recent_auth_required")
+    settings = get_settings()
+    try:
+        account_deletion.delete_account_data(
+            session,
+            cognito_sub=identity.sub,
+            user_pool_id=settings.cognito_user_pool_id,
+            quarantine_bucket=settings.media_quarantine_bucket,
+            public_bucket=settings.media_public_bucket,
+        )
+    except (BotoCoreError, ClientError, SQLAlchemyError, RuntimeError):
+        # Do not propagate SQL/SDK exception text, parameters or traceback into
+        # request logs: any of these can contain account identifiers.
+        raise HTTPException(
+            status_code=503, detail="Account deletion temporarily unavailable; retry safely",
+            headers={"Retry-After": "30", "Location": "/users/me/data-operation"}
+        ) from None
+
+
+@router.get("/me/data-operation", response_model=AccountDataOperationOut)
+def get_my_data_operation(
+    identity: VerifiedIdentity = Depends(get_current_identity),
+    session: Session = Depends(get_session),
+) -> AccountDataOperationOut:
+    result = deletion_status(session, identity.sub)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Account operation not found")
+    return AccountDataOperationOut.model_validate(result)
+
+
+# --- /{user_id} routes ------------------------------------------------
+
+
+@router.get("/{user_id}", response_model=PublicUserOut)
+def get_profile(user_id: int, session: Session = Depends(get_session)) -> PublicUserOut:
+    user = session.scalar(select(User).where(User.id == user_id, User.deleted_at.is_(None)))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return _public_out(session, user)
+
+
+@router.post("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
+def follow_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    event_bus: PostEventBus = Depends(get_event_bus),
+) -> None:
+    try:
+        follow(
+            session,
+            event_bus=event_bus,
+            follower_user_id=current_user.id,
+            followed_user_id=user_id,
+        )
+    except SelfFollowError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except AlreadyFollowingError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.delete("/{user_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
+def unfollow_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    try:
+        unfollow(session, follower_user_id=current_user.id, followed_user_id=user_id)
+    except NotFollowingError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

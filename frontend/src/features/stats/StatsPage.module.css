@@ -1,0 +1,15 @@
+/*
+ * The Stats page's frame: its heading, the tab list and the tab, in one
+ * column. Its own module, so the tabs' stylesheets load with the tabs.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+}

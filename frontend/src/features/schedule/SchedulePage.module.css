@@ -1,0 +1,109 @@
+/*
+ * The Schedule page (FRONTEND-044): its heading, the day controls, and the
+ * day cells side by side. How many cells there are is chosen in JavaScript
+ * (5 from 78em, 3 from 53.75em, 1 below), so each count has its own column
+ * rule here and no media query. A move between days is not animated, so
+ * there is nothing for reduced motion to stop.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+}
+
+/* Previous day, Today (off today only), Next day; wraps at 200% text. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.days {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.days1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.days3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.days5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.cell {
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--color-border);
+}
+
+/* The centre day: a stronger rule above it and its name in the action colour. */
+.centre {
+  border-top-color: var(--color-action);
+}
+
+.dayHeading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+}
+
+/* A day's name, a button that centres it: target-min tall, styled as text. */
+.dayButton {
+  width: 100%;
+  min-height: var(--target-min);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dayButton:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.dayButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.centre .dayButton {
+  color: var(--color-link);
+}
+
+.games {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}

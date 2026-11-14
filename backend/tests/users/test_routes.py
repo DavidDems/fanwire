@@ -1,0 +1,514 @@
+"""Tests for users/ HTTP routes, per AGENTS.md TDD workflow. Written before
+app/users/routes.py and app/users/schemas.py exist.
+
+Routers aren't wired into app.main yet (a later unit wires all three
+modules' routers in together) -- this builds a throwaway local FastAPI()
+app that includes the users router and overrides get_current_identity/
+get_current_user/get_session, the same "build a small app, override the
+dependency" pattern backend/tests/users/test_dependencies.py and
+backend/tests/events/test_routes.py use.
+
+See wiki/CodeContext/Modules/0x01b-users-auth.md Security section: writes
+require a verified Cognito token; profile-page reads (GET /users/{id}) are
+public (0x01-users.md Security).
+"""
+
+from datetime import UTC, date, datetime
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.db import Base, make_engine, make_session_factory
+from app.dependencies import get_event_bus, get_session
+from app.eventbus import InMemoryEventPublisher, PostEventBus
+from app.events.models import Team
+from app.media.models import Media, MediaStatus
+from app.users.auth import FakeTokenVerifier, VerifiedIdentity
+from app.users.dependencies import get_current_identity, get_current_user, get_token_verifier
+from app.users.models import User
+from app.users.routes import router
+from app.users.service import create_user, follow, soft_delete_user
+
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+
+
+@pytest.fixture()
+def session_factory(postgres_url):
+    engine = make_engine(postgres_url)
+    Base.metadata.create_all(engine)
+    yield make_session_factory(engine)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture()
+def app(session_factory):
+    app = FastAPI()
+    app.include_router(router)
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = _get_session_override
+    app.dependency_overrides[get_event_bus] = lambda: PostEventBus(InMemoryEventPublisher())
+    return app
+
+
+@pytest.fixture()
+def client(app):
+    return TestClient(app)
+
+
+def _create(session, cognito_sub, username, **overrides):
+    defaults = {"date_of_birth": date(1990, 1, 1)}
+    defaults.update(overrides)
+    return create_user(session, cognito_sub=cognito_sub, username=username, **defaults)
+
+
+def _as_identity(app, identity: VerifiedIdentity) -> None:
+    app.dependency_overrides[get_current_identity] = lambda: identity
+
+
+def _as_user(app, user: User) -> None:
+    app.dependency_overrides[get_current_user] = lambda: user
+
+
+def _test_event_bus() -> PostEventBus:
+    return PostEventBus(InMemoryEventPublisher())
+
+
+def _with_captured_event_bus(app) -> InMemoryEventPublisher:
+    publisher = InMemoryEventPublisher()
+    app.dependency_overrides[get_event_bus] = lambda: PostEventBus(publisher)
+    return publisher
+
+
+# --- POST /users --------------------------------------------------------
+
+
+def test_create_profile_succeeds(app, client):
+    _as_identity(app, VerifiedIdentity(sub="sub-new", auth_time=RECENT_AUTH_TIME))
+
+    response = client.post(
+        "/users",
+        json={
+            "username": "newuser",
+            "date_of_birth": "1990-01-01",
+            "description": "hi there",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["username"] == "newuser"
+    assert body["description"] == "hi there"
+    assert "cognito_sub" not in body
+    assert "id" in body
+
+
+def test_create_profile_duplicate_cognito_sub_returns_409(app, client, session_factory):
+    with session_factory() as session:
+        _create(session, "sub-dup", "existing_user")
+
+    _as_identity(app, VerifiedIdentity(sub="sub-dup", auth_time=RECENT_AUTH_TIME))
+
+    response = client.post(
+        "/users",
+        json={"username": "another_username", "date_of_birth": "1990-01-01"},
+    )
+
+    assert response.status_code == 409
+
+
+def test_create_profile_duplicate_username_returns_409(app, client, session_factory):
+    with session_factory() as session:
+        _create(session, "sub-existing", "taken_username")
+
+    _as_identity(app, VerifiedIdentity(sub="sub-fresh", auth_time=RECENT_AUTH_TIME))
+
+    response = client.post(
+        "/users",
+        json={"username": "taken_username", "date_of_birth": "1990-01-01"},
+    )
+
+    assert response.status_code == 409
+
+
+# --- GET /users/{user_id} ------------------------------------------------
+
+
+def test_get_profile_returns_200_for_existing_active_user(client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-get", "getme", description="about me")
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == user_id
+    assert body["username"] == "getme"
+    assert body["description"] == "about me"
+    assert "cognito_sub" not in body
+
+
+def test_get_profile_returns_404_for_missing_user(client):
+    response = client.get("/users/999999")
+
+    assert response.status_code == 404
+
+
+def test_get_profile_returns_404_for_soft_deleted_user(client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-gone", "gone_user")
+        soft_delete_user(session, user.id)
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    assert response.status_code == 404
+
+
+def test_get_profile_does_not_leak_date_of_birth(client, session_factory):
+    """Regression test: date_of_birth is PII (wiki/CodeContext/Standards/
+    security.md) and this public, unauthenticated route must never return
+    it -- see PublicUserOut in app.users.schemas."""
+    with session_factory() as session:
+        user = _create(session, "sub-pii", "pii_user")
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    assert response.status_code == 200
+    assert "date_of_birth" not in response.json()
+
+
+def test_get_profile_includes_follower_and_following_counts(client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-counts", "counts_user")
+        user_id = user.id
+
+    response = client.get(f"/users/{user_id}")
+
+    body = response.json()
+    assert body["follower_count"] == 0
+    assert body["following_count"] == 0
+
+
+# --- GET /users/me ---------------------------------------------------------
+
+
+def test_get_me_returns_full_profile_including_date_of_birth(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-me", "me_user", description="about me")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == user.id
+    assert body["username"] == "me_user"
+    assert body["date_of_birth"] == "1990-01-01"
+
+
+def test_get_me_returns_404_when_token_valid_but_no_profile(app, client):
+    _as_identity(app, VerifiedIdentity(sub="sub-no-profile-me", auth_time=RECENT_AUTH_TIME))
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 404
+
+
+def test_me_route_is_not_shadowed_by_user_id_route(app, client, session_factory):
+    """Regression test for route ordering -- GET /users/me must resolve to
+    the /me handler, not fall into GET /users/{user_id} and fail int
+    conversion on "me" (see routes.py module docstring)."""
+    with session_factory() as session:
+        user = _create(session, "sub-ordering", "ordering_user")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "ordering_user"
+
+
+# --- PATCH /users/me --------------------------------------------------------
+
+
+def test_patch_me_updates_only_provided_fields(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch", "patch_user", description="before")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": "after"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["description"] == "after"
+    assert body["username"] == "patch_user"
+
+
+def test_patch_me_explicit_null_clears_description(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-null", "patch_null_user", description="has text")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": None})
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+
+def test_patch_me_absent_field_leaves_it_untouched(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-absent", "patch_absent_user", description="keep me")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={})
+
+    assert response.status_code == 200
+    assert response.json()["description"] == "keep me"
+
+
+def test_patch_me_ignores_username_and_date_of_birth(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-immutable", "immutable_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"username": "hacked", "date_of_birth": "2000-01-01"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["username"] == "immutable_user"
+    assert body["date_of_birth"] == "1990-01-01"
+
+
+def test_patch_me_description_over_500_chars_returns_422(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-long", "patch_long_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"description": "x" * 501})
+
+    assert response.status_code == 422
+
+
+def test_patch_me_bad_preferred_team_id_returns_422(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-team-bad", "patch_team_bad_user")
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"preferred_team_id": 999999})
+
+    assert response.status_code == 422
+
+
+def test_patch_me_sets_valid_preferred_team_id(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-team-ok", "patch_team_ok_user")
+        team = Team(
+            nba_team_id=301,
+            name="Test Team",
+            abbreviation="TST",
+            conference="Eastern",
+            division="Atlantic",
+        )
+        session.add(team)
+        session.commit()
+        team_id = team.id
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"preferred_team_id": team_id})
+
+    assert response.status_code == 200
+    assert response.json()["preferred_team_id"] == team_id
+
+
+def test_patch_me_rejects_unprocessed_or_not_owned_media(app, client, session_factory):
+    with session_factory() as session:
+        owner = _create(session, "sub-patch-pic-owner", "patch_pic_owner")
+        other_user = _create(session, "sub-patch-pic-other", "patch_pic_other")
+        unprocessed = Media(uploader_id=owner.id, status=MediaStatus.UPLOADED)
+        someone_elses = Media(uploader_id=other_user.id, status=MediaStatus.PROCESSED)
+        session.add_all([unprocessed, someone_elses])
+        session.commit()
+        unprocessed_id = unprocessed.id
+        someone_elses_id = someone_elses.id
+
+    _as_user(app, owner)
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": unprocessed_id})
+    assert response.status_code == 422
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": someone_elses_id})
+    assert response.status_code == 422
+
+
+def test_patch_me_sets_valid_own_processed_profile_picture(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-patch-pic-ok", "patch_pic_ok_user")
+        media = Media(uploader_id=user.id, status=MediaStatus.PROCESSED)
+        session.add(media)
+        session.commit()
+        media_id = media.id
+
+    _as_user(app, user)
+
+    response = client.patch("/users/me", json={"profile_picture_media_id": media_id})
+
+    assert response.status_code == 200
+    assert response.json()["profile_picture_media_id"] == media_id
+
+
+# --- GET /users/me/following -------------------------------------------
+
+
+def test_get_my_following_returns_followed_ids(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-following-a", "following_a")
+        followed_one = _create(session, "sub-following-b", "following_b")
+        followed_two = _create(session, "sub-following-c", "following_c")
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed_one.id,
+        )
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed_two.id,
+        )
+
+    _as_user(app, follower)
+
+    response = client.get("/users/me/following")
+
+    assert response.status_code == 200
+    assert sorted(response.json()) == sorted([followed_one.id, followed_two.id])
+
+
+def test_get_my_following_returns_empty_list_when_following_no_one(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-following-lonely", "following_lonely")
+
+    _as_user(app, user)
+
+    response = client.get("/users/me/following")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# --- DELETE /users/me -----------------------------------------------------
+
+
+def test_delete_me_soft_deletes_caller_and_then_404s(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-self-delete", "self_delete_user")
+
+    # Authenticated through the real token chain rather than by overriding
+    # get_current_user: USERS-003 moves DELETE /users/me to get_own_account.
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-self-delete", auth_time=int(datetime.now(UTC).timestamp()))
+    )
+
+    response = client.delete("/users/me", headers={"Authorization": "Bearer good-token"})
+    assert response.status_code == 204
+
+    get_response = client.get(f"/users/{user.id}")
+    assert get_response.status_code == 404
+
+
+# --- POST/DELETE /users/{user_id}/follow ----------------------------------
+
+
+def test_follow_succeeds(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-follower", "follower_user")
+        followed = _create(session, "sub-followed", "followed_user")
+
+    _as_user(app, follower)
+    publisher = _with_captured_event_bus(app)
+
+    response = client.post(f"/users/{followed.id}/follow")
+
+    assert response.status_code == 204
+    event_names = [e.name for e in publisher.published]
+    assert event_names == ["UserFollowed"]
+
+
+def test_self_follow_returns_400(app, client, session_factory):
+    with session_factory() as session:
+        user = _create(session, "sub-self-follow", "self_follow_user")
+
+    _as_user(app, user)
+
+    response = client.post(f"/users/{user.id}/follow")
+
+    assert response.status_code == 400
+
+
+def test_duplicate_follow_returns_409(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-dup-follower", "dup_follower_user")
+        followed = _create(session, "sub-dup-followed", "dup_followed_user")
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed.id,
+        )
+
+    _as_user(app, follower)
+
+    response = client.post(f"/users/{followed.id}/follow")
+
+    assert response.status_code == 409
+
+
+def test_unfollow_succeeds(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-unfollower", "unfollower_user")
+        followed = _create(session, "sub-unfollowed", "unfollowed_user")
+        follow(
+            session,
+            event_bus=_test_event_bus(),
+            follower_user_id=follower.id,
+            followed_user_id=followed.id,
+        )
+
+    _as_user(app, follower)
+
+    response = client.delete(f"/users/{followed.id}/follow")
+
+    assert response.status_code == 204
+
+
+def test_unfollow_when_not_following_returns_404(app, client, session_factory):
+    with session_factory() as session:
+        follower = _create(session, "sub-no-follow", "no_follow_user")
+        followed = _create(session, "sub-not-followed", "not_followed_user")
+
+    _as_user(app, follower)
+
+    response = client.delete(f"/users/{followed.id}/follow")
+
+    assert response.status_code == 404

@@ -1,0 +1,283 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+
+import {
+  RECORDS_KEY,
+  recordQuery,
+  type RecordsCatalogOut,
+} from "../../api/records";
+import { seasonsQuery } from "../../api/stats";
+import {
+  NoSeason,
+  SeasonSelect,
+} from "../../components/stats-nav/SeasonSelect";
+import {
+  StatsNavigator,
+  type StatsLevel,
+  type StatsNavAdapter,
+} from "../../components/stats-nav/StatsNavigator";
+import { groupTitle } from "../../components/stats-nav/recordLabels";
+import {
+  RecordLevel,
+  RecordTitle,
+} from "../../components/stats-nav/RecordLevel";
+import { RecordsLevel } from "../../components/stats-nav/RecordsLevel";
+import type { RecordsBar } from "../../components/stats-nav/types";
+import { SegmentedRow, SegmentedTabs } from "../../components/ui/SegmentedTabs";
+import { Leaders } from "./Leaders";
+import { ROUTE_LINKS } from "./links";
+import styles from "./Stats.module.css";
+
+const VIEWS = [
+  { id: "historical", label: "Historical" },
+  { id: "seasonal", label: "Seasonal" },
+];
+
+/**
+ * The address of a records stack: its record, or its bar and query. Top
+ * records is the default and is not written; Team and Player are.
+ */
+function search(stack: StatsLevel[]): URLSearchParams {
+  const result = new URLSearchParams();
+  const top = stack[stack.length - 1];
+  if (top?.kind === "record") result.set("record", top.id);
+  else if (top?.kind === "records") {
+    if (top.group === "team" || top.group === "player")
+      result.set("group", top.group);
+    if (top.q !== undefined && top.q !== "") result.set("q", top.q);
+  }
+  return result;
+}
+
+function href(stack: StatsLevel[]): string {
+  const query = search(stack).toString();
+  return query === "" ? "/stats/records" : `/stats/records?${query}`;
+}
+
+/**
+ * `/stats/records`: a Historical / Seasonal bar switching the records
+ * navigator or the season's leaders. The bar sits inside what it switches
+ * (2026-11-04): at the end of the Top records / Team / Player bar's row, of
+ * the season picker's row, or, on a record's level, in a row of its own
+ * above the navigator. The records home shows no one-item breadcrumb, as it
+ * only repeated the heading.
+ *
+ * **The URL is the state, and this is the navigator's route adapter.**
+ * `?view=seasonal` is Seasonal (Historical is the default and is not
+ * written); on Historical, `?group=team` and `?group=player` are a group's
+ * cards (Top records is the default and is not written, FRONTEND-030), `?q=`
+ * the search (written with replace, so typing adds no history entry), and
+ * `?record=<id>` a record's list, over its group's cards; on
+ * Seasonal, `?season=` is the picked season (the newest by default). An
+ * unknown value shows the default. The bars replace the history entry, and
+ * switching the view drops the other view's parameters; opening and popping
+ * a level push the address of the new stack. A record opened from a card
+ * carries its origin in the history state, and its Back is the history's
+ * Back, to the tab and query it came from (FRONTEND-030).
+ *
+ * A record level's group is its list's (or the cached catalog's, which says
+ * the same), so `?record=` never carries `group`; until the read lands,
+ * the id's team- or player- prefix supplies it. Unknown prefixes keep the
+ * "Records" fallback.
+ */
+export function RecordsTab() {
+  const [params, setParams] = useSearchParams();
+  const seasonal = params.get("view") === "seasonal";
+
+  return (
+    <div className={styles.tab}>
+      <SegmentedTabs
+        label="Records view"
+        tabs={VIEWS}
+        value={seasonal ? "seasonal" : "historical"}
+        onChange={(id) =>
+          setParams(id === "seasonal" ? { view: "seasonal" } : {}, {
+            replace: true,
+          })
+        }
+      >
+        {(viewBar) => (
+          <div className={styles.tab}>
+            {seasonal ? (
+              <Seasonal
+                viewBar={viewBar}
+                picked={params.get("season")}
+                onPick={(season) =>
+                  setParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.set("season", season);
+                    return next;
+                  })
+                }
+              />
+            ) : (
+              <Historical
+                viewBar={viewBar}
+                recordId={params.get("record") || null}
+                group={bar(params.get("group"))}
+                q={params.get("q") ?? ""}
+                go={(stack, replace, state) =>
+                  setParams(search(stack), { replace, state })
+                }
+              />
+            )}
+          </div>
+        )}
+      </SegmentedTabs>
+    </div>
+  );
+}
+
+/** The history state of a record opened from its card: where it came from. */
+interface Opened {
+  recordsFrom: string;
+}
+
+function isOpened(state: unknown): state is Opened {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    typeof (state as Partial<Opened>).recordsFrom === "string"
+  );
+}
+
+/** The bar `?group=` names; anything else is Top records. */
+function bar(group: string | null): RecordsBar {
+  return group === "team" || group === "player" ? group : "top";
+}
+
+function Historical({
+  viewBar,
+  recordId,
+  group,
+  q,
+  go,
+}: {
+  /** The Historical / Seasonal bar, placed here (see `RecordsTab`). */
+  viewBar: ReactNode;
+  recordId: string | null;
+  group: RecordsBar;
+  q: string;
+  go: (stack: StatsLevel[], replace: boolean, state?: Opened) => void;
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A record opened from a card knows the address it came from (its tab and
+  // query), so Back returns there, as the browser's Back does; a cold
+  // `?record=` has none and falls back to its group's tab.
+  const opened = recordId !== null && isOpened(location.state);
+
+  const cached = useQueryClient()
+    .getQueryData<RecordsCatalogOut>(RECORDS_KEY)
+    ?.records.find((record) => record.id === recordId)?.group;
+  const list = useQuery({
+    ...recordQuery(recordId ?? ""),
+    enabled: recordId !== null,
+  });
+
+  const stack: StatsLevel[] =
+    recordId === null
+      ? [{ kind: "records", group, q }]
+      : [
+          {
+            kind: "records",
+            group:
+              list.data?.group ??
+              cached ??
+              (recordId.startsWith("player-")
+                ? "player"
+                : recordId.startsWith("team-")
+                  ? "team"
+                  : null),
+          },
+          { kind: "record", id: recordId },
+        ];
+
+  const adapter: StatsNavAdapter = {
+    ...ROUTE_LINKS,
+    // A records level is shown alone, a record over its group's.
+    levelHref: (level) =>
+      href(level.kind === "records" ? [level] : [stack[0], level]),
+  };
+
+  return (
+    <>
+      {/* A record's level has no group bar: the view bar keeps its own row
+          above the navigator. */}
+      {recordId === null ? null : <SegmentedRow end={viewBar} />}
+      <StatsNavigator
+        stack={stack}
+        rootCrumb={false}
+        adapter={adapter}
+        levelViews={{
+          name: (level) =>
+            level.kind === "records" ? (
+              groupTitle(level.group)
+            ) : level.kind === "record" ? (
+              <RecordTitle id={level.id} />
+            ) : null,
+          view: (level, { open, replace }) =>
+            level.kind === "records" ? (
+              <RecordsLevel
+                level={level}
+                adapter={adapter}
+                barEnd={viewBar}
+                onLevel={(group, q) => replace({ kind: "records", group, q })}
+                onRecord={(id) => open({ kind: "record", id })}
+              />
+            ) : level.kind === "record" ? (
+              <RecordLevel level={level} adapter={adapter} />
+            ) : null,
+        }}
+        open={(level) =>
+          go([...stack, level], false, {
+            recordsFrom: search(stack).toString(),
+          })
+        }
+        replace={(level) => go([...stack.slice(0, -1), level], true)}
+        pop={(toDepth) => go(stack.slice(0, toDepth), false)}
+        back={opened ? () => void navigate(-1) : undefined}
+      />
+    </>
+  );
+}
+
+function Seasonal({
+  viewBar,
+  picked,
+  onPick,
+}: {
+  /** The Historical / Seasonal bar, at the end of the picker's row. */
+  viewBar: ReactNode;
+  picked: string | null;
+  onPick: (season: string) => void;
+}) {
+  const seasons = useQuery(seasonsQuery());
+  const season = picked ?? seasons.data?.[0] ?? null;
+
+  return (
+    <>
+      <SegmentedRow
+        start={
+          <div className={styles.controls}>
+            <SeasonSelect
+              season={season}
+              options={seasons.data ?? []}
+              onPick={onPick}
+            />
+          </div>
+        }
+        end={viewBar}
+      />
+      {season === null ? (
+        <NoSeason seasons={seasons} />
+      ) : (
+        <>
+          <h2>{season} leaders</h2>
+          <Leaders season={season} />
+        </>
+      )}
+    </>
+  );
+}

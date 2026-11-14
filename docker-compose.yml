@@ -1,0 +1,179 @@
+# Local dev + test orchestration only — nothing here is the production
+# deployment (that's Lambda container images + S3/CloudFront via CDK, see
+# wiki/CodeContext/Standards/aws-stack.md and docker/*.Dockerfile). This gives:
+#   - a real Postgres to run integration tests against (matching RDS, not
+#     an in-memory substitute), per wiki/CodeContext/Standards/design-principles.md testing
+#     pyramid guidance
+#   - a local DynamoDB for the idempotency-key / live-score-cache tables
+#   - one-shot test runners for backend and frontend, same images CI builds
+#   - `backend-dev`: a real, clickable local backend (Phase 4) so the
+#     frontend can be exercised in an actual browser, not just against
+#     mocks (frontend tests still use msw — see frontend/'s test setup)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fanwire
+      POSTGRES_PASSWORD: fanwire
+      POSTGRES_DB: fanwire
+    ports:
+      # Overridable so multiple git worktrees/agents can run compose
+      # concurrently without colliding on the host port. Defaults unchanged.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fanwire"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory"]
+    ports:
+      - "${DYNAMODB_HOST_PORT:-8000}:8000"
+
+  backend-test:
+    # A stable tag rather than the generated `fanwire-backend-test` name.
+    # Compose reuses an image with this tag instead of rebuilding, which is
+    # what lets CI build it once with a layer cache (see test-agent.yml) and
+    # lets a local `compose run` skip the rebuild too. `build` still applies
+    # when the tag is absent, so nothing changes on a clean machine.
+    image: fanwire-backend-test:latest
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dynamodb-local:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
+      AWS_ENDPOINT_URL_DYNAMODB: http://dynamodb-local:8000
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    # docker-outside-of-docker: a handful of tests (e.g. test_db_session.py)
+    # use testcontainers to spin up their own ephemeral Postgres rather than
+    # the `postgres` service above, for tests that need a throwaway instance
+    # with no shared state. Mounting the host socket lets testcontainers
+    # start sibling containers on the host daemon from inside this one.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  frontend-test:
+    image: fanwire-frontend-test:latest
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: test
+
+  # Real local dev backend (Phase 4, wiki/GeneralContext/Architecture/
+  # dev-auth-setup.md): real Postgres (the `postgres` service above), real
+  # Cognito user pool — no fake auth, no TokenVerifier override. Runs
+  # `alembic upgrade head` then uvicorn with --reload against a bind-mounted
+  # `backend/app`, so edits show up without a rebuild.
+  #
+  # No CORS middleware here on purpose: the frontend dev setup calls this
+  # backend through a Vite proxy (`/api` -> `http://localhost:8001`, prefix
+  # stripped — vite.config.*'s `server.proxy`, a separate frontend unit),
+  # so the browser only ever talks to the Vite origin and sees every
+  # request as same-origin. Adding permissive CORS here would just be an
+  # unused, easy-to-forget-about attack surface for a same-origin setup.
+  backend-dev:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
+      # Delivers domain events to the notifications consumer in process
+      # (NOTIFICATIONS-001, app.notifications.local_dispatch), so a follow,
+      # reply or repost creates its notification on this stack.
+      - ENVIRONMENT=development
+      # Cognito ids are not secrets (wiki/GeneralContext/Architecture/
+      # dev-auth-setup.md: "pool id and public client id ship in the
+      # browser bundle anyway") but are per-developer (each points at
+      # their own dev pool), so they come from backend/.env below, never
+      # hardcoded. Never list them here as bare names: Docker Compose
+      # (v5.5.1, 2026-10-07) unsets a bare name the host shell lacks, and
+      # `environment` outranks `env_file`, so backend/.env's values were
+      # dropped and every signed-in request 500'd
+      # (.ai/tests/test_dev_compose.py).
+    # `required: false` lets this start with backend/.env absent entirely —
+    # get_token_verifier just won't resolve a real pool until the Cognito
+    # vars are set one way or the other (host env or this file).
+    env_file:
+      - path: backend/.env
+        required: false
+    volumes:
+      - ./backend/app:/var/task/app
+    ports:
+      - "${BACKEND_DEV_PORT:-8001}:8001"
+
+  # ---------------------------------------------------------------- perf
+  # The local load test (PERF-001, perf/README.md). Only `--profile perf`
+  # starts these, never a plain `up`; `perf/run.ps1` drives them. It
+  # generates no AWS or Cognito traffic, and k6 only ever targets backend-perf.
+  #
+  # Its own Postgres, with no volume and no host port: `down` discards it,
+  # so every run seeds from empty and runs stay comparable.
+  postgres-perf:
+    profiles: ["perf"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fanwire
+      POSTGRES_PASSWORD: fanwire
+      POSTGRES_DB: fanwire
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fanwire"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # The backend under load: the dev image without --reload (a reloader's
+  # file watching would be measured too), against the working tree.
+  # ENVIRONMENT=perf is the only value that lets Settings accept
+  # PERF_JWKS_PATH, the local test JWKS perf/run.ps1 mints before `up`; no
+  # deployed stack sets either (an infra test pins that). The rate limits are
+  # raised far above any run, because every virtual user is one author.
+  backend-perf:
+    profiles: ["perf"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: dev
+    depends_on:
+      postgres-perf:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://fanwire:fanwire@postgres-perf:5432/fanwire
+      ENVIRONMENT: perf
+      PERF_JWKS_PATH: /var/task/perf-results/jwks.json
+      POST_RATE_LIMIT_PER_MINUTE: "1000000"
+      POST_RATE_LIMIT_PER_HOUR: "1000000"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2"]
+    volumes:
+      - ./backend/app:/var/task/app:ro
+      - ./backend/scripts:/var/task/scripts:ro
+      - ./perf/results:/var/task/perf-results:ro
+    ports:
+      - "${BACKEND_PERF_PORT:-8002}:8001"
+
+  # k6 pinned by digest (2.3.0, 2026-09-21), so no local install and no
+  # drifting tag. Scripts and results are under ./perf.
+  k6:
+    profiles: ["perf"]
+    image: grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+    depends_on:
+      - backend-perf
+    environment:
+      BASE_URL: http://backend-perf:8001
+    working_dir: /perf
+    volumes:
+      - ./perf:/perf

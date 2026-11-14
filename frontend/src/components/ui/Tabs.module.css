@@ -1,0 +1,47 @@
+/*
+ * Links that look like tabs (Tabs.tsx says why they are not a tablist): a row
+ * of text links over a hairline, the current one marked by a 3 px action bar
+ * and weight, so colour is never the only signal (accessibility.md A7). The
+ * bar is a border, which forced-colors mode keeps (A20). Values come from
+ * tokens.css by name only.
+ */
+
+.tabs {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.tab[aria-current="page"] {
+  border-bottom-color: var(--color-action);
+  color: var(--color-text);
+}

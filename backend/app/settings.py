@@ -1,0 +1,130 @@
+from datetime import datetime
+from typing import Self
+
+from pydantic import Field, PositiveInt, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """12-factor config: every value comes from the environment, nothing
+    hardcoded per-environment (wiki/CodeContext/Standards/design-principles.md)."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    database_url: str
+    aws_default_region: str = "us-east-1"
+
+    # Cognito wiring for app.users.dependencies.get_token_verifier's
+    # default RefreshingTokenVerifier. Empty-string defaults so Settings()
+    # still constructs fine when unset — the real values only matter once
+    # get_token_verifier is actually invoked in production; route tests
+    # override get_token_verifier entirely and never hit these.
+    cognito_region: str = "us-east-1"
+    cognito_user_pool_id: str = ""
+    cognito_app_client_id: str = ""
+
+    account_lifecycle_enabled: bool = False
+    account_lifecycle_cutover_at: datetime | None = None
+
+    # S3 buckets media/ routes presign uploads into / serve processed
+    # variants from. Defaults let Settings() still construct with nothing
+    # set; the real values only matter once app.media.dependencies.get_s3_client
+    # or ImageUploadPipeline actually issue/serve against them — route
+    # tests override get_s3_client entirely (moto) and never depend on
+    # these resolving to a bucket that actually exists.
+    media_quarantine_bucket: str = "fanwire-media-quarantine"
+    media_public_bucket: str = "fanwire-media-public"
+
+    # Comma-separated banned-word list for app.posts.moderation.ProfanityFilter
+    # (12-factor: env vars are strings, not lists). Parsed by
+    # app.posts.dependencies.get_moderation_chain into a
+    # frozenset[str] -- empty string (the default) means no word is banned.
+    moderation_banned_words: str = ""
+
+    # Per-author post rate limits for app.posts.moderation.PostCountRateLimiter
+    # (every kind of post counts). PositiveInt so zero, a negative number or a
+    # non-integer fails when Settings is built, not at the first post.
+    post_rate_limit_per_minute: PositiveInt = 10
+    post_rate_limit_per_hour: PositiveInt = 100
+
+    # app.posts.moderation.HeuristicSpamScorer: a post scoring at or above
+    # the threshold is refused, and an account younger than
+    # spam_new_account_hours is new (a new account posting a link scores
+    # higher). The threshold must be in (0, 1] and the age a positive
+    # integer, so a bad value fails when Settings is built, not at the first
+    # post. The scorer's weights are constants in the scorer, not settings.
+    spam_score_threshold: float = Field(default=0.8, gt=0, le=1)
+    spam_new_account_hours: PositiveInt = 24
+
+    # EventBridge PostEventBus wiring for app.dependencies.get_event_bus.
+    # Empty default keeps InMemoryEventPublisher wired for local dev/tests
+    # (wiki/CodeContext/Modules/0x00-architecture.md "PostEventBus
+    # implementation") -- once infra/lib/app-stack.ts's POST_EVENT_BUS_NAME
+    # is set, get_event_bus() switches to the real EventBridgePublisher.
+    post_event_bus_name: str = ""
+
+    # SES "From" address for app.notifications.email.SesEmailSender.
+    # infra/lib/app-stack.ts only sets NOTIFICATION_FROM_ADDRESS when
+    # `config.domainName` is configured (no SES identity exists otherwise) --
+    # empty is SesEmailSender's own signal to skip sending (log, no PII) and
+    # let in-app notifications carry on alone, never an error.
+    notification_from_address: str = ""
+
+    # The bucket app.events.load_handler (the SportsDataLoad Lambda) reads
+    # the NBA dataset's CSVs from, under nba-eoin/. Set by
+    # infra/lib/app-stack.ts on that function only. Empty means unset, and
+    # the handler fails fast on it.
+    sports_data_bucket: str = ""
+
+    # The local load test (PERF-001, perf/README.md). PERF_JWKS_PATH points
+    # app.users.dependencies.get_token_verifier at a JWKS file minted by
+    # scripts/mint_perf_tokens.py instead of the Cognito pool, so it must be
+    # impossible anywhere but the compose perf profile: Settings refuses to
+    # build when it is set and ENVIRONMENT is anything but exactly "perf"
+    # (case-sensitive, no surrounding whitespace) -- fail closed at
+    # construction, not at the first request. No deployed stack sets either
+    # (infra/test/perf-env.test.ts pins that). Empty means unset.
+    environment: str = ""
+    perf_jwks_path: str = ""
+
+    # Set by the Lambda runtime, never by this repo. Read only so that
+    # ENVIRONMENT=development can be refused on a deployed function, below.
+    aws_lambda_function_name: str = ""
+
+    @model_validator(mode="after")
+    def _lifecycle_configuration(self) -> Self:
+        if self.account_lifecycle_enabled:
+            if not self.cognito_region or not self.cognito_user_pool_id:
+                raise ValueError("Active account lifecycle requires a trusted Cognito namespace")
+            cutoff = self.account_lifecycle_cutover_at
+            if cutoff is None or cutoff.tzinfo is None or cutoff.utcoffset() is None:
+                raise ValueError("Active account lifecycle requires a timezone-aware cutover")
+        return self
+
+    @model_validator(mode="after")
+    def _perf_jwks_only_in_perf(self) -> Self:
+        if self.perf_jwks_path and self.environment != "perf":
+            raise ValueError(
+                "PERF_JWKS_PATH is set but ENVIRONMENT is "
+                f"{self.environment!r}; it is only accepted when ENVIRONMENT is exactly 'perf'"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _development_never_deployed(self) -> Self:
+        # ENVIRONMENT=development makes app.dependencies.get_event_bus deliver
+        # events in process (NOTIFICATIONS-001), so a deployed function missing
+        # its bus name refuses to start rather than dispatch locally. No deployed
+        # stack sets it (infra/test/local-dispatch-env.test.ts pins that).
+        if self.environment == "development":
+            if self.post_event_bus_name:
+                raise ValueError(
+                    "ENVIRONMENT is 'development' but POST_EVENT_BUS_NAME is set; "
+                    "the local stack has no real bus"
+                )
+            if self.aws_lambda_function_name:
+                raise ValueError(
+                    "ENVIRONMENT is 'development' but AWS_LAMBDA_FUNCTION_NAME is set; "
+                    "the local stack does not run on Lambda"
+                )
+        return self

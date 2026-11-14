@@ -1,0 +1,265 @@
+name: agent-guard
+
+# The enforcement backstop. Every agent-authored PR is checked here, by a
+# workflow the agents cannot modify (`.github/**` is in
+# agentlib.guard.ALWAYS_FORBIDDEN) and cannot skip.
+#
+# This runs independently of agent-orchestrator.yml on purpose. The
+# orchestrator also guards each commit as it happens, but the orchestrator is
+# the thing dispatching the agents; a boundary that is only checked by the
+# component being bounded is not a boundary. If the orchestrator were
+# misconfigured, or a branch were pushed by hand, this job still fails the PR.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    # Only agent-authored branches. A human PR is governed by review and
+    # CODEOWNERS, not by the agent permission model.
+    if: startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    # handoff.md §10, D2b. The checks below are the PR's own boundary, so
+    # they must not run the PR's own code: they used to import its
+    # `agentlib`. The PR is checked out at `pr/` as data; the code, policy
+    # and config come from the base commit at `tools/` beside it, and python
+    # runs with -I so the working directory is never on sys.path.
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/pr
+    defaults:
+      run:
+        working-directory: pr
+    steps:
+      # The branch name is the fork's to choose, so the id derived from it is
+      # validated against the guard's own TASK_ID_SAFE (a bash copy, pinned by
+      # test_workflows.py) and reaches later scripts only as $TASK_ID, never
+      # pasted into their text (handoff.md §10, D2b).
+      - name: Derive the task id from the branch
+        working-directory: ${{ github.workspace }}
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID="${HEAD_REF#agent/}"
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::the task id in this branch name does not match $TASK_ID_SAFE"
+            exit 1
+          fi
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: tools
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: The spec must be valid
+        run: python -I "$TOOLS/.ai/bin/agentctl.py" task validate "$TASK_ID"
+
+      - name: No commit may touch the agent system's own boundaries
+        # Checked separately from the per-role guard below so that the failure
+        # message is unambiguous about which rule was broken.
+        run: |
+          set -euo pipefail
+          # --no-renames: with rename detection --name-only prints only a
+          # rename's destination, hiding the path it was moved away from.
+          git diff --name-only --no-renames "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python -I - "$TASK_ID" <<'PY'
+          import os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
+          from agentlib import guard
+          task_id = sys.argv[1]
+          paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
+          # The orchestrator commits this task's state and telemetry to its own
+          # branch by design, so the PR carries its own history. Those two paths
+          # are the workflow's bookkeeping, not an agent's writes, and they are
+          # the only thing under `.ai/` this check tolerates — scoped to this
+          # task. A worker's own diff is still checked against the unmodified
+          # always-forbidden set, in agent-worker.yml.
+          breaches = [
+              p for p in paths
+              if guard.is_always_forbidden(p)
+              and not guard.is_orchestrator_bookkeeping(p, task_id)
+          ]
+          if breaches:
+              print("This branch modifies the agent system's own boundaries:")
+              for p in breaches:
+                  print(f"  {p}")
+              print("\nThese paths are never writable by an agent. If a human authored")
+              print("this change, it does not belong on an agent/ branch.")
+              raise SystemExit(1)
+          book = [p for p in paths if guard.is_orchestrator_bookkeeping(p, task_id)]
+          print(f"{len(paths)} changed path(s), none forbidden "
+                f"({len(book)} orchestrator bookkeeping)")
+          PY
+
+      - name: Every changed path must be inside the task's scope
+        # The union of what the test agent and the code agent were allowed to
+        # write. A per-commit, per-role check already ran during the workflow;
+        # at PR level the roles' commits are interleaved, so the check here is
+        # "nothing outside the task contract", which is the property a human
+        # reviewer actually needs guaranteed.
+        run: |
+          set -euo pipefail
+          git diff --name-only --no-renames "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          python -I - "$TASK_ID" <<'PY'
+          import json, os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
+          from agentlib import guard, spec as spec_mod
+          task_id = sys.argv[1]
+          spec = spec_mod.load(f".ai/tasks/{task_id}")
+          policy = json.load(open(os.environ["TOOLS"] + "/.ai/policy.json", encoding="utf-8"))
+          paths = [p for p in open("changed.txt", encoding="utf-8").read().splitlines() if p]
+
+          allow_tests = spec_mod.workflow_policy(spec)["allow_test_edits_during_impl"]
+          # A path is acceptable if SOME dispatched role could legitimately have
+          # written it for this task.
+          roles = [r for r, v in policy["roles"].items() if v.get("ci_dispatched")]
+          bad = []
+          for p in paths:
+              # The orchestrator's own state/telemetry for this task belongs to
+              # no role, by design — it is the workflow's bookkeeping, and the
+              # step above has already confirmed it is exactly that.
+              if guard.is_orchestrator_bookkeeping(p, task_id):
+                  continue
+              if any(
+                  guard.check_diff([p], role, spec, policy, allow_test_edits=allow_tests).ok
+                  for role in roles
+              ):
+                  continue
+              bad.append(p)
+          if bad:
+              print(f"{len(bad)} path(s) outside the contract of {task_id}:")
+              for p in bad:
+                  print(f"  {p}")
+              print(f"\nallowed_paths: {spec['allowed_paths']}")
+              print(f"forbidden_paths: {spec['forbidden_paths']}")
+              raise SystemExit(1)
+          print(f"{len(paths)} changed path(s), all inside the task contract")
+          PY
+
+      - name: The task must not have been left in a failed or paused state
+        run: |
+          set -euo pipefail
+          python -I - "$TASK_ID" <<'PY'
+          import os, sys
+          sys.path.insert(0, os.environ["TOOLS"] + "/.ai")
+          from agentlib import state as st
+          from pathlib import Path
+          task_id = sys.argv[1]
+          p = Path(f".ai/tasks/{task_id}/state.json")
+          if not p.exists():
+              print("no state file; treating as a hand-authored branch")
+              raise SystemExit(0)
+          s = st.load_state(p)
+          # A hand run (`agentctl hand start`) has a state file too: HAND_RUNNING
+          # while it is open, COMPLETE once `hand finish` records its PR. Both
+          # pass; ESCALATED and FAILED fail whoever ran the task.
+          mode = st.task_mode(s)
+          print(f"{task_id}: {s['state']} ({mode} run, control={s['control']}, "
+                f"attempt {s['attempt']}/{s['max_attempts']})")
+          if s["state"] in ("ESCALATED", "FAILED"):
+              print(f"\nReason: {s.get('escalation_reason')}")
+              print("This PR is open for a human to look at, not to merge as-is.")
+              raise SystemExit(1)
+          PY
+
+  # One check that always reports, whatever `guard` above decided to do.
+  #
+  # `guard` runs only on `agent/` branches, so on a human PR it is skipped and
+  # never reports at all. A required status check naming a skipped job reads as
+  # "still waiting" on a protected branch, not "not needed" — so requiring
+  # `guard` directly would mean no human-authored PR could ever merge.
+  #
+  # Without this job the alternative is not requiring the guard at all, and a
+  # check that is not required does not block a merge when it fails. The
+  # enforcement backstop would be advisory: a red X that a human can click past
+  # at exactly the moment they are deciding whether to trust an agent's diff.
+  #
+  # So: require THIS job on `main`. It passes when the guard passed and when
+  # the guard correctly did not apply, and fails when the guard failed.
+  # Non-agent branches must also carry no task-state changes (bug 17): an
+  # inherited state file would otherwise change what the next task run reads.
+  #
+  # `success()` is deliberately not used — it treats a skipped dependency as
+  # not-success, which is the case this job exists to distinguish.
+  guard-gate:
+    if: always()
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report the guard
+        env:
+          RESULT: ${{ needs.guard.result }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          case "$RESULT" in
+            success)
+              echo "the agent guard passed on $HEAD_REF" ;;
+            skipped)
+              # Not an agent branch. Governed by review and CODEOWNERS instead,
+              # per the `guard` job's own condition.
+              echo "$HEAD_REF is not an agent/ branch; the agent guard does not apply"
+              if [ "${HEAD_REF#agent/}" != "$HEAD_REF" ]; then
+                echo "::error::$HEAD_REF IS an agent branch but the guard was skipped"
+                exit 1
+              fi ;;
+            *)
+              echo "::error::the agent guard reported '$RESULT' on $HEAD_REF"
+              exit 1 ;;
+          esac
+
+      - name: Check out non-agent PR data
+        if: ${{ !startsWith(github.head_ref, 'agent/') }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Non-agent branches must not change task state
+        if: ${{ !startsWith(github.head_ref, 'agent/') }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          changed_paths="$(mktemp)"
+          trap 'rm -f "$changed_paths"' EXIT
+          # Read only paths, never code from the PR. NUL delimiters preserve
+          # quoted names; --no-renames exposes both ends of a moved state file.
+          # Write first so a failed diff cannot hide in a process substitution.
+          git -C pr diff --no-ext-diff --no-textconv --no-renames --name-only -z "$BASE_SHA...$HEAD_SHA" -- > "$changed_paths"
+          bad=0
+          while IFS= read -r -d '' path; do
+            if [[ "$path" =~ ^\.ai/tasks/[^/]+/state\.json$ ]]; then
+              printf '::error::Non-agent PR changes task state: %q\n' "$path"
+              bad=1
+            fi
+          done < "$changed_paths"
+          if [ "$bad" -ne 0 ]; then
+            echo "Task state belongs on its agent/ branch; rebuild this branch from main without task state."
+            exit 1
+          fi
+          echo "This non-agent PR carries no task-state changes."

@@ -1,0 +1,165 @@
+---
+type: reference
+---
+
+# Permission model
+
+Agent permissions are treated as a security boundary, not as documentation.
+The enforceable part lives in `.ai/policy.json` and `agentlib/guard.py`; this
+file explains the model and records what is enforced where.
+
+## Decision order
+
+For every path in an agent's diff, first match wins, and a denial is never
+overridden later:
+
+| # | Check | Source | Can it be granted away? |
+|---|---|---|---|
+| 1 | `ALWAYS_FORBIDDEN` | `agentlib/guard.py` | **No.** Not by a spec, not by policy.json. |
+| 2 | task `forbidden_paths` | `task.json` | Only by editing the spec (reviewed PR). |
+| 3 | role `deny` | `.ai/policy.json` | Only by editing the policy (reviewed PR). |
+| 4 | role `write` allowlist | `.ai/policy.json` | No match ⇒ denied. |
+| 5 | task `allowed_paths` | `task.json` | Narrows the role. **Never widens it.** |
+
+Point 5 is the important one: a task spec can only ever reduce what a role may
+touch. There is no path from a task spec to more permission than the role has.
+
+## Always forbidden
+
+```
+.ai/**                    the agent system itself
+.github/**                the workflows that enforce it
+wiki/GeneralContext/**    Director-owned semantic context
+.gitignore .gitattributes .gitmodules
+AGENTS.md
+```
+
+A coding worker cannot modify its own security boundaries. This is checked in
+three independent places: before the commit in `agent-worker.yml`, at PR level
+in `agent-guard.yml`, and in `agentctl selfcheck` which runs in the ordinary
+test suite.
+
+## Matrix
+
+| Role | READ | WRITE | EXECUTE | FORBIDDEN |
+|---|---|---|---|---|
+| **Director** | everything | `.ai/`, `wiki/`, workflows — via human-reviewed PR from a non-agent branch | interactive session | merging its own PR; task-state changes on a non-agent branch |
+| **Manager** | task spec, branch diff, distilled results, state history | nothing | none | code, tests, wiki, state (it emits a decision; `agentctl` applies it) |
+| **Test Agent** | handed context files + skills, existing tests, production code (read-only) | test paths within `allowed_paths` | test runners locally | production code, wiki, dependency manifests, workflow state |
+| **Code Agent** | handed context files + skills, committed tests, distilled failure | production paths within `allowed_paths` | test runners locally | test files (unless `allow_test_edits_during_impl`), dependency manifests, `docker/`, wiki, workflow state |
+| **Distiller** | **nothing** — its prompt is its whole world | nothing | none | the repository entirely |
+| **Context Maintainer** | task spec, the diff, the one module file | `wiki/CodeContext/Modules/*.md` | none | `Standards/`, `GeneralContext/`, all code |
+
+## Dependency changes are denied on purpose
+
+`backend/pyproject.toml`, `frontend/package.json`, `infra/package.json`,
+`docker/**` and `docker-compose.yml` are in the code agent's `deny` list.
+
+Adding a package is a supply-chain decision. It is not something a retry loop
+should settle on attempt three because a test would then go green. A task that
+genuinely needs a new dependency escalates to the Director, who adds it in a
+reviewed PR.
+
+## GitHub Actions permissions
+
+Least privilege per workflow:
+
+| Workflow | `contents` | `actions` | `pull-requests` | Why |
+|---|---|---|---|---|
+| `test-agent.yml` | read | — | — | It only runs tests. |
+| `agent-guard.yml` | read | — | — | It only checks a diff. |
+| `agent-worker.yml` `run-model` | read | — | — | Runs the model; hands on a patch. Holds no GitHub credential. |
+| `agent-worker.yml` `land` | write | write | — | Guards and commits the patch to a task branch; wakes the orchestrator. |
+| `agent-orchestrator.yml` | write | write | write | Commits state; triggers CI and workers; opens the review PR. |
+
+**Neither the model nor any code it writes ever runs where a GitHub token
+is.** The model runs in `agent-worker.yml`'s `run-model` job, which can only
+read the repository and holds no GitHub credential at all: its checkouts set
+`persist-credentials: false` (handoff.md §10, D2), and the model runs as a separate unprivileged user,
+`agentrun`, with `.git` moved out of its tree. Every process that user left
+behind is killed before its work is packaged as a patch. The `land` job, on a
+fresh runner with a fresh checkout, applies that patch, guards **every** path
+in it — `.ai/` included, since the state and telemetry are written afterwards
+by the workflow — and only then commits, pushes and hands back (handoff.md
+§10, D2b).
+
+No step that holds a token runs code from a task branch: every `agentctl` call
+in the worker, the orchestrator and `agent-guard` runs from a checkout of
+`main` (for `agent-guard`, the PR's base) beside the task, with
+`AGENTCTL_DATA_ROOT` naming the task tree as data, under `python -I`. All three
+refuse, in bash before any python, a branch whose `.ai/` differs from `main`
+beyond its own `state.json` and telemetry. A branch that changes `.claude/` or
+`.mcp.json` is refused before the model runs, and the CLI is started with
+`--setting-sources user --strict-mcp-config` besides.
+
+A model that is persuaded to dispatch a workflow, push to `main`, or change
+branch protection has no credential with which to try, and neither has
+anything it leaves behind. The provider credential (`ANTHROPIC_API_KEY`) is
+present only in the step that runs the model.
+
+## Secrets
+
+- None are committed. `.ai/config.json` names the secret that holds a
+  credential; it never holds a value.
+- `.gitignore` already excludes `.env` and `*.env`.
+- No workflow echoes a secret, writes one to a file, or passes one to an agent
+  prompt.
+- `AGENT_DISPATCH_TOKEN` is required for the wake after orchestrator-dispatched
+  CI and is used only to chain workflow dispatches
+  ([operations-recovery.md](operations-recovery.md) "If the chain stalls"). Its
+  scopes are in
+  [github-automation-setup-secrets.md](../../wiki/GeneralContext/Architecture/github-automation-setup-secrets.md).
+- That token is a fine-grained PAT, owned by a person, so a workflow using it
+  acts as that person and would inherit that person's ruleset bypass. The
+  PR-creation step is pinned to `github.token` so agent PRs stay bot-authored;
+  keep it pinned, and do not widen the PAT.
+
+## What is not enforced technically
+
+Stated plainly, because this system exists precisely because prose-only rules
+were judged not good enough:
+
+- **Read** restrictions are advisory. A worker is *handed* a small file set and
+  told not to browse, but nothing stops it reading another file in the
+  checkout. Write is what is enforced, and write is what determines blast
+  radius.
+- **The Director** is not sandboxed, deliberately. It is a human-supervised
+  interactive session whose output goes through ordinary review, and it is not
+  bound by worker path permissions — including for `.ai/`, `.github/`,
+  `wiki/GeneralContext/` and `AGENTS.md`. That is the human's decision, not an oversight:
+  keeping the agent system in repair means editing the agent system, and a tier
+  that cannot do so has to hand every workflow bug back to a person who then has
+  to write the patch anyway. Three of the first four defects in the frontend
+  pass were in exactly those trees.
+
+  What bounds it is the branch, not a path list. A Director works on an
+  ordinary human-named branch, where the worker's role guard does not apply
+  and the `main` ruleset does: a pull request, required checks, no force-push,
+  branches must be up to date. The required `guard-gate` separately rejects
+  any non-`agent/*` PR whose diff changes `.ai/tasks/<ID>/state.json`, including
+  additions, deletions and either end of a rename. Task state must arrive on
+  its task branch; a Director may still change task specs and briefs.
+  **Review controls restricted-tree edits**, so the Director is expected to
+  name those in the PR body rather than leave a reviewer to notice them.
+
+  That review is thinner than the ruleset reads. A Director PR is reviewed by
+  one human, the same one who directed the session that wrote it, and that
+  human cannot approve their own PR, so it merges through the "Repository
+  admin" bypass (`wiki/GeneralContext/Architecture/github-automation-setup-ruleset.md`
+  §3): the one-approval rule is waived, not met. Beside that human there is
+  one more reader, `director-review.yml`, an advisory model that reads every
+  such PR touching `.ai/` or `.github/` and lists the controls its diff
+  weakens. It fails nothing, nothing waits on it, and it can be misled by the
+  diff it reads. It is a second pair of eyes, not a second reviewer.
+
+  The split is safe only because a dispatched worker cannot reach the other
+  tier: `agent-worker.yml` builds its push target as `agent/<task id>` itself
+  and blanks both token variables for the model step, so no worker can put a
+  diff on a branch the guard does not cover. `test_workflows.py`'s
+  `TestAWorkerCannotEscapeItsOwnBranch` pins that, and it is the single
+  property this whole model rests on — if it ever fails, the tiers have
+  collapsed into one.
+- **Branch protection and CODEOWNERS** are GitHub repository settings, not
+  files in this repo. `.github/CODEOWNERS` is committed; requiring review on
+  `main` and requiring `gate` and `guard-gate` to pass are settings a human
+  must switch on — see [operations.md](operations.md) "One-time setup".

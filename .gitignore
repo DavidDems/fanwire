@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+.env
+*.env
+
+# Node / frontend
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# CDK / infra
+cdk.out/
+.cdk.staging/
+# `npm run build` in infra/ is type-check only (tsconfig noEmit); ignore stray tsc output anyway
+infra/bin/**/*.js
+infra/lib/**/*.js
+infra/test/**/*.js
+infra/**/*.d.ts
+
+# Load test output (PERF-001): run summaries, the per-machine baseline, and
+# the minted test JWKS and tokens. Never committed.
+perf/results/
+
+# Env / secrets
+.env
+.env.*.local
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code worktrees (each is its own linked git worktree already)
+.claude/worktrees/
+
+# Playwright MCP output (screenshots, snapshots): FrontendUI/verification-browser.md §3a
+.playwright-mcp/
+
+# msys/Git Bash crash dumps (one was committed by mistake in CUT-03)
+*.stackdump

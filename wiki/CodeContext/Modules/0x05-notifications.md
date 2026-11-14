@@ -1,0 +1,95 @@
+---
+type: reference
+---
+
+# 0x05 — Notifications
+
+**Agent-facing.** Current-state only — see [[wiki/GeneralContext/index|index]] for how this wiki is organized.
+
+## Business rules (source: [[wiki/GeneralContext/Architecture/business-rules|Projects]])
+Per wiki/GeneralContext/Architecture/business-rules.md "Notifications" section, verbatim intent:
+- Create a `Notification` when one of three actions happens: **follow**, **reply**, or **repost** — explicitly **not** like.
+- Send an email when someone follows the user, replies to their post, or reposts their post.
+- Store notifications and display them in the website (in-app).
+- Allow the user to clear notifications — **soft-delete**, not hard-delete.
+- Allow the user to block email notifications but **not** the in-app/UI notifications — email opt-out is independent of, and cannot disable, in-app display.
+
+## Schema
+
+### `Notification`
+| column | type | notes |
+|---|---|---|
+| `id` | PK | |
+| `recipient_user_id` | FK → `User.id` | whose notification this is; all reads/writes scoped to this |
+| `type` | enum(`follow`, `reply`, `repost`) | closed set per business rules — `like` is explicitly excluded, not a 4th value waiting to happen |
+| `actor_user_id` | FK → `User.id` | who performed the action (who to display — avatar/name) |
+| `reference_id` | see semantics below | what the notification navigates to when clicked |
+| `cleared_at` | timestamp, nullable | soft-delete marker for "clear notifications"; `NULL` = active |
+| `created_at` | timestamp | |
+
+`reference_id` is one nullable column on `app.notifications.models.Notification`, with no DB-level FK, validated at the application layer (`app.notifications.consumer`). Its semantics by `type`:
+- `follow` → the actor's `User.id` (same value as `actor_user_id`; kept for uniform "click target" semantics across all types even though redundant here)
+- `reply` → the new reply `Post.id` (per [[0x03a-posts-post]], a reply is a `Post` flagged as a reply)
+- `repost` → the new repost `Post.id` (per [[0x03a-posts-post]], a repost is likewise a `Post` with a flag)
+
+### `NotificationPreference`
+| column | type | notes |
+|---|---|---|
+| `user_id` | PK, FK → `User.id` | one row per user |
+| `email_notifications_enabled` | boolean, default `true` | the **only** preference flag — there is no in-app equivalent, by business rule in-app notifications cannot be disabled |
+
+## Design principles tie-in
+See [[wiki/CodeContext/Standards/design-principles|Design principles]]:
+- **Immutability by default** → "clear notifications" is a `cleared_at` timestamp, not a row delete — matches the soft-delete pattern already used for `User`/`Post`.
+- **Single source of truth** → `Notification`/`NotificationPreference` never duplicate the recipient's email address; SES delivery looks it up from `users/` (Cognito-backed) at send time. The email address has exactly one owner.
+- **Explicit over implicit** → `type` is a closed enum, not a free-text/stringly-typed field, so `like` staying excluded is enforced by the type, not by convention.
+- **YAGNI** / "three similar lines beat a premature abstraction" → justifies *not* building the GoF doc's `NotificationChannel`/`NotificationTransport` (Bridge) hierarchy here — see GoF section below (the code's `NotificationChannel` is the Factory Method product, not that Bridge).
+- **Fail fast** → an unrecognized `type` or a `reference_id` that doesn't resolve to the expected table for that `type` is a boundary validation error, not silently dropped.
+
+## GoF pattern tie-in (see [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]])
+
+**Factory Method** — `NotificationFactory.create(channel)` returns a `NotificationChannel` (the product interface, `app/notifications/channels.py`): `EmailNotificationChannel` or `InAppNotificationChannel`, with no push channel, since no business rule asks for one. The GoF doc names the product `Notification` (`EmailNotification`/`PushNotification`/`InAppNotification`), which collides with the ORM model `app.notifications.models.Notification`, hence the code's names. This is the **delivery-channel** axis (email/in-app), distinct from the `Notification.type` **event** column (follow/reply/repost) in the schema above — don't conflate the two. `notifications/` code paths depend only on the `NotificationChannel` interface, never a concrete class, per the connection rule in [[0x00-architecture]].
+
+**Observer** — `notifications/` subscribes to `PostEventBus` (EventBridge; see [[0x00-architecture]]) rather than being called synchronously by any publisher. `reply` and `repost` both arrive as `PostCreated`, which carries only `post_id` and `author_id`: `app.notifications.consumer.handle_domain_event` re-fetches the `Post` row (`session.get(Post, post_id)`) to classify reply/repost and, for one, fetches the parent/original `Post` the same way for its `author_id` (the recipient). This direct, read-only lookup into `posts/`'s `Post` table is a documented exception to the connection rule, the same kind as `PublishPostFacade`'s read of `media/`'s `Media` rows. `follow` arrives as `UserFollowed`, published by `users/` onto the same bus — per [[0x00-architecture]] Conventions, `PostEventBus` is the app's one domain event bus, not `posts/`-exclusive despite the name; `notifications/` subscribes to it uniformly regardless of publisher.
+
+**Bridge — deliberately not applied.** The GoF doc's `NotificationChannel`/`NotificationTransport` Bridge decouples an alert-content abstraction from a transport implementation so either axis can extend independently. Here the matrix is small and mostly fixed by business rule: exactly three event types (closed, per rules above), and in v1 exactly two real transports — in-app (mandatory, always written) and email (optional, gated by one boolean). There's no independent variation to decouple: Factory Method already gives channel dispatch (`EmailNotificationChannel` vs `InAppNotificationChannel`), and every event always produces the in-app row while only the same three events also trigger `EmailNotificationChannel`. Introducing a full Bridge hierarchy for a 3×2 matrix that isn't actually varying independently would be speculative per [[wiki/CodeContext/Standards/design-principles|Design principles]] YAGNI. **Revisit Bridge if/when push or SMS is added** — no push/SMS transport exists (the only SNS topic is the alarm topic, `infra/lib/messaging-stack.ts`); at that point the transport axis genuinely grows and Bridge starts earning its cost.
+
+## AWS mapping (see [[wiki/CodeContext/Standards/aws-stack|AWS Stack]])
+- **RDS Postgres** — system of record for `Notification` and `NotificationPreference`, ordinary relational tables (already listed as such in [[0x00-architecture]]'s AWS topology).
+- **SES** — transactional email delivery for `EmailNotificationChannel`, pay-per-message, no idle cost.
+- **EventBridge** — `PostEventBus`; `notifications/` consumes `PostCreated` for reply/repost.
+- **SQS with a DLQ** — AWS Stack.md calls out "notification fan-out" by name as a case needing an SQS queue with dead-letter queue between the event bus and the consumer, so a downstream outage (e.g. SES throttling) doesn't drop notifications. The consumer sits behind the notification SQS queue with a DLQ, fed by `NotificationRule` ("Consumer wiring" below), and does not process the event inline.
+
+## Security & privacy (see [[wiki/CodeContext/Standards/security|Security]])
+- Structured logs must never contain unhashed PII (wiki/CodeContext/Standards/security.md) — recipient/actor **usernames** are already-public profile data and fine to log, but the recipient's **email address** used for SES delivery must not appear in plaintext logs/traces.
+- All authZ server-side, per [[wiki/CodeContext/Standards/design-principles|Design principles]] — a user can only read or clear their own `recipient_user_id`'s notifications; never trust a client-supplied user id for either the list or the clear (soft-delete) endpoint.
+- **No new PII surface**: neither table stores an email address — enforces the Single-source-of-truth point above and keeps this module out of GDPR/PII-duplication concerns beyond what `users/` already owns.
+
+## Open decisions to flag
+None open.
+
+## Implementation notes (Phase 3 build)
+
+**Self-notification skip.** Not stated in the business rules above, but a self-reply/self-repost (recipient == actor) is skipped — no `Notification` row is created. Mirrors `users/`'s existing no-self-follow rule. `UserFollowed` never hits this branch since `users/` already disallows self-follow at the source.
+
+**Consumer wiring.** `app.notifications.lambda_handler.handler` (infra's `Notifications` function, command `app.notifications.lambda_handler.handler`) is `handle_domain_event`'s real trigger: the notification SQS queue (batch size 10, `reportBatchItemFailures: true`), fed by `messaging-stack.ts`'s `NotificationRule` (`detailType: ["PostCreated", "UserFollowed"]` on `PostEventBus` — filters on detail-type only, so it fires regardless of which module published). Each record's `body` is that EventBridge event, JSON-encoded; the handler unwraps `detail-type`/`detail` and calls `handle_domain_event` unchanged. Per-record failures are reported via `batchItemFailures` rather than raised, so one bad record (batch size 10) doesn't block the rest. `app.eventbus.PostEventBus`'s real backing (`EventBridgePublisher`, see [[0x00-architecture]] "PostEventBus implementation") reaches this queue when `POST_EVENT_BUS_NAME` is configured.
+
+**`EmailSender` interface — real adapter.** `app.notifications.email.SesEmailSender` resolves the recipient's real email via Cognito `AdminGetUser(Username=<recipient_cognito_sub>)` at send time — never from anything this module stores, consistent with "No new PII surface" above — then sends via SES `send_email` from `Settings.notification_from_address`. **Disabled-until-a-from-address-exists behaviour**: infra sets `NOTIFICATION_FROM_ADDRESS` (and grants `ses:SendEmail`) only when `config.domainName` **and** `config.sendEmailNotifications` are both set (`infra/lib/app-stack.ts`). `SesEmailSender.send()` treats an unset value as "email disabled" — it logs (no PII: no email address, no cognito sub in the log line) and returns without calling AWS at all. `app.notifications.lambda_handler` always constructs a real `SesEmailSender` regardless — the class itself decides whether to actually send, so in-app notification creation in `handle_domain_event` is never gated on it. `RecordingEmailSender` remains the test double for unit tests that don't need a real Cognito/SES round-trip.
+
+**Email is best-effort; the committed row is the outcome.** `handle_domain_event` commits before delivery and swallows logged email failures, avoiding retry-created duplicates. Sender presence proves neither SES verification nor production access; sandbox recipients may be rejected. Before committing, it resolves actor, recipient and referenced post. Missing data produces an INFO no-op without ids (`USERS-008`), covering deletion races and anonymous parent/original tombstones; no row or email is created. Missing payload keys still fail. Reply/repost classification: "Observer" above.
+
+**Permanent account removal.** Consumer actor/recipient fences use `users.lifecycle` through commit; restricted/missing identities produce no row. Clear/preference writes fence their owner too. `remove_account_notifications` shares the runner's local transaction, deleting preferences and actor/recipient notifications. Polymorphic references are type-scoped: `follow` names the user; `reply`/`repost` names owned posts. Ordinary Clear stays soft. Stages/status: [[0x01a-users-schema]], [[0x01c-users-routes]].
+
+**Email is off in production.** AWS refused SES production access, so `infra/cdk.json` has `sendEmailNotifications: false` and the notifications function has no `NOTIFICATION_FROM_ADDRESS`: `SesEmailSender` skips every send without calling Cognito or SES, and in-app notifications are unaffected. Turning the flag on is `TODO/01-for-you.md` §4.
+
+**`email_available` (`NOTIFICATIONS-002`).** `GET` and `PUT /notifications/preference` answer `{email_notifications_enabled, email_available}`, both required booleans. `email_available` is `bool(Settings.notification_from_address)`, read through `Depends(get_settings)`: the same empty check `SesEmailSender` skips on, so there is no second switch to disagree with the sender. Infra therefore gives `NOTIFICATION_FROM_ADDRESS` to the Api function as well ([[0x00b-architecture-iam-gaps]] "SES identity"), with no send grant. It means switched on, not delivered: a set address does not prove SES will accept a send, which is why the human's flag gates it. Only the boolean leaves the API; the address never reaches a response or a log line. `UpdateNotificationPreferenceRequest` is unchanged, and a `PUT` carrying `email_available` changes nothing because of it. The stored preference is independent: with `email_available` false a `PUT` still stores and a `GET` still returns it. The frontend disables and captions the control ([[0x08e-frontend-notifications]]), which is why no `PUT` happens from the UI in that state. Locally, `LocalEmailSender` sends nothing whatever the variable says, so a developer who sets it sees `true` with no mail sent.
+
+**Cognito `Username`-as-`sub` note (test-writing gotcha, not a production concern).** `infra/lib/auth-stack.ts`'s user pool has `signInAliases: {email: true}` with no `usernameAttributes` override — CDK's default for that shape auto-generates each user's Cognito `Username` as a random UUID that IS their `sub` (email is only a sign-in alias, never the `Username` itself). `AdminGetUser(Username=sub)` therefore works as a literal match in real Cognito, not an alias lookup. `moto`'s `cognito-idp` mock only matches a literal `Username` (it doesn't model AWS's alias-vs-`sub` distinction at all), so tests must create the moto user with `Username=<the sub value>` directly — which is exactly production behaviour for this pool shape, not a workaround around a moto gap.
+
+**Deleted posts (`POSTS-004`).** `GET /notifications` leaves out `reply` and `repost` notifications whose `reference_id` names a post its owner deleted, through `app.posts.service.deleted_post_ids` (one query per list, never `posts.deleted_at` read here). `follow` notifications are not checked. The rows stay; recovery of the post isn't a feature, so nothing brings them back.
+
+**Undone reposts (`POSTS-007`, the human's decision).** `GET /notifications` also leaves out a `repost` notification whose repost was undone. The undo hard-deletes the row, which `deleted_post_ids` can't see, so `app.posts.service.existing_post_ids` (one more query per list, none when the list has no `repost` row; a soft-deleted row counts as existing) tells them apart, and `routes.py` never reads `posts/`' table. `reference_id` on a `repost` is the repost's own id, so an undo hides exactly that notification, a second reposter's stays, and a repeat repost gets a new id and a new notification. An undo answered 409 removes nothing, so the notification stays listed. The list check is `repost` only. Permanent removal separately deletes reply/repost notifications naming owned posts, without relying on this filter. The row stays, with `cleared_at` null. An email already sent can't be recalled; this covers only the list.
+
+**Local dispatch (`NOTIFICATIONS-001`).** With `ENVIRONMENT` exactly `development` and no `POST_EVENT_BUS_NAME`, `app.dependencies.get_event_bus` wires `app.notifications.local_dispatch.LocalDispatchPublisher`, a third `EventPublisher` that stands in for EventBridge, SQS and the Lambda: `put_event` calls the same `handle_domain_event`, in process, so a local signed-in session sees real notifications. Observer is unchanged: `posts/` and `users/` publish to the bus and don't know the subscriber. The session factory (`open_session`) is injected from that composition root, so `local_dispatch.py` imports no `app.dependencies`. Each event gets its own session, never the request's, closed afterwards. Both notifying sites publish after their commit, so that session sees the row and the repost advisory lock is already released. A failure doesn't reach the caller, because in production the consumer is asynchronous; it's logged with the event name and exception type only, since an exception's message or traceback can carry user and post ids. Delivery is at most once, with no retry. `LocalEmailSender` sends nothing, whatever `NOTIFICATION_FROM_ADDRESS` says, and no AWS client is built: reusing `SesEmailSender` would let a developer's `.env` send real mail.
+
+**It fails closed.** `Settings` refuses `ENVIRONMENT=development` beside a non-empty `POST_EVENT_BUS_NAME` or `AWS_LAMBDA_FUNCTION_NAME` (set by the Lambda runtime, read only for this check), and `infra/test/local-dispatch-env.test.ts` pins that no Lambda function sets `ENVIRONMENT` to anything containing `development`. Every other `ENVIRONMENT` with no bus name keeps `InMemoryEventPublisher`, so `backend-perf` writes no rows. **Switched on in one place:** `backend-dev` in `docker-compose.yml` sets `- ENVIRONMENT=development`.

@@ -1,0 +1,224 @@
+name: deploy
+
+# Deploys the CDK app to fanwire-workload as GitHubActionsDeployRole, on a
+# merge to main that changes a deployable path, or by hand.
+# wiki/CodeContext/Standards/build-deployment.md "Automated deploy" is the
+# design; this header is the part a reviewer must not miss.
+#
+# THE BOUNDARY. .ai/docs/handoff.md §5.7: the agent workflows must not be able
+# to reach AWS. The role's trust names the GitHub environment `production`
+# (infra/iam/github-actions-deploy-role-trust-policy.json), not a branch, so
+# only a job that declares that environment can assume it, and only this one
+# does. The environment itself is restricted to `main` and requires an
+# approving reviewer (repo Settings -> Environments), which puts back the
+# branch check the old `ref:refs/heads/main` trust gave. .ai/tests/
+# test_deploy_workflow.py fails if any other workflow requests an OIDC token,
+# declares an environment, or names this file. agent-guard keeps workers out
+# of .github/ entirely.
+#
+# WHAT IT CANNOT DO. The role holds only sts:AssumeRole on the CDK bootstrap
+# roles. CloudFormation acts as cfn-exec-role, whose policy
+# (FanwireCdkCfnExecPolicy) is the human's to roll out, and every role the
+# stacks create carries FanwireRoleBoundary, also the human's. Nothing here
+# writes either; it reads both and refuses to deploy unless the live versions
+# match the repo, so a change that needs a new version waits for the rollout. Migrations are not run: invoke the
+# Migration function by hand after a deploy that adds an Alembic revision.
+#
+# --require-approval never: CI cannot answer CDK's IAM-change prompt. The
+# review of an IAM change happens at the PR (infra/test/iam-policy.test.ts and
+# the human reviewer) and nowhere else.
+
+on:
+  # A re-run by hand, e.g. after rolling out a new cfn-exec policy version.
+  workflow_dispatch:
+  # Every merge to main that changes something AWS is built from (human
+  # decision 2026-10-05, after two clean dispatched runs). The environment's
+  # required reviewer still gates each run. wiki/ and .ai/ are absent on
+  # purpose: the agent system runs in GitHub Actions and no stack reads it.
+  # Changes to infra/test/ or infra/iam/ do not trigger it either: tests change
+  # no template, and infra/iam/ is applied by a human, never by CDK.
+  # backend/tests/ stays in: the image asset hashes it (app-stack.ts exclude).
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "docker/**"
+      - ".dockerignore"
+      - "infra/bin/**"
+      - "infra/lib/**"
+      - "infra/cdk.json"
+      - "infra/package.json"
+      - "infra/package-lock.json"
+      - ".github/workflows/deploy.yml"
+      # Negations last: each removes only what a pattern above added.
+      - "!**/*.md"
+      - "!frontend/src/**/*.test.ts"
+      - "!frontend/src/**/*.test.tsx"
+
+permissions:
+  contents: read
+
+# Two deploys never overlap; a second one waits rather than cancelling a
+# CloudFormation update halfway. GitHub keeps one *pending* run per group: a
+# third merge while one runs and one waits replaces the waiting one, which is
+# harmless because it deploys main as of the newer merge.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ca-central-1
+      # The public domain, served by CloudFront; the smoke check fetches it.
+      SITE_URL: https://fanwire.daviddems.com
+      # Vite inlines these at build time. They are ids, not secrets:
+      # Fanwire-Auth's outputs, held as variables (not secrets: `vars.`
+      # never sees secrets) on the `production` environment.
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_MEDIA_BASE_URL: ${{ vars.VITE_MEDIA_BASE_URL }}
+      VITE_COGNITO_REGION: ${{ vars.VITE_COGNITO_REGION }}
+      VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
+      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Every deploy uploads the bundle (-c deployFrontend=true below). Without
+      # the flag a deploy of Fanwire-Cdn removes the live BucketDeployment.
+      # Built in Docker, which fails on any empty VITE_* value.
+      - name: Build the frontend bundle
+        run: >-
+          docker build -f docker/frontend.Dockerfile --target export --output frontend
+          --build-arg VITE_API_BASE_URL --build-arg VITE_MEDIA_BASE_URL
+          --build-arg VITE_COGNITO_REGION --build-arg VITE_COGNITO_USER_POOL_ID
+          --build-arg VITE_COGNITO_CLIENT_ID .
+
+      - name: Check the bundle carries the production ids
+        run: |
+          set -eu
+          for name in VITE_COGNITO_USER_POOL_ID VITE_COGNITO_CLIENT_ID VITE_MEDIA_BASE_URL; do
+            value="$(printenv "$name")"
+            if ! grep -lqF "$value" frontend/dist/assets/*.js; then
+              echo "::error::$name ($value) is not in frontend/dist/assets/*.js"
+              exit 1
+            fi
+          done
+
+      - name: Build the pinned CDK image
+        run: docker build -q -f docker/cdk-deploy.Dockerfile -t fanwire-cdk:deploy .
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6
+        with:
+          role-to-assume: arn:aws:iam::294321867941:role/GitHubActionsDeployRole
+          role-session-name: fanwire-deploy-${{ github.run_id }}
+          aws-region: ca-central-1
+
+      # FanwireCdkCfnExecPolicy and FanwireRoleBoundary are applied by hand
+      # (infra/iam/README.md), and a commit that needs a new version of either
+      # must not deploy before the human has rolled it out: too narrow an exec
+      # policy fails mid-deploy, too narrow a boundary deploys cleanly and then
+      # fails at runtime. So both live default versions must equal the
+      # committed files. Read through the CDK lookup role (ReadOnlyAccess);
+      # the deploy role itself holds no IAM permission, and this step's
+      # credentials end with it.
+      - name: Check the live IAM matches the repo
+        run: |
+          set -euo pipefail
+          creds="$(aws sts assume-role --role-arn arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-ca-central-1 --role-session-name "fanwire-iam-check-$GITHUB_RUN_ID" --query Credentials --output json)"
+          AWS_ACCESS_KEY_ID="$(jq -r .AccessKeyId <<<"$creds")"
+          AWS_SECRET_ACCESS_KEY="$(jq -r .SecretAccessKey <<<"$creds")"
+          AWS_SESSION_TOKEN="$(jq -r .SessionToken <<<"$creds")"
+          export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          check() {
+            local arn="$1" file="$2" version
+            if ! version="$(aws iam get-policy --policy-arn "$arn" --query Policy.DefaultVersionId --output text)"; then
+              echo "::error::$arn does not exist. Create it from $file first (infra/iam/README.md)."
+              exit 1
+            fi
+            aws iam get-policy-version --policy-arn "$arn" --version-id "$version" --query PolicyVersion.Document --output json > "$RUNNER_TEMP/live.json"
+            if ! python3 -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])) != json.load(open(sys.argv[2])))' "$RUNNER_TEMP/live.json" "$file"; then
+              echo "::error::$arn (default $version) differs from $file. Roll the committed version out before this deploy (infra/iam/README.md)."
+              exit 1
+            fi
+            echo "$arn: default $version matches $file"
+          }
+          check arn:aws:iam::294321867941:policy/FanwireCdkCfnExecPolicy infra/iam/cdk-cfn-exec-role-policy.json
+          check arn:aws:iam::294321867941:policy/FanwireRoleBoundary infra/iam/fanwire-role-boundary-policy.json
+
+      # The checkout is mounted at /repo so the backend image asset builds from
+      # the real repo root; the anonymous volume keeps the image's pinned
+      # node_modules visible under the mount. The socket lets CDK build and
+      # push that asset with the runner's Docker daemon.
+      - name: Write the CDK runner
+        run: |
+          cat > "$RUNNER_TEMP/cdk" <<'EOF'
+          #!/usr/bin/env bash
+          exec docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" -v /repo/infra/node_modules \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
+            -e AWS_REGION -e AWS_DEFAULT_REGION -e CI=true \
+            "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/cdk"
+
+      - name: cdk diff
+        run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy diff -c deployFrontend=true'
+
+      - name: cdk deploy
+        run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy deploy --all -c deployFrontend=true --require-approval never'
+
+      # A deploy CloudFormation calls a success can still leave the site down.
+      # Fetch it through CloudFront, as a user would: /api/health (the function),
+      # /api/feed (the database), / (this run's bundle). No credentials; the
+      # retries cover a cold start and the CloudFront invalidation.
+      - name: Smoke check the live site
+        id: smoke
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/smoke-body"
+          health_ok() { python3 -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])).get("status") != "ok")' "$body"; }
+          feed_ok() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(not (isinstance(d, dict) and "items" in d))' "$body"; }
+          spa_ok() { grep -qF '<div id="root">' "$body"; }
+          check() {
+            local url="$1" valid="$2" code=000
+            rm -f "$body"
+            for attempt in $(seq 1 12); do
+              code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 10 "$url" || true)"
+              if [ "$code" = 200 ] && "$valid" 2>/dev/null; then
+                echo "$url: ok (attempt $attempt)"
+                return 0
+              fi
+              if [ "$attempt" -lt 12 ]; then
+                sleep 10
+              fi
+            done
+            echo "::error::$url failed after 12 attempts (last status $code, body: $(head -c 500 "$body" 2>/dev/null | tr '\r\n' '  ')). If this commit adds an Alembic revision, invoke the Migration function, then re-run this workflow. To roll back, re-run the last green deploy run (incident-runbook.md, 'Roll back a deploy')."
+            exit 1
+          }
+          check "$SITE_URL/api/health" health_ok
+          check "$SITE_URL/api/feed?limit=1" feed_ok
+          check "$SITE_URL/" spa_ok
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }} at \`${GITHUB_SHA::7}\`"
+            echo
+            echo "Smoke check of the live site: ${{ steps.smoke.outcome }}"
+            echo
+            echo "Migrations are not run by this workflow. If this commit adds an Alembic"
+            echo "revision, invoke the Migration function by hand now: build-deployment.md"
+            echo "-> \"Automated deploy\"."
+          } >> "$GITHUB_STEP_SUMMARY"

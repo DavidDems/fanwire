@@ -1,0 +1,477 @@
+"""Tests for the get_current_identity FastAPI dependency, per AGENTS.md TDD
+workflow. Written before app/users/dependencies.py exists.
+
+Exercises the actual boundary enforcement wiki/CodeContext/Modules/
+0x01b-users-auth.md's Security section requires: a Cognito token verified
+server-side on every request, never trusted based on client claims alone.
+No real protected route exists yet in app.main — this proves the
+dependency works against a throwaway route defined in this test module,
+per the task's instructions not to touch app.main this phase.
+"""
+
+from datetime import UTC, date, datetime
+
+import pytest
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
+
+from app.db import Base, make_engine, make_session_factory
+from app.dependencies import get_session
+from app.settings import Settings
+from app.users.auth import FakeTokenVerifier, RefreshingTokenVerifier, VerifiedIdentity
+from app.users.dependencies import (
+    _default_token_verifier,
+    get_current_identity,
+    get_current_user,
+    get_optional_current_user,
+    get_token_verifier,
+)
+from app.users.models import User
+from app.users.service import create_user, soft_delete_user
+
+RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+
+
+def _make_app():
+    app = FastAPI()
+
+    @app.get("/whoami")
+    def whoami(identity: VerifiedIdentity = Depends(get_current_identity)):
+        return {"sub": identity.sub, "email": identity.email}
+
+    return app
+
+
+def test_get_current_identity_accepts_a_valid_bearer_token(session_factory):
+    app = _make_app()
+    identity = VerifiedIdentity(
+        sub="cognito-sub-123", email="alice@example.com", auth_time=RECENT_AUTH_TIME
+    )
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(identity)
+
+    def real_session():
+        with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = real_session
+    client = TestClient(app)
+
+    response = client.get("/whoami", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"sub": "cognito-sub-123", "email": "alice@example.com"}
+
+
+def test_get_current_identity_rejects_an_invalid_token():
+    app = _make_app()
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(None)
+    client = TestClient(app)
+
+    response = client.get("/whoami", headers={"Authorization": "Bearer bad-token"})
+
+    assert response.status_code == 401
+
+
+def test_get_current_identity_rejects_a_missing_authorization_header():
+    app = _make_app()
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/whoami")
+
+    assert response.status_code == 401
+
+
+def test_get_current_identity_rejects_a_malformed_authorization_header():
+    app = _make_app()
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/whoami", headers={"Authorization": "good-token-no-scheme"})
+
+    assert response.status_code == 401
+
+
+def _settings(**overrides) -> Settings:
+    values = {
+        "database_url": "postgresql+psycopg://u:p@host:5432/db",
+        "cognito_region": "us-east-1",
+        "cognito_user_pool_id": "us-east-1_pool123",
+        "cognito_app_client_id": "client-abc",
+        **overrides,
+    }
+    return Settings(**values)
+
+
+def test_get_token_verifier_builds_a_refreshing_token_verifier_from_settings():
+    _default_token_verifier.cache_clear()
+
+    verifier = get_token_verifier(_settings())
+
+    assert isinstance(verifier, RefreshingTokenVerifier)
+
+
+def test_get_token_verifier_caches_by_settings_values():
+    _default_token_verifier.cache_clear()
+    settings = _settings()
+
+    first = get_token_verifier(settings)
+    second = get_token_verifier(settings)
+
+    assert first is second
+
+
+def test_get_token_verifier_differs_for_different_settings():
+    _default_token_verifier.cache_clear()
+
+    first = get_token_verifier(_settings(cognito_user_pool_id="us-east-1_pool-a"))
+    second = get_token_verifier(_settings(cognito_user_pool_id="us-east-1_pool-b"))
+
+    assert first is not second
+
+
+# --- get_current_user -------------------------------------------------
+#
+# Resolves the verified token's `sub` to this app's local User row. Needs a
+# real Postgres-backed session (via testcontainers, same fixture pattern as
+# backend/tests/users/test_service.py) since it queries the users table.
+
+
+@pytest.fixture()
+def session_factory(postgres_url):
+    engine = make_engine(postgres_url)
+    Base.metadata.create_all(engine)
+    yield make_session_factory(engine)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+def _make_current_user_app(*, identity: VerifiedIdentity, session_factory):
+    app = FastAPI()
+
+    @app.get("/me")
+    def me(user: User = Depends(get_current_user)):
+        return {"id": user.id, "username": user.username}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(identity)
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_current_user_resolves_to_the_matching_active_user(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-resolve-me",
+            username="resolveme",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    identity = VerifiedIdentity(sub="sub-resolve-me", auth_time=RECENT_AUTH_TIME)
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "username": "resolveme"}
+
+
+def test_get_current_user_404s_when_no_user_row_matches_the_sub(session_factory):
+    identity = VerifiedIdentity(sub="sub-with-no-profile", auth_time=RECENT_AUTH_TIME)
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
+
+
+def test_get_current_user_403s_when_the_matching_row_is_soft_deleted(session_factory):
+    # USERS-003: a deactivated account is refused on the active-account path
+    # with a recognisable 403, no longer the "no profile yet" 404.
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-soft-deleted",
+            username="softdeleted",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+
+    identity = VerifiedIdentity(sub="sub-soft-deleted", auth_time=RECENT_AUTH_TIME)
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "account_deactivated"}
+
+
+def test_get_current_user_404_detail_is_unchanged_when_no_row_matches(session_factory):
+    identity = VerifiedIdentity(sub="sub-with-no-profile-detail", auth_time=RECENT_AUTH_TIME)
+    app = _make_current_user_app(identity=identity, session_factory=session_factory)
+    client = TestClient(app)
+
+    response = client.get("/me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User profile not found"}
+
+
+# --- get_optional_current_user -----------------------------------------
+#
+# For the guest-vs-authenticated feed/ (a later unit): no header -> None
+# (guest), an invalid/malformed token -> 401 (never a silent downgrade to
+# guest), a valid token with no matching profile -> None.
+
+
+def _make_optional_current_user_app(*, session_factory):
+    app = FastAPI()
+
+    @app.get("/maybe-me")
+    def maybe_me(user: User | None = Depends(get_optional_current_user)):
+        if user is None:
+            return {"authenticated": False}
+        return {"authenticated": True, "id": user.id}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_optional_current_user_returns_none_without_authorization_header(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me")
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+def test_get_optional_current_user_401s_on_an_invalid_token(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(None)
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer bad-token"})
+
+    assert response.status_code == 401
+
+
+def test_get_optional_current_user_401s_on_a_malformed_header(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "good-token-no-scheme"})
+
+    assert response.status_code == 401
+
+
+def test_get_optional_current_user_returns_none_when_token_valid_but_no_profile(session_factory):
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-no-profile", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+def test_get_optional_current_user_resolves_the_active_user(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-optional-with-profile",
+            username="optionalprofile",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-with-profile", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": True, "id": user_id}
+
+
+def test_get_optional_current_user_returns_none_for_a_deactivated_callers_valid_token(
+    session_factory,
+):
+    """USERS-003: the public-read path treats a deactivated caller as a guest."""
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-optional-deactivated",
+            username="optionaldeactivated",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+
+    app = _make_optional_current_user_app(session_factory=session_factory)
+    app.dependency_overrides[get_token_verifier] = lambda: FakeTokenVerifier(
+        VerifiedIdentity(sub="sub-optional-deactivated", auth_time=RECENT_AUTH_TIME)
+    )
+    client = TestClient(app)
+
+    response = client.get("/maybe-me", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": False}
+
+
+# --- get_own_account (USERS-003) -----------------------------------------
+#
+# The own-account path: the caller's own User row whether or not deleted_at is
+# set, 404 with no row, 401 exactly as get_current_identity. Imported inside
+# the helper so this module still collects before the dependency exists.
+
+
+def _make_own_account_app(*, session_factory, verifier):
+    from app.users.dependencies import get_own_account
+
+    app = FastAPI()
+
+    @app.get("/own")
+    def own(user: User = Depends(get_own_account)):
+        return {"id": user.id, "deactivated": user.deleted_at is not None}
+
+    @app.get("/whoami")
+    def whoami(identity: VerifiedIdentity = Depends(get_current_identity)):
+        return {"sub": identity.sub}
+
+    def _get_session_override():
+        session = session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_token_verifier] = lambda: verifier
+    app.dependency_overrides[get_session] = _get_session_override
+    return app
+
+
+def test_get_own_account_returns_an_active_callers_row(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-own-active",
+            username="ownactive",
+            date_of_birth=date(1990, 1, 1),
+        )
+        user_id = user.id
+
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-active", auth_time=RECENT_AUTH_TIME)
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "deactivated": False}
+
+
+def test_get_own_account_returns_a_deactivated_callers_row(session_factory):
+    with session_factory() as session:
+        user = create_user(
+            session,
+            cognito_sub="sub-own-deactivated",
+            username="owndeactivated",
+            date_of_birth=date(1990, 1, 1),
+        )
+        soft_delete_user(session, user.id)
+        user_id = user.id
+
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-deactivated", auth_time=RECENT_AUTH_TIME)
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": user_id, "deactivated": True}
+
+
+def test_get_own_account_404s_when_no_user_row_matches_the_sub(session_factory):
+    app = _make_own_account_app(
+        session_factory=session_factory,
+        verifier=FakeTokenVerifier(
+            VerifiedIdentity(sub="sub-own-no-profile", auth_time=RECENT_AUTH_TIME)
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.get("/own", headers={"Authorization": "Bearer good-token"})
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("headers", "verifier"),
+    [
+        pytest.param(
+            {},
+            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)),
+            id="missing",
+        ),
+        pytest.param(
+            {"Authorization": "good-token-no-scheme"},
+            FakeTokenVerifier(VerifiedIdentity(sub="irrelevant", auth_time=RECENT_AUTH_TIME)),
+            id="malformed",
+        ),
+        pytest.param({"Authorization": "Bearer bad-token"}, FakeTokenVerifier(None), id="rejected"),
+    ],
+)
+def test_get_own_account_401s_exactly_as_get_current_identity(session_factory, headers, verifier):
+    app = _make_own_account_app(session_factory=session_factory, verifier=verifier)
+    client = TestClient(app)
+
+    own = client.get("/own", headers=headers)
+    identity = client.get("/whoami", headers=headers)
+
+    assert identity.status_code == 401
+    assert own.status_code == 401
+    assert own.json() == identity.json()

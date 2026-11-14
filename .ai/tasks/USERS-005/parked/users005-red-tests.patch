@@ -1,0 +1,700 @@
+diff --git a/backend/tests/feed/test_routes.py b/backend/tests/feed/test_routes.py
+index b743c77..bd518ba 100644
+--- a/backend/tests/feed/test_routes.py
++++ b/backend/tests/feed/test_routes.py
+@@ -186,6 +186,21 @@ def test_get_feed_guest_returns_recent_posts_newest_first(client, session_factor
+     assert body["next_before_id"] is None
+ 
+ 
++def test_feed_author_carries_both_avatar_colours(client, session_factory):
++    with session_factory() as session:
++        author = _make_user(session, username="colour_feed_author",
++                            avatar_inner_color="orange", avatar_outer_color="purple")
++        _make_post(session, author, text="coloured author")
++
++    response = client.get("/feed")
++
++    assert response.status_code == 200
++    author_body = response.json()["items"][0]["author"]
++    assert author_body["avatar_inner_color"] == "orange"
++    assert author_body["avatar_outer_color"] == "purple"
++    assert "profile_avatar_key" not in author_body
++
++
+ def test_get_feed_authenticated_returns_personalized_feed(app, client, session_factory):
+     with session_factory() as session:
+         viewer = _make_user(session, username="auth_feed_viewer")
+diff --git a/backend/tests/search/test_routes.py b/backend/tests/search/test_routes.py
+index e4430aa..81257ba 100644
+--- a/backend/tests/search/test_routes.py
++++ b/backend/tests/search/test_routes.py
+@@ -179,6 +179,20 @@ def test_search_accounts_returns_matching_users(client, session_factory):
+     assert "date_of_birth" not in body["items"][0]
+ 
+ 
++def test_search_accounts_carries_both_avatar_colours(client, session_factory):
++    with session_factory() as session:
++        _make_user(session, cognito_sub="sub-colour-search", username="coloursearch",
++                   avatar_inner_color="lavender", avatar_outer_color="forest")
++
++    response = client.get("/search/accounts", params={"q": "coloursearch"})
++
++    assert response.status_code == 200
++    account = response.json()["items"][0]
++    assert account["avatar_inner_color"] == "lavender"
++    assert account["avatar_outer_color"] == "forest"
++    assert "profile_avatar_key" not in account
++
++
+ def test_search_accounts_paginates_independently_of_offset(client, session_factory):
+     with session_factory() as session:
+         users = [
+diff --git a/backend/tests/test_migrations_users_avatar.py b/backend/tests/test_migrations_users_avatar.py
+index 6ed997a..9ee1541 100644
+--- a/backend/tests/test_migrations_users_avatar.py
++++ b/backend/tests/test_migrations_users_avatar.py
+@@ -1,6 +1,4 @@
+-"""USERS-004's nullable profile avatar migration and rollback contract."""
+-
+-from __future__ import annotations
++"""USERS-005 avatar colour migration and rollback contract."""
+ 
+ from pathlib import Path
+ 
+@@ -28,39 +26,42 @@ def engine(postgres_url):
+     engine.dispose()
+ 
+ 
+-def _user_columns(engine) -> dict[str, tuple[str, str, str | None]]:
++def _columns(engine) -> dict[str, tuple[str, str, str | None]]:
+     with engine.connect() as connection:
+-        rows = connection.execute(
+-            text(
+-                "SELECT column_name, data_type, is_nullable, column_default "
+-                "FROM information_schema.columns WHERE table_name = 'users'"
+-            )
+-        ).all()
++        rows = connection.execute(text(
++            "SELECT column_name, data_type, is_nullable, column_default "
++            "FROM information_schema.columns WHERE table_name = 'users'"
++        )).all()
+     return {name: (kind, nullable, default) for name, kind, nullable, default in rows}
+ 
+ 
+-def test_migration_adds_only_nullable_avatar_key_and_round_trips(alembic_config, engine):
++def test_migration_replaces_preset_with_nullable_colour_columns_and_round_trips(
++    alembic_config, engine
++):
+     command.upgrade(alembic_config, _PARENT_REVISION)
+     with engine.begin() as connection:
+-        user_id = connection.execute(
+-            text(
+-                "INSERT INTO users (cognito_sub, username, date_of_birth) "
+-                "VALUES ('sub-avatar-migration', 'avatar_migration', '1990-01-01') RETURNING id"
+-            )
+-        ).scalar_one()
+-    before = set(_user_columns(engine))
++        user_id = connection.execute(text(
++            "INSERT INTO users (cognito_sub, username, date_of_birth, profile_avatar_key) "
++            "VALUES ('sub-avatar-migration', 'avatar_migration', '1990-01-01', 'arc') RETURNING id"
++        )).scalar_one()
+ 
+     command.upgrade(alembic_config, "head")
+ 
+-    columns = _user_columns(engine)
+-    assert set(columns) - before == {"profile_avatar_key"}
+-    assert columns["profile_avatar_key"] == ("text", "YES", None)
++    columns = _columns(engine)
++    assert "profile_avatar_key" not in columns
++    assert columns["avatar_inner_color"] == ("text", "YES", None)
++    assert columns["avatar_outer_color"] == ("text", "YES", None)
+     with engine.connect() as connection:
+-        assert connection.execute(
+-            text("SELECT profile_avatar_key FROM users WHERE id = :id"), {"id": user_id}
+-        ).scalar_one() is None
++        row = connection.execute(text(
++            "SELECT avatar_inner_color, avatar_outer_color FROM users WHERE id = :id"
++        ), {"id": user_id}).one()
++    assert row == (None, None)
+ 
+     command.downgrade(alembic_config, _PARENT_REVISION)
+-    assert "profile_avatar_key" not in _user_columns(engine)
+-    command.upgrade(alembic_config, "head")
+-    assert _user_columns(engine)["profile_avatar_key"] == ("text", "YES", None)
++    columns = _columns(engine)
++    assert columns["profile_avatar_key"] == ("text", "YES", None)
++    assert "avatar_inner_color" not in columns and "avatar_outer_color" not in columns
++    with engine.connect() as connection:
++        assert connection.execute(text(
++            "SELECT profile_avatar_key FROM users WHERE id = :id"
++        ), {"id": user_id}).scalar_one() is None
+diff --git a/backend/tests/users/test_avatar_profile.py b/backend/tests/users/test_avatar_profile.py
+index aab7916..9eb8a28 100644
+--- a/backend/tests/users/test_avatar_profile.py
++++ b/backend/tests/users/test_avatar_profile.py
+@@ -1,4 +1,4 @@
+-"""USERS-004 profile avatar contract, persistence and exclusivity tests."""
++"""USERS-005 avatar colour contract, persistence and public mapping tests."""
+ 
+ from datetime import UTC, date, datetime
+ 
+@@ -17,17 +17,8 @@ from app.users.routes import router
+ from app.users.service import create_user, get_public_profiles
+ 
+ RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
+-
+-AVATAR_KEYS = (
+-    "court-lines",
+-    "ball-seams",
+-    "shot-clock",
+-    "scoreboard",
+-    "arc",
+-    "net-grid",
+-    "baseline",
+-    "play-pattern",
+-)
++INNER = ("gold", "orange", "red", "green", "sky", "lavender", "silver", "teal")
++OUTER = ("blue", "crimson", "black", "purple", "forest")
+ 
+ 
+ @pytest.fixture()
+@@ -56,133 +47,123 @@ def client(session_factory):
+ 
+ 
+ def _create(session, username: str, **overrides) -> User:
+-    return create_user(
+-        session,
+-        cognito_sub=f"sub-{username}",
+-        username=username,
+-        date_of_birth=date(1990, 1, 1),
+-        **overrides,
+-    )
++    return create_user(session, cognito_sub=f"sub-{username}", username=username,
++                       date_of_birth=date(1990, 1, 1), **overrides)
+ 
+ 
+-@pytest.mark.parametrize("avatar_key", AVATAR_KEYS)
+-def test_patch_accepts_each_stable_avatar_key(client, session_factory, avatar_key):
++@pytest.mark.parametrize("inner", INNER)
++@pytest.mark.parametrize("outer", OUTER)
++def test_patch_persists_independent_palette_colours(client, session_factory, inner, outer):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, f"avatar-{avatar_key}")
++        user = _create(session, f"colour-{inner}-{outer}")
+         user_id = user.id
+     app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    response = http.patch("/users/me", json={"profile_avatar_key": avatar_key})
++    response = http.patch("/users/me", json={"avatar_inner_color": inner,
++                                               "avatar_outer_color": outer})
+ 
+     assert response.status_code == 200
+-    assert response.json()["profile_avatar_key"] == avatar_key
++    assert response.json()["avatar_inner_color"] == inner
++    assert response.json()["avatar_outer_color"] == outer
+     with session_factory() as session:
+-        assert (
+-            session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == avatar_key
+-        )
+-
+-
+-def test_invalid_avatar_key_is_rejected_without_changing_profile(client, session_factory):
++        saved = session.scalar(select(User).where(User.id == user_id))
++        assert saved.avatar_inner_color == inner
++        assert saved.avatar_outer_color == outer
++
++
++@pytest.mark.parametrize("field,value", [
++    ("avatar_inner_color", "blue"), ("avatar_outer_color", "gold"),
++    ("avatar_inner_color", "not-a-team-colour"),
++    ("avatar_outer_color", "not-a-team-colour"),
++])
++def test_patch_rejects_wrong_palette_or_unknown_key_without_mutation(
++    client, session_factory, field, value
++):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, "bad-avatar", profile_avatar_key="arc")
++        user = _create(session, f"invalid-{field}-{value}",
++                       avatar_inner_color="red", avatar_outer_color="black")
+         user_id = user.id
+     app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    response = http.patch("/users/me", json={"profile_avatar_key": "team-logo"})
++    response = http.patch("/users/me", json={field: value})
+ 
+     assert response.status_code == 422
+     with session_factory() as session:
+-        assert session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == "arc"
++        saved = session.get(User, user_id)
++        assert (saved.avatar_inner_color, saved.avatar_outer_color) == ("red", "black")
+ 
+ 
+-def test_avatar_key_default_and_public_and_me_serialization(client, session_factory):
++def test_patch_omission_preserves_and_null_clears_each_colour(client, session_factory):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, "default-avatar")
+-        user_id = user.id
+-    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
+-        sub="sub-default-avatar", auth_time=RECENT_AUTH_TIME
+-    )
++        user = _create(session, "colour-patch", avatar_inner_color="sky",
++                       avatar_outer_color="purple")
+     app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    own = http.get("/users/me")
+-    public = http.get(f"/users/{user_id}")
++    unchanged = http.patch("/users/me", json={"avatar_outer_color": "blue"})
++    cleared = http.patch("/users/me", json={"avatar_inner_color": None})
+ 
+-    assert own.json()["profile_avatar_key"] is None
+-    assert public.json()["profile_avatar_key"] is None
++    assert (unchanged.json()["avatar_inner_color"], unchanged.json()["avatar_outer_color"]) == ("sky", "blue")
++    assert (cleared.json()["avatar_inner_color"], cleared.json()["avatar_outer_color"]) == (None, "blue")
+ 
+ 
+-def test_avatar_patch_null_resets_and_omission_preserves_choice(client, session_factory):
++def test_colours_default_null_and_are_returned_by_me_and_public(client, session_factory):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, "reset-avatar", profile_avatar_key="net-grid")
++        user = _create(session, "default-colours")
++        user_id = user.id
++    app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
++        sub="sub-default-colours", auth_time=RECENT_AUTH_TIME)
+     app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    unchanged = http.patch("/users/me", json={})
+-    reset = http.patch("/users/me", json={"profile_avatar_key": None})
++    own = http.get("/users/me").json()
++    public = http.get(f"/users/{user_id}").json()
+ 
+-    assert unchanged.json()["profile_avatar_key"] == "net-grid"
+-    assert reset.json()["profile_avatar_key"] is None
++    assert own["avatar_inner_color"] is None and own["avatar_outer_color"] is None
++    assert public["avatar_inner_color"] is None and public["avatar_outer_color"] is None
++    assert "profile_avatar_key" not in own and "profile_avatar_key" not in public
+ 
+ 
+-def test_preset_clears_picture_reference_but_preserves_media_row(client, session_factory):
++def test_legacy_preset_is_neither_accepted_nor_returned(client, session_factory):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, "picture-avatar")
+-        media = Media(
+-            uploader_id=user.id,
+-            s3_key_thumbnail="thumbs/preserved.webp",
+-            s3_key_public="public/preserved.webp",
+-            status=MediaStatus.PROCESSED,
+-        )
+-        session.add(media)
+-        session.commit()
+-        user.profile_picture_media_id = media.id
+-        session.commit()
+-        user_id = user.id
+-        media_id = media.id
++        user = _create(session, "legacy-preset")
+     app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    response = http.patch("/users/me", json={"profile_avatar_key": "shot-clock"})
++    response = http.patch("/users/me", json={"profile_avatar_key": "court-lines"})
+ 
+-    assert response.status_code == 200
+-    with session_factory() as session:
+-        user = session.get(User, user_id)
+-        media = session.get(Media, media_id)
+-        assert user.profile_avatar_key == "shot-clock"
+-        assert user.profile_picture_media_id is None
+-        assert media is not None
+-        assert media.s3_key_public == "public/preserved.webp"
++    assert response.status_code == 422
++    assert "profile_avatar_key" not in http.get("/users/me").json()
+ 
+ 
+-def test_attaching_processed_picture_clears_preset(client, session_factory):
++def test_setting_colour_does_not_clear_picture_or_delete_media(client, session_factory):
+     http, app = client
+     with session_factory() as session:
+-        user = _create(session, "picture-wins", profile_avatar_key="arc")
+-        media = Media(uploader_id=user.id, status=MediaStatus.PROCESSED)
++        user = _create(session, "colour-picture")
++        media = Media(uploader_id=user.id, s3_key_thumbnail="thumbs/kept.webp",
++                      s3_key_public="public/kept.webp", status=MediaStatus.PROCESSED)
+         session.add(media)
+         session.commit()
+-        user_id = user.id
+-        media_id = media.id
+-
+-    def get_current_user_override():
+-        with session_factory() as session:
+-            yield session.get(User, user_id)
+-
+-    app.dependency_overrides[get_current_user] = get_current_user_override
++        user.profile_picture_media_id = media.id
++        session.commit()
++        user_id, media_id = user.id, media.id
++    app.dependency_overrides[get_current_user] = lambda: user
+ 
+-    response = http.patch("/users/me", json={"profile_picture_media_id": media_id})
++    response = http.patch("/users/me", json={"avatar_inner_color": "teal"})
+ 
+     assert response.status_code == 200
+-    assert response.json()["profile_avatar_key"] is None
++    with session_factory() as session:
++        saved = session.get(User, user_id)
++        media = session.get(Media, media_id)
++        assert saved.profile_picture_media_id == media_id
++        assert media is not None and media.s3_key_public == "public/kept.webp"
+ 
+ 
+-def test_public_profile_interface_exposes_avatar_key(session_factory):
++def test_public_profile_interface_exposes_both_colours(session_factory):
+     with session_factory() as session:
+-        user = _create(session, "public-avatar", profile_avatar_key="play-pattern")
+-
++        user = _create(session, "mapped-colours", avatar_inner_color="gold",
++                       avatar_outer_color="forest")
+         profile = get_public_profiles(session, [user.id])[user.id]
+-
+-        assert profile.profile_avatar_key == "play-pattern"
++        assert (profile.avatar_inner_color, profile.avatar_outer_color) == ("gold", "forest")
+diff --git a/frontend/src/components/ui/Avatar.test.tsx b/frontend/src/components/ui/Avatar.test.tsx
+index 49e2d78..95f8474 100644
+--- a/frontend/src/components/ui/Avatar.test.tsx
++++ b/frontend/src/components/ui/Avatar.test.tsx
+@@ -1,36 +1,71 @@
+ import { render, screen } from "@testing-library/react";
+ import { describe, expect, it } from "vitest";
+ 
++import type { components } from "../../api/schema";
++import { INNER_COLORS, OUTER_COLORS } from "../../lib/teamColors";
+ import { Avatar } from "./Avatar";
+ 
+-const AVATAR_KEYS = [
+-  "court-lines",
+-  "ball-seams",
+-  "shot-clock",
+-  "scoreboard",
+-  "arc",
+-  "net-grid",
+-  "baseline",
+-  "play-pattern",
+-] as const;
++type Schemas = components["schemas"];
++type InnerSchemaKey = NonNullable<Schemas["UpdateMeRequest"]["avatar_inner_color"]>;
++type OuterSchemaKey = NonNullable<Schemas["UpdateMeRequest"]["avatar_outer_color"]>;
++type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends
++  (<T>() => T extends B ? 1 : 2) ? true : false;
++type Assert<T extends true> = T;
++type PaletteKeys<T extends readonly { key: string }[]> = T[number]["key"];
++
++// Compile-time contract: a generated OpenAPI schema drift fails typecheck.
++type InnerPaletteMatchesSchema = Assert<Equal<InnerSchemaKey, PaletteKeys<typeof INNER_COLORS>>>;
++type OuterPaletteMatchesSchema = Assert<Equal<OuterSchemaKey, PaletteKeys<typeof OUTER_COLORS>>>;
++const schemaPaletteContract: [InnerPaletteMatchesSchema, OuterPaletteMatchesSchema] = [true, true];
++void schemaPaletteContract;
+ 
+ describe("Avatar", () => {
+-  it("keeps the username initial as the null-key default", () => {
++  it("keeps today's exact default initials when neither colour is selected", () => {
+     const { container } = render(
+-      <Avatar username="fanwire" size="sm" avatarKey={null} />,
++      <Avatar username="fanwire" size="sm" avatarInnerColor={null} avatarOuterColor={null} />,
+     );
+ 
+     expect(container.querySelector("[aria-hidden='true']")).toHaveTextContent("f");
++    expect(container.querySelector("[aria-hidden='true']")).not.toHaveAttribute("data-avatar-key");
++  });
++
++  it("renders the first Unicode code point as typed in both sizes", () => {
++    for (const size of ["sm", "lg"] as const) {
++      const { container, unmount } = render(
++        <Avatar username="🧡Fanwire" size={size} avatarInnerColor={null} avatarOuterColor={null} />,
++      );
++      expect(container.querySelector("[aria-hidden='true']")).toHaveTextContent("🧡");
++      unmount();
++    }
++  });
++
++  it("uses the selected inner token with black text and an independent outer ring", () => {
++    const { container } = render(
++      <Avatar username="fanwire" size="lg" avatarInnerColor="gold" avatarOuterColor="forest" />,
++    );
++    const avatar = container.querySelector("[aria-hidden='true']");
++    expect(avatar).toHaveStyle({
++      backgroundColor: "var(--team-inner-gold)",
++      color: "black",
++      borderColor: "var(--team-outer-forest)",
++    });
++    expect(avatar).toHaveTextContent("f");
+   });
+ 
+-  it.each(AVATAR_KEYS)("renders the original %s treatment", (avatarKey) => {
++  it("shows an outer ring without changing the default initials foreground", () => {
+     const { container } = render(
+-      <Avatar username="fanwire" size="lg" avatarKey={avatarKey} />,
++      <Avatar username="fanwire" size="sm" avatarInnerColor={null} avatarOuterColor="blue" />,
+     );
++    expect(container.querySelector("[aria-hidden='true']")).toHaveStyle({
++      color: "var(--color-text)",
++      borderColor: "var(--team-outer-blue)",
++    });
++  });
+ 
+-    const art = container.querySelector(`[data-avatar-key='${avatarKey}']`);
+-    expect(art).toBeInTheDocument();
+-    expect(art).toHaveAttribute("aria-hidden", "true");
+-    expect(screen.queryByText("f")).toBeNull();
++  it("keeps a profile picture rendered when colours are selected", () => {
++    const { container } = render(
++      <Avatar username="fanwire" size="sm" pictureKey="picture.webp" avatarInnerColor="red" avatarOuterColor="black" />,
++    );
++    expect(screen.getByRole("img", { hidden: true })).toHaveAttribute("src", expect.stringContaining("picture.webp"));
+   });
+ });
+diff --git a/frontend/src/features/feed/PostNode.test.tsx b/frontend/src/features/feed/PostNode.test.tsx
+index 4bc2b24..9cfab30 100644
+--- a/frontend/src/features/feed/PostNode.test.tsx
++++ b/frontend/src/features/feed/PostNode.test.tsx
+@@ -47,12 +47,15 @@ function renderNode(post: PostView) {
+ }
+ 
+ describe("one PostNode renders a standalone post", () => {
+-  it("renders the author's saved preset avatar", async () => {
+-    const author = { ...ROOT.author, profile_avatar_key: "baseline" };
++  it("renders the author's saved inner and outer avatar colours", async () => {
++    const author = { ...ROOT.author, avatar_inner_color: "gold", avatar_outer_color: "forest" };
+     renderNode(testPostView({ id: 404, text: ROOT_TEXT, author }));
+ 
+     expect(await screen.findByText(ROOT_TEXT)).toBeInTheDocument();
+-    expect(document.querySelector("[data-avatar-key='baseline']")).toBeInTheDocument();
++    expect(document.querySelector("[aria-hidden='true']")).toHaveStyle({
++      backgroundColor: "var(--team-inner-gold)", color: "black",
++      borderColor: "var(--team-outer-forest)",
++    });
+   });
+ 
+   it("renders the post without asking for anything at all", async () => {
+diff --git a/frontend/src/features/profile/ProfilePage.test.tsx b/frontend/src/features/profile/ProfilePage.test.tsx
+index 77c0e9d..47b2ae1 100644
+--- a/frontend/src/features/profile/ProfilePage.test.tsx
++++ b/frontend/src/features/profile/ProfilePage.test.tsx
+@@ -87,9 +87,9 @@ beforeEach(() => {
+ });
+ 
+ describe("the public profile variant", () => {
+-  it("renders the saved preset on a public profile", async () => {
++  it("renders saved colours on a public profile", async () => {
+     const me = meStub();
+-    const viewed = publicProfileStub(publicProfile({ profile_avatar_key: "net-grid" }));
++    const viewed = publicProfileStub(publicProfile({ avatar_inner_color: "silver", avatar_outer_color: "black" }));
+     server.use(me.handler, viewed.handler, followingStub().handler);
+ 
+     renderProfile(VIEWED_USER_ID, signedIn());
+@@ -97,7 +97,10 @@ describe("the public profile variant", () => {
+     await screen.findByRole("heading", {
+       name: new RegExp(`^${VIEWED_USERNAME}$`, "i"),
+     });
+-    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
++    expect(document.querySelector("[aria-hidden='true']")).toHaveStyle({
++      backgroundColor: "var(--team-inner-silver)", color: "black",
++      borderColor: "var(--team-outer-black)",
++    });
+   });
+ 
+   it("is headed by the viewed user's username", async () => {
+@@ -173,14 +176,17 @@ describe("the public profile variant", () => {
+ });
+ 
+ describe("the own profile variant", () => {
+-  it("renders the saved preset on the owner's profile", async () => {
+-    const own = meStub({ ...testProfile(), profile_avatar_key: "arc" });
++  it("renders saved colours on the owner's profile", async () => {
++    const own = meStub({ ...testProfile(), avatar_inner_color: "red", avatar_outer_color: "crimson" });
+     server.use(own.handler);
+ 
+     renderProfile(OWN_USER_ID, signedIn());
+ 
+     await screen.findByRole("heading", { name: /^raptorsfan$/i });
+-    expect(document.querySelector("[data-avatar-key='arc']")).toBeInTheDocument();
++    expect(document.querySelector("[aria-hidden='true']")).toHaveStyle({
++      backgroundColor: "var(--team-inner-red)", color: "black",
++      borderColor: "var(--team-outer-crimson)",
++    });
+   });
+ 
+   it("renders the caller's own date of birth", async () => {
+diff --git a/frontend/src/features/profile/ProfileSettings.test.tsx b/frontend/src/features/profile/ProfileSettings.test.tsx
+index 5384a6f..b1be830 100644
+--- a/frontend/src/features/profile/ProfileSettings.test.tsx
++++ b/frontend/src/features/profile/ProfileSettings.test.tsx
+@@ -16,7 +16,7 @@
+  * ([[0x00-architecture]] Connection rule). `profile_picture_media_id` is
+  * therefore asserted *absent* from every body this form sends.
+  */
+-import { screen, waitFor } from "@testing-library/react";
++import { screen, waitFor, within } from "@testing-library/react";
+ import userEvent from "@testing-library/user-event";
+ import { HttpResponse, http } from "msw";
+ import { Route, Routes } from "react-router-dom";
+@@ -186,41 +186,52 @@ describe("the settings form", () => {
+     });
+   });
+ 
+-  it("offers a keyboard-operable single-choice avatar grid", async () => {
++  it("offers separate labelled keyboard-operable inner and outer radio groups", async () => {
+     const user = userEvent.setup();
+     renderSettings();
+ 
+-    const choices = await screen.findAllByRole("radio");
+-    expect(choices).toHaveLength(9);
+-    await user.click(choices[0]);
++    const inner = await screen.findByRole("radiogroup", { name: "Inner colour" });
++    const outer = screen.getByRole("radiogroup", { name: "Outer colour" });
++    const innerChoices = within(inner).getAllByRole("radio");
++    const outerChoices = within(outer).getAllByRole("radio");
++    expect(innerChoices.map((choice) => choice.getAttribute("aria-label"))).toEqual([
++      "None", "Gold", "Orange", "Red", "Green", "Sky Blue", "Lavender", "Silver", "Teal",
++    ]);
++    expect(outerChoices.map((choice) => choice.getAttribute("aria-label"))).toEqual([
++      "None", "Blue", "Crimson", "Black", "Purple", "Forest Green",
++    ]);
++    await user.click(innerChoices[0]);
+     await user.keyboard("{ArrowDown}");
+-    expect(choices[1]).toBeChecked();
+-    expect(choices[1]).toHaveFocus();
++    expect(innerChoices[1]).toBeChecked();
++    expect(innerChoices[1]).toHaveFocus();
++    expect(outerChoices[0]).toBeChecked();
+   });
+ 
+-  it("saves a selected preset", async () => {
++  it("updates the preview and saves only the changed inner colour", async () => {
+     const user = userEvent.setup();
+     const patch = renderSettings();
+-    const courtLines = await screen.findByRole("radio", { name: /court lines/i });
+-    await user.click(courtLines);
++    await user.click(await screen.findByRole("radio", { name: "Gold" }));
++    expect(document.querySelector("[aria-hidden='true']")).toHaveStyle({
++      backgroundColor: "var(--team-inner-gold)", color: "black",
++    });
+     await user.click(save());
+ 
+     await waitFor(() => expect(patch.bodies).toHaveLength(1));
+-    expect(patch.onlyBody().profile_avatar_key).toBe("court-lines");
++    expect(patch.onlyBody()).toEqual({ avatar_inner_color: "gold" });
+   });
+ 
+-  it("uses null for the explicit initials reset", async () => {
++  it("sends null only for an explicitly cleared colour", async () => {
+     const user = userEvent.setup();
+-    const resetPatch = renderSettings(testProfile({ profile_avatar_key: "net-grid" }));
+-    await user.click(await screen.findByRole("radio", { name: /use initials/i }));
++    const resetPatch = renderSettings(testProfile({ avatar_inner_color: "sky", avatar_outer_color: "blue" }));
++    await user.click(await screen.findByRole("radio", { name: "None", checked: true }));
+     await user.click(save());
+     await waitFor(() => expect(resetPatch.bodies).toHaveLength(1));
+-    expect(resetPatch.onlyBody()).toHaveProperty("profile_avatar_key", null);
++    expect(resetPatch.onlyBody()).toEqual({ avatar_inner_color: null });
+   });
+ 
+-  it("keeps the previous avatar visible and reports a failed save", async () => {
++  it("restores saved colours and reports a failed save", async () => {
+     const user = userEvent.setup();
+-    const profile = testProfile({ profile_avatar_key: "net-grid" });
++    const profile = testProfile({ avatar_inner_color: "sky", avatar_outer_color: "blue" });
+     server.use(
+       meStub(profile).handler,
+       http.patch("*/users/me", () => HttpResponse.json({}, { status: 500 })),
+@@ -230,19 +241,20 @@ describe("the settings form", () => {
+       <Routes><Route path="/profile/:userId" element={<ProfilePage />} /></Routes>,
+       { authService: new FakeAuthService({ session: testSession() }), route: `/profile/${profile.id}` },
+     );
+-    expect(await screen.findByRole("radio", { name: /net grid/i })).toBeChecked();
+-    await user.click(await screen.findByRole("radio", { name: /court lines/i }));
++    expect(await screen.findByRole("radio", { name: "Sky Blue" })).toBeChecked();
++    await user.click(await screen.findByRole("radio", { name: "Gold" }));
+     await user.click(save());
+ 
+     expect(await screen.findByRole("alert")).toHaveTextContent(/could not save/i);
+-    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
+-    expect(document.querySelector("[data-avatar-key='court-lines']")).toBeNull();
++    expect(screen.getByRole("radio", { name: "Sky Blue" })).toBeChecked();
++    expect(screen.getByRole("radio", { name: "Gold" })).not.toBeChecked();
+   });
+ 
+-  it("keeps the initials default available when no preset is selected", async () => {
++  it("shows None as each group's default choice", async () => {
+     renderSettings();
+     await description();
+ 
+-    expect(screen.getByRole("radio", { name: /use initials/i })).toBeInTheDocument();
++    expect(screen.getByRole("radiogroup", { name: "Inner colour" })).toBeInTheDocument();
++    expect(screen.getAllByRole("radio", { name: "None" })).toHaveLength(2);
+   });
+ });
+diff --git a/frontend/src/features/search/SearchPage.test.tsx b/frontend/src/features/search/SearchPage.test.tsx
+index 4483e05..b75c3b1 100644
+--- a/frontend/src/features/search/SearchPage.test.tsx
++++ b/frontend/src/features/search/SearchPage.test.tsx
+@@ -167,14 +167,17 @@ describe("the search view", () => {
+ });
+ 
+ describe("free-text results (criterion 1)", () => {
+-  it("renders a saved preset on an account search result", async () => {
+-    const account = { ...ALICE, profile_avatar_key: "ball-seams" };
++  it("renders saved avatar colours on an account search result", async () => {
++    const account = { ...ALICE, avatar_inner_color: "teal", avatar_outer_color: "purple" };
+     renderSearch("/search?q=raptors", {
+       accounts: { 0: accountsPage([account], null) },
+     });
+ 
+     expect(await screen.findByRole("link", { name: ALICE.username })).toBeInTheDocument();
+-    expect(document.querySelector("[data-avatar-key='ball-seams']")).toBeInTheDocument();
++    expect(document.querySelector("[aria-hidden='true']")).toHaveStyle({
++      backgroundColor: "var(--team-inner-teal)", color: "black",
++      borderColor: "var(--team-outer-purple)",
++    });
+   });
+ 
+   it("calls GET /search/accounts and GET /search/posts once each, with the same q, from offset 0", async () => {
+diff --git a/frontend/src/test/auth.tsx b/frontend/src/test/auth.tsx
+index 601ae3b..ba8a1fd 100644
+--- a/frontend/src/test/auth.tsx
++++ b/frontend/src/test/auth.tsx
+@@ -231,6 +231,8 @@ export function testProfile(overrides: Partial<MeOut> = {}): MeOut {
+     description: null,
+     preferred_team_id: 1,
+     profile_picture_media_id: null,
++    avatar_inner_color: null,
++    avatar_outer_color: null,
+     created_at: "2026-09-01T00:00:00Z",
+     follower_count: 0,
+     following_count: 0,
+diff --git a/frontend/src/test/bundle-budgets/USERS-005.ts b/frontend/src/test/bundle-budgets/USERS-005.ts
+new file mode 100644
+index 0000000..00ef9bf
+--- /dev/null
++++ b/frontend/src/test/bundle-budgets/USERS-005.ts
+@@ -0,0 +1,19 @@
++import type { UnitBudget } from "../bundle-budget";
++
++/**
++ * USERS-005 replaces avatar presets with two palette selections. The shared
++ * Avatar and shell/feed/search rendering move in the entry; profile controls
++ * and their responsive styles move in the lazy profile output.
++ * Growth ceilings follow the task's 1 KiB gzip entry cap and keep each changed
++ * lazy output below the 500,000-byte raw hard limit.
++ */
++export default {
++  unit: "USERS-005",
++  entryJsGzipGrowth: 1_000,
++  entryJsRawGrowth: 2_000,
++  entryCssGzipGrowth: 1_000,
++  changed: {
++    ProfilePage: 5_000,
++    "css:ProfilePage.css": 1_800,
++  },
++} satisfies UnitBudget;

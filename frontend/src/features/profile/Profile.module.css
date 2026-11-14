@@ -1,0 +1,159 @@
+/*
+ * The profile page (wiki/CodeContext/FrontendUI/layout.md §3, "identity header
+ * plus body"). Mobile-first: rules outside a media query are the phone layout.
+ * Values come from tokens.css by name only.
+ */
+
+/* The page: header card, description, private row, settings card, stacked. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* A failed load (FRONTEND-033): the alert, then Retry under it at its own width. */
+.failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/*
+ * Header card, phone: avatar beside the name and counts; the action (Follow /
+ * Unfollow) wraps onto its own row, under the name.
+ */
+.header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: var(--space-3);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-4);
+  row-gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.action {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* From 40em (640 px): the action sits on the right of the header card. */
+@media (min-width: 40em) {
+  .header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .action {
+    grid-column: 3;
+    align-items: flex-end;
+  }
+}
+
+/* The private row: date of birth, with its "only you" note. */
+.private {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+
+.privateLabel {
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Settings card: heading, messages and form, stacked. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/*
+ * The form: FormField's Field stacks each label over its control and spaces
+ * consecutive fields (components/FormField.module.css), so only the controls'
+ * width and the gap above Save are set here.
+ */
+.form textarea,
+.form select {
+  width: 100%;
+}
+
+.avatarChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.25rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.avatarChoices legend {
+  padding: 0 var(--space-1);
+  font-weight: var(--font-weight-semibold);
+}
+
+.avatarChoice {
+  display: flex;
+  min-height: 2.75rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+  font-size: var(--font-size-sm);
+}
+
+.avatarChoice:has(input:checked) {
+  border-color: var(--color-text);
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.avatarChoice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.avatarChoice:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.save {
+  margin-top: var(--space-5);
+}

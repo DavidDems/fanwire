@@ -1,0 +1,264 @@
+"""Tests for app.posts.facade — PublishPostFacade, the single entry point
+for creating a post per wiki/CodeContext/Modules/0x00-architecture.md
+"Connection rule", per AGENTS.md TDD workflow. Written before
+app/posts/facade.py exists.
+
+Sequence under test: moderation chain -> confirm attached Media is
+Processed -> persist Post -> attach Media -> commit -> fan-out on
+PostEventBus (PostCreated only). POSTS-006 retired #GameId parsing for new
+posts: a token in new text creates no EventMention and publishes no
+PostMentionedEvent.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+
+import pytest
+from sqlalchemy import select
+
+from app.db import Base, make_engine, make_session_factory
+from app.eventbus import InMemoryEventPublisher, PostEventBus
+from app.events.models import Game, Team
+from app.media.models import Media, MediaStatus
+from app.posts.facade import (
+    POST_CREATED,
+    CreatePostRequest,
+    MediaNotFoundError,
+    MediaNotProcessedError,
+    PublishPostFacade,
+)
+from app.posts.models import EventMention, Post
+from app.posts.moderation import (
+    ModerationCheck,
+    ModerationContext,
+    PostRejected,
+)
+from app.users.models import User
+
+
+@pytest.fixture()
+def session_factory(postgres_url):
+    engine = make_engine(postgres_url)
+    Base.metadata.create_all(engine)
+    yield make_session_factory(engine)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+class NeverRejects(ModerationCheck):
+    def check(self, context: ModerationContext) -> None:
+        pass
+
+
+class AlwaysRejects(ModerationCheck):
+    def check(self, context: ModerationContext) -> None:
+        raise PostRejected("always rejects")
+
+
+def _make_user(**overrides) -> User:
+    defaults = {
+        "cognito_sub": "sub-facade-1",
+        "username": "facade_author",
+        "date_of_birth": date(1990, 1, 1),
+    }
+    defaults.update(overrides)
+    return User(**defaults)
+
+
+def _seed_game(session, **overrides) -> Game:
+    home = Team(
+        nba_team_id=201,
+        name="Boston Celtics",
+        abbreviation="BOS",
+        conference="Eastern",
+        division="Atlantic",
+    )
+    away = Team(
+        nba_team_id=202,
+        name="Los Angeles Lakers",
+        abbreviation="LAL",
+        conference="Western",
+        division="Pacific",
+    )
+    session.add_all([home, away])
+    session.commit()
+
+    defaults = {
+        "nba_game_id": 777,
+        "home_team_id": home.id,
+        "away_team_id": away.id,
+        "date": datetime(2026, 1, 1, tzinfo=UTC),
+        "season": "2025-26",
+        "home_score": 100,
+        "away_score": 98,
+    }
+    defaults.update(overrides)
+    game = Game(**defaults)
+    session.add(game)
+    session.commit()
+    return game
+
+
+def test_publish_plain_post_persists_and_fires_post_created(session_factory):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        request = CreatePostRequest(author_id=author.id, text="hello world")
+        post = facade.publish(request)
+
+        assert post.id is not None
+        fetched = session.scalar(select(Post).where(Post.id == post.id))
+        assert fetched is not None
+        assert fetched.text == "hello world"
+
+        event_names = [e.name for e in publisher.published]
+        assert event_names == [POST_CREATED]
+        created_event = publisher.published[0]
+        assert created_event.detail["post_id"] == post.id
+        assert created_event.detail["author_id"] == author.id
+
+
+def test_publish_with_resolvable_mention_creates_no_event_mention_and_only_fires_post_created(
+    session_factory,
+):
+    """POSTS-006: this test used to pin the EventMention and the
+    PostMentionedEvent a resolvable token produced."""
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+        game = _seed_game(session)
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        text = f"great game #GameId{game.id}"
+        request = CreatePostRequest(author_id=author.id, text=text)
+        post = facade.publish(request)
+
+        assert session.scalar(select(EventMention).where(EventMention.post_id == post.id)) is None
+        assert session.get(Post, post.id).text == text
+
+        event_names = [e.name for e in publisher.published]
+        assert event_names == [POST_CREATED]
+
+
+def test_publish_with_unresolvable_mention_creates_no_event_mention_and_only_fires_post_created(
+    session_factory,
+):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        request = CreatePostRequest(author_id=author.id, text="unknown game #GameId999999")
+        post = facade.publish(request)
+
+        assert post.id is not None
+        mentions = session.scalars(
+            select(EventMention).where(EventMention.post_id == post.id)
+        ).all()
+        assert mentions == []
+
+        event_names = [e.name for e in publisher.published]
+        assert event_names == [POST_CREATED]
+
+
+def test_publish_with_processed_media_attaches_it(session_factory):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        media = Media(uploader_id=author.id, status=MediaStatus.PROCESSED)
+        session.add(media)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        request = CreatePostRequest(
+            author_id=author.id, text="post with image", media_ids=[media.id]
+        )
+        post = facade.publish(request)
+
+        fetched_media = session.scalar(select(Media).where(Media.id == media.id))
+        assert fetched_media.post_id == post.id
+
+
+def test_publish_with_non_processed_media_raises_and_persists_nothing(session_factory):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        media = Media(uploader_id=author.id, status=MediaStatus.UPLOADED)
+        session.add(media)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        request = CreatePostRequest(
+            author_id=author.id, text="post with unprocessed image", media_ids=[media.id]
+        )
+
+        with pytest.raises(MediaNotProcessedError):
+            facade.publish(request)
+
+        assert session.scalar(select(Post).where(Post.author_id == author.id)) is None
+        assert publisher.published == []
+
+
+def test_publish_with_nonexistent_media_id_raises_media_not_found(session_factory):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=NeverRejects(), event_bus=bus)
+
+        request = CreatePostRequest(
+            author_id=author.id, text="post with bogus media", media_ids=[999_999]
+        )
+
+        with pytest.raises(MediaNotFoundError):
+            facade.publish(request)
+
+        assert session.scalar(select(Post).where(Post.author_id == author.id)) is None
+        assert publisher.published == []
+
+
+def test_publish_moderation_rejection_raises_and_persists_nothing(session_factory):
+    with session_factory() as session:
+        author = _make_user()
+        session.add(author)
+        session.commit()
+
+        publisher = InMemoryEventPublisher()
+        bus = PostEventBus(publisher)
+        facade = PublishPostFacade(session=session, moderation_chain=AlwaysRejects(), event_bus=bus)
+
+        request = CreatePostRequest(author_id=author.id, text="whatever")
+
+        with pytest.raises(PostRejected):
+            facade.publish(request)
+
+        assert session.scalar(select(Post).where(Post.author_id == author.id)) is None
+        assert publisher.published == []

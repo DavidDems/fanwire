@@ -1,0 +1,539 @@
+/*
+ * The stats navigator: the breadcrumb bar, the level's heading and its view,
+ * laid out by the caller's column. Tables scroll sideways inside their own
+ * focusable container; the page never does. Focus rings are base.css's
+ * global :focus-visible, and a button's font and cursor are base.css's too.
+ * Values come from tokens.css by name only.
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The breadcrumb and Back: one row of a fixed height, at every level. */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+}
+
+.bar ol {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar li + li::before {
+  content: "›";
+  padding-inline: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.bar + h2,
+.section :is(h2, h3),
+.championBody > p {
+  margin: 0;
+}
+
+/*
+ * The team's cumulative record (FRONTEND-037): wins bars above the baseline,
+ * losses below it. The side carries the meaning; the two fills only help.
+ */
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.chartSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-size: var(--font-size-sm);
+}
+
+.chartZero {
+  stroke: var(--color-border-strong);
+  stroke-width: 1.5;
+}
+
+.chartAxis {
+  fill: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.chartWin {
+  fill: var(--color-text);
+}
+
+.chartLoss {
+  fill: var(--color-text-muted);
+}
+
+.chartTable > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--color-link);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/*
+ * The champion's place, two lines tall in every state, so the line that
+ * replaces the loading one (two lines at 360 wide) moves nothing below it.
+ */
+.championBody {
+  min-height: calc(2em * var(--line-height-body));
+}
+
+.section strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted,
+.facts dt {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.recordEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.recordEmpty > svg {
+  width: min(7rem, 100%);
+}
+
+/*
+ * The All standings' place while they load, as tall as the two tables that
+ * replace it (fifteen teams a conference: a caption and sixteen ruled rows of
+ * small type, padded by space-2 each, in a bordered box), their gaps and the
+ * tie-break note.
+ */
+.hold {
+  --line: calc(var(--font-size-sm) * var(--line-height-body));
+
+  min-height: calc(
+    2 * (var(--space-4) + 17 * var(--line) + 16 * var(--space-2) + 18px) +
+      var(--space-5) + var(--line)
+  );
+}
+
+/* A team's record and splits: label over figure, side by side, wrapping. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table caption {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  text-align: right;
+}
+
+.table thead th {
+  border-bottom: 1px solid var(--color-border-strong);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.table tbody tr + tr {
+  border-top: 1px solid var(--color-border);
+}
+
+.table abbr {
+  text-decoration: none;
+}
+
+.table .name {
+  text-align: left;
+}
+
+.table tbody th.name {
+  font-weight: var(--font-weight-regular);
+}
+
+/* A rank-1 row's name: it holds the record, as on its card (FRONTEND-042). */
+.table tbody th.lead {
+  font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * A table's headline figure (a leader's average, a record's value). It holds
+ * a record's visually hidden phrase, which is absolutely positioned, so it is
+ * that phrase's containing block inside the scroll region.
+ */
+.figure {
+  position: relative;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A record's percentage beside its figure: `(.890)`, `(57.1%)` (EVENTS-011). */
+.share {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+}
+
+/* A level control without an address: a button that reads as a link. */
+.control {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+/* Player results: one list card with dividers. */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+/* A divider between rows, with the same room above and below it. */
+.list > li + li {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.more {
+  width: 100%;
+}
+
+/*
+ * The stats cards (FRONTEND-019, FRONTEND-030; `StatCard`): one column on a
+ * phone, two from 40 rem, three from 64 rem (the records home's wide column).
+ * A record card is `.cardStretched`: its one control is its View all link,
+ * whose ::after is stretched over the card, so the whole card is the hit area
+ * and one tab stop; nothing in the card sits above it. Such a card shows the
+ * hover and focus state; the link's own ring is base.css's :focus-visible.
+ * A leader card (FRONTEND-043) is not stretched: its player links and its
+ * View all button are each their own control, with their own rings.
+ */
+.cards {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.cardStretched:hover,
+.cardStretched:focus-within {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-muted);
+}
+
+.card p,
+.card h3 {
+  margin: 0;
+}
+
+/* An entry that holds the record or leads the board (FRONTEND-042). */
+.card strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * The title, with View all at its right; where the card is too narrow for a
+ * 12rem title beside it (a phone at 200% text), View all wraps below.
+ */
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.cardHead > h3 {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.cardHead > :not(h3) {
+  flex: none;
+  font-size: var(--font-size-sm);
+}
+
+.cardStretched > .cardHead > :not(h3)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+/*
+ * A card's room for its top entries (FRONTEND-042): three entries of two
+ * lines, line 1 as tall as the team icon (2 rem) or a body line, whichever is
+ * taller, line 2 a small line, and the gaps between entries. Line 1 never
+ * wraps, so the room is the same at every width; it is in em and rem, so it
+ * scales with the text.
+ */
+.cards {
+  --entry: calc(
+    max(2rem, var(--line-height-body) * 1em) + var(--font-size-sm) *
+      var(--line-height-body)
+  );
+  --entries: calc(3 * var(--entry) + 2 * var(--space-2));
+}
+
+/*
+ * The cards' place while the summary loads: placeholder cards as tall as a
+ * card (padding, the title, the category line, the entries' room and the
+ * gaps), so the cards that land in it move nothing below.
+ */
+.cardHold {
+  min-height: calc(
+    2 * var(--space-4) + 2 * var(--space-1) + var(--line-height-body) * 1em +
+      var(--font-size-sm) * var(--line-height-body) + var(--entries)
+  );
+}
+
+/*
+ * A card's entries (FRONTEND-030, FRONTEND-042): a fixed room, so the entries
+ * that land move nothing at any width or text size. The loading bars stand
+ * in the same room.
+ */
+.holder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: var(--entries);
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * An entry's line 1: the icon, the name and the value on one line that never
+ * wraps. The name gives way, cut with an ellipsis on screen only: its whole
+ * text stays in the page for assistive tech. The value keeps its width.
+ */
+.entryLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.entryName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryValue {
+  flex: none;
+}
+
+/* A record's list's place while it loads: a long table's worth of room. */
+.listHold {
+  min-height: calc(24 * var(--font-size-sm) * var(--line-height-body));
+}
+
+/* FRONTEND-031: a team's icon beside its name, in a row or a heading. */
+.team {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The team level's result cards (FRONTEND-037): one list, newest first, in
+ * one column, two where its own box is 36em wide (a container query, so the
+ * narrow compose picker stays at one). The grid never reorders: the DOM order
+ * is the reading, keyboard and visual order, row by row.
+ */
+.resultsWrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (min-width: 36em) {
+  .results {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * A card is its one control, a link or (in the picker) a button: the matchup
+ * and the W/L chip on the first line, the score and the game below.
+ */
+.results > li > :is(a, button) {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  /* The global reduced-motion rule zeros this token. */
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.results > li > :is(a, button):hover {
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface-muted);
+}
+
+.results > li > :is(a, button):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.matchup {
+  font-weight: var(--font-weight-semibold);
+}
+
+/*
+ * The result chip: a win solid (text colour behind surface-colour text), a
+ * loss outlined. The letter is the result; the contrast only helps.
+ */
+.win,
+.loss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  border: 1px solid var(--color-text);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.win {
+  background-color: var(--color-text);
+  color: var(--color-surface);
+}
+
+.loss {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.resultLine {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.resultScore {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}

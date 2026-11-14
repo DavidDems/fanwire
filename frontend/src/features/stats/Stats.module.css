@@ -1,0 +1,100 @@
+/*
+ * The Stats page's tabs (/stats/seasons, /stats/records, /stats/players): the
+ * tab's controls, the stats navigator and the leaders, stacked in one column.
+ * Every table, the leaders' included, is drawn by the navigator's ScrollTable
+ * with the navigator's own stylesheet (components/stats-nav/), so no table
+ * rule lives here (R24). Values come from tokens.css by name only.
+ */
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/*
+ * The season picker and the team bar, stacked. Field owns its own layout
+ * (components-map-posts.md §5): only the controls' width is set here.
+ */
+.controls {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab h2 {
+  margin: 0;
+}
+
+/*
+ * The tab's in-page bars (Records view, Record group) wrap rather than
+ * overflow when their tabs outgrow the column (a phone at 200% text).
+ */
+.tab [role="tablist"] {
+  flex-wrap: wrap;
+}
+
+.controls select,
+.controls input {
+  width: 100%;
+}
+
+/* The leaders' section: its h3, its rule, its tables. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.section h3 {
+  margin: 0;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* The team bar's suggestions, under the input in the page's flow. */
+.combobox {
+  position: relative;
+}
+
+.options {
+  position: relative;
+  z-index: var(--z-dropdown);
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+.options > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.options > li:hover {
+  background: var(--color-surface-muted);
+}
+
+/*
+ * The active option (aria-activedescendant points at it): an outline, which
+ * forced-colors mode keeps, so it never depends on the fill alone.
+ */
+.options > li[aria-selected="true"] {
+  background: var(--color-surface-muted);
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}

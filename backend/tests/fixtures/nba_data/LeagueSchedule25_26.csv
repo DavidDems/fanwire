@@ -1,0 +1,14 @@
+gameId,gameDateTimeEst,gameDay,homeTeamId,awayTeamId,homeTeamName,homeTeamCity,awayTeamName,awayTeamCity,arenaName,arenaCity,arenaState,gameLabel,gameSubLabel,gameSubtype,seriesGameNumber,weekNumber
+42500102,2026-06-05 20:30:00,Fri,1610612759,1610612752,Spurs,San Antonio,Knicks,New York,Frost Bank Center,San Antonio,TX,NBA Finals,Game 2,"",Game 2,33
+42500101,2026-06-03 20:30:00,Wed,1610612759,1610612752,Spurs,San Antonio,Knicks,New York,Frost Bank Center,San Antonio,TX,NBA Finals,Game 1,"",Game 1,33
+52500201,2026-04-17 19:30:00,Fri,1610612753,1610612766,Magic,Orlando,Hornets,Charlotte,Kia Center,Orlando,FL,SoFi Play-In Tournament,East,"","",26
+32500011,2026-02-15 17:00:00,Sun,1610616859,1610616861,Stars,"",World,"",Intuit Dome,Inglewood,CA,All-Star,Game 1,"","",17
+62500001,2025-12-16 20:30:00,Tue,0,0,,,,,T-Mobile Arena,Las Vegas,NV,Emirates NBA Cup,Championship,in-season-knockout,"",9
+22501201,2025-12-09 00:00:00,Tue,0,0,,,,,"","","",Emirates NBA Cup,Quarterfinal,in-season-knockout,"",8
+22500005,2025-11-05 19:30:00,Wed,1610612748,1610612755,Heat,Miami,76ers,Philadelphia,Kaseya Center,Miami,FL,"","","","",3
+22500004,2025-11-05 19:30:00,Wed,1610612752,1610612738,Knicks,New York,Celtics,Boston,Madison Square Garden,New York,NY,"","","","",3
+22500003,2025-11-03 22:00:00,Mon,1610612744,1610612747,Warriors,Golden State,Lakers,Los Angeles,Chase Center,San Francisco,CA,Emirates NBA Cup,West Group A,in-season,"",3
+22500002,2025-11-03 19:00:00,Mon,1610612738,1610612752,Celtics,Boston,Knicks,New York,TD Garden,Boston,MA,"","","","",3
+22500002,2025-11-03 19:00:00,Mon,1610612738,1610612752,Celtics,Boston,Knicks,New York,TD Garden,Boston,MA,"","","","",3
+22500001,2025-11-01 19:30:00,Sat,1610612761,1610612747,Raptors,Toronto,Lakers,Los Angeles,Scotiabank Arena,Toronto,ON,"","","","",2
+12500007,2025-10-17 22:30:00,Fri,1610612747,1610612758,Lakers,Los Angeles,Kings,Sacramento,Crypto.com Arena,Los Angeles,CA,Preseason,"","","",0

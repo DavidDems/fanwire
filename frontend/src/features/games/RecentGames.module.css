@@ -1,0 +1,31 @@
+/* Keep the lazy-import placeholder in HomeView in step with these dimensions. */
+.section {
+  margin-top: var(--space-5);
+  min-width: 0;
+}
+
+.section h2 {
+  margin-bottom: var(--space-3);
+}
+
+.section ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * A loading row: as tall as a game card (GameCard.module.css .card, two icon
+ * lines, their gap and the padding), so the card revealed in its place moves
+ * nothing.
+ */
+.row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: calc(2 * var(--space-6) + var(--space-1) + 2 * var(--space-2));
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}

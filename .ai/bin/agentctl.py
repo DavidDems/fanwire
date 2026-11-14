@@ -1,0 +1,1291 @@
+#!/usr/bin/env python3
+"""agentctl - the only supported way to touch agent workflow state.
+
+Every GitHub Actions step and every human intervention goes through this CLI,
+so there is exactly one implementation of "what happens next" and it is the
+tested one. Workflow YAML stays a thin shell: read state, ask agentctl, do one
+thing, write state.
+
+  agentctl status                       board of every task
+  agentctl task validate DEMO-001       check a spec before it is dispatched
+  agentctl next DEMO-001                what the orchestrator should do now
+  agentctl context DEMO-001             the exact context a worker gets
+  agentctl state advance DEMO-001 -e CI_PASSED
+  agentctl state control DEMO-001 --set PAUSE
+  agentctl hand start UI-009            record a task a human runs by hand
+  agentctl hand finish UI-009 --pr 140
+  agentctl guard check DEMO-001 --role code_agent --base main --head HEAD
+  agentctl distill DEMO-001 --log ci.txt --ci-status failure
+  agentctl ci-event --conclusion cancelled   the event a CI conclusion means
+  agentctl telemetry report
+  agentctl shadow report --comments comments.json   jev's answers beside Haiku's
+  agentctl docs inventory --paths wiki/  words against budget, inbound links, last commit
+  agentctl docs dupes                   repeated and near-repeated Markdown paragraphs
+  agentctl docs archive-refs            PR numbers and hashes to fanwire-archive (dry run)
+  agentctl addresses                    fail on a personal email address in a tracked file
+  agentctl selfcheck                    prove the machinery works, no tokens spent
+
+Exit codes: 0 success, 1 the thing being checked failed, 2 usage/IO error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+
+# Code and data are found separately (handoff.md §10, D2b).
+#
+# AI_ROOT is wherever this file lives, and supplies everything that is code or
+# trusted configuration: agentlib, config.json, policy.json, prompts, skills.
+# In CI that is a checkout of `main` beside the task, so nothing a model wrote
+# on a task branch is ever imported or obeyed.
+#
+# REPO_ROOT is the tree being worked on: task specs and state, telemetry,
+# required context, and where git runs. `AGENTCTL_DATA_ROOT` names it (the
+# task branch's checkout, in CI); unset, it is this checkout, as it always was.
+AI_ROOT = Path(__file__).resolve().parents[1]
+_DATA_ROOT = os.environ.get("AGENTCTL_DATA_ROOT", "")
+if _DATA_ROOT and not Path(_DATA_ROOT).is_dir():
+    # Fail fast: a wrong path would otherwise read as "no tasks", and state
+    # would be written into a directory nobody looks at.
+    print(f"agentctl: AGENTCTL_DATA_ROOT {_DATA_ROOT!r} is not a directory", file=sys.stderr)
+    raise SystemExit(2)
+REPO_ROOT = Path(_DATA_ROOT).resolve() if _DATA_ROOT else AI_ROOT.parent
+sys.path.insert(0, str(AI_ROOT))
+
+from agentlib import (
+    agentresult as ares,
+)
+from agentlib import (
+    addresses,
+    ciresult,
+    doccorpus,
+    doclint,
+    guard,
+    handusage,
+    metrics,
+    orchestrator,
+    promptbuild,
+    shadow,
+)
+from agentlib import (
+    spec as spec_mod,
+)
+from agentlib import (
+    state as st,
+)
+from agentlib import (
+    telemetry as tm,
+)
+
+TASKS_DIR = REPO_ROOT / ".ai" / "tasks"
+SKILLS_DIR = AI_ROOT / "skills"
+
+OK, FAILED, USAGE = 0, 1, 2
+
+
+# --------------------------------------------------------------------------- helpers
+
+
+def _json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def config() -> dict:
+    return _json(AI_ROOT / "config.json")
+
+
+def policy() -> dict:
+    return _json(AI_ROOT / "policy.json")
+
+
+def known_skills() -> set[str]:
+    if not SKILLS_DIR.exists():
+        return set()
+    return {d.name for d in SKILLS_DIR.iterdir() if (d / "SKILL.md").exists()}
+
+
+def task_dir(task_id: str) -> Path:
+    d = TASKS_DIR / task_id
+    if not spec_mod.TASK_ID_RE.fullmatch(task_id):
+        die(f"{task_id!r} is not a valid task id")
+    return d
+
+
+def state_path(task_id: str) -> Path:
+    return task_dir(task_id) / "state.json"
+
+
+def load_spec(task_id: str) -> dict:
+    try:
+        return spec_mod.load(task_dir(task_id))
+    except spec_mod.SpecError as exc:
+        die(str(exc))
+        raise  # unreachable; keeps the type checker honest
+
+
+def draft_state(task_id: str, spec: dict, mode: str = "auto") -> dict:
+    """The state a task is in before anything has run: DRAFT, on disk nowhere.
+
+    A spec with no state file is not an error — it is a task nobody has started.
+    Treating it as one produced a chicken-and-egg that killed the first live
+    orchestrator run: `next` refused to answer without a state file, and the
+    action it would have returned (`validate`) is what creates that file.
+    """
+    policy_ = spec_mod.workflow_policy(spec)
+    s = st.new_state(
+        task_id,
+        branch=spec_mod.branch_name(task_id),
+        max_attempts=policy_["max_impl_attempts"],
+        mode=mode,
+    )
+    s["require_red_baseline"] = policy_["require_red_baseline"]
+    return s
+
+
+def load_pair(task_id: str, require_state: bool = True) -> tuple[dict, dict]:
+    spec = load_spec(task_id)
+    p = state_path(task_id)
+    if p.exists():
+        return spec, st.load_state(p)
+    if require_state:
+        die(f"no state file for {task_id}; run `agentctl state init {task_id}`")
+    return spec, draft_state(task_id, spec)
+
+
+def emit(obj) -> None:
+    print(json.dumps(obj, indent=2, sort_keys=True))
+
+
+def die(message: str, code: int = USAGE) -> None:
+    print(f"agentctl: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def git(*args: str) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        die(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+# --------------------------------------------------------------------------- task
+
+
+def cmd_task_new(args) -> int:
+    d = task_dir(args.task_id)
+    if d.exists():
+        die(f"{d} already exists")
+    d.mkdir(parents=True)
+    spec = {
+        "schema": spec_mod.SCHEMA_VERSION,
+        "task_id": args.task_id,
+        "objective": args.objective or "TODO: one sentence, what this task must achieve.",
+        "acceptance_criteria": ["TODO: observable, testable, one per line."],
+        "allowed_paths": ["TODO/**"],
+        "forbidden_paths": [],
+        "required_context": ["wiki/CodeContext/Modules/0x00-architecture.md"],
+        "required_skills": [],
+        "workflow_policy": dict(spec_mod.WORKFLOW_POLICY_DEFAULTS),
+    }
+    (d / "task.json").write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+    (d / "brief.md").write_text(
+        f"# {args.task_id}\n\n"
+        "Prose for the Manager. Nothing parses this file; the contract is `task.json`.\n\n"
+        "## Why this task exists\n\n## What 'done' looks like\n\n## Known constraints\n",
+        encoding="utf-8",
+    )
+    print(f"created {d.relative_to(REPO_ROOT)}")
+    return OK
+
+
+def cmd_task_validate(args) -> int:
+    try:
+        spec = spec_mod.load(task_dir(args.task_id))
+    except spec_mod.SpecError as exc:
+        die(str(exc), FAILED)
+    errors = spec_mod.validate(spec, known_skills())
+    if errors:
+        print(f"{args.task_id}: {len(errors)} problem(s)", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        return FAILED
+    print(f"{args.task_id}: spec is valid")
+    return OK
+
+
+def cmd_task_list(args) -> int:
+    for d in sorted(TASKS_DIR.glob("*/task.json")):
+        print(d.parent.name)
+    return OK
+
+
+# --------------------------------------------------------------------------- state
+
+
+def _require_valid_spec(task_id: str) -> dict:
+    spec = load_spec(task_id)
+    errors = spec_mod.validate(spec, known_skills())
+    if errors:
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        die(f"refusing to start an invalid spec ({len(errors)} problems)", FAILED)
+    return spec
+
+
+def cmd_state_init(args) -> int:
+    spec = _require_valid_spec(args.task_id)
+    if state_path(args.task_id).exists():
+        # Idempotent: the orchestrator may retry a run, and re-initialising
+        # would silently discard a task's history.
+        print(f"{args.task_id} already has state; leaving it alone", file=sys.stderr)
+        emit(st.load_state(state_path(args.task_id)))
+        return OK
+    s = st.advance(draft_state(args.task_id, spec), "VALIDATED")
+    st.save_state(state_path(args.task_id), s)
+    emit(s)
+    return OK
+
+
+def cmd_state_show(args) -> int:
+    _, s = load_pair(args.task_id)
+    emit(s)
+    return OK
+
+
+def cmd_state_advance(args) -> int:
+    spec, s = load_pair(args.task_id)
+    ctx: dict = {"spec": spec}
+    if args.reason:
+        ctx["reason"] = args.reason
+    if args.distilled:
+        ctx["distilled"] = _json(Path(args.distilled))
+    if args.ci_run_id or args.ci_conclusion:
+        ctx["ci"] = {
+            "run_id": args.ci_run_id,
+            "conclusion": args.ci_conclusion,
+            "commit": args.commit_sha,
+        }
+    if args.commit_sha:
+        ctx["commit_sha"] = args.commit_sha
+    if args.extra_attempts:
+        ctx["extra_attempts"] = args.extra_attempts
+    # An unsolicited event about a task that has already finished. CI re-running
+    # on a completed task's branch is normal -- a review PR must be brought
+    # up to date before it can merge -- and the orchestrator waking to find
+    # nothing to do is not a failure. Callers that represent a *deliberate*
+    # instruction never pass this, so a person asking for the impossible is
+    # still told so.
+    if args.ignore_terminal and st.is_terminal(s):
+        print(f"agentctl: {args.task_id} is {s['state']}; {args.event} not applied")
+        return OK
+    # A worker's result is only ever about the state it was dispatched into
+    # (handoff.md §10, D3, S9): MANAGER_RETRY is legal from ESCALATED for a
+    # human, and a manager landing after the task escalated must not use it.
+    if args.from_state and s["state"] != args.from_state:
+        die(
+            f"{args.task_id} is {s['state']}, not {args.from_state}; {args.event} not applied",
+            FAILED,
+        )
+    # A CI result for a task a human has paused (handoff.md §10, D3, S2). Not
+    # applied, and not lost silently either: its run id is recorded and the
+    # notice names it. operations.md has the re-run recipe.
+    if args.discard_if_paused and s.get("control") == "PAUSE":
+        if args.ci_run_id:
+            s = st.note_ci_run(s, args.ci_run_id, args.ci_conclusion, args.commit_sha, False)
+            st.save_state(state_path(args.task_id), s)
+        print(
+            f"::notice::{args.task_id} is paused; CI run {args.ci_run_id or '(unknown)'} "
+            f"({args.ci_conclusion or 'no conclusion'}) was discarded, not applied. "
+            "To get a verdict: resume the task, then re-dispatch test-agent on its branch."
+        )
+        return OK
+    event = args.event
+    if event == "CI_FAILED" and s["state"] == "BASELINE_CI" and s.get("require_red_baseline", True):
+        # handoff.md §10, D4. Red is only "as required" when the new tests are
+        # what failed. Decided here, for every caller, so nothing applies a
+        # baseline CI_FAILED unclassified; with no evidence it fails closed.
+        verdict = baseline_verdict(s, args.ci_jobs, args.ci_log)
+        if not verdict["right_reason"]:
+            event = "CI_FAILED_WRONG_REASON"
+            ctx["reason"] = verdict["reason"]
+        print(f"agentctl: baseline red {_verdict_line(verdict)}", file=sys.stderr)
+    try:
+        s = st.advance(s, event, **ctx)
+    except st.Paused as exc:
+        print(f"agentctl: {exc}", file=sys.stderr)
+        return FAILED
+    except st.StateError as exc:
+        die(str(exc), FAILED)
+    if args.ci_run_id:
+        s = st.note_ci_run(s, args.ci_run_id, args.ci_conclusion, args.commit_sha, True)
+    if args.session_id:
+        s = st.record_session(s, args.role or "manager", args.session_id)
+    st.save_state(state_path(args.task_id), s)
+    emit(s)
+    return OK
+
+
+def baseline_verdict(s: dict, jobs_path: str | None, log_path: str | None) -> dict:
+    """ciresult.baseline_verdict for this task's failed baseline run.
+
+    The test commit's files come from git in the data root: every commit the
+    test agent landed (state.test_commits), as that commit changed it. Any
+    file that cannot be read is simply absent, which the verdict treats as
+    unreadable, never as a pass.
+    """
+    log = ""
+    ran = None
+    if log_path:
+        try:
+            log = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            pass
+    if jobs_path:
+        try:
+            ran = _json(Path(jobs_path))
+        except (OSError, ValueError):
+            pass
+    files: set[str] = set()
+    for sha in st.test_commits(s):
+        changed = subprocess.run(
+            ["git", "diff-tree", "-r", "-z", "--root", "--no-commit-id", "--name-only"]
+            + ["--no-renames", sha],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if changed.returncode == 0:
+            files.update(p for p in changed.stdout.split("\0") if p)
+    return ciresult.baseline_verdict(log, ran, files)
+
+
+def _verdict_line(verdict: dict) -> str:
+    """One line for the run log. Built from parsed paths and job names only,
+    never raw log text, and kept to a single line so nothing in it can be read
+    as a workflow command."""
+    if verdict["right_reason"]:
+        files = sorted({f["file"] for f in verdict["failures"]})
+        text = "for the right reason: " + ", ".join(files)
+    else:
+        text = "for the wrong reason: " + verdict["reason"]
+    return " ".join(text.split())
+
+
+def cmd_state_control(args) -> int:
+    _, s = load_pair(args.task_id)
+    try:
+        s = st.set_control(s, args.set)
+    except st.StateError as exc:
+        die(str(exc), FAILED)
+    st.save_state(state_path(args.task_id), s)
+    print(f"{args.task_id}: control={s['control']} state={s['state']}")
+    return OK
+
+
+# --------------------------------------------------------------------------- hand runs
+
+
+def cmd_hand_start(args) -> int:
+    """Record that a human is running this task by hand (state.MODES).
+
+    Not idempotent, unlike `state init`: an existing state file is either the
+    orchestrator's, which a hand run must not take over, or an earlier hand
+    run's, whose history starting again would discard.
+    """
+    spec = _require_valid_spec(args.task_id)
+    path = state_path(args.task_id)
+    if path.exists():
+        s = st.load_state(path)
+        die(
+            f"{args.task_id} already has state ({s['state']}, {st.task_mode(s)} run); "
+            "leaving it alone",
+            FAILED,
+        )
+    s = st.advance(draft_state(args.task_id, spec, mode="hand"), "HAND_STARTED")
+    st.save_state(path, s)
+    emit(s)
+    print(f"next: commit .ai/tasks/{args.task_id}/state.json on agent/{args.task_id}")
+    return OK
+
+
+def cmd_hand_finish(args) -> int:
+    load_spec(args.task_id)  # the id is a task's, or this dies
+    if not state_path(args.task_id).exists():
+        die(f"no state file for {args.task_id}; run `agentctl hand start` first", FAILED)
+    s = st.load_state(state_path(args.task_id))
+    try:
+        usage = handusage.capture(args.usage_transcript) if args.usage_transcript else None
+        s = st.advance(s, "HAND_FINISHED", pr=args.pr, hand_usage=usage)
+    except st.Paused as exc:
+        print(f"agentctl: {exc}", file=sys.stderr)
+        return FAILED
+    except (st.StateError, handusage.HandUsageError) as exc:
+        die(str(exc), FAILED)
+    st.save_state(state_path(args.task_id), s)
+    emit(s)
+    return OK
+
+
+# --------------------------------------------------------------------------- dispatch
+
+
+def cmd_ci_event(args) -> int:
+    """The event a CI run's `workflow_run` conclusion means (handoff.md §10, D3, S1)."""
+    print(st.ci_event(args.conclusion))
+    return OK
+
+
+def cmd_next(args) -> int:
+    # require_state=False: a task that has never run is DRAFT, and the answer
+    # is `validate`. This is the orchestrator's very first call on a new task.
+    spec, s = load_pair(args.task_id, require_state=False)
+    emit(orchestrator.next_action(s, spec))
+    return OK
+
+
+def cmd_context(args) -> int:
+    """The exact payload a worker is started with.
+
+    Printed rather than piped so a human can read what an agent was told
+    before it ran, which is most of what `.ai/docs/operations.md` means by
+    'inspect without opening an agent session'.
+    """
+    spec, s = load_pair(args.task_id)
+    ctx = orchestrator.worker_context(s, spec)
+    ctx["context_files"] = [
+        str(REPO_ROOT / ref) for ref in ctx["required_context"] if (REPO_ROOT / ref).exists()
+    ]
+    ctx["skill_files"] = [
+        str(SKILLS_DIR / name / "SKILL.md")
+        for name in ctx["required_skills"]
+        if (SKILLS_DIR / name / "SKILL.md").exists()
+    ]
+    emit(ctx)
+    return OK
+
+
+def cmd_prompt(args) -> int:
+    """Assemble the exact prompt a worker will be started with."""
+    spec, s = load_pair(args.task_id)
+    ctx = orchestrator.worker_context(s, spec)
+    ctx["role"] = args.role  # the workflow names the role; state confirms the rest
+    ctx["context_files"] = [
+        str(REPO_ROOT / ref) for ref in ctx["required_context"] if (REPO_ROOT / ref).exists()
+    ]
+    ctx["skill_files"] = [
+        str(SKILLS_DIR / name / "SKILL.md")
+        for name in ctx["required_skills"]
+        if (SKILLS_DIR / name / "SKILL.md").exists()
+    ]
+    try:
+        text = promptbuild.build(ctx, AI_ROOT)
+    except promptbuild.PromptError as exc:
+        die(str(exc), FAILED)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+    else:
+        print(text)
+    return OK
+
+
+# ------------------------------------------------------------------- agent results
+
+
+def cmd_summary_line(args) -> int:
+    print(ares.summary_line(ares.parse(args.agent_result)))
+    return OK
+
+
+def cmd_manager_decision(args) -> int:
+    print(ares.manager_decision(ares.parse(args.agent_result)))
+    return OK
+
+
+def cmd_session_id(args) -> int:
+    print(ares.parse(args.agent_result).get("session_id") or "")
+    return OK
+
+
+def cmd_telemetry_from_run(args) -> int:
+    """Record one invocation from a normalised agent result.
+
+    Never fails the workflow: losing an accounting record must not lose the
+    run. A problem here is reported as a warning and the step still succeeds.
+    """
+    cfg = config()
+    if not cfg.get("telemetry", {}).get("enabled", True):
+        return OK
+    attempt = 0
+    if state_path(args.task).exists():
+        try:
+            attempt = st.load_state(state_path(args.task))["attempt"]
+        except st.StateError:
+            pass
+    rec = ares.telemetry_record(
+        ares.parse(args.agent_result),
+        task_id=args.task,
+        role=args.role,
+        attempt=attempt,
+        workflow_run_id=args.workflow_run_id,
+        started_at=args.started,
+        outcome=args.result,
+    )
+    try:
+        path = tm.record(
+            REPO_ROOT / cfg["telemetry"]["root"], rec, prices=cfg["telemetry"].get("prices", {})
+        )
+    except tm.TelemetryError as exc:
+        print(f"::warning::telemetry not recorded: {exc}", file=sys.stderr)
+        return OK
+    print(path.relative_to(REPO_ROOT))
+    return OK
+
+
+# --------------------------------------------------------------------------- guard
+
+
+def cmd_guard_check(args) -> int:
+    try:
+        spec = spec_mod.load(task_dir(args.task_id))
+    except spec_mod.SpecError as exc:
+        # A missing or unreadable spec is a refusal, reported as one: not a
+        # traceback that reads like a crash of the guard itself.
+        die(f"guard: cannot load the spec: {exc}", FAILED)
+        raise  # unreachable; keeps the type checker honest
+    if args.diff_file:
+        paths = [
+            line.strip()
+            for line in Path(args.diff_file).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    else:
+        paths = [
+            p for p in git("diff", "--name-only", f"{args.base}...{args.head}").splitlines() if p
+        ]
+
+    allow_test_edits = spec_mod.workflow_policy(spec)["allow_test_edits_during_impl"]
+    result = guard.check_diff(paths, args.role, spec, policy(), allow_test_edits=allow_test_edits)
+
+    if result.ok:
+        print(f"guard: {len(paths)} path(s) OK for role {args.role} on {args.task_id}")
+        return OK
+    print(
+        f"guard: {len(result.violations)} violation(s) for role {args.role} on {args.task_id}",
+        file=sys.stderr,
+    )
+    print(guard.format_violations(result.violations), file=sys.stderr)
+    return FAILED
+
+
+def cmd_guard_tested(args) -> int:
+    """May a CI verdict for `--sha` be applied to the checked-out task branch?
+
+    Only if that commit is in the branch's history and nothing but this task's
+    own bookkeeping changed after it (handoff.md §10, D1). A verdict for any
+    other code is evidence about something the branch does not contain.
+    """
+    if not guard.TASK_ID_SAFE.fullmatch(args.task_id):
+        print(f"guard: {args.task_id!r} is not a valid task id", file=sys.stderr)
+        return FAILED
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", args.sha, "HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        print(
+            f"guard: {args.sha} is not in the history of the checked-out branch; "
+            f"its CI verdict says nothing about {args.task_id}",
+            file=sys.stderr,
+        )
+        return FAILED
+    since = [p for p in git("diff", "--name-only", args.sha, "HEAD").splitlines() if p]
+    untested = guard.untested_changes(since, args.task_id)
+    if untested:
+        print(
+            f"guard: {len(untested)} path(s) changed after {args.sha} was tested:",
+            file=sys.stderr,
+        )
+        for p in untested:
+            print(f"  {p}", file=sys.stderr)
+        return FAILED
+    print(f"guard: {args.sha} is what {args.task_id}'s branch carries; the verdict applies")
+    return OK
+
+
+# --------------------------------------------------------------------------- distil
+
+
+def cmd_distill(args) -> int:
+    log = Path(args.log).read_text(encoding="utf-8", errors="replace") if args.log else ""
+    _, s = load_pair(args.task_id) if state_path(args.task_id).exists() else (None, None)
+    attempt = args.attempt if args.attempt is not None else (s["attempt"] if s else 0)
+    result = ciresult.distill(log, args.ci_status, args.task_id, attempt)
+    if args.out:
+        Path(args.out).write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    emit(result)
+    return OK
+
+
+# --------------------------------------------------------------------------- shadow
+
+
+# Usage: gh api --paginate repos/<owner>/<repo>/issues/comments > comments.json
+def cmd_shadow_report(args) -> int:
+    try:
+        if args.comments == "-":
+            text = sys.stdin.read()
+        else:
+            text = Path(args.comments).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        die(f"cannot read comments from {args.comments}: {exc}")
+    summary = shadow.summarize(shadow.collect(shadow.load_comments(text)))
+    if args.json:
+        emit(summary)
+        return OK
+    t = summary["totals"]
+    print(
+        f"records {t['records']}  agree {t['agree']}  disagree {t['disagree']}  "
+        f"haiku ${t['haiku_cost_usd']:.4f}  jev ${t['jev_cost_usd']:.4f}"
+    )
+    for name, b in sorted(summary["by_automation"].items()):
+        conf = "-" if b["mean_confidence"] is None else f"{b['mean_confidence']:.2f}"
+        j = b["jev"]
+        print(
+            f"  {name:<12} {b['records']} records  {b['agree']} agree  "
+            f"{b['disagree']} disagree  jev yes {j['yes']} / no {j['no']} / none {j['none']}  "
+            f"mean confidence {conf}  haiku ${b['haiku_cost_usd']:.4f}  "
+            f"jev ${b['jev_cost_usd']:.4f}"
+        )
+    if summary["rows"]:
+        print("\nrows:")
+    words = {True: "agree", False: "disagree", None: "-"}
+    for r in summary["rows"]:
+        conf = "-" if r["confidence"] is None else f"{r['confidence']:.2f}"
+        print(
+            f"  #{r['pr']:<4} {r['task'] or '-'!s:<12} {r['automation']:<11} "
+            f"haiku {r['haiku'] or '-'}  jev {r['jev'] or '-'}  {conf}  {words[r['agree']]}"
+        )
+    return OK
+
+
+# --------------------------------------------------------------------------- unit metrics
+
+
+def cmd_metrics_collect(args) -> int:
+    try:
+        record = metrics.collect(
+            REPO_ROOT, args.task_id, pr=args.pr, repo=args.repo, backfilled=args.backfilled
+        )
+        if args.out:
+            output = Path(args.out).resolve()
+            if any(
+                output.is_relative_to(REPO_ROOT / ".ai" / directory)
+                for directory in ("tasks", "telemetry")
+            ):
+                raise metrics.MetricsError(
+                    "metric artifacts must not overwrite task state or telemetry"
+                )
+            output.parent.mkdir(parents=True, exist_ok=True)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=output.parent, delete=False
+                ) as stream:
+                    temporary = Path(stream.name)
+                    json.dump(record, stream, indent=2, sort_keys=True)
+                    stream.write("\n")
+                os.replace(temporary, output)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+            print(output)
+        else:
+            emit(record)
+    except Exception as exc:
+        if args.diagnostic_json:
+            value = metrics.validate_diagnostic(
+                getattr(exc, "diagnostic", None), task_id=args.task_id, pr=args.pr, source="metrics"
+            ) or metrics.failure_diagnostic(source="metrics", task_id=args.task_id, pr=args.pr)
+            print(json.dumps({"metrics_error": value}, sort_keys=True), file=sys.stderr)
+            return USAGE
+        if isinstance(exc, (metrics.MetricsError, OSError)):
+            die(str(exc))
+        raise
+    return OK
+
+
+# --------------------------------------------------------------------------- telemetry
+
+
+def cmd_telemetry_record(args) -> int:
+    cfg = config()
+    root = REPO_ROOT / cfg["telemetry"]["root"]
+    try:
+        path = tm.record(root, _json(Path(args.file)), prices=cfg["telemetry"].get("prices", {}))
+    except tm.TelemetryError as exc:
+        die(str(exc), FAILED)
+    print(path.relative_to(REPO_ROOT))
+    return OK
+
+
+def cmd_telemetry_report(args) -> int:
+    cfg = config()
+    summary = tm.aggregate(REPO_ROOT / cfg["telemetry"]["root"])
+    if args.json:
+        emit(summary)
+        return OK
+    # Cost is the provider's own figure wherever a record has one; a record
+    # whose cost is only the estimate is counted and listed (handoff.md §10,
+    # D6). Permission denials answer whether a worker tried a tool it is not
+    # given, a shell above all (D2's threat chain).
+    t = summary["totals"]
+    print(
+        f"invocations {t['invocations']}  tokens {t['total_tokens']:,}  "
+        f"cost ${t['cost_usd']:.4f} ({t['estimated_records']} estimated, "
+        f"{t['unpriced_records']} unpriced)  "
+        f"permission denials {t['permission_denials']}  escalations {t['escalations']}"
+    )
+    for scope in ("by_task", "by_role", "by_model"):
+        if not summary[scope]:
+            continue
+        print(f"\n{scope.replace('_', ' ')}:")
+        for key, b in sorted(summary[scope].items()):
+            flags = ""
+            if b["estimated_records"]:
+                flags += f"  {b['estimated_records']} estimated"
+            if b["permission_denials"]:
+                flags += f"  {b['permission_denials']} denied"
+            print(
+                f"  {key:<34} {b['invocations']:>4} runs  {b['total_tokens']:>10,} tok  "
+                f"${b['cost_usd']:.4f}{flags}"
+            )
+    if summary["estimated"]:
+        print("\nestimated cost, not the provider's figure (records before D6 omit cache tokens):")
+        for rel in summary["estimated"]:
+            print(f"  {rel}")
+    if summary["denials"]:
+        print("\npermission denied:")
+        for d in summary["denials"]:
+            print(f"  {d['record']}  {d['count']}  {', '.join(d['tools']) or '-'}")
+    if summary["unreadable"]:
+        print("\nunreadable records:", file=sys.stderr)
+        for rel in summary["unreadable"]:
+            print(f"  {rel}", file=sys.stderr)
+    return OK
+
+
+# --------------------------------------------------------------------------- status
+
+
+def cmd_status(args) -> int:
+    rows = []
+    now = datetime.now(UTC)
+    # Keyed on task.json, not state.json: a task with a spec and no state is a
+    # DRAFT waiting to start, and it belongs on the board. Keying on state
+    # files is why a just-created task read as "no tasks".
+    for task_file in sorted(TASKS_DIR.glob("*/task.json")):
+        d = task_file.parent
+        try:
+            spec = spec_mod.load(d)
+        except spec_mod.SpecError as exc:
+            rows.append((d.name, "BAD SPEC", "-", "-", "-", str(exc)[:60]))
+            continue
+        state_file = d / "state.json"
+        try:
+            s = st.load_state(state_file) if state_file.exists() else draft_state(d.name, spec)
+        except (st.StateError, json.JSONDecodeError) as exc:
+            rows.append((d.name, "UNREADABLE", "-", "-", "-", str(exc)[:60]))
+            continue
+        action = orchestrator.next_action(s, spec)
+        nxt = action["kind"] + (f":{action['role']}" if action.get("role") else "")
+        # A dispatch whose result is overdue (handoff.md §10, D3): the run
+        # was lost, cancelled, or never started. Nothing will wake the task.
+        overdue = st.stalled(s, now)
+        if overdue:
+            nxt = f"STALLED: {overdue}"
+        rows.append(
+            (
+                s["task_id"],
+                s["state"],
+                st.task_mode(s),  # who runs it: the orchestrator, or a human by hand
+                s["control"],
+                f"{s['attempt']}/{s['max_attempts']}",
+                nxt if overdue else (s.get("escalation_reason") or nxt),
+            )
+        )
+    if not rows:
+        print("no tasks")
+        return OK
+    print(f"{'TASK':<14}{'STATE':<26}{'MODE':<6}{'CTRL':<7}{'ATT':<7}NEXT / REASON")
+    for r in rows:
+        print(f"{r[0]:<14}{r[1]:<26}{r[2]:<6}{r[3]:<7}{r[4]:<7}{r[5]}")
+    return OK
+
+
+# --------------------------------------------------------------------------- selfcheck
+
+
+def cmd_selfcheck(args) -> int:
+    """Drive the machinery end to end with no model and no CI.
+
+    This is the cheap, always-available proof that the workflow engine itself
+    is sound: every committed spec validates, the policy loads, and a synthetic
+    task walks the green path, the retry path and the escalation path.
+    """
+    problems: list[str] = []
+
+    try:
+        cfg, pol = config(), policy()
+    except (OSError, json.JSONDecodeError) as exc:
+        die(f"cannot load configuration: {exc}", FAILED)
+    for role in ("manager", "test_agent", "code_agent", "distiller", "context_maintainer"):
+        if role not in pol["roles"]:
+            problems.append(f"policy.json has no entry for role {role}")
+        if role not in cfg["roles"]:
+            problems.append(f"config.json has no model for role {role}")
+
+    skills = known_skills()
+    for d in sorted(TASKS_DIR.glob("*/task.json")):
+        try:
+            spec = spec_mod.load(d.parent)
+        except spec_mod.SpecError as exc:
+            problems.append(str(exc))
+            continue
+        problems += [f"{d.parent.name}: {e}" for e in spec_mod.validate(spec, skills)]
+
+    demo = {
+        "task_id": "SELF-001",
+        "allowed_paths": ["backend/app/**", "backend/tests/**"],
+        "forbidden_paths": [],
+        "workflow_policy": {"max_impl_attempts": 2, "run_context_maintainer": True},
+    }
+
+    # Green path.
+    s = st.new_state("SELF-001", branch="agent/SELF-001", max_attempts=2)
+    for event in ("VALIDATED", "DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_FAILED"):
+        s = st.advance(s, event)
+    if s["state"] != "READY_FOR_IMPLEMENTATION":
+        problems.append(f"red baseline did not open implementation (got {s['state']})")
+    for event in ("DISPATCH_CODE_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_PASSED"):
+        s = st.advance(s, event, spec=demo)
+    s = st.advance(s, "MAINTAINER_DONE")
+    if s["state"] != "COMPLETE":
+        problems.append(f"green path did not COMPLETE (got {s['state']})")
+
+    # A green baseline must NOT open implementation.
+    s = st.advance(st.new_state("SELF-002", max_attempts=2), "VALIDATED")
+    for event in ("DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_PASSED"):
+        s = st.advance(s, event)
+    if s["state"] != "MANAGER_REVIEW":
+        problems.append(f"green baseline was not caught (got {s['state']})")
+
+    # Nor may a baseline that is red for the wrong reason (handoff.md §10, D4).
+    audit = {"jobs": [{"name": "pip-audit", "conclusion": "failure"}]}
+    verdict = ciresult.baseline_verdict("", audit, {"backend/tests/test_x.py"})
+    if verdict["right_reason"]:
+        problems.append("a failed audit read as a baseline red for the right reason")
+    s = st.advance(st.new_state("SELF-005", max_attempts=2), "VALIDATED")
+    for event in ("DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED"):
+        s = st.advance(s, event)
+    s = st.advance(s, "CI_FAILED_WRONG_REASON", reason=verdict["reason"])
+    if s["state"] != "MANAGER_REVIEW":
+        problems.append(f"wrong-reason red baseline was not caught (got {s['state']})")
+
+    # Retry loop terminates.
+    s = st.advance(st.new_state("SELF-003", max_attempts=2), "VALIDATED")
+    for event in ("DISPATCH_TEST_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_FAILED"):
+        s = st.advance(s, event)
+    for _ in range(20):
+        if s["state"] == "MANAGER_REVIEW":
+            break
+        action = orchestrator.next_action(s, demo)
+        if action["kind"] == "dispatch_agent" and action["role"] == "code_agent":
+            for event in ("DISPATCH_CODE_AGENT", "AGENT_COMMITTED", "CI_STARTED", "CI_FAILED"):
+                s = st.advance(s, event, spec=demo)
+        elif action["kind"] == "distill":
+            s = st.advance(s, "DISTILLED", distilled={})
+        else:
+            problems.append(f"retry loop stalled at {s['state']} ({action})")
+            break
+    else:
+        problems.append("retry loop did not terminate within 20 iterations")
+    if s["attempt"] > 2:
+        problems.append(f"retry loop exceeded its budget (attempt {s['attempt']})")
+
+    # A manager that never decides cannot be dispatched forever (D3, L1).
+    s = dict(st.new_state("SELF-004", max_attempts=2), state="MANAGER_REVIEW")
+    for _ in range(orchestrator.MAX_TRANSITIONS):
+        action = orchestrator.next_action(s, demo)
+        if action["kind"] != "dispatch_agent":
+            break
+        s = st.advance(s, action["event"])
+    if s["state"] != "ESCALATED":
+        problems.append(f"manager loop did not escalate (got {s['state']})")
+
+    # The guard refuses a worker reaching for the system's own boundaries.
+    breach = guard.check_diff(
+        [".github/workflows/agent-orchestrator.yml", ".ai/policy.json"],
+        "code_agent",
+        demo,
+        pol,
+    )
+    if breach.ok:
+        problems.append("guard did NOT stop a worker writing agent infrastructure")
+
+    if problems:
+        print(f"selfcheck: {len(problems)} problem(s)", file=sys.stderr)
+        for p in problems:
+            print(f"  - {p}", file=sys.stderr)
+        return FAILED
+    print("selfcheck: state machine, guard, policy and every committed task spec are consistent")
+    return OK
+
+
+# --------------------------------------------------------------------------- wiring
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="agentctl", description=__doc__.splitlines()[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    task = sub.add_parser("task", help="task specifications").add_subparsers(
+        dest="sub", required=True
+    )
+    t_new = task.add_parser("new", help="scaffold a spec (Director)")
+    t_new.add_argument("task_id")
+    t_new.add_argument("--objective")
+    t_new.set_defaults(func=cmd_task_new)
+    t_val = task.add_parser("validate", help="validate a spec before dispatch")
+    t_val.add_argument("task_id")
+    t_val.set_defaults(func=cmd_task_validate)
+    task.add_parser("list").set_defaults(func=cmd_task_list)
+
+    state = sub.add_parser("state", help="workflow state").add_subparsers(dest="sub", required=True)
+    s_init = state.add_parser("init", help="create state.json and validate the spec")
+    s_init.add_argument("task_id")
+    s_init.set_defaults(func=cmd_state_init)
+    s_show = state.add_parser("show")
+    s_show.add_argument("task_id")
+    s_show.set_defaults(func=cmd_state_show)
+    s_adv = state.add_parser("advance", help="apply one workflow event")
+    s_adv.add_argument("task_id")
+    s_adv.add_argument("-e", "--event", required=True)
+    s_adv.add_argument("--reason")
+    s_adv.add_argument("--distilled", help="path to a distilled result JSON")
+    s_adv.add_argument("--ci-run-id")
+    s_adv.add_argument("--ci-conclusion")
+    s_adv.add_argument("--commit-sha")
+    s_adv.add_argument("--extra-attempts", type=int)
+    s_adv.add_argument(
+        "--ci-jobs",
+        help="`gh run view --json jobs` of the CI run; with --ci-log, how a failed baseline "
+        "is classified (handoff.md §10, D4)",
+    )
+    s_adv.add_argument("--ci-log", help="`gh run view --log-failed` of the CI run")
+    s_adv.add_argument("--session-id", help="record a resumable provider session id")
+    s_adv.add_argument("--role", help="which role the --session-id belongs to")
+    s_adv.add_argument(
+        "--ignore-terminal",
+        action="store_true",
+        help="exit 0 instead of failing when the task has already finished "
+        "(for unsolicited events such as a late CI result)",
+    )
+    s_adv.add_argument(
+        "--discard-if-paused",
+        action="store_true",
+        help="when the task is paused, record --ci-run-id, print a notice and exit 0 "
+        "instead of applying the event",
+    )
+    s_adv.add_argument(
+        "--from-state",
+        choices=sorted(st.STATES),
+        help="refuse unless the task is in this state (a worker's result applies only "
+        "to the state it was dispatched into)",
+    )
+    s_adv.set_defaults(func=cmd_state_advance)
+    s_ctl = state.add_parser("control", help="human stop/start")
+    s_ctl.add_argument("task_id")
+    s_ctl.add_argument("--set", required=True, choices=sorted(st.CONTROLS))
+    s_ctl.set_defaults(func=cmd_state_control)
+
+    hand = sub.add_parser("hand", help="record a task a human runs by hand").add_subparsers(
+        dest="sub", required=True
+    )
+    h_start = hand.add_parser("start", help="create a hand-run state, in HAND_RUNNING")
+    h_start.add_argument("task_id")
+    h_start.set_defaults(func=cmd_hand_start)
+    h_fin = hand.add_parser("finish", help="mark a hand run COMPLETE, with its PR")
+    h_fin.add_argument("task_id")
+    h_fin.add_argument("--pr", type=int, required=True, help="the pull request number")
+    h_fin.add_argument(
+        "--usage-transcript",
+        action="append",
+        type=Path,
+        help="explicit Claude JSONL for this unit; repeat for parent/subagent sessions",
+    )
+    h_fin.set_defaults(func=cmd_hand_finish)
+
+    p_ci = sub.add_parser("ci-event", help="the event a CI run's conclusion means")
+    p_ci.add_argument("--conclusion", required=True)
+    p_ci.set_defaults(func=cmd_ci_event)
+
+    p_next = sub.add_parser("next", help="what the orchestrator does now")
+    p_next.add_argument("task_id")
+    p_next.set_defaults(func=cmd_next)
+
+    p_ctx = sub.add_parser("context", help="the exact payload a worker receives")
+    p_ctx.add_argument("task_id")
+    p_ctx.set_defaults(func=cmd_context)
+
+    p_prompt = sub.add_parser("prompt", help="the exact prompt a worker is started with")
+    p_prompt.add_argument("task_id")
+    p_prompt.add_argument("--role", required=True, choices=sorted(promptbuild.ROLE_PROMPTS))
+    p_prompt.add_argument("--out")
+    p_prompt.set_defaults(func=cmd_prompt)
+
+    for name, func in (
+        ("summary-line", cmd_summary_line),
+        ("manager-decision", cmd_manager_decision),
+        ("session-id", cmd_session_id),
+    ):
+        sp = sub.add_parser(name, help=f"read {name.replace('-', ' ')} from an agent result")
+        sp.add_argument("--agent-result", required=True)
+        sp.set_defaults(func=func)
+
+    tfr = sub.add_parser("telemetry-from-run", help="record one invocation (used by agent-worker)")
+    tfr.add_argument("--task", required=True)
+    tfr.add_argument("--role", required=True)
+    tfr.add_argument("--started", required=True)
+    tfr.add_argument("--workflow-run-id", required=True)
+    tfr.add_argument("--agent-result", required=True)
+    tfr.add_argument("--result", required=True)
+    tfr.set_defaults(func=cmd_telemetry_from_run)
+
+    g = sub.add_parser("guard", help="path permissions").add_subparsers(dest="sub", required=True)
+    g_chk = g.add_parser("check", help="check a diff against role + task permissions")
+    g_chk.add_argument("task_id")
+    g_chk.add_argument("--role", required=True)
+    g_chk.add_argument("--diff-file", help="file of changed paths, one per line")
+    g_chk.add_argument("--base", default="main")
+    g_chk.add_argument("--head", default="HEAD")
+    g_chk.set_defaults(func=cmd_guard_check)
+    g_tst = g.add_parser("tested", help="may a CI verdict for --sha apply to this branch")
+    g_tst.add_argument("task_id")
+    g_tst.add_argument("--sha", required=True)
+    g_tst.set_defaults(func=cmd_guard_tested)
+
+    d = sub.add_parser("distill", help="CI log -> bounded structured result")
+    d.add_argument("task_id")
+    d.add_argument("--log", help="path to the raw CI log")
+    d.add_argument("--ci-status", required=True, choices=["success", "failure", "cancelled"])
+    d.add_argument("--attempt", type=int)
+    d.add_argument("--out", help="also write the result here")
+    d.set_defaults(func=cmd_distill)
+
+    met = sub.add_parser("metrics", help="derived per-unit measurements").add_subparsers(
+        dest="sub", required=True
+    )
+    met_collect = met.add_parser(
+        "collect", help="measure one merged unit without changing its sources"
+    )
+    met_collect.add_argument("task_id")
+    met_collect.add_argument(
+        "--pr", type=int, help="merged PR; otherwise use the task's recorded PR"
+    )
+    met_collect.add_argument("--repo", help="GitHub owner/name; otherwise derive it from origin")
+    met_collect.add_argument("--out", help="explicit JSON artifact path; otherwise print JSON")
+    met_collect.add_argument(
+        "--backfilled", action="store_true", help="mark a retrospective collection"
+    )
+    met_collect.add_argument(
+        "--diagnostic-json", action="store_true", help="emit bounded failure evidence on stderr"
+    )
+    met_collect.set_defaults(func=cmd_metrics_collect)
+
+    tel = sub.add_parser("telemetry").add_subparsers(dest="sub", required=True)
+    tel_rec = tel.add_parser("record")
+    tel_rec.add_argument("--file", required=True)
+    tel_rec.set_defaults(func=cmd_telemetry_record)
+    tel_rep = tel.add_parser("report")
+    tel_rep.add_argument("--json", action="store_true")
+    tel_rep.set_defaults(func=cmd_telemetry_report)
+
+    sh = sub.add_parser("shadow").add_subparsers(dest="sub", required=True)
+    sh_rep = sh.add_parser("report", help="jev answers beside Haiku, from gh api comments")
+    sh_rep.add_argument("--comments", required=True, help="gh api output file, or - for stdin")
+    sh_rep.add_argument("--json", action="store_true")
+    sh_rep.set_defaults(func=cmd_shadow_report)
+
+    docs = sub.add_parser("docs", help="deterministic documentation checks").add_subparsers(
+        dest="sub", required=True
+    )
+    docs_lint = docs.add_parser("lint", help="check documentation and its shrinking baseline")
+    docs_lint.add_argument(
+        "--base", default="origin/main", help="merged base commit (default: origin/main)"
+    )
+    docs_lint.add_argument("--json", action="store_true")
+    docs_lint.set_defaults(func=cmd_docs_lint)
+
+    def corpus(name: str, help_text: str):
+        cp = docs.add_parser(name, help=help_text)
+        cp.add_argument("--root", default=None, help="repository to read (default: this one)")
+        cp.add_argument(
+            "--paths", nargs="+", default=None, help="limit to these path prefixes"
+        )
+        cp.add_argument("--json", action="store_true")
+        return cp
+
+    inv = corpus("inventory", "words against budget, inbound links and last commit per file")
+    inv.add_argument("-v", "--verbose", action="store_true", help="list each inbound source")
+    inv.set_defaults(func=cmd_docs_inventory)
+    dup = corpus("dupes", "repeated paragraphs (exact) and near repeats (word shingles)")
+    dup.add_argument("--min-words", type=int, default=12)
+    dup.add_argument("--threshold", type=float, default=0.8, help="near-repeat Jaccard floor")
+    dup.set_defaults(func=cmd_docs_dupes)
+    arc = corpus("archive-refs", "rewrite #NNN and commit hashes in Markdown to fanwire-archive")
+    arc.add_argument("--write", action="store_true", help="apply the changes (default: dry run)")
+    arc.set_defaults(func=cmd_docs_archive_refs)
+
+    addr = sub.add_parser("addresses", help="fail on a personal email address in a tracked file")
+    addr.add_argument("--root", default=None, help="repository to scan (default: this one)")
+    addr.set_defaults(func=cmd_addresses)
+
+    sub.add_parser("status", help="board of every task").set_defaults(func=cmd_status)
+    sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent").set_defaults(
+        func=cmd_selfcheck
+    )
+    return p
+
+
+def cmd_docs_lint(args) -> int:
+    try:
+        result = doclint.lint(REPO_ROOT, base=args.base, rules_root=AI_ROOT.parent)
+    except (OSError, ValueError) as exc:
+        print(f"docs lint: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(result, ensure_ascii=True, indent=2))
+    else:
+        for error in result["errors"]:
+            print(error)
+        print(
+            f"docs lint: {len(result['violations'])} baselined violations, {len(result['errors'])} errors"
+        )
+    return FAILED if result["errors"] else OK
+
+
+def _corpus_root(args) -> Path:
+    # Corpus text is printed: a cp1252 Windows console must not crash on it.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
+    return Path(args.root) if args.root else REPO_ROOT
+
+
+def cmd_docs_inventory(args) -> int:
+    try:
+        rows = doccorpus.inventory(_corpus_root(args), args.paths)
+    except (OSError, ValueError) as exc:
+        print(f"docs inventory: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=True, indent=2))
+        return OK
+    for r in rows:
+        budget = r["budget"] if r["budget"] else "-"
+        flag = "OVER" if r["over"] else ""
+        last = r["last_commit"]["date"] if r["last_commit"] else "uncommitted"
+        print(
+            f"{r['words']:>6} / {budget!s:<5} {flag:<4} {r['type'] or 'untyped':<9} "
+            f"in:{len(r['inbound']):<3} {last:<11} {r['path']}"
+        )
+        if args.verbose:
+            for link in r["inbound"]:
+                print(f"{'':>8}<- {link['source']} ({link['kind']})")
+    words = sum(r["words"] for r in rows)
+    over = sum(r["over"] for r in rows)
+    print(f"docs inventory: {len(rows)} files, {words} words, {over} over budget")
+    return OK
+
+
+def cmd_docs_dupes(args) -> int:
+    try:
+        result = doccorpus.dupes(
+            _corpus_root(args), args.paths, min_words=args.min_words, threshold=args.threshold
+        )
+    except (OSError, ValueError) as exc:
+        print(f"docs dupes: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(result, ensure_ascii=True, indent=2))
+        return OK
+    for group in result["exact"]:
+        print(f"exact x{len(group['locations'])} ({group['words']} words): {group['preview']}")
+        for location in group["locations"]:
+            print(f"    {location}")
+    for pair in result["near"]:
+        print(f"near {pair['similarity']:.2f}: {pair['a']}  ~  {pair['b']}")
+    print(
+        f"docs dupes: {len(result['exact'])} exact groups, {len(result['near'])} near pairs"
+    )
+    return OK
+
+
+def cmd_docs_archive_refs(args) -> int:
+    try:
+        changes = doccorpus.archive_refs(_corpus_root(args), args.paths, write=args.write)
+    except (OSError, ValueError, UnicodeDecodeError, subprocess.CalledProcessError) as exc:
+        print(f"docs archive-refs: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps([c.__dict__ for c in changes], ensure_ascii=True, indent=2))
+        return OK
+    for c in changes:
+        print(f"{c.path}:{c.line}:\n  - {c.old.rstrip()}\n  + {c.new.rstrip()}")
+    files = len({c.path for c in changes})
+    verb = "changed" if args.write else "would change (dry run; --write applies)"
+    print(f"docs archive-refs: {len(changes)} lines in {files} files {verb}")
+    return OK
+
+
+def cmd_addresses(args) -> int:
+    root = Path(args.root) if args.root else REPO_ROOT
+    try:
+        hits = addresses.scan(root)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"addresses: {exc}", file=sys.stderr)
+        return USAGE
+    for hit in hits:
+        print(addresses.format_hit(hit))
+    noun = "address" if len(hits) == 1 else "addresses"
+    print(f"addresses: {len(hits)} personal {noun}")
+    if hits:
+        print(
+            "Use a placeholder such as <owner-email>+fw1, or an example.com / .test address."
+        )
+    return FAILED if hits else OK
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

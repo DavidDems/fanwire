@@ -1,0 +1,545 @@
+"""Tests for app.notifications.consumer.handle_domain_event -- the
+PostEventBus Observer subscriber, per AGENTS.md TDD workflow. Written
+before app/notifications/consumer.py exists.
+
+See wiki/CodeContext/Modules/0x05-notifications.md's Observer/business-rules
+sections and this unit's task brief for the resolved judgment calls this
+consumer implements:
+- PostCreated's actual payload is only {"post_id", "author_id"} (no
+  is_reply/is_repost flags) -- the consumer re-fetches the Post row by id
+  rather than app.posts.facade being modified to add those fields.
+- A self-reply/self-repost (recipient == actor) is skipped, not notified --
+  not stated explicitly in the business rules, mirrors users/'s existing
+  no-self-follow rule.
+- Only follow/reply/repost trigger a Notification -- a plain post (neither
+  is_reply nor is_repost) and PostReported/PostMentionedEvent are ignored.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import date
+
+import pytest
+from sqlalchemy import select
+
+from app.db import Base, make_engine, make_session_factory
+from app.posts.models import Post
+from app.users.models import User
+
+
+@pytest.fixture()
+def session_factory(postgres_url):
+    engine = make_engine(postgres_url)
+    Base.metadata.create_all(engine)
+    yield make_session_factory(engine)
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+def _make_user(session, **overrides) -> User:
+    defaults = {
+        "cognito_sub": f"sub-consumer-{overrides.get('username', 'u')}",
+        "username": "consumer_user",
+        "date_of_birth": date(1990, 1, 1),
+    }
+    defaults.update(overrides)
+    user = User(**defaults)
+    session.add(user)
+    session.commit()
+    return user
+
+
+# --- PostCreated: reply ------------------------------------------------------
+
+
+@pytest.mark.parametrize("deleting_party", ["actor", "recipient"])
+def test_accepted_deletion_drops_late_notification_without_email_or_rows(
+    lifecycle_case, deleting_party
+):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    case = lifecycle_case
+    actor, recipient = case.seed("late_actor"), case.seed("late_recipient")
+    target = actor if deleting_party == "actor" else recipient
+    case.objects.fail = True
+    with pytest.raises(RuntimeError):
+        case.delete(target.sub)
+    sender = RecordingEmailSender()
+    with case.factory() as session:
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={
+                "follower_user_id": actor.user_id,
+                "followed_user_id": recipient.user_id,
+            },
+            email_sender=sender,
+        )
+        assert result is None
+        assert session.query(Notification).count() == 0
+    assert sender.sent == []
+
+
+def test_reply_creates_notification_for_parent_author(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification, NotificationType
+
+    with session_factory() as session:
+        parent_author = _make_user(session, username="reply_parent_author")
+        replier = _make_user(session, username="replier")
+        parent = Post(author_id=parent_author.id, text="parent post")
+        session.add(parent)
+        session.commit()
+        reply = Post(author_id=replier.id, text="a reply", is_reply=True, parent_post_id=parent.id)
+        session.add(reply)
+        session.commit()
+
+        sender = RecordingEmailSender()
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": reply.id, "author_id": replier.id},
+            email_sender=sender,
+        )
+
+        assert result is not None
+        assert result.recipient_user_id == parent_author.id
+        assert result.actor_user_id == replier.id
+        assert result.type == NotificationType.REPLY
+        assert result.reference_id == reply.id
+
+        fetched = session.scalar(select(Notification).where(Notification.id == result.id))
+        assert fetched is not None
+
+
+def test_self_reply_is_skipped(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        author = _make_user(session, username="self_reply_author")
+        parent = Post(author_id=author.id, text="own post")
+        session.add(parent)
+        session.commit()
+        reply = Post(
+            author_id=author.id, text="replying to myself", is_reply=True, parent_post_id=parent.id
+        )
+        session.add(reply)
+        session.commit()
+
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": reply.id, "author_id": author.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is None
+        count = len(
+            session.scalars(
+                select(Notification).where(Notification.recipient_user_id == author.id)
+            ).all()
+        )
+        assert count == 0
+
+
+# --- PostCreated: repost ------------------------------------------------------
+
+
+def test_repost_creates_notification_for_original_author(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import NotificationType
+
+    with session_factory() as session:
+        original_author = _make_user(session, username="repost_original_author")
+        reposter = _make_user(session, username="reposter")
+        original = Post(author_id=original_author.id, text="original post")
+        session.add(original)
+        session.commit()
+        repost = Post(author_id=reposter.id, is_repost=True, original_post_id=original.id)
+        session.add(repost)
+        session.commit()
+
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": repost.id, "author_id": reposter.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is not None
+        assert result.recipient_user_id == original_author.id
+        assert result.actor_user_id == reposter.id
+        assert result.type == NotificationType.REPOST
+        assert result.reference_id == repost.id
+
+
+def test_self_repost_is_skipped(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+
+    with session_factory() as session:
+        author = _make_user(session, username="self_repost_author")
+        original = Post(author_id=author.id, text="own post to repost")
+        session.add(original)
+        session.commit()
+        repost = Post(author_id=author.id, is_repost=True, original_post_id=original.id)
+        session.add(repost)
+        session.commit()
+
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": repost.id, "author_id": author.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is None
+
+
+# --- PostCreated: plain post ---------------------------------------------------
+
+
+def test_plain_post_creates_no_notification(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        author = _make_user(session, username="plain_post_author")
+        post = Post(author_id=author.id, text="just a plain post")
+        session.add(post)
+        session.commit()
+
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": post.id, "author_id": author.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+
+
+# --- UserFollowed ---------------------------------------------------------------
+
+
+def test_user_followed_creates_notification(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import NotificationType
+
+    with session_factory() as session:
+        followed = _make_user(session, username="followed_user")
+        follower = _make_user(session, username="follower_user")
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is not None
+        assert result.recipient_user_id == followed.id
+        assert result.actor_user_id == follower.id
+        assert result.type == NotificationType.FOLLOW
+        assert result.reference_id == follower.id
+
+
+# --- Ignored events --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("event_name", ["PostReported", "PostMentionedEvent", "SomethingElse"])
+def test_ignored_events_return_none_and_create_no_row(session_factory, event_name):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        author = _make_user(session, username=f"ignored_{event_name}")
+        post = Post(author_id=author.id, text="whatever")
+        session.add(post)
+        session.commit()
+
+        result = handle_domain_event(
+            session,
+            event_name=event_name,
+            detail={"post_id": post.id, "reporter_id": author.id},
+            email_sender=RecordingEmailSender(),
+        )
+
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+
+
+# --- Email gating by NotificationPreference --------------------------------------
+
+
+def test_email_sent_by_default_when_no_preference_row_exists(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+
+    with session_factory() as session:
+        followed = _make_user(session, username="default_pref_followed")
+        follower = _make_user(session, username="default_pref_follower")
+
+        sender = RecordingEmailSender()
+        handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed.id},
+            email_sender=sender,
+        )
+
+        assert len(sender.sent) == 1
+        assert sender.sent[0].recipient_cognito_sub == followed.cognito_sub
+
+
+def test_email_suppressed_when_preference_disabled_but_notification_still_created(
+    session_factory,
+):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification, NotificationPreference
+
+    with session_factory() as session:
+        followed = _make_user(session, username="disabled_pref_followed")
+        follower = _make_user(session, username="disabled_pref_follower")
+        session.add(NotificationPreference(user_id=followed.id, email_notifications_enabled=False))
+        session.commit()
+
+        sender = RecordingEmailSender()
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed.id},
+            email_sender=sender,
+        )
+
+        assert sender.sent == []
+        assert result is not None
+        fetched = session.scalar(select(Notification).where(Notification.id == result.id))
+        assert fetched is not None
+
+
+# --- Email is best-effort ----------------------------------------------------------
+
+
+def test_email_send_failure_does_not_propagate_and_leaves_one_notification(session_factory):
+    # Production incident 2026-09-30: SES rejected the send (unverified
+    # identity), the exception escaped handle_domain_event after the
+    # Notification row was already committed, SQS redelivered the record and
+    # every redelivery committed another row -- duplicate "started following
+    # you" notifications. Email is a best-effort side channel; the committed
+    # in-app row is the durable outcome.
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import EmailSender
+    from app.notifications.models import Notification, NotificationType
+
+    class FailingEmailSender(EmailSender):
+        def send(self, *, recipient_cognito_sub, notification):
+            raise RuntimeError("MessageRejected: Email address not verified")
+
+    with session_factory() as session:
+        followed = _make_user(session, username="email_fails_followed")
+        follower = _make_user(session, username="email_fails_follower")
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed.id},
+            email_sender=FailingEmailSender(),
+        )
+
+        assert result is not None
+        assert result.recipient_user_id == followed.id
+        assert result.type == NotificationType.FOLLOW
+        rows = session.scalars(
+            select(Notification).where(Notification.recipient_user_id == followed.id)
+        ).all()
+        assert len(rows) == 1
+
+
+# --- An event naming a row that does not exist ----------------------------------
+#
+# The new post of a PostCreated is the one row that can go missing in practice:
+# the facade commits before it publishes, and undoing a plain repost hard-deletes
+# it (POSTS-007), so a retry could never win. That is a successful no-op, not a
+# failure for a human in the DLQ. Any other missing row (a recipient) is still
+# malformed: it fails the record (wiki/CodeContext/Modules/0x05-notifications.md:
+# SQS redelivers it, then dead-letters it), by name and before anything is
+# committed -- it used to be an AttributeError on None, which mypy (strict)
+# rightly refused (handoff.md §10, D5). For UserFollowed the recipient is
+# looked up before the commit, so a missing one can never surface after the
+# row exists, where failing the record would commit a duplicate on redelivery.
+
+
+def test_post_created_for_a_post_that_no_longer_exists_is_a_no_op(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        author = _make_user(session, username="missing_post_author")
+        sender = RecordingEmailSender()
+
+        result = handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"post_id": 999_999_999, "author_id": author.id},
+            email_sender=sender,
+        )
+
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []
+
+
+def test_post_created_event_for_a_deleted_post_is_dropped_and_logged(
+    session_factory, caplog, monkeypatch
+):
+    from app.notifications import consumer
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    # Alembic's fileConfig may have disabled this existing logger in a prior
+    # test; restore its enabled state only for this test's logging contract.
+    monkeypatch.setattr(logging.getLogger(consumer.logger.name), "disabled", False)
+    caplog.set_level(logging.INFO, logger=consumer.logger.name)
+    records: list[logging.LogRecord] = []
+
+    class _Recording(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Recording()
+    consumer.logger.addHandler(handler)
+    try:
+        with session_factory() as session:
+            author = _make_user(session, username="deleted_post_event_author")
+            deleted_post = Post(author_id=author.id, text="deleted before notification")
+            session.add(deleted_post)
+            session.commit()
+            deleted_post_id, author_id = deleted_post.id, author.id
+            session.delete(deleted_post)
+            session.commit()
+
+            result = consumer.handle_domain_event(
+                session,
+                event_name="PostCreated",
+                detail={"post_id": deleted_post_id, "author_id": author_id},
+                email_sender=RecordingEmailSender(),
+            )
+
+            assert result is None
+            assert session.scalars(select(Notification)).first() is None
+    finally:
+        consumer.logger.removeHandler(handler)
+
+    assert records
+    assert any("no longer exists" in record.getMessage() for record in records)
+
+
+def test_the_no_op_logs_at_most_info_and_no_ids(session_factory):
+    from app.notifications import consumer
+    from app.notifications.email import RecordingEmailSender
+
+    post_id, author_id = 987_654_321, 123_456_789
+    records: list[logging.LogRecord] = []
+
+    class _Recording(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Recording()
+    consumer.logger.addHandler(handler)
+    try:
+        with session_factory() as session:
+            result = consumer.handle_domain_event(
+                session,
+                event_name="PostCreated",
+                detail={"post_id": post_id, "author_id": author_id},
+                email_sender=RecordingEmailSender(),
+            )
+    finally:
+        consumer.logger.removeHandler(handler)
+
+    assert result is None
+    standard_attributes = logging.makeLogRecord({}).__dict__
+    for record in records:
+        assert record.levelno <= logging.INFO
+        extras = {k: v for k, v in record.__dict__.items() if k not in standard_attributes}
+        line = f"{record.getMessage()} {extras}"
+        assert str(post_id) not in line
+        assert str(author_id) not in line
+
+
+def test_post_created_with_no_post_id_key_still_fails(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+
+    with session_factory() as session, pytest.raises(KeyError):
+        handle_domain_event(
+            session,
+            event_name="PostCreated",
+            detail={"author_id": 1},
+            email_sender=RecordingEmailSender(),
+        )
+
+
+def test_user_followed_for_a_nonexistent_recipient_is_dropped(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        follower = _make_user(session, username="missing_followed_follower")
+        followed = _make_user(session, username="deleted_followed_recipient")
+        followed_id = followed.id
+        session.delete(followed)
+        session.commit()
+        sender = RecordingEmailSender()
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower.id, "followed_user_id": followed_id},
+            email_sender=sender,
+        )
+
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []
+
+
+def test_user_followed_for_a_nonexistent_actor_is_dropped(session_factory):
+    from app.notifications.consumer import handle_domain_event
+    from app.notifications.email import RecordingEmailSender
+    from app.notifications.models import Notification
+
+    with session_factory() as session:
+        follower = _make_user(session, username="deleted_follow_actor")
+        follower_id = follower.id
+        session.delete(follower)
+        session.commit()
+        followed = _make_user(session, username="missing_actor_followed")
+        sender = RecordingEmailSender()
+
+        result = handle_domain_event(
+            session,
+            event_name="UserFollowed",
+            detail={"follower_user_id": follower_id, "followed_user_id": followed.id},
+            email_sender=sender,
+        )
+
+        assert result is None
+        assert session.scalars(select(Notification)).first() is None
+        assert sender.sent == []

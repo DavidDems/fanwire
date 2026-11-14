@@ -1,0 +1,199 @@
+/*
+ * One post card (wiki/CodeContext/FrontendUI/layout.md §4, components-map-posts.md §5),
+ * in the feed, in search results and in the thread modal alike. Values come
+ * from tokens.css by name only.
+ */
+
+/* Tight inside a post: reposted line, header, text, media, quote, footer. */
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Avatar, author and time on one line; wrapping only when 320 px forces it. */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  min-width: 0;
+}
+
+.author {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The time is the link to the post's thread (FRONTEND-010): it keeps the muted
+ * look of a timestamp, underlines on hover, and is at least 24 px tall (WCAG
+ * 2.5.8). Focus is base.css's :focus-visible ring.
+ */
+.timeLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.timeLink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.timeLink .time {
+  color: inherit;
+}
+
+/* The line breaks the author typed, and long words or URLs wrap (typography.md §2). */
+.text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The action row, under the content: like, reply and repost (each an icon and
+ * its count, PostAction.module.css). Left-aligned and evenly spaced, one row
+ * that wraps on a phone.
+ */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-5);
+  row-gap: var(--space-1);
+}
+
+/* "↻ name reposted", above a plain repost's original: quiet, one small line. */
+.reposted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.reposter {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* An original that can no longer be shown, said in place of an empty card. */
+.unavailable {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/*
+ * The original inside a quote repost: a compact bordered box, not a second
+ * card (layout.md §4 keeps cards one level deep), with no controls of its own.
+ */
+.quoted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.quotedHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  margin: 0;
+}
+
+/* A few lines of the original, then an ellipsis: the box stays compact. */
+.quotedText {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/*
+ * A reply's parent (FRONTEND-034) is the same box with a small avatar in its
+ * header and a line more of text: it is the context the reply answers.
+ */
+.parent .quotedText {
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+/*
+ * An original that cannot be shown (FRONTEND-012): the quoted box's shape on
+ * the muted surface, holding only "Post deleted" or "This post is
+ * unavailable", in the original's place on a plain repost and in a quote.
+ */
+.missing {
+  background-color: var(--color-surface-muted);
+}
+
+/*
+ * A reply's card (FRONTEND-034): the reply, its parent's box, its action row
+ * and Show this thread, in one column like any card's. The wrapper only
+ * anchors the thread line.
+ */
+.threaded {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/*
+ * The thread line: decorative, so a pseudo-element no screen reader reads.
+ * Centred in the card's left padding (the gutter, --space-4 wide), from just
+ * below the reply's 2rem avatar to the middle of the Show this thread row
+ * (1.5rem tall). A border, so forced-colors mode keeps it in a system colour.
+ */
+.threaded::before {
+  position: absolute;
+  top: calc(2rem + var(--space-1));
+  bottom: 0.75rem;
+  left: calc(var(--space-4) / -2 - 1px);
+  border-left: 2px solid var(--color-border);
+  content: "";
+  pointer-events: none;
+}
+
+/*
+ * Show this thread: a small 600 link under the action row, sized to its words
+ * so the rest of the row stays the card's clickable surface. At least 24 px
+ * tall (WCAG 2.5.8); focus is base.css's ring.
+ */
+.showThread {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  min-height: 1.5rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.showThread:hover {
+  text-decoration: underline;
+}

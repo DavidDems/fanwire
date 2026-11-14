@@ -1,0 +1,15 @@
+# A change to the agent system's own boundaries must be reviewed by a human.
+#
+# Agents cannot write these paths at all - `.ai/**` and `.github/**` are in
+# agentlib.guard.ALWAYS_FORBIDDEN, and .github/workflows/agent-guard.yml fails
+# any agent PR that touches them. This file covers the other direction: a
+# HUMAN PR that changes the permission model, the workflows, or the agent
+# prompts should not land without a second pair of eyes.
+#
+# Takes effect only once "Require review from Code Owners" is enabled in branch
+# protection for `main` - see .ai/docs/operations.md, "One-time setup".
+
+/.ai/                   @DavidDems
+/.github/               @DavidDems
+/AGENTS.md              @DavidDems
+/wiki/GeneralContext/   @DavidDems

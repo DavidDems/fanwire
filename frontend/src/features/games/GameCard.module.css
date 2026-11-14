@@ -1,0 +1,73 @@
+/*
+ * The compact game card (FRONTEND-037; shared by Recent Games and the
+ * Schedule page since FRONTEND-044): two team lines, away above home, as tall
+ * as two icons, their gap and the padding. Recent Games' loading row
+ * (RecentGames.module.css .row) keeps the same height, so a card revealed in
+ * its place moves nothing. A game not played yet adds its start time below.
+ */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: calc(2 * var(--space-6) + var(--space-1) + 2 * var(--space-2));
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.card:hover {
+  background-color: var(--color-surface-muted);
+}
+
+a.card:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Icon, name and record, then the score at the line's end. */
+.side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--font-size-sm);
+}
+
+.name {
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.record {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.score {
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The result is in the hidden "winner" too; the weight and muting only help. */
+.winner .score {
+  font-weight: var(--font-weight-bold);
+}
+
+.loser {
+  color: var(--color-text-muted);
+}
+
+/* A game not played yet: its start, "7:30 PM ET" or "Time TBD". */
+.time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}

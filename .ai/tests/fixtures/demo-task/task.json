@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "task_id": "DEMO-001",
+  "objective": "Add a GET /health/version endpoint returning the backend package version, so the agent workflow can be exercised end to end against real CI without touching any existing behaviour.",
+  "acceptance_criteria": [
+    "GET /health/version returns HTTP 200.",
+    "The response body is a JSON object with a single key `version`, whose value is a non-empty string.",
+    "The existing GET /health endpoint still returns {\"status\": \"ok\"} with HTTP 200."
+  ],
+  "allowed_paths": [
+    "backend/app/main.py",
+    "backend/tests/test_health_version.py"
+  ],
+  "forbidden_paths": [],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md"
+  ],
+  "required_skills": [
+    "backend-testing",
+    "fastapi-module",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": false
+  }
+}

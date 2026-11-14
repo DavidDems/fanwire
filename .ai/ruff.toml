@@ -1,0 +1,9 @@
+# Matches backend/pyproject.toml's ruff settings so `.ai/` and `backend/` are
+# formatted the same way, without `.ai/` depending on the backend package.
+line-length = 100
+target-version = "py312"
+
+[lint.per-file-ignores]
+# Shared spec/policy dicts on a test class are fixtures, not mutable state.
+# ClassVar annotations here would add noise without adding safety.
+"tests/*" = ["RUF012"]

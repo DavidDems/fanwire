@@ -1,0 +1,55 @@
+# FRONTEND-023: player and season insight
+
+## Outcome
+
+Give `/players/:playerId` and the team-season level under `/stats/seasons` a
+quick visual comparison while keeping the full tables as the authoritative
+text and data view. The current player page is all wide tables, and the local
+360 px view shows only a slice of several columns. The Players tab is a
+search-first screen; it should remain so.
+
+## Chart contract
+
+- Player chart: points in the 10 most recent completed games, oldest to newest;
+  x is the short local game date, y is integer points. Zero baseline; ticks at
+  0, 5, 10, and so on through the first multiple of 5 above the maximum.
+- Team chart: point differential (team score minus opponent score) for every
+  loaded game in the selected season, oldest to newest; x is game date, y is a
+  symmetric range around zero with 5-point ticks. Label each win/loss in text.
+- The team-season data is rendered by the existing `components/stats-nav/TeamLevel.tsx`;
+  that component and its module stylesheet are in scope for this unit.
+- Both charts retain a semantic table with exactly the plotted points, a
+  caption that names metric and scope, and no information conveyed only by
+  color or hover. Existing game-log and season tables remain complete.
+- Fewer than two points means no line: keep the data table and explain why the
+  chart is not drawn. Loading, API error, and empty data stay distinct.
+- On changing a settled filter, interpolate plotted positions for at most
+  180 ms to make the new data relationship legible; no entrance animation and
+  no animation when reduced motion is requested.
+
+## Scope, branch, and merge order
+
+This is frontend-only. Its implementation has no runtime dependency on the
+other visual units, but the human requested a stacked review sequence. Create
+`agent/FRONTEND-023` from the green head of the Director PR
+`director/frontend-023-budget-fold` (PR fanwire-archive#257). `FRONTEND-024` must then branch
+from the `agent/FRONTEND-023` PR head after its full CI gate is green, and
+`USERS-004` must branch from the `agent/FRONTEND-024` PR head after its full
+CI gate is green. The required merge order is fanwire-archive#257, FRONTEND-023,
+FRONTEND-024, USERS-004. Each PR body must name this order. No task may be
+merged before its parent reaches `main`.
+
+## Test and performance contract
+
+Test the plotted sample/order, exact ticks and values, table equivalence,
+empty and one-point behavior, delayed/error response, accessible names, filter
+request count, and reduced motion. Add only to the designated lazy bundle
+budget entry in the test commit. No dependencies, network assets, canvas-only
+data, or pointer-only tooltip. The PR includes bundle measurements, a
+before/after table, and browser rows in both themes at 360 and 1280.
+
+The current local backend returned one season (2023–24), so a multi-season
+comparison cannot be claimed from this audit. Use another existing test
+fixture or a browser response override for wider season coverage and label it
+synthetic. Update the frontend module page only if the documented UI contract
+changed.

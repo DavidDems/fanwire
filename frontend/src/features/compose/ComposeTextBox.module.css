@@ -1,0 +1,7 @@
+/*
+ * The text box. FormField's Field owns the label, hint and their spacing, and
+ * base.css styles the textarea itself; only its width is set here.
+ */
+.text {
+  width: 100%;
+}

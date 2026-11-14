@@ -1,0 +1,603 @@
+name: agent-orchestrator
+
+# The state machine's driver. Every run does exactly ONE thing and stops:
+#
+#   read state -> `agentctl next` -> perform that one action -> commit state
+#
+# A dispatch is the exception to that order (handoff.md §10, D3): the
+# transition is committed and pushed first, and the worker or CI is started
+# only after, so whatever it reads already says it is running.
+#
+# It never waits for an agent or for CI. Whatever it started wakes it again:
+# a finished CI run through `workflow_run`, a finished worker through its own
+# dispatch back to here. That is what makes the workflow survive a cancelled
+# run, an expired session, or a runner dying mid-task - the next run rebuilds
+# everything it needs from `.ai/tasks/<ID>/state.json`.
+#
+# The decision itself lives in .ai/agentlib/orchestrator.py, not in `if:`
+# expressions here, so it is unit-tested and readable in one place.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "Task id, e.g. DEMO-001"
+        required: true
+      event:
+        description: "Optional workflow event to apply first (e.g. MANAGER_RETRY, CANCEL)"
+        required: false
+      reason:
+        description: "Reason, recorded in the state file"
+        required: false
+  workflow_run:
+    workflows: [test-agent]
+    types: [completed]
+
+# Nothing at the top level: a job added later inherits no write. The one job
+# states its own (OpenSSF Scorecard, Token-Permissions; threat-model.md).
+permissions: {}
+
+concurrency:
+  # One orchestrator at a time per task. Never cancel in flight: a half-applied
+  # transition is worse than a queued one.
+  # Both triggers must normalise to the SAME key, or a workflow_run-woken run
+  # and a dispatch-woken run collide on one task and half-apply transitions.
+  # workflow_run supplies `agent/<ID>`, so the dispatch side is formatted to match.
+  group: >-
+    agent-${{ github.event.inputs.task_id
+      && format('agent/{0}', github.event.inputs.task_id)
+      || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    # A test-agent run on anything other than a task branch is the ordinary
+    # quality gate and is none of this workflow's business.
+    #
+    # And on a task branch, only the run this orchestrator dispatched is the
+    # task's verdict (handoff.md §10, D1). `head_branch` is just a name: a fork
+    # PR from a branch called `agent/<ID>` carries it too, and so does a
+    # path-filtered `pull_request` run on the real branch. The repository is
+    # public, so the first is anyone's to send.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.event.workflow_run.head_branch, 'agent/') &&
+       github.event.workflow_run.event == 'workflow_dispatch' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    permissions:
+      contents: write # commit state + telemetry to the task branch
+      actions: write # trigger test-agent.yml and agent-worker.yml
+      pull-requests: write # open the human-review PR when a task completes
+    runs-on: ubuntu-latest
+    # One run does one transition and stops, so this is generous by an order of
+    # magnitude. Without it the job inherits GitHub's 6-hour default and a hung
+    # run holds this task's concurrency group for that long, dropping every
+    # transition behind it (handoff.md 5.4, 5.5).
+    timeout-minutes: 15
+    # handoff.md §10, D2b. Later steps hold AGENT_DISPATCH_TOKEN, so no code
+    # from the task branch runs here: the branch is checked out at `task/` as
+    # data, `main` at `tools/` beside it, and every agentctl call and every
+    # inline python that imports agentlib uses the tools copy (python -I, so
+    # the working directory is never on sys.path).
+    env:
+      TOOLS: ${{ github.workspace }}/tools
+      AGENTCTL_DATA_ROOT: ${{ github.workspace }}/task
+    defaults:
+      run:
+        working-directory: task
+    steps:
+      - name: Resolve the task
+        id: task
+        # Nothing is checked out yet, so the job's default directory does
+        # not exist.
+        working-directory: ${{ github.workspace }}
+        env:
+          INPUT_TASK_ID: ${{ github.event.inputs.task_id }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_TASK_ID:-}" ]; then
+            TASK_ID="$INPUT_TASK_ID"
+          else
+            TASK_ID="${HEAD_BRANCH#agent/}"
+          fi
+          # handoff.md §10, D2. Both sources are attacker-influenced: anyone
+          # with `actions: write` can dispatch this with any string, and a
+          # fork's PR branch can be named `agent/<anything>`. The id becomes a
+          # branch, a path and an output line (a newline in it would forge a
+          # second output), and later steps hold AGENT_DISPATCH_TOKEN. So it is
+          # checked here, before any of that, against the guard's own
+          # TASK_ID_SAFE — a bash copy, because nothing is checked out yet;
+          # test_workflows.py fails if it drifts from agentlib/guard.py. The
+          # rejected value is never echoed.
+          export LC_ALL=C # [A-Z] means A to Z, not a locale's collation order
+          TASK_ID_SAFE='^[A-Z][A-Z0-9]{0,15}-[0-9]{3,5}$'
+          if ! [[ "$TASK_ID" =~ $TASK_ID_SAFE ]]; then
+            echo "::error::task id does not match $TASK_ID_SAFE; refusing to run"
+            exit 1
+          fi
+          echo "id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "branch=agent/$TASK_ID" >> "$GITHUB_OUTPUT"
+          # Every later script reads these as variables, never as an expression
+          # pasted into its text: an expression is expanded into the script
+          # before bash parses it, so a value there is code, not data.
+          echo "TASK_ID=$TASK_ID" >> "$GITHUB_ENV"
+          echo "BRANCH=agent/$TASK_ID" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ steps.task.outputs.branch }}
+          path: task
+          fetch-depth: 0
+
+      # The trusted copy (handoff.md §10, D2b): `main` at the commit this
+      # run's workflow file came from.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+
+      - name: Is this a task this orchestrator drives?
+        id: drive
+        env:
+          TASK_ID: ${{ steps.task.outputs.id }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # A `workflow_run` wake means only "CI finished on a branch called
+          # agent/<something>". It does not mean this orchestrator ever
+          # dispatched that task. The handoff has a human cut `agent/<ID>` by
+          # hand on purpose — that prefix is what makes agent-guard.yml check
+          # the diff against the spec's allowed_paths — and such a branch has
+          # no state file. agent-guard.yml already says exactly this ("no state
+          # file; treating as a hand-authored branch") and exits 0; this is the
+          # same rule in the one other workflow that keys off the branch name.
+          #
+          # Without it the run does not merely fail: `agentctl next` answers
+          # `validate` for a stateless task, so the steps below would create a
+          # state file, commit it onto somebody's open PR, and go on to
+          # dispatch a paid worker for work a human had already done by hand.
+          #
+          # A missing state file must NOT mean "not mine" on a
+          # workflow_dispatch. A person naming a task id is how a new task is
+          # bootstrapped, and a new task has no state file either — answering
+          # "not mine" there would mean nothing could ever start.
+          #
+          # A state file, though, no longer means "mine". A hand-run task
+          # records itself too (`agentctl hand start`, mode "hand"), so the
+          # board shows it as running instead of DRAFT. So the rule is the
+          # state's `mode`: only "auto" is driven, whatever the event. That
+          # includes a dispatch: a hand-run task is a human's in a Claude Code
+          # session, and the orchestrator's events are illegal on it anyway
+          # (agentlib/state.py), so a dispatch naming one has nothing to do.
+          # A file from before modes existed has none, and is auto. Any other
+          # value is not driven: fail closed, spend nothing. The value is
+          # never echoed: it is the branch's to choose, and a newline in it
+          # would be read as a workflow command.
+          #
+          # Bash and jq only (jq is on ubuntu-latest): this runs before the
+          # .ai gate below, so no python may.
+          if [ -f ".ai/tasks/$TASK_ID/state.json" ]; then
+            MODE="$(jq -r 'if has("mode") then .mode else "auto" end' ".ai/tasks/$TASK_ID/state.json")"
+            if [ "$MODE" = "auto" ]; then
+              echo "drive=true" >> "$GITHUB_OUTPUT"
+            elif [ "$MODE" = "hand" ]; then
+              echo "drive=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$TASK_ID is a hand-run task; a human runs it, so there is nothing to drive"
+            else
+              echo "drive=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::$TASK_ID has a state file with an unknown mode; not driving it"
+            fi
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "drive=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drive=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TASK_ID has no state file; agent/$TASK_ID is hand-authored, so there is nothing to drive"
+          fi
+
+      # handoff.md §10, D2b. Nothing under .ai/ on a task branch may differ
+      # from main except this task's own state and telemetry. Bash and git
+      # only, before any python runs; the same script is in both jobs of
+      # agent-worker.yml, and test_workflows.py fails if the copies drift.
+      # Only on a branch this orchestrator drives: a hand-authored branch is
+      # none of its business (see the step above), and refusing it would
+      # paint a red X on a human's PR.
+      - name: Refuse .ai changes beyond this task's bookkeeping
+        if: steps.drive.outputs.drive == 'true'
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          # What this branch changed since it left main. --no-renames: with
+          # rename detection --name-only prints only a rename's destination.
+          # -z: no quoting, and a newline in a name cannot split it in two.
+          # A temp file, not a pipe, so a failing git (no origin/main) fails
+          # the step instead of yielding an empty, passing list.
+          CHANGED="$(mktemp)"
+          trap 'rm -f "$CHANGED"' EXIT
+          git diff --name-only -z --no-renames origin/main...HEAD -- .ai > "$CHANGED"
+          BAD=0
+          while IFS= read -r -d '' p; do
+            if [ "$p" = ".ai/tasks/$TASK_ID/state.json" ]; then
+              continue
+            fi
+            rest="${p#".ai/telemetry/runs/$TASK_ID/"}"
+            if [ "$rest" != "$p" ] && [[ "$rest" != */* ]] && [[ "$rest" == *.json ]]; then
+              continue
+            fi
+            printf '::error::%q differs from main and is not this task bookkeeping\n' "$p"
+            BAD=1
+          done < "$CHANGED"
+          if [ "$BAD" -ne 0 ]; then
+            echo "::error::refusing agent/$TASK_ID: its .ai/ may differ from main only in its own state and telemetry"
+            exit 1
+          fi
+          echo ".ai/ matches main apart from this task's bookkeeping"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Apply the CI result
+        if: github.event_name == 'workflow_run' && steps.drive.outputs.drive == 'true'
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          TASK_ID: ${{ steps.task.outputs.id }}
+          # handoff.md §10, D4: read the failed run's jobs and log. This
+          # step's own token; the PAT is not needed to read a run.
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # handoff.md §10, D3 (S1). Every documented conclusion has a case,
+          # in agentlib (state.CI_CONCLUSIONS), not here: success is
+          # CI_PASSED, failure and timed_out are CI_FAILED, and everything
+          # else (cancelled, skipped, stale, neutral, action_required,
+          # startup_failure, or one GitHub adds later) is not a test verdict
+          # and escalates with a reason naming the conclusion. It used to
+          # fall through as "nothing to apply" and leave the task in *_CI
+          # forever; sending it to the manager instead would spend the code
+          # agent's attempts on the runner's problem.
+          EVENT="$(python -I "$TOOLS/.ai/bin/agentctl.py" ci-event --conclusion "$CONCLUSION")"
+          if [ "$EVENT" != "ESCALATE" ]; then
+            # A real verdict must be about code this branch still carries.
+            # CI_STARTED is committed and pushed before CI is dispatched
+            # (D3), so the tested SHA is normally the tip; bookkeeping since
+            # is allowed, anything else fails this run visibly and leaves
+            # the state untouched rather than applying a verdict for code
+            # nobody tested (D1).
+            python -I "$TOOLS/.ai/bin/agentctl.py" guard tested "$TASK_ID" --sha "$SHA"
+          fi
+          # handoff.md §10, D4. A failed baseline is red as required only
+          # when the new tests are what failed: not an audit, not openapi
+          # drift, not a test file the test commit never touched. That is
+          # decided in agentlib (ciresult.baseline_verdict, applied by
+          # `state advance` while the task is in BASELINE_CI), from the
+          # run's job list and its failed-job log, fetched here and passed as
+          # files. Fetched for every failure because only agentctl knows the
+          # state; an implementation failure ignores them and is distilled as
+          # before. A fetch that fails leaves an empty file, which the
+          # classifier fails closed on: the manager looks, the code agent
+          # spends nothing. Outside the task checkout, so never committed.
+          CI_EVIDENCE=()
+          if [ "$EVENT" = "CI_FAILED" ]; then
+            JOBS="$RUNNER_TEMP/ci-jobs.json"
+            LOG="$RUNNER_TEMP/ci-failed.log"
+            if ! gh run view "$RUN_ID" --json jobs > "$JOBS"; then
+              echo "::warning::could not read the jobs of CI run $RUN_ID"
+              : > "$JOBS"
+            fi
+            if ! gh run view "$RUN_ID" --log-failed > "$LOG"; then
+              echo "::warning::could not read the failed-job log of CI run $RUN_ID"
+              : > "$LOG"
+            fi
+            CI_EVIDENCE=(--ci-jobs "$JOBS" --ci-log "$LOG")
+          fi
+          # --ignore-terminal: CI re-running on a finished task's branch is
+          # routine (a review PR has to be brought up to date before it can
+          # merge), and the state machine rightly refuses a CI result for a
+          # COMPLETE task. Waking to find nothing to do is not a failure -- it
+          # used to fail the whole run and paint a red X on a healthy pipeline.
+          # --discard-if-paused (D3, S2): a paused task takes no result. It is
+          # not applied, its run id is recorded and a notice names it;
+          # operations.md has the re-run recipe.
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event "$EVENT" --ci-run-id "$RUN_ID" --ci-conclusion "$CONCLUSION" \
+            --commit-sha "$SHA" --ignore-terminal --discard-if-paused \
+            --reason "CI run $RUN_ID concluded '$CONCLUSION', which is not a test verdict" \
+            "${CI_EVIDENCE[@]}"
+
+      - name: Apply a human-supplied event
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.event != ''
+        # Free text from whoever dispatched the run, so it arrives as data
+        # (handoff.md §10, D2): `agentctl` rejects an unknown event itself, and
+        # the reason is only ever recorded.
+        env:
+          INPUT_EVENT: ${{ github.event.inputs.event }}
+          INPUT_REASON: ${{ github.event.inputs.reason }}
+        run: |
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event "$INPUT_EVENT" \
+            --reason "$INPUT_REASON"
+
+      - name: Decide the next action
+        id: decide
+        # Every action step below is gated on `decide.outputs.kind`, so leaving
+        # this unset is what makes the whole rest of the job no-op on a
+        # hand-authored branch. Only this step, the CI-result step above and
+        # the always() steps below (the two commits, the failure router) need
+        # the gate; the others fall out.
+        if: steps.drive.outputs.drive == 'true'
+        run: |
+          set -euo pipefail
+          ACTION=$(python -I "$TOOLS/.ai/bin/agentctl.py" next "$TASK_ID")
+          echo "$ACTION"
+          echo "kind=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin)["kind"])')" >> "$GITHUB_OUTPUT"
+          echo "role=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin).get("role",""))')" >> "$GITHUB_OUTPUT"
+          # The transition this dispatch implies. Supplied by agentlib, never
+          # re-derived here — a second copy of that mapping in YAML is exactly
+          # what went wrong on the first live run.
+          echo "event=$(echo "$ACTION" | python -I -c 'import json,sys; print(json.load(sys.stdin).get("event",""))')" >> "$GITHUB_OUTPUT"
+
+      # --- the one action -------------------------------------------------
+
+      - name: Validate the spec and open the task
+        if: steps.decide.outputs.kind == 'validate'
+        run: python -I "$TOOLS/.ai/bin/agentctl.py" state init "$TASK_ID"
+
+      - name: Distil the failure
+        id: distill
+        if: steps.decide.outputs.kind == 'distill'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN_ID=$(python -I -c "
+          import json, os, sys; sys.path.insert(0, os.environ['TOOLS'] + '/.ai')
+          from agentlib import state as st
+          s = st.load_state('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json')
+          print((s.get('last_ci') or {}).get('run_id') or '')
+          ")
+          # Only the failing jobs' output, capped. The raw log never reaches a
+          # prompt and is not committed anywhere.
+          if [ -n "$RUN_ID" ]; then
+            gh run view "$RUN_ID" --log-failed > ci.log 2>/dev/null || echo "" > ci.log
+          else
+            echo "" > ci.log
+          fi
+          tail -c 200000 ci.log > ci.tail.log
+          python -I "$TOOLS/.ai/bin/agentctl.py" distill "$TASK_ID" \
+            --log ci.tail.log --ci-status failure --out distilled.json
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event DISTILLED --distilled distilled.json
+
+      # handoff.md §10, D3 (the race). A dispatch is three steps, in this
+      # order: move the machine (here), commit AND push that state (the next
+      # step), and only then start the worker or CI. The dispatch used to come
+      # first, and the worker read the task branch before DISPATCH_* had
+      # landed on it — USERS-002's margin was about four seconds — and CI
+      # tested a commit one bookkeeping commit behind the tip. Nothing is
+      # dispatched unless the push succeeded.
+      - name: Advance the state before dispatching
+        id: premove
+        if: steps.decide.outputs.kind == 'run_ci' || steps.decide.outputs.kind == 'dispatch_agent'
+        env:
+          KIND: ${{ steps.decide.outputs.kind }}
+          EVENT: ${{ steps.decide.outputs.event }}
+        run: |
+          set -euo pipefail
+          # The worker reports back with AGENT_COMMITTED, which is only legal
+          # from a *_RUNNING state, and DISPATCH_CODE_AGENT is what increments
+          # the attempt counter. Every dispatch has an event now, the
+          # manager's included (DISPATCH_MANAGER, D3 L1), so every dispatch
+          # is in the history and counted.
+          if [ "$KIND" = "run_ci" ]; then
+            EVENT=CI_STARTED
+          fi
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event "$EVENT"
+          # DISPATCH_MANAGER past state.MAX_MANAGER_INVOCATIONS escalates
+          # instead: then there is nothing to start.
+          NOW=$(python -I -c "
+          import json, os
+          print(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['state'])
+          ")
+          if [ "$NOW" = "ESCALATED" ]; then
+            echo "::warning::$TASK_ID escalated on $EVENT; nothing dispatched"
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --- persist -------------------------------------------------------------
+
+      - name: Commit the state change
+        id: persist
+        # Nothing to commit when nothing decided anything, and a hand-authored
+        # branch must never receive an orchestrator commit it did not ask for.
+        # always() (handoff.md §10, D3, S8): a failed action step used to skip
+        # this, losing whatever it had already moved.
+        if: always() && steps.drive.outputs.drive == 'true'
+        env:
+          KIND: ${{ steps.decide.outputs.kind }}
+        run: |
+          set -euo pipefail
+          git config user.name "fanwire-agent-orchestrator"
+          git config user.email "noreply@github.com"
+          git add .ai/tasks/ .ai/telemetry/ || true
+          if git diff --cached --quiet; then
+            echo "no state change to commit"
+          else
+            git commit -m "[agent-state] $TASK_ID: $KIND"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      # --- dispatch, only once the state that says so is on the branch -------
+
+      - name: Run the authoritative test suite
+        id: ci
+        if: >-
+          steps.decide.outputs.kind == 'run_ci' &&
+          steps.persist.outcome == 'success' &&
+          steps.premove.outputs.dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run test-agent.yml --ref "$BRANCH"
+
+      - name: Dispatch the worker
+        id: dispatch
+        if: >-
+          steps.decide.outputs.kind == 'dispatch_agent' &&
+          steps.persist.outcome == 'success' &&
+          steps.premove.outputs.dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
+          ROLE: ${{ steps.decide.outputs.role }}
+        run: |
+          set -euo pipefail
+          gh workflow run agent-worker.yml \
+            --ref "${{ github.event.repository.default_branch }}" \
+            -f task_id="$TASK_ID" \
+            -f role="$ROLE"
+
+      - name: Continue, when the next step needs no external event
+        id: continue
+        # `validate` and `distill` complete inside this run, so nothing else
+        # would wake the orchestrator. `run_ci` and `dispatch_agent` are woken
+        # by CI or by the worker, and must NOT self-dispatch here.
+        if: steps.decide.outputs.kind == 'validate' || steps.decide.outputs.kind == 'distill'
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_DISPATCH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          # Cheap runaway guard on top of the state machine's own bounds.
+          HOPS=$(python -I -c "
+          import json, os; print(len(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['history']))
+          ")
+          if [ "$HOPS" -gt 200 ]; then
+            echo "::error::$TASK_ID has taken $HOPS transitions; refusing to continue"
+            exit 1
+          fi
+          gh workflow run agent-orchestrator.yml \
+            --ref "${{ github.event.repository.default_branch }}" \
+            -f task_id="$TASK_ID"
+
+      # --- a failed action is routed, never lost (handoff.md §10, D3, S8) ----
+      #
+      # A distil, transition, dispatch or self-wake that failed leaves a task
+      # nothing will wake: a dispatch that never happened has no result to
+      # come back. Escalate it, naming what failed, and commit that. ESCALATE
+      # rather than AGENT_FAILED because no agent ran, and the manager can fix
+      # none of these: they are a token, a workflow file or GitHub. Not for
+      # `validate`, which has no state file to record into until it succeeds.
+      # A failed push is not here either: then nothing was dispatched and the
+      # branch still holds the state before this run, so the next run simply
+      # does this one again.
+      - name: Escalate an action that failed
+        id: failed
+        if: >-
+          always() && steps.drive.outputs.drive == 'true' &&
+          (steps.distill.outcome == 'failure' || steps.premove.outcome == 'failure' ||
+           steps.ci.outcome == 'failure' || steps.dispatch.outcome == 'failure' ||
+           steps.continue.outcome == 'failure')
+        env:
+          KIND: ${{ steps.decide.outputs.kind }}
+          DISTILL: ${{ steps.distill.outcome }}
+          PREMOVE: ${{ steps.premove.outcome }}
+          CI: ${{ steps.ci.outcome }}
+          DISPATCH: ${{ steps.dispatch.outcome }}
+          CONTINUE: ${{ steps.continue.outcome }}
+        run: |
+          set -euo pipefail
+          WHAT="the $KIND action"
+          if [ "$DISTILL" = "failure" ]; then WHAT="distilling the CI failure"; fi
+          if [ "$PREMOVE" = "failure" ]; then WHAT="the transition before dispatching"; fi
+          if [ "$CI" = "failure" ]; then WHAT="dispatching test-agent (CI was never started)"; fi
+          if [ "$DISPATCH" = "failure" ]; then WHAT="dispatching the worker (it was never started)"; fi
+          if [ "$CONTINUE" = "failure" ]; then WHAT="waking the orchestrator again"; fi
+          REASON="orchestrator run $GITHUB_RUN_ID failed at $WHAT"
+          python -I "$TOOLS/.ai/bin/agentctl.py" state advance "$TASK_ID" \
+            --event ESCALATE --reason "$REASON"
+          echo "::error::$REASON; $TASK_ID escalated"
+
+      - name: Commit the escalation
+        if: always() && steps.drive.outputs.drive == 'true' && steps.failed.outcome == 'success'
+        env:
+          KIND: ${{ steps.decide.outputs.kind }}
+        run: |
+          set -euo pipefail
+          git config user.name "fanwire-agent-orchestrator"
+          git config user.email "noreply@github.com"
+          git add .ai/tasks/ .ai/telemetry/ || true
+          if git diff --cached --quiet; then
+            echo "no state change to commit"
+          else
+            git commit -m "[agent-state] $TASK_ID: $KIND"
+            git push origin HEAD:"$BRANCH"
+          fi
+
+      - name: Open the review PR
+        if: steps.decide.outputs.kind == 'halt'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          STATE=$(python -I -c "
+          import json, os; print(json.load(open('.ai/tasks/' + os.environ['TASK_ID'] + '/state.json'))['state'])
+          ")
+          if [ "$STATE" != "COMPLETE" ] && [ "$STATE" != "ESCALATED" ]; then
+            echo "halted in $STATE; nothing to open"; exit 0
+          fi
+          {
+            echo "Opened by the agent workflow. **Not merged by it** - no workflow here"
+            echo "has merge permission, and this needs a human review like any other PR."
+            echo ""
+            echo "Paths changed are inside the task contract; \`agent-guard\` enforces that"
+            echo "independently on this PR. Start with \`.ai/tasks/$TASK_ID/brief.md\`."
+            echo ""
+            echo "Task state at hand-off:"
+            echo ""
+            echo '```json'
+            python -I "$TOOLS/.ai/bin/agentctl.py" state show "$TASK_ID"
+            echo '```'
+          } > pr-body.md
+          gh pr create \
+            --base "${{ github.event.repository.default_branch }}" \
+            --head "$BRANCH" \
+            --title "$TASK_ID: $STATE" \
+            --body-file pr-body.md 2> pr-error.txt && exit 0
+          # Only a genuine duplicate is benign. Anything else — most likely
+          # "GitHub Actions is not permitted to create or approve pull
+          # requests", which is a repository setting — must be reported as
+          # itself. A blanket `||` that renames every failure "already exists"
+          # is worse than no handler at all.
+          if grep -qi "already exists" pr-error.txt; then
+            echo "a PR for this branch already exists"
+            exit 0
+          fi
+          echo "::error::could not open the review PR:"
+          cat pr-error.txt
+          echo "If this says Actions is not permitted to create pull requests,"
+          echo "enable Settings -> Actions -> General -> Workflow permissions ->"
+          echo "'Allow GitHub Actions to create and approve pull requests'."
+          echo "The task itself is unaffected; only the PR is missing. Open it"
+          echo "by hand: gh pr create --base ${{ github.event.repository.default_branch }} --head $BRANCH"
+          exit 1
+
+      - name: Summary
+        if: always()
+        # Even when the checkout never happened. agentctl then exits 2 on the
+        # missing data root, which `|| true` absorbs.
+        working-directory: ${{ github.workspace }}
+        run: |
+          {
+            echo "### ${TASK_ID:-(task id not resolved)}"
+            echo ""
+            echo '```'
+            python -I "$TOOLS/.ai/bin/agentctl.py" status || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

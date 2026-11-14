@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-1111-1111-1111-111111111111",
+      "receiptHandle": "AQEBexamplereceipthandle==",
+      "body": "{\"version\": \"0\", \"id\": \"6a7e8feb-b491-4cf7-a9f1-bf3703467718\", \"detail-type\": \"GuardDuty Malware Protection Object Scan Result\", \"source\": \"aws.guardduty\", \"account\": \"294321867941\", \"time\": \"2026-01-01T00:00:00Z\", \"region\": \"ca-central-1\", \"resources\": [\"arn:aws:s3:::fanwire-media-quarantine/uploads/44/original.jpg\"], \"detail\": {\"schemaVersion\": \"1.0\", \"scanStatus\": \"COMPLETED\", \"resourceType\": \"S3Object\", \"s3ObjectDetails\": {\"bucketName\": \"fanwire-media-quarantine\", \"objectKey\": \"uploads/44/original.jpg\", \"versionId\": \"3sL4kqtJlcpXroDTDmJ+rmSpXd3dIbrHY+MTRCxf3vjVBH40Nr8X8gdRQBpUMLUo\", \"eTag\": \"3e5b8b1234567890abcdef1234567890\", \"s3Throttled\": false}, \"scanResultDetails\": {\"scanResultStatus\": \"UNSUPPORTED\", \"threats\": []}}}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1767225600000",
+        "SenderId": "AIDAEXAMPLE",
+        "ApproximateFirstReceiveTimestamp": "1767225600000"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "00000000000000000000000000000000",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:ca-central-1:294321867941:Fanwire-Messaging-MediaScanResultQueue",
+      "awsRegion": "ca-central-1"
+    }
+  ]
+}

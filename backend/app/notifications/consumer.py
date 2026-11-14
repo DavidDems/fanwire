@@ -1,0 +1,195 @@
+"""app.notifications.consumer.handle_domain_event -- the PostEventBus
+Observer subscriber, per wiki/CodeContext/Standards/gof-patterns.md
+"Observer" and wiki/CodeContext/Modules/0x05-notifications.md.
+
+handle_domain_event is a plain, directly-invokable, fully unit-testable
+function with two callers (wiki/CodeContext/Modules/0x00-architecture.md
+"PostEventBus implementation"). Deployed, EventBridge -> SQS (with a DLQ) ->
+Lambda reach it through app.notifications.lambda_handler. On the local stack,
+with ENVIRONMENT=development and no POST_EVENT_BUS_NAME,
+app.notifications.local_dispatch.LocalDispatchPublisher calls it in process.
+Anywhere else with no bus name, InMemoryEventPublisher only records events and
+nothing reaches this function.
+
+Resolved gap between the wiki's stated design and the actual PostCreated
+payload: the wiki says this subscriber "distinguishes reply/repost from
+the event payload's flags," but app.posts.facade.PublishPostFacade's actual
+POST_CREATED detail dict is only {"post_id", "author_id"} -- no
+is_reply/is_repost/parent_post_id/original_post_id. Rather than modify
+app.posts.facade to add those fields, this module re-fetches the Post row
+by post_id (session.get(Post, post_id)) to read those flags, and -- for a
+reply/repost -- fetches the parent/original Post row the same way to find
+its author_id (the notification recipient). This is a direct read of
+posts/'s Post table, for lookup only, never a write -- the same kind of
+narrow, explicitly-justified boundary crossing app.posts.facade already
+makes into app.media.models.Media ("the one place posts/ touches media/'s
+Media rows directly"); here it's the one place notifications/ touches
+posts/'s Post rows directly.
+
+Self-notification skip (judgment call, not stated in the business rules):
+a self-reply/self-repost (recipient == actor) is skipped, not notified --
+mirrors app.users.service's existing no-self-follow rule. UserFollowed
+never hits this branch since users/ already disallows self-follow at the
+source.
+
+A PostCreated whose new post has no row is a successful no-op (POSTS-007):
+undoing a plain repost hard-deletes its row, so the undo can beat this
+consumer, no retry would ever win, and there is nothing for a human in the
+DLQ. The facade commits before it publishes, so a missing row means a later
+delete in practice; it can't be told apart from a wrong id, a silent no-op
+being the accepted cost. A record with no post_id key still fails.
+
+Account deletion (USERS-008) can also remove actors and recipients before an
+already-published event arrives. Missing referenced rows, deleted new posts and
+anonymous parents are successful no-ops with a non-identifying INFO log. Missing
+required payload keys still fail as malformed events. All references are checked
+before committing a notification so an undeliverable event cannot leave a row.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from aws_lambda_powertools import Logger
+from sqlalchemy.orm import Session
+
+from app.notifications.channels import NotificationFactory
+from app.notifications.email import EmailSender
+from app.notifications.models import Notification, NotificationPreference, NotificationType
+from app.posts.models import Post  # read-only lookup only, see module docstring
+from app.posts.service import deleted_post_ids
+from app.users.lifecycle import AccountRestricted, fence_users
+from app.users.models import User
+
+POST_CREATED = "PostCreated"
+USER_FOLLOWED = "UserFollowed"
+
+logger = Logger()
+
+
+class MissingReferenceError(LookupError):
+    """An event names a row that does not exist. Carries the model name only:
+    the lambda handler logs the exception, and ids stay out of the logs."""
+
+
+def _require[RowT: (Post, User)](session: Session, model: type[RowT], row_id: Any) -> RowT:
+    row = session.get(model, row_id)
+    if row is None:
+        raise MissingReferenceError(f"the event names a {model.__name__} that does not exist")
+    return row
+
+
+def handle_domain_event(
+    session: Session, *, event_name: str, detail: dict[str, Any], email_sender: EmailSender
+) -> Notification | None:
+    """Handle one domain event published on PostEventBus. Only
+    PostCreated (reply/repost only, not a plain post) and UserFollowed are
+    notification triggers, per wiki/CodeContext/Modules/
+    0x05-notifications.md business rules; every other event name --
+    including PostReported and the retired PostMentionedEvent -- returns None without
+    raising.
+
+    On a notification-worthy event: always creates+persists the
+    Notification row (in-app display is mandatory, not gated by
+    preference), commits, then "delivers" via NotificationFactory's
+    in_app channel (a no-op, for Factory Method uniformity) and, if the
+    recipient's NotificationPreference.email_notifications_enabled is true
+    (or no preference row exists yet -- default enabled), via the email
+    channel.
+
+    Email is a best-effort side channel: the committed Notification row is
+    the durable outcome, so any exception from email delivery (e.g. SES
+    MessageRejected) is logged -- notification type and id only, no PII --
+    and swallowed, and the notification is still returned. Missing referenced
+    rows are successful no-ops; malformed payloads and storage failures before
+    the commit still propagate (see the module docstring).
+    """
+    try:
+        if event_name == POST_CREATED:
+            recipient_id, actor_id, notif_type, reference_id = _resolve_post_created(
+                session, detail
+            )
+            if recipient_id is None:
+                return None
+        elif event_name == USER_FOLLOWED:
+            recipient_id = detail["followed_user_id"]
+            actor_id = detail["follower_user_id"]
+            notif_type = NotificationType.FOLLOW
+            reference_id = actor_id
+        else:
+            return None
+        _require(session, User, actor_id)
+        recipient = _require(session, User, recipient_id)
+    except MissingReferenceError:
+        logger.info("notification event names data that no longer exists")
+        return None
+
+    if recipient_id == actor_id:
+        return None
+    try:
+        fence_users(session, [actor_id, recipient_id])
+    except AccountRestricted:
+        session.rollback()
+        return None
+
+    notification = Notification(
+        recipient_user_id=recipient_id,
+        type=notif_type,
+        actor_user_id=actor_id,
+        reference_id=reference_id,
+    )
+    session.add(notification)
+    session.commit()
+
+    factory = NotificationFactory(email_sender)
+
+    # In-app "delivery" is always attempted for interface uniformity, even
+    # though it's a no-op -- see app.notifications.channels.
+    factory.create("in_app").deliver(session, notification, recipient=recipient)
+
+    preference = session.get(NotificationPreference, recipient_id)
+    email_enabled = preference is None or preference.email_notifications_enabled
+    if email_enabled:
+        try:
+            factory.create("email").deliver(session, notification, recipient=recipient)
+        except Exception:
+            # Broad on purpose: the row is already committed, and failing the
+            # record would make SQS redeliver it and commit a duplicate row.
+            logger.exception(
+                "email notification delivery failed",
+                extra={
+                    "notification_type": notification.type.value,
+                    "notification_id": notification.id,
+                },
+            )
+
+    return notification
+
+
+def _resolve_post_created(
+    session: Session, detail: dict[str, Any]
+) -> tuple[int | None, int, NotificationType | None, int | None]:
+    """Returns (recipient_id, actor_id, type, reference_id) for a
+    PostCreated event, or (None, actor_id, None, None) if the new post is
+    neither a reply nor a repost (a plain post -- no notification) or has no
+    row (see the module docstring)."""
+    post = session.get(Post, detail["post_id"])
+    actor_id = detail["author_id"]
+
+    if post is None or post.author_id is None or post.id in deleted_post_ids(session, [post.id]):
+        logger.info("post created event names a post that no longer exists")
+        return None, actor_id, None, None
+    if post.is_reply:
+        parent = _require(session, Post, post.parent_post_id)
+        if parent.author_id is None:
+            logger.info("notification recipient no longer exists")
+            return None, actor_id, None, None
+        return parent.author_id, actor_id, NotificationType.REPLY, post.id
+    if post.is_repost:
+        original = _require(session, Post, post.original_post_id)
+        if original.author_id is None:
+            logger.info("notification recipient no longer exists")
+            return None, actor_id, None, None
+        return original.author_id, actor_id, NotificationType.REPOST, post.id
+
+    return None, actor_id, None, None

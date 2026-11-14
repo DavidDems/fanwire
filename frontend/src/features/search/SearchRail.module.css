@@ -1,0 +1,90 @@
+/*
+ * The search half of the home page's right rail (FRONTEND-036): the bar, then
+ * a preview of the results, in the rail's --rail-width column. The rail is
+ * mounted from 72em only, so nothing here needs a media query. Its markup is
+ * this feature's own, so it is styled by element under .rail, which keeps the
+ * entry's class map small. Values come from tokens.css by name only.
+ */
+
+/* The bar, then the results, a section's space apart. */
+.rail,
+.rail section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* Accounts and Posts: heading, state, rows and Show all, closer together. */
+.rail section section {
+  gap: var(--space-3);
+}
+
+/* "Results for …" with Clear search beside it, or under it when long. */
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* A query of up to 100 characters wraps rather than widening the rail. */
+.rail h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-size-lg);
+  overflow-wrap: anywhere;
+}
+
+.rail h3 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Rows with a divider between them; accounts keep /search's card around them. */
+.rail ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail li {
+  min-width: 0;
+  padding-block: var(--space-2);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.rail li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.rail li a {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A post's time: the link to its thread, quieter than its author. */
+.rail li a:has(time) {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+/* Three lines of a post (or an account's description) at most. */
+.rail li p {
+  display: -webkit-box;
+  margin: var(--space-1) 0 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Show all: a link, at the end of its section. */
+.rail section section > a:last-child {
+  align-self: flex-start;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}

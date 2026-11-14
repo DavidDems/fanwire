@@ -1,0 +1,37 @@
+/*
+ * The home page (wiki/CodeContext/FrontendUI/layout.md §3): the feed, and
+ * from 76.0625em the right rail beside it (FRONTEND-036). The rail is mounted
+ * from 76.0625em only (HomeView's useMediaQuery), so below that the feed is alone.
+ * AppLayout.module.css widens main on / to make room for it. Values come from
+ * tokens.css by name only.
+ */
+
+.home {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+/* The feed: whatever the rail leaves. */
+.home > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * The rail: --rail-width wide, sticky under the header at the sidebar's own
+ * top, and scrolling on its own when taller than the viewport. The padding
+ * keeps focus rings inside its scroll box, which would otherwise clip them.
+ */
+.rail {
+  position: sticky;
+  top: calc(var(--target-min) + 2 * var(--space-2));
+  flex: none;
+  box-sizing: border-box;
+  width: var(--rail-width);
+  max-height: calc(100vh - var(--target-min) - 2 * var(--space-2));
+  max-height: calc(100dvh - var(--target-min) - 2 * var(--space-2));
+  padding: var(--space-1) var(--space-1) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
