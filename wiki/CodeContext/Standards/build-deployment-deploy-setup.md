@@ -6,7 +6,7 @@ type: runbook
 
 Run once per repository, by the human, before the first dispatch of `deploy.yml` ([[wiki/CodeContext/Standards/build-deployment|Build & Deployment]] "Automated deploy") — and again whenever the role's trust or the `production` environment is recreated: a new repository changes the OIDC subject's ids. The current account state is recorded in [[wiki/CodeContext/Modules/0x00c-architecture-aws-account|0x00c]] → "AWS account state". Each command is a single line.
 
-1. Apply the trust, from the repo root with this file present. Nothing else assumes the role, so applying it before the merge breaks nothing. To undo it, apply the same JSON with `sub` set to `repo:DavidDems@71515505/fanwire@1373722771:ref:refs/heads/main`.
+1. Apply the trust, from the repo root with this file present. Nothing else assumes the role, so applying it before the merge breaks nothing. To undo it, apply the same JSON with `sub` set to `repo:DavidDems@71515505/fanwire@1457277496:ref:refs/heads/main`.
    ```powershell
    aws iam update-assume-role-policy --profile fanwire-workload --role-name GitHubActionsDeployRole --policy-document file://infra/iam/github-actions-deploy-role-trust-policy.json
    ```
