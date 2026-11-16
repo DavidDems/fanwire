@@ -18,7 +18,7 @@ slices extracted the review's decisions to
 [0003](../Decisions/0003-red-baseline.md),
 [0004](../Decisions/0004-required-quality-checks.md) and
 [0005](../Decisions/0005-provider-cost-telemetry.md); the rest of it is
-absorbed by [Prompt 25](25-context-update-track.md). Keep jev disabled.
+absorbed by the Context-Update-Track. Keep jev disabled.
 Completed app work is recorded in [the index](../index.md).
 
 **Brief for a Director session** (a high-tier model, driven turn by turn by
@@ -111,7 +111,7 @@ One Director PR each, in order.
    baseline line. That lets the linter land before the migration. Tests
    first, against fixture docs.
 3. **Migrate the corpus:** absorbed by
-   [Prompt 25](25-context-update-track.md), the Context-Update-Track.
+   the Context-Update-Track (done, `Timeline/2026-11.md`).
 4. **The WikiMaintenance skill and its trigger.**
    - Write `.claude/skills/wiki-maintenance/SKILL.md`. A pass runs the
      linter, works the baseline down, condenses `reference` files over

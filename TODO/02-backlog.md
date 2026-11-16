@@ -36,9 +36,9 @@ changes a workflow.
     proves the distiller, the manager decision and a retry, none of which has
     run, and, as the first worker run on the pinned CLI, its install check.
     Needs the human's go.
-16. `director`: **`metrics-publish.yml`'s daily catchup fails** at `pr-detail`
-    on `FRONTEND-016`'s PR (fanwire-archive#195): every scheduled run from
-    2026-11-08 to 2026-11-13 failed (run 43424088694).
+16. `director`: **`metrics-publish.yml`'s catchup** failed at `pr-detail` on a
+    `FRONTEND-016` PR that does not exist in the new repository. The first
+    scheduled run there (2026-11-14) passed: closed.
 17. `director`: Decide whether `--permission-mode acceptEdits`
     (`.ai/bin/invoke_agent.sh`) is right for a non-interactive worker that has
     to run a tool. Settle it with `Prompts/13-worker-shell.md`.
@@ -53,11 +53,6 @@ changes a workflow.
     `docker compose run`.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
-
-## Context-Update-Track
-
-Compact every context file, then move to a fresh public repository (the human, 2026-11-11).
-Brief and queue (`CUT-00` to `CUT-12`, one `director` PR each): `wiki/GeneralContext/Prompts/25-context-update-track.md`.
 
 ## Improvement roadmap
 
@@ -107,6 +102,8 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | **A GuardDuty-findings alarm**: route Medium/High findings to the alarm topic (EventBridge rule → SNS) | `director` | — | `incident-runbook-inventory.md` Known gaps, after `INFRA-004` | Findings live in the delegated-admin account (`fanwire-log-archive`), not the workload account that holds the topic, so the routing crosses accounts. Needs a design first |
 | **A friendlier 429 message**: the frontend shows a generic failure when `POST /posts` or a repost is rate-limited | `hand` | — | `POSTS-002` (fanwire-archive#183), "Not in this task" | `createPost` treats every non-2xx alike. A "slow down" line where the composer shows errors |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (fanwire-archive#161), `0x03a-posts-post.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
+| **`0x00a` "Alarms" says 21; `infra/test/alarms.test.ts` pins 23** | `hand` | — | CUT-11, fanwire-archive#398 "Carried over" | Make the doc match the test |
+| **Small open decisions from the compaction**: migrations stay manual (revisit with the permissions boundary); per-user rate limits (`0x00b`); the incident inventory may be missing the sports-data bucket; `dev-auth-setup` "mirrors" vs prod's pre-sign-up auto-confirm | `director` | — | CUT-11, fanwire-archive#398 "Carried over" | Check each against the code before acting |
 
 ## Launch adjustments (Track D sequence)
 

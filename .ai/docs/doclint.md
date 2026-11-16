@@ -102,7 +102,7 @@ and corpus migration are separate Prompt 10 deliverables.
 ## Corpus tools
 
 `agentlib.doccorpus` adds three `docs` subcommands for the
-[Context-Update-Track](../../wiki/GeneralContext/Prompts/25-context-update-track.md).
+Context-Update-Track (runbook: [repo-cutover](../../wiki/GeneralContext/Architecture/repo-cutover.md)).
 They share the linter's types, budgets, body count and link syntax, read
 tracked files only, and exit 0 unless their input is unusable (2). Each takes
 `--paths <prefix>...` to narrow its scope, `--root <repo>` to read another

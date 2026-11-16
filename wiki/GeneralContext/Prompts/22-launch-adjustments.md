@@ -35,7 +35,7 @@ data operations are not.
   killed, including removing the future-auth guard; three baseline runs pass.
   No full local backend rerun after the clock-only correction is claimed.
 - Artifacts: `users009-*` in the old checkout's untracked `.worktrees/_ledger/`
-  (after CUT-12, in the `fanwire-archive` folder beside this one). Both PRs are draft review
+  (since CUT-12, in `C:\Users\david\source\repos\fanwire-archive`). Both PRs are draft review
   checkpoints; task stays HAND_RUNNING. The receiving Director must inspect
   exact-head CI and both diffs before declaring ready; no rollout approval is
   implied. No browser/provider/deployed-role proof was obtained.
