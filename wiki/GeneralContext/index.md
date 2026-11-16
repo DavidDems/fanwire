@@ -81,7 +81,6 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 Live:
 
-- **`25-context-update-track.md`** (2026-11-11): Context-Update-Track. Compact every context file to its budget, write a timeline of the history the move loses, scrub personal addresses, then cut over to a fresh repository (`CUT-00` to `CUT-12`, one Director PR each).
 - **`22-launch-adjustments.md`**: [USERS-009](../../.ai/tasks/USERS-009/brief.md) implementation/documentation PR checkpoint and Director handoff under [ADR 0009](Decisions/0009-account-lifecycle-evidence.md). Migration, legacy-adoption and activation gates remain. AUTH-001 and USERS-005 stay parked and preserved.
 - **`04-cheap-automations.md`**: the four Haiku 5.5 automations (CI failure summary, criteria coverage, spec drift, wiki update proposal) are built and live; left is proving live the "Fixed" line and `assumed_to_exist` (`TODO/02` item 14). `jev` stays off.
 - **`06-nba-data.md`**: sports data on the Eoin Moore Kaggle dataset. Left: the API-SPORTS infra clean-up and the gated `EVENTS-008`.
