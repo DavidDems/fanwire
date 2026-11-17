@@ -24,6 +24,7 @@ dependencies = [
     "pillow>=11.0",                 # media pipeline: type validation, EXIF strip, resize
     "python-multipart>=0.0.12",     # FastAPI file upload parsing
     "email-validator>=2.2",         # Pydantic EmailStr for registration
+    "kagglehub>=1.0.3",             # EVENTS-008: scheduled dataset refresh; 1.0.3 pins the certifi fix
 ]
 
 [project.optional-dependencies]
