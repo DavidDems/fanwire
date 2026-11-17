@@ -2686,6 +2686,21 @@ class TestEveryNpmTreeIsAudited:
             assert m, f"`{line}` in {tree}/ sets no --audit-level"
             assert m.group(1) in self.GATING, f"{tree}/ audits at {m.group(1)}"
 
+    def test_the_frontend_gates_runtime_at_high_and_everything_at_critical(self, gate):
+        """picomatch (GHSA-fc5q-39xc-vjpf, high, affected through its latest
+        release, no fix) reaches `frontend/` only through vite and vitest, which
+        are build and test tooling. Runtime dependencies still block at `high`;
+        the whole tree, dev tooling included, blocks at `critical`. Revert to a
+        single `high` audit once a fixed picomatch ships."""
+        lines = self.audits(job_block(gate, "npm-audit")).get("frontend", [])
+        levels = {}
+        for line in lines:
+            m = re.search(r"--audit-level[= ](\w+)", line)
+            assert m, f"`{line}` sets no --audit-level"
+            levels["--omit=dev" in line] = m.group(1)
+        assert levels.get(True) == "high", "no runtime-only audit at high"
+        assert levels.get(False) == "critical", "no full-tree audit at critical"
+
     def test_the_job_runs_when_either_tree_changes(self, gate):
         """Keyed on the filter outputs, it also inherits the non-PR bypass
         that makes a dispatched run authoritative."""
