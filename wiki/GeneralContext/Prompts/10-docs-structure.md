@@ -112,22 +112,13 @@ One Director PR each, in order.
    first, against fixture docs.
 3. **Migrate the corpus:** absorbed by
    the Context-Update-Track (done, `Timeline/2026-11.md`).
-4. **The WikiMaintenance skill and its trigger.**
-   - Write `.claude/skills/wiki-maintenance/SKILL.md`. A pass runs the
-     linter, works the baseline down, condenses `reference` files over
-     budget, deletes facts that are recorded twice, and checks module files
-     against the code they describe. It never rewrites a `decision`.
-   - Write `wiki-health.yml` (no model, no key) to run on push to `main` and
-     weekly. When there are 3 or more merges since the last maintenance PR
-     (count by label) **and** the linter reports debt, it opens or updates a
-     single issue, "Wiki maintenance due", listing the violations.
-   - **Who does the pass: decided, a Director session** started by the
-     human with the skill, on the subscription (the human, 2026-10-19,
-     [ADR 0028](../Decisions/0028-improvement-roadmap-answers.md); don't ask again). The issue says
-     how to start one. Build no automated pass. Automating it would mean a
-     scheduled cloud routine or an API job opening a `wiki-maintenance/*` PR
-     under a new guard role whose only write is `wiki/**`. That is a later
-     proposal, only once `12` can score a maintenance pass.
+4. **The wiki review skill: replaced** (the human, 2026-11-17,
+   [ADR 0035](../Decisions/0035-outstanding-work-answers.md)). No `wiki-health.yml`
+   and no scheduled run. Outstanding-work track 8 builds a `wiki-review` skill
+   and a copy-pastable prompt the human runs by hand about weekly. A pass
+   still runs the linter, works the baseline down, condenses `reference`
+   files over budget, removes facts recorded twice and checks module files
+   against their code, and it never rewrites a `decision`.
 
 ## Design notes (starting points, not decisions)
 

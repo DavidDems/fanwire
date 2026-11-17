@@ -16,7 +16,7 @@ This folder is written for you.
 
 | File | What it covers |
 |---|---|
-| [`01-for-you.md`](01-for-you.md) | Only you can do these: the API-SPORTS resources to delete by hand, the Kaggle token for `EVENTS-008`, watching each deploy and running its migration, rolling out IAM policy changes, axe on every route, SES reapplication (optional, later) |
+| [`01-for-you.md`](01-for-you.md) | Only you can do these: the two `RETAIN` API-SPORTS resources to delete by hand, the Kaggle token for `EVENTS-008`, watching each deploy and running its migration, rolling out IAM policy changes, axe on every route, SES reapplication (optional, later) |
 | [`02-backlog.md`](02-backlog.md) | What is left to build, each item with its mode (`hand`, `auto` or `director`). Not human-only, but kept here so the remaining work is one list |
 
 ## Commands in this folder are PowerShell, one per line

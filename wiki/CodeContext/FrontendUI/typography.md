@@ -53,10 +53,10 @@ character rule on them (`app/users/schemas.py`: `username: str`). In Segoe UI
 and SF, `@Illini_1` and `@lllini_l` are almost indistinguishable at 16 px. That
 is an impersonation vector the typeface can't fix.
 
-**The fix belongs to the backend:** a username character rule (for example
-lowercase `[a-z0-9_]`, which removes `I` entirely and leaves `l` vs `1`, which
-the system faces do separate). That is a `users/` decision for the human, not a
-styling unit's. It's recorded here and in the PR so it isn't lost. Until then:
+**The fix belongs to the backend, and it is decided:** usernames follow
+Instagram's rule (1–30 ASCII letters, digits, `_` and `.`; no `..`; no trailing
+`.`), [ADR 0035](../../GeneralContext/Decisions/0035-outstanding-work-answers.md). It leaves `I` and `l` in
+play, so until it ships:
 
 - a username is always a link to the profile, so the profile, not the glyphs,
   is the identity check;

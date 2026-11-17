@@ -17,14 +17,12 @@ answered decisions are `wiki/GeneralContext/Decisions/`.
 
 `wiki/GeneralContext/Prompts/06-nba-data.md` is the thread.
 
-- **After the API-SPORTS infra clean-up deploys:** the idempotency table and
-  the API-SPORTS secret are `RETAIN`, so they stay in the account after
-  leaving the template. Delete them by hand; that PR names them.
-- **For `EVENTS-008` only, later:** check that the Kaggle dataset is updating
-  during the season (the 2026-10-25 download at `C:\data\nba` already holds
-  the first 2026-27 games). If it is, create a Kaggle API token
-  (kaggle.com → Settings → API) and store it in Secrets Manager under the
-  name the `EVENTS-008` spec gives.
+- **After the API-SPORTS infra clean-up deploys:** delete `IdempotencyTable`
+  (DynamoDB) and the `ApiSportsKey` secret by hand. Both are `RETAIN`, nothing
+  uses them, and you decided to delete them (ADR 0035); the PR names them.
+- **Before `EVENTS-008` (the first Outstanding-work track):** create a Kaggle
+  API token (kaggle.com → Settings → API) and store it in Secrets Manager
+  under the name the `EVENTS-008` spec gives. The track tells you when.
 
 ## 2. Watching each deploy
 
