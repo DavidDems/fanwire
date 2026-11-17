@@ -377,9 +377,19 @@ jobs:
       # would block every PR (.ai/tests/test_workflows.py
       # TestEveryNpmTreeIsAudited). The react-router 6 residue that used to
       # be named here is gone since react-router 7 (FRONTEND-016, #195).
-      - name: Audit frontend for known CVEs (blocks on high)
+      # picomatch (GHSA-fc5q-39xc-vjpf, high, affected through 4.0.7 and no
+      # fixed release) reaches frontend/ only through vite and vitest, which
+      # are build and test tooling and ship nothing. So what ships still
+      # blocks on `high`, and the whole tree, tooling included, blocks on
+      # `critical`. Make this one `npm audit --audit-level=high` again once
+      # picomatch has a fix (.ai/tests/test_workflows.py
+      # TestEveryNpmTreeIsAudited).
+      - name: Audit frontend runtime dependencies for known CVEs (blocks on high)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit the whole frontend tree for known CVEs (blocks on critical)
+        working-directory: frontend
+        run: npm audit --audit-level=critical
       - name: Install infra dependencies
         working-directory: infra
         run: npm ci
