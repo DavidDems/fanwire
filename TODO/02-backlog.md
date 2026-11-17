@@ -18,6 +18,10 @@ backlog item":
 then. Writing a spec is Director work. When an item is done, delete it here
 and record the result as current-state fact in the module file it changed.
 
+**Order of work:** the Outstanding-work tracks, `wiki/GeneralContext/Prompts/30-*`
+to `37-*`, run in numeric order ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
+Each row below names its track.
+
 ## Agent system
 
 Findings, evidence and the agreed plan are `.ai/docs/handoff.md` §10; what is
@@ -27,50 +31,36 @@ changes a workflow.
 
 11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`.
     `.ai/config.json` still has `claude-opus-5`, `claude-sonnet-5` and one
-    `claude-haiku-4-5`.
-14. `director`: **Cheap automations**: all four are built and live; what is
-    left is proving two fixes live (the "Fixed" line, `assumed_to_exist`).
-    Brief: `Prompts/04-cheap-automations.md`.
-15. `auto`: **Exercise a failure path on purpose** (`handoff.md` §6, item 3):
-    one cheap task with a deliberately impossible acceptance criterion. It
-    proves the distiller, the manager decision and a retry, none of which has
-    run, and, as the first worker run on the pinned CLI, its install check.
-    Needs the human's go.
-16. `director`: **`metrics-publish.yml`'s catchup** failed at `pr-detail` on a
-    `FRONTEND-016` PR that does not exist in the new repository. The first
-    scheduled run there (2026-11-14) passed: closed.
-17. `director`: Decide whether `--permission-mode acceptEdits`
-    (`.ai/bin/invoke_agent.sh`) is right for a non-interactive worker that has
-    to run a tool. Settle it with `Prompts/13-worker-shell.md`.
+    `claude-haiku-4-5`. Track 2.
+14. **Parked for API cost** ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)):
+    proving the cheap automations' two fixes live (`Prompts/04`), exercising a
+    failure path on purpose (`handoff.md` §6, item 3), and whether
+    `--permission-mode acceptEdits` suits a worker that runs a tool
+    (`Prompts/13`). Each needs metered runs; the human revisits only by
+    choosing to spend.
 18. `director`: Spec validation that rejects an acceptance criterion with no
-    observable predicate (caught today only by the red-baseline gate).
+    observable predicate (caught today only by the red-baseline gate). Track 7.
 19. `director`: A CI check that a PR's base is `main` (stacked PRs merged
-    top-down never reached it), and correlating prompt size with attempts per
-    task once `Prompts/11` records both.
+    top-down never reached it). Track 7.
 20. `director`: Local guards: `agentctl selfcheck` asserting each workspace's
     `node_modules` is installed, refusing `git stash` in agent sessions (the
     stack is shared across worktrees), and a port pre-flight before
-    `docker compose run`.
+    `docker compose run`. Track 7.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Improvement roadmap
 
-From the Director's review of 2026-10-19, agreed with the human. Within the
-track the order is a dependency order. Each brief is in
-`wiki/GeneralContext/Prompts/`. The decisions the briefs raised were answered
-by the human on 2026-10-19 (`wiki/GeneralContext/Decisions/0028-improvement-roadmap-answers.md`,
-`0029-performance-test-design.md`), and each
-brief records its answer.
+From the Director's review of 2026-10-19, narrowed on 2026-11-17: development is
+hand-run, so the briefs that need metered API runs are parked
+([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
+Each brief is in `wiki/GeneralContext/Prompts/`.
 
-| Order | Brief | Mode | Why it's here |
-|---|---|---|---|
-| System 2 | `10-docs-structure.md` | `director` | Deliverable 4 only: the WikiMaintenance skill and `wiki-health.yml`. Its corpus migration (Deliverable 3) is absorbed by `Prompts/25`. |
-| System 3 | `11-metrics-every-mode.md` | `director` | The sensor. `12` needs its record format and the pipeline version. |
-| System 4 | `12-agent-evals.md` | `director` | The test harness. Its first run is the baseline `13`–`15` are judged against. |
-| System 5 | `13-worker-shell.md` | `director` | The biggest bottleneck (CI round trips). The first change scored by `12`. |
-| System 6 | `14-learning-loop.md` | `director` | Criterion ids (deterministic coverage) and review corrections → skill proposals. Needs `11` and `12`. |
-| System 7 | `15-context-graph.md` | `director` | Our own graph generator on mature parsers. It enforces the connection rule; its token savings are measured by `12`. |
+| Brief | Mode | Now |
+|---|---|---|
+| `10-docs-structure.md` | `director` | Deliverable 4 is replaced by the `wiki-review` skill, track 8 |
+| `11-metrics-every-mode.md` | `director` | Deliverables 4 and 5 (VERSION/changelog, reporting), track 7 |
+| `12`–`15` (evals, worker shell, learning loop, context graph) | `director` | Parked: each needs metered API runs to build or score |
 
 ## Workflow ideas, not yet designed
 
@@ -79,8 +69,7 @@ before a brief.
 
 | Item | Mode | Notes |
 |---|---|---|
-| **A weekly review of `wiki/`** | `director` | Overlaps `Prompts/10` deliverable 4 (`wiki-health.yml`, weekly, opening a "Wiki maintenance due" issue for a Director session). Settle it there rather than build a second trigger |
-| **A weekly review of `.ai/`** | `director` | The same shape as the wiki one: a deterministic weekly report (stalled tasks, unproven-live items in handoff, telemetry and metrics from `Prompts/11`, Scorecard findings) in an issue, and a Director session acting on it. Design it after `11` |
+| **A review of `wiki/` and of `.ai/`** | `director` | Decided: two skills (`wiki-review`, `ai-review`) and two copy-pastable prompts the human runs by hand about weekly. No scheduled run, no `wiki-health.yml`. Track 8, the last |
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
 
 ## Sports data
@@ -91,8 +80,8 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (fanwire-archive#142, deployed 2026-10-14) | Now unblocked; needs a spec. Two are `RETAIN`: the human deletes them by hand afterwards |
-| **Scheduled refresh from Kaggle** during the season | `hand` | `EVENTS-008` | the human, 2026-10-13 | Gated: the dataset must resume updating after 2026-10-21, and a Kaggle token must be in Secrets Manager |
+| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (fanwire-archive#142, deployed 2026-10-14) | Track 3. Needs a spec. The two `RETAIN` resources (`IdempotencyTable`, `ApiSportsKey`) are deleted by hand afterwards: decided, nothing else uses them (ADR 0035) |
+| **Automated refresh from Kaggle**: download the dataset and load it with no manual step | `hand` | `EVENTS-008` | the human, 2026-10-13 | **Top priority, track 1.** The gate is lifted (ADR 0035); the human stores a Kaggle token in Secrets Manager first |
 
 ## Backend and infra
 
@@ -113,10 +102,9 @@ Completed launch units/research are removed; historical records remain.
 
 | Order | Mode | Task | What |
 |---|---|---|---|
-| 1 | `director` | pending | Merge exact USERS-009 foundation scope before its task branch; separately review legacy adoption, cutover/activation and any demonstrated IAM prerequisite. No AWS write or production operation is authorized. |
-| 2 | `hand` | `USERS-009` | Durable issuer/sub authority, deletion tombstones/operation/status/manifests and automatic bounded scheduled reconciliation. Preserve DELETE 204 completion semantics; no frontend/reset redesign. All recovery/fencing stages activate together after migration and explicit rollout gates. |
-| 3 | `hand` | `AUTH-001` | Paused independently: authoritative lost/late reset completion and revocation evidence or a further reviewed architecture/scope amendment is still required. Native verified-email codes/static reminder retained; preserve the unshipped experiment. No timer-unlock/manual-only design is approved. |
-| 4 | `hand` | `USERS-005` | Avatar colours replace presets. Scope amended to cover `AppLayout`; resume from the red tests in [`parked/`](../.ai/tasks/USERS-005/parked/users005-red-tests.patch). |
+| 1 | `hand` | `USERS-005` | Avatar colours replace presets. Scope amended to cover `AppLayout`; resume from the red tests in [`parked/`](../.ai/tasks/USERS-005/parked/users005-red-tests.patch). Track 6 |
+| 2 | `director` | pending | `USERS-009` is merged but dormant (`ACCOUNT_LIFECYCLE_ENABLED=false` in `infra/lib/app-stack.ts`). Review legacy adoption and the cutover/activation procedure, then activate with the human's approval at each gate. Track 6 |
+| 3 | `hand` | `AUTH-001` | Re-scoped to Cognito's native forgot-password flow with its verified-email code and a static verify reminder; the lost/late-reset revocation machinery is dropped ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)). A Director rewrites the spec first. Track 6 |
 
 Outstanding Director UI documentation follow-ups remain under Frontend. Completed
 IAM/scope prerequisites are not AWS writes to repeat. Foundation authorization
@@ -124,20 +112,9 @@ does not authorize deployment or production user-data operations. Reset retains
 Cognito's default sender and verified-email codes: no SES, custom reset tokens,
 separate post-reset mail, password history or paid-plan requirement.
 
-## Deferred new-device security (outside Track D)
+## Dropped: new-device security
 
-`AUTH-002` and `AUTH-003` remain deferred outside Track D and are not expanded by
-the account-lifecycle research. `USERS-007` did not implement recovery;
-`AUTH-001` remains in Track D behind the research gate above.
-
-| Order | Task | What |
-|---|---|---|
-| 1 | `AUTH-002` | Per-user remembered-device registry; requires a separate Director policy/scope prerequisite for its migration path. Outside Track D. |
-| 2 | `AUTH-003` | Dismissible verification prompt for unverified users and pre-session email step-up for verified users on new devices; depends on `AUTH-002`. Outside Track D. |
-
-New-device email codes are lower assurance and require an architecture that
-withholds usable tokens until the challenge succeeds. See those task briefs for
-their separate security constraints and approval gates.
+`AUTH-002` and `AUTH-003` are dropped ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)): a challenge that withholds tokens needs an email path (SES, email MFA, a paid plan) the project rules out. Their task directories stay until a task branch removes them.
 
 ## Frontend
 
@@ -149,11 +126,11 @@ their separate security constraints and approval gates.
 | **UI-track browser rows left NOT DONE**: axe and forced colors on the shell, rail, Recent Games, result cards, team tabs and chart; a full 82-game season chart (label density); the picker at 320/768 | `hand` | — | fanwire-archive#346, fanwire-archive#347, fanwire-archive#351, `FRONTEND-037` PR | Browser-only, on real data after the human's game-data refresh |
 | **The entry chunk is ~1 kB under its 480 kB raw limit** (478.88 kB after `FRONTEND-044`) | `hand` | — | `FRONTEND-044` PR (fanwire-archive#373) | The next unit that adds to the entry (a nav item, a shell change) fails the bundle-budget test. Move something lazy first, or raise the limit by decision |
 | **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore`, `ChevronDownIcon` and `UserIcon`; a scrim token for `Dialog`'s backdrop (it uses the `--neutral-950` primitive); stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the "for the Director" lists of `FRONTEND-008`/`009`/`010` and `UI-009` | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
-| **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Keep storing the preference; caption or disable it. Prefer the backend saying whether email is available (a field on the preference response) over a build-time flag |
-| **"1 followers", "1 likes"**: singular and plural | `auto` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). **`auto` by the human's choice (2026-10-12)**, an exception to `work-modes.md`'s backend-only rule: the pipeline's first frontend task. Record its cost as handoff §10.5 does. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
+| **Email toggle while email is off.** "Email me about new notifications" still renders and does nothing | `hand` | — | `0x05-notifications.md` → "Email is off in production" | Decided (ADR 0035): the preference response gains a field saying whether email is available; the frontend captions or disables the toggle from it. Keep storing the preference. Track 4 |
+| **"1 followers", "1 likes"**: singular and plural | `hand` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). Was `auto` by the human's 2026-10-12 choice; now `hand`, since API spend is out (ADR 0035). Track 5. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
 | **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |
 | **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components-map-posts.md` §5, `FRONTEND-007` | `src/components/` |
 | **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, compose's `attachmentReads.ts` since FRONTEND-013, stats), sharing one cache key | `hand` | — | `FRONTEND-007` | Move into `api/`; needs all four features in scope |
 | **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `hand` | — | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
-| **A username character rule** (look-alike usernames) | `director` | — | `typography.md` §1 | A product decision first. **Director** |
+| **A username character rule** (look-alike usernames) | `hand` | — | `typography.md` §1 | Decided (ADR 0035): Instagram's rule, `^(?!.*\.\.)(?!.*\.$)\w[\w.]{0,29}$`, ASCII-only, whole-string. Backend schema, then the form. Decide what happens to existing names that break it. Track 4 |
 

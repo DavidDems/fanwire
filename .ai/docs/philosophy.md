@@ -37,19 +37,17 @@ thing that reports its own success.
 
 ## 2. What this project actually is
 
-fanwire is a sports discussion app. That is the *byproduct*.
-
-The real objective is an automated AI development pipeline — a repeatable
-process that takes a specification and produces reviewed, tested, working
-software with as little human involvement as the work genuinely requires. The
-app exists to give that pipeline something real to build, with real
-constraints, real regressions and real cost.
+fanwire is a sports discussion app, and since 2026-11-17 the app is the
+goal: the best sports social app the human can build, deployed and configured
+with no third-party hosting ([ADR 0035](../../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
+The pipeline is a means of building it efficiently and safely. Development is
+hand-run because API spend is too high, so the pipeline's rules matter most
+where they are enforced and cheap.
 
 This matters when you are reviewing the system, because it changes what counts
-as a good decision. A change that ships the app faster but makes the pipeline
-less observable is a **bad** trade here. A change that costs an extra CI minute
-but turns a prose rule into an enforced one is a **good** trade here. Optimise
-for the pipeline.
+as a good decision. A change that costs an extra CI minute but turns a prose
+rule into an enforced one is a **good** trade here. A change that needs metered
+API runs to prove is a **poor** one until the human chooses to spend.
 
 ## 3. The ordering: safety, determinism, observability, cost, maintainability
 

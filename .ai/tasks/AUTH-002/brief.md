@@ -1,5 +1,7 @@
 # AUTH-002: remembered-device registry
 
+**Dropped, 2026-11-17** ([ADR 0035](../../../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)): the project rules out the email path this needs. Do not start it.
+
 Product direction: [ADR 0008](../../../wiki/GeneralContext/Decisions/0008-remembered-devices-and-step-up-auth.md).
 
 Prose for the Manager. The contract is `task.json`.

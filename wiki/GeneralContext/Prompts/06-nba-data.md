@@ -114,13 +114,15 @@ the first 2026-27 games). Facts every loader relies on:
 1. **The API-SPORTS infra clean-up** (`TODO/02-backlog.md` "Sports data",
    first row): delete the idempotency and live-score tables, the API-SPORTS
    secret, the ingestion-retry queue and DLQ, and their exports. It needs a
-   spec (Director PR). Two resources are `RETAIN`, so the human deletes them
-   by hand after the deploy; that PR names them (`TODO/01-for-you.md`).
-2. **`EVENTS-008`, the scheduled refresh, stays gated.** Write its spec only
-   once the dataset is seen updating (the 2026-10-25 copy suggests it is; check
-   Kaggle shows versions after 2026-10-21) and the human has stored a Kaggle
-   API token in Secrets Manager. Then: a daily EventBridge Scheduler rule
-   invokes a refresh that downloads only `Games.csv`,
+   spec (Director PR). Two resources are `RETAIN` (`IdempotencyTable` and
+   `ApiSportsKey`); the human decided to delete both, by hand after the deploy
+   ([ADR 0035](../Decisions/0035-outstanding-work-answers.md), `TODO/01-for-you.md`).
+   Outstanding-work track 3.
+2. **`EVENTS-008`, the automated refresh, is the top priority** (the human,
+   2026-11-17, [ADR 0035](../Decisions/0035-outstanding-work-answers.md); the
+   gate is lifted). Outstanding-work track 1 writes its spec and builds it; the
+   human stores a Kaggle API token in Secrets Manager first. The shape to
+   start from: a daily EventBridge Scheduler rule invokes a refresh that downloads only `Games.csv`,
    `PlayerStatistics.csv`, `TeamStatistics.csv` and `Players.csv` through the
    Kaggle API (egress over the NAT instance on 443, already allowed) and loads
    the current season. New games only; a corrected final score is reported,
