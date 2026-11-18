@@ -32,6 +32,6 @@ No pagination on `GET /events/teams` (YAGNI — `Team` is a small, static ~30-ro
 The module's sections live in one part file each:
 
 - [[0x02a-events-schema]]: the tables: `Team`, `Game`, `Player` and `PlayerGameStats`, with their design, pattern, AWS and security notes
-- [[0x02b-events-loading]]: the dataset loader, the `SportsDataLoad` function, the schedule (`ScheduledGame` and its route) and the scale generator
+- [[0x02b-events-loading]]: the dataset loader, the `SportsDataLoad` function and the daily `SportsDataRefresh` that feeds it, the schedule (`ScheduledGame` and its route) and the scale generator
 - [[0x02c-events-routes]]: the public API routes: teams, games, the game detail, players and seasons
 - [[0x02d-events-records]]: the records library: the registry, aggregate tables, the three records routes, the edge cache and the indexes
