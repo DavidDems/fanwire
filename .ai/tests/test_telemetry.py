@@ -200,6 +200,40 @@ class TestTheEstimatePricesCacheTokens:
             ):
                 assert isinstance(price.get(field), (int, float)), (role, field)
 
+    def test_the_roles_run_the_current_generation(self):
+        # Backlog item 11: the pipeline's roles moved to the 5.5 generation.
+        models = {role: cfg["model"] for role, cfg in CONFIG["roles"].items()}
+        assert models == {
+            "manager": "claude-opus-5-5",
+            "test_agent": "claude-sonnet-5-5",
+            "code_agent": "claude-sonnet-5-5",
+            "distiller": "claude-haiku-5-5",
+            "context_maintainer": "claude-sonnet-5-5",
+        }
+
+    def test_no_role_or_automation_names_a_previous_generation_model(self):
+        # The old rows stay priced (historical telemetry names them), but
+        # nothing in the pipeline may still run one.
+        old = {"claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"}
+        users = dict(CONFIG["roles"])
+        users.update({k: v for k, v in CONFIG["automations"].items() if isinstance(v, dict)})
+        for name, cfg in users.items():
+            model = cfg["model"]
+            assert model not in old, (name, model)
+            assert not model.startswith("claude-haiku-4-5-"), (name, model)
+
+    @pytest.mark.parametrize(
+        ("model", "cache_read"),
+        [
+            ("claude-opus-5-5", 0.20),
+            ("claude-sonnet-5-5", 0.10),
+        ],
+    )
+    def test_verified_cache_read_prices(self, model, cache_read):
+        # The provider's list cache-read rates, 0.05x input for both.
+        price = PRICES[f"anthropic/{model}"]
+        assert price["cache_read_per_mtok"] == pytest.approx(cache_read)
+
     @pytest.mark.parametrize(
         ("model", "inp", "out"),
         [

@@ -29,9 +29,6 @@ proven live is `.ai/docs/handoff-live-proof.md`. Every `director` item is one
 PR, with its structural assertion in `.ai/tests/test_workflows.py` where it
 changes a workflow.
 
-11. `director`: Models to `claude-sonnet-5-5` / `claude-opus-5-5`.
-    `.ai/config.json` still has `claude-opus-5`, `claude-sonnet-5` and one
-    `claude-haiku-4-5`. Track 2.
 14. **Parked for API cost** ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)):
     proving the cheap automations' two fixes live (`Prompts/04`), exercising a
     failure path on purpose (`handoff.md` §6, item 3), and whether
