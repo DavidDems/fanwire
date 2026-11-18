@@ -81,7 +81,6 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
 | **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (fanwire-archive#142, deployed 2026-10-14) | Track 3. Needs a spec. The two `RETAIN` resources (`IdempotencyTable`, `ApiSportsKey`) are deleted by hand afterwards: decided, nothing else uses them (ADR 0035) |
-| **Automated refresh from Kaggle**: download the dataset and load it with no manual step | `hand` | `EVENTS-008` | the human, 2026-10-13 | **Top priority, track 1.** The gate is lifted (ADR 0035); the human stores a Kaggle token in Secrets Manager first |
 
 ## Backend and infra
 

@@ -23,7 +23,7 @@ Success: the answer names the new head revision.
 
 ## Load sports data
 
-Nothing invokes `SportsDataLoad` (`EVENTS-002`), by design, like `Migration`. The human loads the live database after a deploy, from one PowerShell window, because later steps use the variables earlier ones set. Run the steps in order:
+Since `EVENTS-008` a daily rule runs `SportsDataRefresh` (09:00 UTC), which downloads the dataset's files into `SportsDataBucket` and invokes `SportsDataLoad` for the current season. **This section is the manual fallback**, and the way to load any other season. The one-time setup is storing the Kaggle token with `aws secretsmanager put-secret-value --secret-id fanwire/kaggle-api-token`, from a masked `Read-Host -AsSecureString` prompt so the value never reaches chat or shell history. To run the refresh now, invoke `SportsDataRefresh` with the event `{}` and a CLI read timeout above its 10 minutes (the pattern of step 5 below); the load follows asynchronously. A `GamesConflicting` alarm means the load skipped a game whose score or teams disagree with the dataset; the game stays as stored (`0x02b`). `SportsDataLoad` is still invoked by hand, like `Migration`, when a season needs loading directly. The human loads the live database by hand, from one PowerShell window, because later steps use the variables earlier ones set. Run the steps in order:
 
 1. Find the bucket. `$bucket` then prints its name.
    ```powershell
