@@ -118,19 +118,7 @@ the first 2026-27 games). Facts every loader relies on:
    `ApiSportsKey`); the human decided to delete both, by hand after the deploy
    ([ADR 0035](../Decisions/0035-outstanding-work-answers.md), `TODO/01-for-you.md`).
    Outstanding-work track 3.
-2. **`EVENTS-008`, the automated refresh, is the top priority** (the human,
-   2026-11-17, [ADR 0035](../Decisions/0035-outstanding-work-answers.md); the
-   gate is lifted). Outstanding-work track 1 writes its spec and builds it; the
-   human stores a Kaggle API token in Secrets Manager first. The shape to
-   start from: a daily EventBridge Scheduler rule invokes a refresh that downloads only `Games.csv`,
-   `PlayerStatistics.csv`, `TeamStatistics.csv` and `Players.csv` through the
-   Kaggle API (egress over the NAT instance on 443, already allowed) and loads
-   the current season. New games only; a corrected final score is reported,
-   not applied silently. Depends on `EVENTS-002`.
-3. **Until then a new season reaches the site by hand:** the human
-   re-uploads the files and runs "Load sports data" for the current season
-   (re-runnable; existing games are "already present").
-4. **Later, not planned:** seasons before 2003-04 (needs historical teams),
+2. **Later, not planned:** seasons before 2003-04 (needs historical teams),
    player mentions in posts, following players or teams, and the NBA's
    standings tie-breakers (`EVENTS-007` orders by win percentage, wins,
    name, and says so).

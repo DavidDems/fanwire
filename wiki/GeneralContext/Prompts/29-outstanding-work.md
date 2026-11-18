@@ -19,7 +19,6 @@ answers; don't re-ask them). The human starts one session per track with:
 
 | Track | File | What |
 |---|---|---|
-| 1 | `30-outstanding-work-1-kaggle-refresh.md` | Automated Kaggle download and load (`EVENTS-008`). The top priority |
 | 2 | `31-outstanding-work-2-dependencies.md` | Dependabot alerts, Renovate's majors, model names |
 | 3 | `32-outstanding-work-3-infra-housekeeping.md` | API-SPORTS clean-up, alarms, IAM and alarm gaps, small open decisions |
 | 4 | `33-outstanding-work-4-backend-product.md` | Email availability field, username rule, follows feed, `PostCreated` consumer |

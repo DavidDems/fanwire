@@ -20,9 +20,11 @@ answered decisions are `wiki/GeneralContext/Decisions/`.
 - **After the API-SPORTS infra clean-up deploys:** delete `IdempotencyTable`
   (DynamoDB) and the `ApiSportsKey` secret by hand. Both are `RETAIN`, nothing
   uses them, and you decided to delete them (ADR 0035); the PR names them.
-- **Before `EVENTS-008` (the first Outstanding-work track):** create a Kaggle
-  API token (kaggle.com → Settings → API) and store it in Secrets Manager
-  under the name the `EVENTS-008` spec gives. The track tells you when.
+- **`EVENTS-008` is deployed (2026-11-18); the daily refresh needs your Kaggle
+  token:** create it (kaggle.com → Settings → API), store it in
+  `fanwire/kaggle-api-token` with the masked-prompt command, run the refresh
+  once by hand and check the newest game. The steps are the list in PR #7.
+  Delete this item once the first run has loaded.
 
 ## 2. Watching each deploy
 
