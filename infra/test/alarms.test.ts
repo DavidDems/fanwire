@@ -36,12 +36,14 @@ const SYNTH_MODES: Record<string, Record<string, unknown>> = {
  * deliberate change to this line:
  *   3 DLQ (notification, ingestion-retry, media-scan-result)
  * + 3 HTTP API ($default 5xx, Latency p95, Latency p99)
- * + 2 x 7 Lambda functions in Fanwire-App (Errors + Throttles each: Api, Media,
- *   Notifications, Migration, SportsDataLoad, OriginVerifyAuthorizer, AccountDeletion)
+ * + 2 x 8 Lambda functions in Fanwire-App (Errors + Throttles each: Api, Media,
+ *   Notifications, Migration, SportsDataLoad, SportsDataRefresh,
+ *   OriginVerifyAuthorizer, AccountDeletion)
  * + 3 RDS (CPUUtilization, FreeStorageSpace, DatabaseConnections)
- * = 23
+ * + 1 SportsDataConflictsAlarm (Fanwire/SportsData GamesConflicting; EVENTS-008)
+ * = 26 (was 23: SportsDataRefresh Errors, SportsDataRefresh Throttles, SportsDataConflictsAlarm)
  */
-const EXPECTED_ALARM_COUNT = 3 + 3 + 2 * 7 + 3;
+const EXPECTED_ALARM_COUNT = 3 + 3 + 2 * 8 + 3 + 1;
 
 beforeAll(() => {
   ensureFrontendDist();
@@ -278,6 +280,38 @@ describe('Lambda alarms (Fanwire-App)', () => {
       });
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe('sports data alarms (Fanwire-App, EVENTS-008)', () => {
+  test('SportsDataRefresh is a function in the template (so the derived loop above covers it)', () => {
+    const refresh = Object.entries(resourcesOfType(appRaw(), 'AWS::Lambda::Function')).filter(
+      ([, f]) =>
+        JSON.stringify((f.Properties?.ImageConfig as { Command?: string[] })?.Command) ===
+        JSON.stringify(['app.events.refresh_handler.handler']),
+    );
+    expect(refresh).toHaveLength(1);
+  });
+
+  test('GamesConflicting: Maximum > 0 over one 5-minute period, to the topic, missing data not breaching', () => {
+    const hits = alarmsIn(appRaw()).filter(
+      (a) => a.Namespace === 'Fanwire/SportsData' && a.MetricName === 'GamesConflicting',
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      Statistic: 'Maximum',
+      Period: FIVE_MINUTES,
+      ComparisonOperator: 'GreaterThanThreshold',
+      Threshold: 0,
+      EvaluationPeriods: 1,
+      TreatMissingData: 'notBreaching',
+      AlarmActions: [importedTopicArn()],
+      OKActions: [importedTopicArn()],
+    });
+    const ids = Object.entries(resourcesOfType(appRaw(), 'AWS::CloudWatch::Alarm'))
+      .filter(([, a]) => a.Properties?.MetricName === 'GamesConflicting')
+      .map(([id]) => id);
+    expect(ids.some((id) => id.startsWith('SportsDataConflictsAlarm'))).toBe(true);
   });
 });
 
