@@ -113,8 +113,8 @@ describe('Data stack', () => {
   });
 
   describe('secrets', () => {
-    test('three CMK-encrypted secrets: DB credentials, API-SPORTS key placeholder, CloudFront origin-verify value', () => {
-      tpl().resourceCountIs('AWS::SecretsManager::Secret', 3);
+    test('four CMK-encrypted secrets: DB credentials, API-SPORTS key placeholder, CloudFront origin-verify value, Kaggle API token placeholder', () => {
+      tpl().resourceCountIs('AWS::SecretsManager::Secret', 4);
       for (const s of Object.values(resourcesOfType(raw(), 'AWS::SecretsManager::Secret'))) {
         expect(s.Properties?.KmsKeyId).toBeDefined();
         // never a literal value committed in code/template
@@ -127,6 +127,30 @@ describe('Data stack', () => {
         Description: Match.stringLikeRegexp('origin-verify'),
       });
     });
+  });
+
+  // EVENTS-008: the Kaggle token is put there by hand; the placeholder makes a
+  // first run before that fail loud. Retained so a stack delete never loses it.
+  test('Kaggle API token secret: fanwire/kaggle-api-token, CMK, Retain, generated placeholder, described', () => {
+    const hits = Object.values(resourcesOfType(raw(), 'AWS::SecretsManager::Secret')).filter(
+      (r) => r.Properties?.Name === 'fanwire/kaggle-api-token',
+    );
+    expect(hits).toHaveLength(1);
+    const secret = hits[0]!;
+    expect(secret.Properties?.KmsKeyId).toBeDefined();
+    expect(secret['DeletionPolicy']).toBe('Retain');
+    expect(secret.Properties?.GenerateSecretString).toBeDefined();
+    expect(secret.Properties?.SecretString).toBeUndefined();
+    expect(secret.Properties?.Description).toMatch(/Kaggle API token/);
+  });
+
+  test('Kaggle API token secret ARN is exported for Fanwire-App', () => {
+    const ids = Object.entries(resourcesOfType(raw(), 'AWS::SecretsManager::Secret'))
+      .filter(([, r]) => r.Properties?.Name === 'fanwire/kaggle-api-token')
+      .map(([id]) => id);
+    expect(ids).toHaveLength(1);
+    const outputs = Object.values((raw().Outputs ?? {}) as Record<string, { Value?: unknown; Export?: { Name?: unknown } }>);
+    expect(outputs.some((o) => JSON.stringify(o.Value) === JSON.stringify({ Ref: ids[0] }) && o.Export?.Name !== undefined)).toBe(true);
   });
 
   test('no custom-resource Lambdas', () => {

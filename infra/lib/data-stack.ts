@@ -31,6 +31,8 @@ export class DataStack extends cdk.Stack {
   readonly apiSportsSecret: secretsmanager.Secret;
   /** Shared secret CloudFront sends to the API origin; see AppStack's origin-verify authorizer. */
   readonly originVerifySecret: secretsmanager.Secret;
+  /** Kaggle API token for the daily dataset refresh (EVENTS-008); set by hand, read by SportsDataRefresh only. */
+  readonly kaggleApiTokenSecret: secretsmanager.Secret;
 
   static readonly DATABASE_NAME = 'fanwire';
 
@@ -126,6 +128,17 @@ export class DataStack extends cdk.Stack {
       encryptionKey: keyRef,
       generateSecretString: { passwordLength: 48, excludePunctuation: true },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    this.kaggleApiTokenSecret = new secretsmanager.Secret(this, 'KaggleApiToken', {
+      secretName: 'fanwire/kaggle-api-token',
+      description:
+        'Kaggle API token for the daily NBA dataset refresh. Created with a random placeholder (a first run before ' +
+        'the real token is set fails loud); a human sets the real token by hand with ' +
+        '`aws secretsmanager put-secret-value`. Readable by the SportsDataRefresh Lambda role only.',
+      encryptionKey: keyRef,
+      generateSecretString: { passwordLength: 32, excludePunctuation: true },
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
   }
 

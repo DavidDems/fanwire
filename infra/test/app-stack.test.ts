@@ -20,6 +20,8 @@ const HANDLERS = {
   migration: 'app.migrate.handler',
   // EVENTS-002: the hand-invoked NBA dataset load, the same pattern again.
   sportsDataLoad: 'app.events.load_handler.handler',
+  // EVENTS-008: the daily Kaggle download, outside the VPC; it invokes the load.
+  sportsDataRefresh: 'app.events.refresh_handler.handler',
   accountDeletion: 'app.account_deletion_handler.handler',
 } as const;
 
@@ -102,8 +104,8 @@ describe('App stack: one shared Lambda image', () => {
     for (const banned of ['node_modules', '.git', '__pycache__', '.venv', 'cdk.out']) expect(names).not.toContain(banned);
   });
 
-  test('six image functions share one image URI; each overrides only its command', () => {
-    expect(imageFunctions()).toHaveLength(6);
+  test('seven image functions share one image URI; each overrides only its command', () => {
+    expect(imageFunctions()).toHaveLength(7);
     const uris = new Set(imageFunctions().map(([, f]) => JSON.stringify((f.Properties?.Code as { ImageUri: unknown }).ImageUri)));
     expect(uris.size).toBe(1);
     for (const kind of Object.keys(HANDLERS) as (keyof typeof HANDLERS)[]) expect(fn(kind)).toBeDefined();
@@ -127,8 +129,10 @@ describe('App stack: functions', () => {
     tpl().resourceCountIs('Custom::LogRetention', 0);
   });
 
-  test('every backend function runs in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
-    for (const [, f] of imageFunctions()) {
+  test('every backend function but the refresh runs in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
+    for (const [id, f] of imageFunctions()) {
+      expect(f.Properties?.KmsKeyArn).toBeDefined();
+      if (id === fn('sportsDataRefresh')[0]) continue; // EVENTS-008: outside the VPC, pinned below
       const vpc = f.Properties?.VpcConfig as { SubnetIds: unknown[]; SecurityGroupIds: unknown[] };
       expect(vpc.SubnetIds).toHaveLength(2);
       expect(vpc.SecurityGroupIds).toHaveLength(1);
@@ -137,7 +141,9 @@ describe('App stack: functions', () => {
   });
 
   test('DATABASE_URL is assembled from a Secrets Manager dynamic reference, never a literal password', () => {
-    for (const [, f] of imageFunctions()) {
+    for (const [id, f] of imageFunctions()) {
+      if (id === fn('sportsDataRefresh')[0]) continue; // EVENTS-008: never touches the database
+
       const url = JSON.stringify(envOf(f).DATABASE_URL);
       expect(url).toContain('postgresql+psycopg://');
       expect(url).toContain('{{resolve:secretsmanager:');
@@ -303,8 +309,12 @@ describe('App stack: triggers', () => {
     expect(scheduleIam).toEqual([]);
   });
 
-  test('no async invoke config: nothing sends failed runs to the ingestion retry queue (EVENTS-003)', () => {
-    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+  test('one async invoke config, on the sports data load, no retries; none sends failed runs to a queue (EVENTS-003, EVENTS-008)', () => {
+    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 1);
+    const [config] = Object.values(resourcesOfType(raw(), 'AWS::Lambda::EventInvokeConfig'));
+    expect(config?.Properties?.FunctionName).toEqual({ Ref: fn('sportsDataLoad')[0] });
+    expect(config?.Properties?.MaximumRetryAttempts).toBe(0);
+    expect(config?.Properties?.DestinationConfig).toBeUndefined();
   });
 
   test('SQS event source mappings: notifications and media scan results only', () => {
@@ -419,7 +429,32 @@ describe('App stack: migration runner', () => {
     // Same positive control as above, so an empty result means something.
     expect(invokersOf(fn('media')[0]).join('\n')).toContain('AWS::Lambda::EventSourceMapping');
     expect(invokersOf(fn('sportsDataLoad')[0])).toEqual([]);
-    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 0);
+    // EVENTS-008: the one async invoke config is the load's own, retries off;
+    // the refresh's role (an IAM grant, not a trigger) is its only invoker.
+    tpl().resourceCountIs('AWS::Lambda::EventInvokeConfig', 1);
+  });
+
+  test('the refresh is invoked by exactly one rule, cron(0 9 * * ? *), no retries (EVENTS-008)', () => {
+    // Positive control again, so the sweep below can see a rule.
+    expect(invokersOf(fn('media')[0]).join('\n')).toContain('AWS::Lambda::EventSourceMapping');
+    const [refreshId] = fn('sportsDataRefresh');
+    const hits = invokersOf(refreshId).filter((h) => h.includes('AWS::Events::Rule'));
+    expect(hits).toHaveLength(1);
+    const rules = Object.values(resourcesOfType(raw(), 'AWS::Events::Rule'));
+    // AccountDeletionSchedule plus the refresh schedule, nothing else
+    expect(rules).toHaveLength(2);
+    const refreshRules = rules.filter((r) => r.Properties?.ScheduleExpression === 'cron(0 9 * * ? *)');
+    expect(refreshRules).toHaveLength(1);
+    const targets = refreshRules[0]!.Properties?.Targets as { Arn: unknown; RetryPolicy?: unknown }[];
+    expect(targets).toHaveLength(1);
+    expect(targets[0]!.Arn).toEqual({ 'Fn::GetAtt': [refreshId, 'Arn'] });
+    expect(targets[0]!.RetryPolicy).toEqual({ MaximumRetryAttempts: 0 });
+    // the other rule still targets only the account deletion function
+    const other = rules.find((r) => r !== refreshRules[0])!;
+    expect(JSON.stringify(other.Properties?.Targets)).not.toContain(refreshId);
+    // and nothing schedules the load or the migration
+    expect(invokersOf(fn('sportsDataLoad')[0])).toEqual([]);
+    expect(invokersOf(fn('migration')[0])).toEqual([]);
   });
 
   test('same VPC, app subnets and Lambda security group as the api function (so it can reach RDS)', () => {
@@ -607,7 +642,7 @@ describe('App stack: sports data load (EVENTS-002)', () => {
 
   test('no other function is told about the bucket', () => {
     for (const [id, f] of imageFunctions()) {
-      if (id === fn('sportsDataLoad')[0]) continue;
+      if (id === fn('sportsDataLoad')[0] || id === fn('sportsDataRefresh')[0]) continue; // the refresh: EVENTS-008
       expect({ id, env: JSON.stringify(envOf(f)) }).toEqual({ id, env: expect.not.stringContaining('SportsDataBucket') });
     }
   });
@@ -636,10 +671,120 @@ describe('App stack: sports data load (EVENTS-002)', () => {
 
   test('no other role in the App stack is granted anything on the bucket', () => {
     const loadRole = roleOf(load());
+    const refreshRole = roleOf(fn('sportsDataRefresh')[1]); // EVENTS-008: pinned in its own block below
     const offenders = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy'))
       .filter(([, p]) => !JSON.stringify(p.Properties?.Roles).includes(`"${loadRole}"`))
+      .filter(([, p]) => !JSON.stringify(p.Properties?.Roles).includes(`"${refreshRole}"`))
       .filter(([, p]) => JSON.stringify(p.Properties?.PolicyDocument).includes('SportsDataBucket'))
       .map(([id]) => id);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * EVENTS-008: the daily Kaggle refresh. One more command on the one image, but
+ * outside the VPC (it needs Kaggle and AWS APIs, never the database), with its
+ * own five grants, none wider than the nba-eoin/* object prefix.
+ */
+describe('App stack: sports data refresh (EVENTS-008)', () => {
+  const refresh = () => fn('sportsDataRefresh')[1];
+  const statementsOf = () => statementsForRole(roleOf(refresh()));
+  const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : [v]);
+  /** Statements that grant `action`, flattened to their resources. */
+  const grants = (action: string) =>
+    statementsOf().filter((st) => (asList(st.Action) as string[]).includes(action));
+  const resourcesFor = (action: string) => grants(action).flatMap((st) => asList(st.Resource));
+
+  test('image function: 10-minute timeout, 1024 MB of memory, 2048 MB of ephemeral storage', () => {
+    expect(refresh().Properties?.PackageType).toBe('Image');
+    expect((refresh().Properties?.ImageConfig as { Command: string[] }).Command).toEqual([
+      'app.events.refresh_handler.handler',
+    ]);
+    expect(refresh().Properties?.Timeout).toBe(600);
+    expect(refresh().Properties?.MemorySize).toBe(1024);
+    expect(refresh().Properties?.EphemeralStorage).toEqual({ Size: 2048 });
+    expect(refresh().Properties?.ReservedConcurrentExecutions).toBeUndefined();
+  });
+
+  test('outside the VPC: no VpcConfig, and no network-interface statement on its role', () => {
+    expect(refresh().Properties?.VpcConfig).toBeUndefined();
+    const actions = actionsForRole(roleOf(refresh()));
+    expect(actions.filter((a) => a.startsWith('ec2:'))).toEqual([]);
+    expect(statementsOf().map((st) => st.Sid)).not.toContain('VpcNetworkInterfaces');
+  });
+
+  test('every other image function keeps its VpcConfig and a DATABASE_URL', () => {
+    const others = imageFunctions().filter(([id]) => id !== fn('sportsDataRefresh')[0]);
+    expect(others).toHaveLength(6);
+    for (const [, f] of others) {
+      expect(f.Properties?.VpcConfig).toBeDefined();
+      expect(Object.keys(envOf(f))).toContain('DATABASE_URL');
+    }
+  });
+
+  test('environment is exactly SPORTS_DATA_BUCKET, KAGGLE_SECRET_ARN and LOAD_FUNCTION_NAME', () => {
+    const env = envOf(refresh());
+    expect(Object.keys(env).sort()).toEqual(['KAGGLE_SECRET_ARN', 'LOAD_FUNCTION_NAME', 'SPORTS_DATA_BUCKET']);
+    expect(JSON.stringify(env.SPORTS_DATA_BUCKET)).toContain('SportsDataBucket');
+    expect(JSON.stringify(env.KAGGLE_SECRET_ARN)).toContain('KaggleApiToken');
+    expect(env.LOAD_FUNCTION_NAME).toEqual({ Ref: fn('sportsDataLoad')[0] });
+    expect(JSON.stringify(env)).not.toMatch(/KAGGLE_API_TOKEN|KAGGLE_KEY|KAGGLE_USERNAME|resolve:secretsmanager/);
+  });
+
+  test('secretsmanager:GetSecretValue on exactly the Kaggle secret ARN', () => {
+    const resources = resourcesFor('secretsmanager:GetSecretValue');
+    expect(resources).toHaveLength(1);
+    expect(JSON.stringify(resources[0])).toContain('KaggleApiToken');
+    expect(JSON.stringify(resources[0])).not.toContain('*');
+  });
+
+  test('s3:GetObject and s3:PutObject on the bucket objects under nba-eoin/*, nothing else on S3 objects', () => {
+    for (const action of ['s3:GetObject', 's3:PutObject']) {
+      const resources = resourcesFor(action);
+      expect(resources).toHaveLength(1);
+      expect(JSON.stringify(resources[0])).toContain('SportsDataBucket');
+      expect(JSON.stringify(resources[0])).toContain('/nba-eoin/*');
+    }
+    const s3 = actionsForRole(roleOf(refresh())).filter((a) => a.startsWith('s3:'));
+    expect(s3.sort()).toEqual(['s3:GetObject', 's3:ListBucket', 's3:PutObject']);
+  });
+
+  test('s3:ListBucket on the bucket itself, only with an s3:prefix condition of nba-eoin/*', () => {
+    const [st, ...rest] = grants('s3:ListBucket');
+    expect(rest).toEqual([]);
+    expect(st).toBeDefined();
+    expect(st!.Effect).toBe('Allow');
+    expect(JSON.stringify(st!.Resource)).toContain('SportsDataBucket');
+    expect(JSON.stringify(st!.Resource)).not.toContain('/*');
+    expect(st!.Condition).toEqual({ StringLike: { 's3:prefix': 'nba-eoin/*' } });
+  });
+
+  test('kms:GenerateDataKey on the Data CMK, the key the function already decrypts with', () => {
+    const decrypt = resourcesFor('kms:Decrypt');
+    expect(decrypt).toHaveLength(1);
+    expect(resourcesFor('kms:GenerateDataKey')).toEqual(decrypt);
+  });
+
+  test('lambda:InvokeFunction on the sports data load ARN only', () => {
+    expect(resourcesFor('lambda:InvokeFunction')).toEqual([{ 'Fn::GetAtt': [fn('sportsDataLoad')[0], 'Arn'] }]);
+  });
+
+  test('no other role in the App stack may invoke the load or read the Kaggle secret', () => {
+    const refreshRole = roleOf(refresh());
+    const offenders = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy'))
+      .filter(([, p]) => !JSON.stringify(p.Properties?.Roles).includes(`"${refreshRole}"`))
+      .filter(([, p]) => /lambda:InvokeFunction|KaggleApiToken/.test(JSON.stringify(p.Properties?.PolicyDocument)))
+      .map(([id]) => id);
+    expect(offenders).toEqual([]);
+  });
+
+  test('no statement on its role has a wildcard action, and the only wildcard resources are nba-eoin/* objects', () => {
+    for (const st of statementsOf()) {
+      for (const a of asList(st.Action) as string[]) expect(a).not.toContain('*');
+      for (const r of asList(st.Resource)) {
+        const text = JSON.stringify(r);
+        if (text.includes('*')) expect(text).toContain('/nba-eoin/*');
+      }
+    }
   });
 });

@@ -13,6 +13,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -60,14 +61,17 @@ export const ALARM_THRESHOLDS = {
   rdsFreeStorageBytes: 2 * 1024 ** 3,
   /** A t4g.micro allows roughly 80 to 110 connections: alarm well before the cap. */
   rdsConnections: 60,
+  /** Any game the refresh skipped as disagreeing with the dataset is worth an email. */
+  sportsDataConflicts: 0,
 } as const;
 
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
- * five functions, the HTTP API in front of the API function, and every
- * trigger (SQS event source mappings). Two functions -- the migration runner
- * and the sports data load -- are deliberately the target of no trigger at
- * all; see `migrationRunner()` and `sportsDataLoad()` below.
+ * seven functions, the HTTP API in front of the API function, and every
+ * trigger (SQS event source mappings, the two schedules). The migration runner
+ * is deliberately the target of no trigger at all (`migrationRunner()`); the
+ * sports data load is invoked only by the daily refresh function and by a
+ * human (`sportsDataLoad()`, `sportsDataRefresh()`).
  *
  * The API-SPORTS ingestion function, its schedule, retry trigger and async
  * destination, and the API's live-score cache grant are gone (EVENTS-003).
@@ -308,7 +312,10 @@ export class AppStack extends cdk.Stack {
     this.migrationRunner(image, keyRef, common);
 
     // --- the NBA dataset load, on demand only (EVENTS-002)
-    this.sportsDataLoad(image, keyRef, common, storage.sportsDataBucket);
+    const sportsLoad = this.sportsDataLoad(image, keyRef, common, storage.sportsDataBucket);
+
+    // --- the daily Kaggle refresh, outside the VPC, invokes the load (EVENTS-008)
+    this.sportsDataRefresh(image, keyRef, storage.sportsDataBucket, data.kaggleApiTokenSecret, sportsLoad);
 
     // --- HTTP API, reachable only with CloudFront's origin-verify header.
     const authorizerFn = this.originVerifyAuthorizer(data);
@@ -391,6 +398,19 @@ export class AppStack extends cdk.Stack {
         threshold: t.lambdaThrottlesPerPeriod,
       });
     }
+
+    // The load skips (never applies) a game that disagrees with the dataset and
+    // emits this metric, 0 on a clean run (EVENTS-008).
+    this.alarm('SportsDataConflictsAlarm', 'games skipped for disagreeing with the dataset', {
+      metric: new cloudwatch.Metric({
+        namespace: 'Fanwire/SportsData',
+        metricName: 'GamesConflicting',
+        statistic: 'Maximum',
+        period,
+      }),
+      comparisonOperator: GT,
+      threshold: t.sportsDataConflicts,
+    });
 
     const db = data.database;
     this.alarm('RdsCpuAlarm', 'RDS CPU utilization', {
@@ -494,11 +514,15 @@ export class AppStack extends cdk.Stack {
    * EVENTS-002): downloads the four CSVs from the sports-data bucket and runs
    * the same loader as `scripts/load_nba_history.py`.
    *
-   * The migration runner's pattern: the same image with another `cmd`, and
-   * **nothing invokes it** -- the human does, after uploading the files
+   * The migration runner's pattern: the same image with another `cmd`. **Only
+   * the refresh function and a human invoke it** (EVENTS-008): the daily
+   * refresh uploads the files and invokes it asynchronously for the current
+   * season; by hand, after uploading the files, remains the fallback
    * (build-deployment.md "Load sports data"). The invoker sweep in
-   * `test/app-stack.test.ts` covers it. One load at a time is an advisory
-   * lock in Postgres, as for migrations, not a concurrency reservation.
+   * `test/app-stack.test.ts` pins that. One load at a time is an advisory
+   * lock in Postgres, as for migrations, not a concurrency reservation. An
+   * async invoke never retries (EventInvokeConfig): a failed or locked load
+   * is covered by the next day's run.
    *
    * Sized from the Director's measurement (2026-10-14, local Postgres): all
    * 23 seasons in 73-139 s at a 709 MB peak, one season in 18 s at 99 MB.
@@ -514,8 +538,8 @@ export class AppStack extends cdk.Stack {
     keyRef: kms.IKey,
     common: Record<string, string>,
     bucket: s3.IBucket,
-  ): void {
-    this.backendFunction('SportsDataLoad', {
+  ): lambda.Function {
+    const load = this.backendFunction('SportsDataLoad', {
       command: 'app.events.load_handler.handler',
       timeout: cdk.Duration.minutes(15),
       memorySize: 2048,
@@ -530,6 +554,76 @@ export class AppStack extends cdk.Stack {
           resources: [bucket.arnForObjects(`${StorageStack.SPORTS_DATA_PREFIX}*`)],
         }),
       ],
+    });
+    load.configureAsyncInvoke({ retryAttempts: 0 });
+    return load;
+  }
+
+  /**
+   * The daily Kaggle refresh (`app.events.refresh_handler.handler`,
+   * EVENTS-008): downloads the dataset files singly into the sports-data
+   * bucket, then invokes SportsDataLoad asynchronously for the current season.
+   *
+   * **Outside the VPC**: it needs Kaggle and AWS APIs, never the database, and
+   * avoids the NAT. So its environment is not `common` (no DATABASE_URL), and
+   * the token is read from Secrets Manager at invocation time, never held in
+   * the function's configuration. 2048 MB of ephemeral storage because
+   * kagglehub may leave a server-side zip beside the extracted file.
+   *
+   * Five grants beyond backendFunction's: read the one secret, get/put the
+   * dataset objects, list the bucket under the dataset prefix only (so a
+   * missing object reads as 404, not as denied), generate data keys on the CMK
+   * (`kms:Decrypt` is already there), and invoke the load, nothing else.
+   */
+  private sportsDataRefresh(
+    image: ecrAssets.DockerImageAsset,
+    keyRef: kms.IKey,
+    bucket: s3.IBucket,
+    kaggleSecret: secretsmanager.ISecret,
+    load: lambda.IFunction,
+  ): void {
+    const refresh = this.backendFunction('SportsDataRefresh', {
+      command: 'app.events.refresh_handler.handler',
+      timeout: cdk.Duration.minutes(10),
+      memorySize: 1024,
+      ephemeralStorageSize: cdk.Size.mebibytes(2048),
+      image,
+      keyRef,
+      outsideVpc: true,
+      environment: {
+        SPORTS_DATA_BUCKET: bucket.bucketName,
+        KAGGLE_SECRET_ARN: kaggleSecret.secretArn,
+        LOAD_FUNCTION_NAME: load.functionName,
+      },
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'ReadKaggleToken',
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [kaggleSecret.secretArn],
+        }),
+        new iam.PolicyStatement({
+          sid: 'ReadWriteSportsDataset',
+          actions: ['s3:GetObject', 's3:PutObject'],
+          resources: [bucket.arnForObjects(`${StorageStack.SPORTS_DATA_PREFIX}*`)],
+        }),
+        new iam.PolicyStatement({
+          sid: 'ListSportsDataset',
+          actions: ['s3:ListBucket'],
+          resources: [bucket.bucketArn],
+          conditions: { StringLike: { 's3:prefix': `${StorageStack.SPORTS_DATA_PREFIX}*` } },
+        }),
+        this.kmsStatement('SseKmsSportsDataset', ['kms:GenerateDataKey']),
+        new iam.PolicyStatement({
+          sid: 'InvokeSportsDataLoad',
+          actions: ['lambda:InvokeFunction'],
+          resources: [load.functionArn],
+        }),
+      ],
+    });
+    new events.Rule(this, 'SportsDataRefreshSchedule', {
+      // 09:00 UTC, after the dataset's nightly upload
+      schedule: events.Schedule.cron({ minute: '0', hour: '9' }),
+      targets: [new targets.LambdaFunction(refresh, { retryAttempts: 0 })],
     });
   }
 
@@ -564,7 +658,10 @@ export class AppStack extends cdk.Stack {
     });
   }
 
-  /** One of the five functions running the shared image, with its own role and log group. */
+  /**
+   * One of the functions running the shared image, with its own role and log
+   * group. In the VPC unless `outsideVpc` (no VPC config, and no ENI statement).
+   */
   private backendFunction(
     id: string,
     opts: {
@@ -576,6 +673,7 @@ export class AppStack extends cdk.Stack {
       keyRef: kms.IKey;
       environment: Record<string, string>;
       statements: iam.PolicyStatement[];
+      outsideVpc?: boolean;
     },
   ): lambda.Function {
     const { network } = this.props;
@@ -594,18 +692,23 @@ export class AppStack extends cdk.Stack {
         // AWS's AWSLambdaVPCAccessExecutionRole statement, inline. The
         // Describe* actions have no resource-level permissions and Lambda
         // validates the rest against Resource "*" at CreateFunction time.
-        new iam.PolicyStatement({
-          sid: 'VpcNetworkInterfaces',
-          actions: [
-            'ec2:CreateNetworkInterface',
-            'ec2:DescribeNetworkInterfaces',
-            'ec2:DescribeSubnets',
-            'ec2:DeleteNetworkInterface',
-            'ec2:AssignPrivateIpAddresses',
-            'ec2:UnassignPrivateIpAddresses',
-          ],
-          resources: ['*'],
-        }),
+        // Not for a function outside the VPC.
+        ...(opts.outsideVpc
+          ? []
+          : [
+              new iam.PolicyStatement({
+                sid: 'VpcNetworkInterfaces',
+                actions: [
+                  'ec2:CreateNetworkInterface',
+                  'ec2:DescribeNetworkInterfaces',
+                  'ec2:DescribeSubnets',
+                  'ec2:DeleteNetworkInterface',
+                  'ec2:AssignPrivateIpAddresses',
+                  'ec2:UnassignPrivateIpAddresses',
+                ],
+                resources: ['*'],
+              }),
+            ]),
         // Environment variables are encrypted with the CMK.
         this.kmsStatement('DecryptEnvironmentAndData', ['kms:Decrypt']),
         ...opts.statements,
@@ -626,10 +729,14 @@ export class AppStack extends cdk.Stack {
       ephemeralStorageSize: opts.ephemeralStorageSize,
       environment: opts.environment,
       environmentEncryption: opts.keyRef,
-      vpc: network.vpc,
-      vpcSubnets: { subnetGroupName: NetworkStack.APP_SUBNETS },
-      securityGroups: [network.lambdaSecurityGroup],
-      allowPublicSubnet: false,
+      ...(opts.outsideVpc
+        ? {}
+        : {
+            vpc: network.vpc,
+            vpcSubnets: { subnetGroupName: NetworkStack.APP_SUBNETS },
+            securityGroups: [network.lambdaSecurityGroup],
+            allowPublicSubnet: false,
+          }),
     });
     // The role's permissions must exist before the function is created
     // (Lambda validates the VPC permissions at CreateFunction).

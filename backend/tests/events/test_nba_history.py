@@ -822,18 +822,23 @@ def test_an_existing_game_keeps_its_id_and_gets_its_new_fields_and_box_score(ses
         assert _box_count(session, 22400001) == 11
 
 
-def test_an_existing_game_whose_score_disagrees_is_a_dataset_error(session_factory):
+def test_an_existing_game_whose_score_disagrees_is_skipped_and_reported(session_factory):
+    """EVENTS-008: was a DatasetError. The stored result stays as stored, the
+    conflict is named in the report, and the rest of the dataset still loads."""
     with session_factory() as session:
         _events_001_game(session, 22400001, (121, 115))
-    with session_factory() as session:
-        before = _snapshot(session)
 
-    with session_factory() as session, pytest.raises(nba_history.DatasetError) as excinfo:
-        nba_history.load_nba_history(session, FIXTURE_DIR)
-
-    assert "22400001" in str(excinfo.value)
     with session_factory() as session:
-        assert _snapshot(session) == before
+        report = nba_history.load_nba_history(session, FIXTURE_DIR)
+
+    conflicts = report.seasons["2024-25"].games_conflicting
+    assert [c.nba_game_id for c in conflicts] == [22400001]
+    assert (conflicts[0].stored_home_score, conflicts[0].dataset_home_score) == (121, 120)
+    with session_factory() as session:
+        game = _game(session, 22400001)
+        assert (game.home_score, game.away_score) == (121, 115)
+        assert game.venue is None  # left exactly as stored, not "updated"
+        assert _game(session, 22400002) is not None  # the rest loaded
 
 
 # --------------------------------------------------------------------- re-runs

@@ -45,8 +45,11 @@ Rules, and why:
   mentions and users' preferred teams point at those ids. A stored game is
   never deleted: one stored by EVENTS-001 is "updated" (its new fields set,
   its box score added), and one that already has everything is "already
-  present". A stored game whose teams or score disagree with the dataset is
-  a DatasetError: a stored result is never changed silently.
+  present". A stored game whose teams or final score disagree with the
+  dataset is left exactly as stored, and counted and named in
+  SeasonReport.games_conflicting (EVENTS-008); the rest of the run loads in the
+  same transaction. A stored result is never changed silently, and a
+  disagreement no longer aborts the load.
 - **Sized for the real dataset** (~31k games and ~745k box-score rows from
   2003-04): each file is read once, box-score rows are kept only for games
   this run stores, existing-row lookups are batched, and box-score rows are
@@ -175,6 +178,15 @@ _PLAYERS_COLUMNS = (
     "toYear",
 )
 
+#: The header columns each of the four files must carry; the scheduled refresh
+#: (app.events.refresh_handler) checks a first-ever download against them.
+REQUIRED_COLUMNS = {
+    _GAMES_FILE: _GAMES_COLUMNS,
+    _BOX_FILE: _BOX_COLUMNS,
+    _TEAM_STATS_FILE: _TEAM_STATS_COLUMNS,
+    _PLAYERS_FILE: _PLAYERS_COLUMNS,
+}
+
 # A team's minutes may miss its expected total by this much and still fit:
 # the source rounds each row to the second, or truncates it to the minute.
 _MINUTES_TOLERANCE = 1.0
@@ -191,6 +203,22 @@ class PointsMismatch:
     nba_team_id: int
     team_score: int
     players_points: int
+
+
+@dataclass(frozen=True)
+class GameConflict:
+    """A stored game whose teams or final score disagree with the dataset. It
+    is left as stored; this names both sides."""
+
+    nba_game_id: int
+    stored_home_nba_team_id: int
+    stored_away_nba_team_id: int
+    stored_home_score: int
+    stored_away_score: int
+    dataset_home_nba_team_id: int
+    dataset_away_nba_team_id: int
+    dataset_home_score: int
+    dataset_away_score: int
 
 
 @dataclass(frozen=True)
@@ -214,6 +242,7 @@ class SeasonReport:
     missing_box_scores: tuple[int, ...]
     points_mismatches: tuple[PointsMismatch, ...]
     unclear_minutes: tuple[tuple[int, int], ...]
+    games_conflicting: tuple[GameConflict, ...] = ()
 
     def line(self) -> str:
         parts = [
@@ -244,6 +273,11 @@ class SeasonReport:
             parts.append(
                 "minutes fitting neither format, read as decimals: "
                 + ", ".join(f"{game} team {team}" for game, team in self.unclear_minutes)
+            )
+        if self.games_conflicting:
+            parts.append(
+                "conflicting with the stored game, left as stored: "
+                + ", ".join(str(c.nba_game_id) for c in self.games_conflicting)
             )
         return "; ".join(parts)
 
@@ -285,6 +319,7 @@ class _SeasonCounts:
     missing_box_scores: list[int] = field(default_factory=list)
     points_mismatches: list[PointsMismatch] = field(default_factory=list)
     unclear_minutes: list[tuple[int, int]] = field(default_factory=list)
+    games_conflicting: list[GameConflict] = field(default_factory=list)
 
     def freeze(self, season: str) -> SeasonReport:
         return SeasonReport(
@@ -305,6 +340,7 @@ class _SeasonCounts:
                 sorted(self.points_mismatches, key=lambda m: (m.nba_game_id, m.nba_team_id))
             ),
             unclear_minutes=tuple(sorted(self.unclear_minutes)),
+            games_conflicting=tuple(sorted(self.games_conflicting, key=lambda c: c.nba_game_id)),
         )
 
 
@@ -860,6 +896,7 @@ def _write_games(
     """Insert new games, update stored ones, and insert the box score of
     every game written that has none yet."""
     existing, with_box = _existing_games(session, list(stored))
+    nba_team_ids = {team_id: nba_id for nba_id, team_id in team_ids.items()}
     new_games: list[tuple[_StoredGame, Game]] = []
     needing_box: list[tuple[_StoredGame, Game]] = []
 
@@ -872,7 +909,10 @@ def _write_games(
             new_games.append((game, Game(nba_game_id=nba_game_id, **values)))
             continue
 
-        _check_agrees(current, values, nba_game_id)
+        conflict = _conflict(current, game, values, nba_team_ids)
+        if conflict is not None:
+            season_counts.games_conflicting.append(conflict)
+            continue
         changed = {name: value for name, value in values.items() if getattr(current, name) != value}
         has_box = current.id in with_box
         if has_box:
@@ -917,14 +957,27 @@ def _copy_box_rows(session: Session, rows: list[tuple[Any, ...]]) -> None:
             copy.write_row(row)
 
 
-def _check_agrees(current: Game, values: dict[str, Any], nba_game_id: int) -> None:
-    """A stored game's teams and score are facts the dataset must agree with."""
-    for name in ("home_team_id", "away_team_id", "home_score", "away_score"):
-        if getattr(current, name) != values[name]:
-            raise DatasetError(
-                f"game {nba_game_id} is stored with {name} {getattr(current, name)}, but the "
-                f"dataset says {values[name]}; a stored result is never changed silently"
-            )
+def _conflict(
+    current: Game, game: _StoredGame, values: dict[str, Any], nba_team_ids: dict[int, int]
+) -> GameConflict | None:
+    """A stored game's teams and score are facts the dataset must agree with;
+    where it does not, the game is left as stored and named."""
+    if all(
+        getattr(current, name) == values[name]
+        for name in ("home_team_id", "away_team_id", "home_score", "away_score")
+    ):
+        return None
+    return GameConflict(
+        nba_game_id=game.row.nba_game_id,
+        stored_home_nba_team_id=nba_team_ids[current.home_team_id],
+        stored_away_nba_team_id=nba_team_ids[current.away_team_id],
+        stored_home_score=current.home_score,
+        stored_away_score=current.away_score,
+        dataset_home_nba_team_id=game.row.home_nba_team_id,
+        dataset_away_nba_team_id=game.row.away_nba_team_id,
+        dataset_home_score=game.home_score,
+        dataset_away_score=game.away_score,
+    )
 
 
 def _report_box_score(game: _StoredGame, season_counts: _SeasonCounts) -> None:

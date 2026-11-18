@@ -2,9 +2,10 @@
 
 Loads the NBA dataset into the live database. One more command override on
 the shared backend image, wired up as infra/lib/app-stack.ts's
-`SportsDataLoad` function. **Nothing invokes it automatically**, like
-`Migration`: the human uploads the dataset's four CSVs to the sports-data
-bucket's `nba-eoin/` prefix and invokes it with `{"seasons": [...]}`
+`SportsDataLoad` function. The daily `SportsDataRefresh` function
+(app.events.refresh_handler) uploads the dataset's CSVs to the sports-data
+bucket's `nba-eoin/` prefix and invokes this asynchronously; the human can
+still do both by hand and invoke it with `{"seasons": [...]}`
 (wiki/CodeContext/Standards/build-deployment.md "Load sports data").
 
 What it does, in order, and why:
@@ -32,6 +33,11 @@ What it does, in order, and why:
    transaction, so a failure leaves the database as it was -- and removes
    the directory whether it succeeds or not.
 5. **Returns the report** as plain JSON data, and logs one line per season.
+   A stored game whose teams or score disagree with the dataset is left as
+   stored (EVENTS-008): each season's `games_conflicting` lists them, one
+   warning is logged per conflict, and the CloudWatch EMF metric
+   `GamesConflicting` (namespace Fanwire/SportsData, Count) carries the run's
+   total, 0 when there are none, so an alarm can watch it.
 
 **It raises on failure**, never returns an error value: the Lambda console
 shows a returned `{"ok": false}` as a successful invocation. **It never
@@ -51,7 +57,8 @@ from pathlib import Path
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]  # no boto3 stubs/py.typed marker installed
-from aws_lambda_powertools import Logger
+from aws_lambda_powertools import Logger, Metrics
+from aws_lambda_powertools.metrics import MetricUnit
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from pydantic import ValidationError
 from sqlalchemy import Engine
@@ -76,6 +83,7 @@ __all__ = [
 ]
 
 logger = Logger()
+metrics = Metrics(namespace="Fanwire/SportsData")
 
 #: Key for the `pg_try_advisory_lock` that serializes loads. Pinned, like
 #: app.migrate.MIGRATION_LOCK_KEY, and different from it: a load and a
@@ -223,4 +231,12 @@ def handler(event: Any, context: Any) -> dict[str, Any]:
     result = _as_data(report)
     for line in result["lines"]:
         logger.info(line)
+    conflicts = [c for counts in report.seasons.values() for c in counts.games_conflicting]
+    for conflict in conflicts:
+        logger.warning(
+            f"game {conflict.nba_game_id} conflicts with the dataset and was left as stored",
+            extra=asdict(conflict),
+        )
+    metrics.add_metric(name="GamesConflicting", unit=MetricUnit.Count, value=len(conflicts))
+    metrics.flush_metrics()
     return result
