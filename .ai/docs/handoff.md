@@ -242,7 +242,7 @@ The human's decisions on this review are numbered ADRs; each item names its owne
 2. **`jev`:** the direct route, shadow mode only, and switched off; shadowing the Manager needed a deliberately failing task (§6, item 3): [ADR 0025](../../wiki/GeneralContext/Decisions/0025-jev-shadow-only-switched-off.md).
 3. **D3's human escalation exit:** see [ADR 0001](../../wiki/GeneralContext/Decisions/0001-bounded-orchestration.md).
 4. **The test-kit hole is closed:** `frontend/src/test/**` and `frontend/src/**/__tests__/**` join `code_agent.deny`: [ADR 0024](../../wiki/GeneralContext/Decisions/0024-test-kit-closed-to-code-agent.md).
-5. **Also queued after D1–D6:** D7, §9.2 item 1 (the CI half of bug 17), the newer models, the provider CLI pin and the spend controls: [ADR 0026](../../wiki/GeneralContext/Decisions/0026-agent-models-cli-pin-and-spend-controls.md).
+5. **Also queued after D1–D6:** D7, §9.2 item 1 (the CI half of bug 17), the newer models (applied 2026-11-18: every role and automation runs a `*-5-5` model, pinned by `.ai/tests/test_telemetry.py`), the provider CLI pin and the spend controls: [ADR 0026](../../wiki/GeneralContext/Decisions/0026-agent-models-cli-pin-and-spend-controls.md).
 6. **§9.2 item 5: keep `action_required` on bot-authored PRs**, with fork-PR approval and the deleted gateway key: [ADR 0023](../../wiki/GeneralContext/Decisions/0023-human-gates-on-agent-work.md).
 7. **D2b's worker-isolation choice:** see [ADR 0002](../../wiki/GeneralContext/Decisions/0002-worker-credential-isolation.md).
 8. **Work modes (2026-10-09, after `MEDIA-002`'s USD $2.65):** code is hand-run, the API is for cheap automation: [ADR 0027](../../wiki/GeneralContext/Decisions/0027-work-modes.md).

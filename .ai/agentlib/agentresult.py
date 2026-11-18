@@ -5,7 +5,7 @@ shape, and nothing downstream knows which provider produced it:
 
     {
       "provider":   "anthropic",
-      "model":      "claude-sonnet-5",
+      "model":      "claude-sonnet-5-5",
       "session_id": "sess-abc123" | null,
       "usage":      {"input_tokens": 0, "output_tokens": 0,
                      "cache_creation_input_tokens": 0 | null,
