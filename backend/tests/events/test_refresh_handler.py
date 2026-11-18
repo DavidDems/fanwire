@@ -22,6 +22,10 @@ from types import SimpleNamespace
 
 import boto3
 import pytest
+from freezegun import freeze_time
+from moto import mock_aws
+
+from app.events import refresh_handler
 from app.events.kaggle_source import DatasetFileNotFound
 from app.events.refresh_handler import (
     DatasetRefreshRejected,
@@ -30,10 +34,6 @@ from app.events.refresh_handler import (
     current_season,
     handler,
 )
-from freezegun import freeze_time
-from moto import mock_aws
-
-from app.events import refresh_handler
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 FIXTURE_DIR = _BACKEND_DIR / "tests" / "fixtures" / "nba_data"

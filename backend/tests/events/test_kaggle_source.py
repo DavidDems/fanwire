@@ -14,13 +14,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from app.events import kaggle_source
 from app.events.kaggle_source import (
     DATASET_HANDLE,
     DatasetFileNotFound,
     KagglehubSource,
 )
-
-from app.events import kaggle_source
 
 FAKE_TOKEN = "FAKE-TOKEN-0123"
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
