@@ -9,44 +9,59 @@ proposal until track 41 lands it in `0x09-predictions.md`. Disclosure rules:
 [ADR 0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md).
 Dated 2026-11-19.
 
-## Sources (verify first)
+## Sources
 
-The parameters below are FiveThirtyEight's published NBA Elo method
-("How We Calculate NBA Elo Ratings", 2015). **That page could not be read on
-2026-11-19:** fivethirtyeight.com redirects to `abcnews.com/politics`, and this
-session's fetch tool refuses `web.archive.org`. The values come from search
-summaries and two third-party restatements:
+The parameters are FiveThirtyEight's published NBA Elo method, Nate Silver
+and Reuben Fischer-Baum, "How We Calculate NBA Elo Ratings" (2015). The site
+is gone (its links redirect to `abcnews.com`). **The human pasted the archived
+article on 2026-11-19, without its footnotes**, and the quotes below come from
+that paste.
 
-- [Nic Dobson, "FiveThirtyEight's Elo Ratings and Logistic Regression" (2019)](https://nicidob.github.io/nba_elo)
-  gives the 100-point home bonus and the 1300 start for new teams.
-- [Luke DiPerna, "How to build an NBA Elo rating system" (2023)](https://luke-lite.github.io/blog/how-to-build-an-NBA-Elo-rating-system)
-  gives the margin-of-victory multiplier, which he says matches 538's
-  constants, and 0.75/1505 as his own reversion.
-- [538's data README](https://github.com/fivethirtyeight/data/tree/master/nba-elo)
-  documents the columns only.
+- "We found the optimal K for the NBA to be 20."
+- "Home-court advantage is set as equivalent to 100 Elo rating points. One
+  hundred Elo points is equivalent to about 3.5 NBA points."
+- "In our NBA ratings, by contrast, they keep three-quarters of it":
+  `(.75 * 1754) + (.25 * 1505) = 1692`.
+- "Each franchise begins with an Elo rating of 1300 in its inaugural
+  professional season."
+- "They include both regular-season and playoff games", with no separate
+  playoff parameter.
+- "The system is zero-sum."
+- "Teams retain their prior Elo ratings when they change cities or
+  nicknames." 538 links the 1988–2002 Charlotte Hornets with New Orleans
+  (today's Pelicans), so today's Charlotte franchise is the 2004 expansion
+  team.
+- The margin-of-victory formula is "in the footnotes", which the paste lacks.
 
-**Deliverable 0 of track 41:** the human opens
-`https://web.archive.org/web/2020/https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/`
-in a browser and pastes the relevant paragraphs. The session records exact
-quotes here, and a value that differs from the archive is replaced by the
-archive's. The point-spread divisor (28) and the playoff rule were not found in
-any source reached; they are unverified until then.
+**Not settled by the article**, so check against 538's own data rather than a
+blog: the margin-of-victory formula, restated by
+[DiPerna (2023)](https://luke-lite.github.io/blog/how-to-build-an-NBA-Elo-rating-system),
+who says it matches 538's constants. 538's game-by-game file
+([`fivethirtyeight/data`, `nba-elo`](https://github.com/fivethirtyeight/data/tree/master/nba-elo))
+gives each team's rating before (`elo_i`) and after (`elo_n`) every game, with
+the score and 538's forecast.
+
+**Deliverable 0 of track 41** (no human step): replay a few hundred 2004–2015
+games of that file with the formula below, starting from its `elo_i` values,
+and require `elo_n` to match to 0.1. Then check that `forecast` matches the
+win-probability formula with `H` = 100. A mismatch means the formula is fixed
+until it matches, and the fix is recorded here. Keep the file outside the repo.
 
 ## Model `elo-mov-1`
 
 | Element | Value | Source / status |
 |---|---|---|
-| Start | 1500 for every team at its first game from 2003-04; a franchise whose first game comes later (Charlotte, 2004-05) starts at 1300 | 538 convention for new teams (Dobson); verify |
-| Home advantage `H` | +100 to the home rating; 0 on a neutral floor (`game_type = 'cup-final'` only in v1) | 538 (Dobson, search summary: "about 3.5 points") |
-| Win probability | `p_home = 1 / (1 + 10^(−(R_home + H − R_away) / 400))` | standard Elo |
-| K | 20 | 538 (search summary) |
-| Margin-of-victory multiplier | `M = (MOV + 3)^0.8 / (7.5 + 0.006 × D)`, with `D` = winner's rating − loser's rating, home advantage included (negative for an upset, which raises `M`) | DiPerna, "matches 538"; verify |
-| Update | `Δ = K × M × (S − p_home)`, `S` = 1 for a home win and 0 otherwise; the home team gains `Δ`, the away team loses it | standard Elo, zero-sum |
-| Between seasons | before a team's first game of a season: `R ← 0.75 R + 0.25 × 1505` | DiPerna's and widely cited as 538's; verify |
-| Expected margin | `(R_home + H − R_away) / 28` points, home minus away | recalled 538 rule, **unverified**; see below |
+| Start | 1500 for every team at its first game from 2003-04 (our data begins there; 538's history from 1946 doesn't exist in it); a franchise whose first game comes later (Charlotte, 2004-05) starts at 1300 | 538 article (1300 for a new franchise); the 1500 start is ours, absorbed by the burn-in |
+| Home advantage `H` | +100 to the home rating; 0 on a neutral floor (`game_type = 'cup-final'` only in v1) | 538 article; the article doesn't address neutral floors |
+| Win probability | `p_home = 1 / (1 + 10^(−(R_home + H − R_away) / 400))` | standard Elo; checked against 538's `forecast` in deliverable 0 |
+| K | 20 | 538 article |
+| Margin-of-victory multiplier | `M = (MOV + 3)^0.8 / (7.5 + 0.006 × D)`, with `D` = winner's rating − loser's rating, home advantage included (negative for an upset, which raises `M`) | DiPerna; **checked against 538's data in deliverable 0** |
+| Update | `Δ = K × M × (S − p_home)`, `S` = 1 for a home win and 0 otherwise; the home team gains `Δ`, the away team loses it | 538 article (zero-sum) |
+| Between seasons | before a team's first game of a season: `R ← 0.75 R + 0.25 × 1505` | 538 article |
+| Expected margin | `(R_home + H − R_away) / 28.6` points, home minus away | derived from the article's "100 Elo points ≈ 3.5 points"; stored, not shown in v1 |
 | Expected total | not produced (`expected_total` null) | Elo has no scoring level |
-| Playoffs, play-in | same parameters | no source reached says otherwise; one unofficial page claims K = 24 in the playoffs, unverified |
-| Relocations | the franchise id carries its rating (Seattle→Oklahoma City 2008, New Jersey→Brooklyn 2012, the Charlotte and New Orleans renames) | the loader keys teams by nba.com franchise id |
+| Playoffs, play-in | same parameters | 538 article (both included, no separate parameter) |
+| Relocations | the franchise id carries its rating (Seattle→Oklahoma City 2008, New Jersey→Brooklyn 2012, the Charlotte and New Orleans renames) | 538 article; the loader keys teams by nba.com franchise id, which splits Charlotte and New Orleans the way 538 does |
 
 **Not in v1, each a candidate for a later version:**
 
@@ -60,9 +75,9 @@ any source reached; they are unverified until then.
 A candidate ships only if a holdout backtest improves the Brier score, and only
 as a new version (ADR 0039).
 
-**The margin divisor** is checked, not fitted: report the mean absolute error
-of the expected margin. The UI shows a margin ("by about 4") only if the human
-accepts that number.
+**The margin divisor** (28.6) is checked, not fitted: report the mean absolute error
+of the expected margin. The margin is stored but not shown in v1
+([ADR 0040](../Decisions/0040-predictions-track-answers.md) item 10).
 
 ## Running it
 

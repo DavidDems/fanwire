@@ -23,7 +23,8 @@ body.
 
 1. `29-outstanding-work.md` "How every track runs".
 2. [ADR 0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md):
-   the disclosure and no-change rules this track must honour.
+   the disclosure and no-change rules this track must honour; ADR [0040](../Decisions/0040-predictions-track-answers.md)
+   items 8–11 (the human's answers for this track).
 3. [`41-elo-model-spec.md`](41-elo-model-spec.md): the model, the backtest and
    the wording.
 4. `wiki/CodeContext/Modules/0x09-predictions.md` (tables, the batch, the
@@ -42,17 +43,19 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 - The full history (2003-04 onward) loads into a throwaway Postgres on port
   5433 in about 133 s (`0x02b` "Measured"), from `C:\data\nba` or
   `C:\data\nba-refresh`.
-- **FiveThirtyEight's method page is offline** (`41-elo-model-spec.md`
-  "Sources").
+- **FiveThirtyEight's site is gone**; the human pasted the archived article
+  (`41-elo-model-spec.md` "Sources"), all but its footnotes.
 
 ## Deliverables
 
 One PR each, test-first.
 
-0. **Verify the parameters (Director PR).** The human opens the archived 538
-   page in a browser and pastes the paragraphs. The session records exact
-   quotes in `41-elo-model-spec.md`, and any value the archive contradicts is
-   corrected before code.
+0. **Check the margin formula against 538's data (no human step).** The
+   article is quoted in `41-elo-model-spec.md` "Sources"; only its footnoted
+   margin-of-victory formula is unconfirmed. Replay 538's own `nba-elo`
+   ratings as that section describes, and record the result there. A value
+   that can't be confirmed is used as restated and marked unverified
+   ([ADR 0040](../Decisions/0040-predictions-track-answers.md) item 8).
 1. **The model (`PREDICTIONS-0xx`).**
    - `PredictionModel` (Strategy): `replay(final_games) -> ratings`,
      `predict(game, ratings) -> Forecast`.
@@ -69,8 +72,9 @@ One PR each, test-first.
    - Run it against the full local load. **The PR shows the numbers:** overall,
      regular vs playoffs, per season, the calibration table, and the margin's
      mean absolute error.
-   - Ask the human (`AskUserQuestion`): publish these as the record? Show a
-     margin?
+   - Publish them as measured; no approval step (ADR 0040 item 9). No
+     margin is shown in v1 (item 10). A weakness found becomes a backlog row,
+     not a change (item 11).
 3. **Live forecasts (`PREDICTIONS-0xx`).**
    - The batch hook: replay, write new `team_ratings`, upsert `open` predictions
      for the next 7 days, all after settlement in the same run.
@@ -108,8 +112,8 @@ launch has a record to show.
 
 ## How the human wants the work done
 
-- `AskUserQuestion` with the recommendation first. A worktree per unit;
-  subagents never run `git`.
+- The human's answers are ADR 0040. `AskUserQuestion` only for a question it
+  doesn't answer. A worktree per unit; subagents never run `git`.
 - Never tune a parameter on the seasons the record is scored on (ADR 0039). A
   better idea becomes `elo-mov-2`, through track 44's comparison or its own
   ADR.
