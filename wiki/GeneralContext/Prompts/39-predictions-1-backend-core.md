@@ -30,7 +30,8 @@ It closes the backlog row "Predictions track 39".
 1. `29-outstanding-work.md` "How every track runs": the shared rules.
 2. ADRs [0037](../Decisions/0037-predictions-module-and-batch-lambda.md),
    [0038](../Decisions/0038-picks-scoring-and-leaderboards.md),
-   [0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md).
+   [0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md),
+   [0040](../Decisions/0040-predictions-track-answers.md) (the human's answers for every track).
 3. [`39-predictions-data.md`](39-predictions-data.md) (tables, settlement, API)
    and [`39-predictions-design.md`](39-predictions-design.md) (boards, abuse).
 4. `Architecture/work-modes.md`; `director-sessions.md` "The loop, per unit".
@@ -68,11 +69,10 @@ Verify each: `git log origin/main`, `gh pr list`,
 One PR each, test-first per `AGENTS.md` Workflow: the failing tests committed
 alone, then the code, then the module reference.
 
-0. **Specs (Director PR)** for the units below, merged before each runs. Ask
-   the human (`AskUserQuestion`, recommendation first):
-   - the board minimums (`39-predictions-design.md`);
-   - whether global boards need a verified email or a 7-day-old account;
-   - the pick-write limit.
+0. **Specs (Director PR)** for the units below, merged before each runs. The
+   human's answers are [ADR 0040](../Decisions/0040-predictions-track-answers.md) items 1–4: the minimums (15/50/10), a verified
+   email for global boards, 300 pick writes an hour, and picks visible after
+   the lock. Don't re-ask them.
 1. **The contract (`PREDICTIONS-001`).**
    - The package `app/predictions/`; Pydantic schemas and the routes of
      `39-predictions-data.md` "API contract", mounted under `/predictions`.
@@ -87,6 +87,11 @@ alone, then the code, then the module reference.
    - `final_games(session, from_season)`: ordered, for track 41.
    - Frozen dataclasses, batched, with query-count tests like
      `game_final_previews`. `predictions` never imports `app.events.models`.
+2b. **Verified email (`USERS-0xx`, a users unit).** A stored flag synced from
+   the token's `email_verified` claim on sign-in and after verification, and
+   `app.users.service.verified_user_ids(session, ids)` for the boards
+   (ADR 0040, Consequences). Tests: the flag follows the claim, and a batched
+   read uses a fixed query count.
 3. **Tables and the immutability trigger (`PREDICTIONS-002`).**
    - The six tables and their indexes in one Alembic migration.
    - The trigger on `model_predictions`. Tests against real Postgres:
@@ -121,8 +126,10 @@ alone, then the code, then the module reference.
 6. **Reads and boards (`PREDICTIONS-005`).**
    - `GET /games`, `/games/{id}`, `/me/picks`, `/users/{id}/record`,
      `/leaderboards`. `/model` returns `null` fields until track 41.
-   - The two boards × two periods × two scopes; minimums, shared ranks, the
-     model ghost row (empty until 41); open picks hidden until the lock.
+   - The two boards × two periods × two scopes; minimums and the
+     verified-email rule on global boards, shared ranks, the model ghost row
+     (empty until 41); open picks hidden from all but their owner until the
+     lock, then public.
    - Measure the boards on a seeded season (10,000 users × 100 picks, a script
      like `seed_perf.py`) and record p95 in the module file.
 7. **Docs, in the units above and one Director PR:**
@@ -146,8 +153,8 @@ alone, then the code, then the module reference.
 
 ## How the human wants the work done
 
-- `AskUserQuestion` with the recommendation first, only for what the docs leave
-  open.
+- The human's answers are ADR 0040. `AskUserQuestion`, recommendation first,
+  only for a question it doesn't answer.
 - A worktree per unit; subagents never run `git`. Manual steps are an ordered
   list, one PowerShell line each.
 

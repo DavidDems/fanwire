@@ -25,7 +25,7 @@ restricted-tree edit is named in its PR body.
 ## Read first, in this order
 
 1. `29-outstanding-work.md` "How every track runs".
-2. ADR 0037; [`39-predictions-data.md`](39-predictions-data.md) "Settlement"
+2. ADR 0037 and ADR [0040](../Decisions/0040-predictions-track-answers.md) (the answers); [`39-predictions-data.md`](39-predictions-data.md) "Settlement"
    and "Events"; `wiki/CodeContext/Modules/0x09-predictions.md` (landed by `39`).
 3. `0x00-architecture.md` "PostEventBus implementation";
    `0x02b-events-loading.md` "The load function";
@@ -53,10 +53,10 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
 One PR each, test-first.
 
-0. **Specs (Director PR).** Ask the human:
-   - the daily run's time (proposal: 15:00 UTC);
-   - the notification's wording;
-   - whether a voided pick also notifies.
+0. **Specs (Director PR).** The human's answers are [ADR 0040](../Decisions/0040-predictions-track-answers.md) items 5–7: the
+   daily run at 15:00 UTC; the wording "Your picks: 6 won, 4 lost · +68
+   points" (plus "· 1 not counted"); and a void that notifies on its own. Don't
+   re-ask them.
 1. **`SportsDataLoaded` (`EVENTS-0xx`).**
    - `load_handler` publishes `{seasons, source, games_written}` through
      `PostEventBus` **after** its transaction commits.
@@ -119,8 +119,8 @@ a `pick` link shows its preview in `GET /feed`.
 
 ## How the human wants the work done
 
-- `AskUserQuestion` with the recommendation first, only for what the docs leave
-  open. A worktree per unit; subagents never run `git`.
+- The human's answers are ADR 0040. `AskUserQuestion`, recommendation first,
+  only for a question it doesn't answer. A worktree per unit; subagents never run `git`.
 - A deploy waits for the human's approval. After the notifications migration,
   the human runs the Migration Lambda (one PowerShell line, in the PR).
 
@@ -144,8 +144,7 @@ a `pick` link shows its preview in `GET /feed`.
 - **Why SQS** between the rule and the function: a DLQ and retries without
   re-running a load. Same as `NotificationRule` (`Standards/aws-stack.md`).
 - **One notification per user per run**, not per pick: a user with 10 picks on
-  a night gets one line ("Your picks: 6 won, 4 lost, +68"). The proposal
-  wording is for the human to confirm.
+  a night gets one line (wording: ADR 0040 item 6).
 
 ## Limits
 
