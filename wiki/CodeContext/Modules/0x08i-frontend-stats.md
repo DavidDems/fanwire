@@ -112,7 +112,10 @@ stats reads are `src/api/stats.ts` (below, "The stats navigator").
   link and the stat columns stay put; the column scrolls with the table at
   360 px. The visible text is "Post" with `SquarePenIcon`; the accessible
   name says what about ("Post about Scottie Barnes’s game", "… LeBron James’s
-  playoffs").
+  playoffs"). The space after "Post" is visible text, outside
+  `VisuallyHidden`, whose text starts at "about" (`FRONTEND-045`): jsdom 31
+  drops a hidden span's leading space and names the link "Postabout …", and
+  `expectSpaceOutsideHiddenText` in `src/test/post-about.ts` pins it.
 
 ### The stats navigator (`FRONTEND-018`)
 

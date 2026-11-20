@@ -152,8 +152,11 @@ anybody has to remember:
   every upload reached msw named `blob`. The module wraps the global `Request`
   and does the conversion itself, names included; `setupTests.ts` imports it
   **before** msw, which builds its `Request` from the global. It reads the
-  bytes the way Vitest's own bridge does (jsdom's `impl` buffer), because a
-  request body is built synchronously. `harness.test.ts` and
+  bytes the way Vitest's own bridge does, because a request body is built
+  synchronously: jsdom 31 keeps them as `_bytes` behind a private field that
+  only its generated `implForWrapper` reaches, and jsdom 25 as `_buffer` under
+  an own `Symbol("impl")`. `bytesOf` tries both (`FRONTEND-045`, until
+  `FRONTEND-048` drops jsdom 25's). `harness.test.ts` and
   `MediaWidget.test.tsx` pin it. Vitest 5 has the
   same bridge, so this stays until upstream keeps file names.
 - **The harness carries three things for Node 24 and later** (`FRONTEND-025`).
@@ -170,6 +173,22 @@ anybody has to remember:
   without `--localstorage-file`, and Vitest copies a jsdom key only when the
   global lacks it, so `setupTests.ts` copies jsdom's storage over a global that is
   `undefined`. Node 20 rejects that flag, so it cannot be the fix.
+- **`setupTests.ts` passes msw both versions' unhandled-request key**
+  (`FRONTEND-045`). msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`,
+  and each ignores the other's, so one options object, held in a variable so
+  neither version's types reject the key they lack, carries both as `"error"`.
+  `FRONTEND-048` drops msw 2's.
+- **A test-only author rule, `[popover] { display: block }`**, is appended to
+  the document by `setupTests.ts` (`FRONTEND-045`). jsdom 31's default
+  stylesheet hides `[popover]:not(:popover-open)`, and jsdom implements no
+  `showPopover()`, so an open `Menu` list was missing from every role query.
+  An author rule outranks a user-agent one whatever its specificity. The
+  browser opens the popover for real; no production CSS changes.
+- **A test that holds an element across a re-mount reads a detached copy.**
+  Recovering on `/compose` inside `ComposeModal`'s 500 ms grace unmounts the
+  dialog until the composer's chunk arrives, so `deactivated.test.tsx` finds
+  the Compose dialog *after* recovery. It surfaced on msw 3, where a warm
+  earlier test makes the recovery land at about 90 ms.
 - **`tsconfig.app.json` lists `vite/client` and `node` in `types` explicitly.**
   Vitest 4's `vitest/globals` does not pull them in, and without them the
   disk-reading tests (`node:fs`, `process.cwd()`) and CSS/SVG imports do not
