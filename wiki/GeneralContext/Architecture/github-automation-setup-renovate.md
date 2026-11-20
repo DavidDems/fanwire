@@ -33,6 +33,14 @@ release pulled within days never reaches a PR. At most 5 PRs are open at once,
 each labelled `dependencies`. The **Dependency Dashboard** issue lists what is
 pending, waiting out its age, or blocked.
 
+**`npmrc: allow-remote=all`** is for Renovate's own lockfile runs only.
+Mend's runner uses npm 12, whose `allow-remote` default is `none`, and npm
+treats a registry package that declares `bundleDependencies` (`aws-cdk-lib`)
+as a remote fetch. Without the setting, `infra/package-lock.json` fails with
+`EALLOWREMOTE` and the PR's `renovate/artifacts` check stays red
+(npm/cli#9800). `all` is npm 11's default. CI and local npm never read this
+setting. Drop it once a fixed npm ships.
+
 `pip non-major` rarely has anything to do: `backend/pyproject.toml` states
 `>=` ranges, which every release already satisfies, and only ruff and mypy
 are exact. **`director-review` skips Renovate's PRs** by design, even the

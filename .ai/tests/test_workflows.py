@@ -2819,6 +2819,15 @@ class TestRenovateNeverMergesAnything:
             assert days >= 3, f"{path}: minimumReleaseAge {age!r} is under 3 days"
         assert config.get("internalChecksFilter") == "strict"
 
+    def test_its_lockfile_runs_may_fetch_bundled_tarballs(self, config):
+        """npm 12 defaults `allow-remote` to `none` and treats a registry
+        package with `bundleDependencies` (aws-cdk-lib) as a remote fetch, so
+        Renovate's `infra/package-lock.json` update fails with EALLOWREMOTE
+        (npm/cli#9800). `all` is npm 11's default; it reaches only Renovate's
+        own artifact run, not CI's or a developer's npm."""
+        lines = [line.strip() for line in config.get("npmrc", "").splitlines()]
+        assert "allow-remote=all" in lines, "npmrc must set allow-remote=all"
+
     def test_its_branches_are_not_agent_branches(self, config):
         """`agent/*` is the worker's namespace: the guard would hold such a
         PR against a task spec it does not have, and Renovate is not a worker."""
