@@ -32,7 +32,7 @@
     "vite": "^7.3.7",
     "@vitejs/plugin-react": "^5.2.0",
     "vitest": "^4.1.11",
-    "jsdom": "^25.0.0",
+    "jsdom": "^31.0.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/user-event": "^14.5.0",
