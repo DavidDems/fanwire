@@ -31,7 +31,12 @@ here, last. Nobody edits `package.json` by hand to land a major.
 
 Done: model names (PR #9); github-actions non-major, `ruff`, `k6`,
 `actions/checkout` v7, `date-fns` 4, `jest-dom` 7, `zustand` 5 (#11–#17,
-deployed). ADR 0026 lines 38–40 still call the model switch pending; only a
+deployed). 2026-11-20: `npm non-major` (#21, after #23 gave Renovate
+`allow-remote=all` for npm 12's `EALLOWREMOTE` on `aws-cdk-lib`'s bundled
+tarball), a short-hash test flake (#25), **unit 1 `FRONTEND-045`** (#27), then
+its four majors `@types/node` 26, `jsdom` 31, `vitest` 5, `msw` 3 (#28–#31,
+deploy running at hand-over). **Unit 2's spec `FRONTEND-046`** is a Director PR
+on `director/frontend-046-spec`; once it merges, run the unit. ADR 0026 lines 38–40 still call the model switch pending; only a
 superseding ADR can correct it, if the human wants one.
 
 ## Where things stand (2026-11-20), verify, don't trust
@@ -47,11 +52,10 @@ superseding ADR can correct it, if the human wants one.
   and in the foreground: on this 8 GB machine Claude Code reaps background
   jobs under memory pressure.
 
-Done since: PR #21 (`npm non-major`) merged after #23 gave Renovate
-`allow-remote=all` (npm 12's `EALLOWREMOTE` on `aws-cdk-lib`'s bundled tarball).
-The four unit-1 majors re-probed together on 2026-11-20 (118 of 3,671 red);
-`.ai/tasks/FRONTEND-045/brief.md` has the corrected causes, including one
-msw 3 failure in `deactivated.test.tsx` the table below lacks.
+Rows 1–3 of the table below are done (`FRONTEND-045`; its brief has the
+corrected causes). `vite` 8 + `plugin-react` 6 re-probed on `b6cde48`: one
+test red, the bundle budget, because Rolldown splits the entry into preloaded
+chunks (`.ai/tasks/FRONTEND-046/brief.md`).
 
 Probe findings (each major alone from `main`; file and line on 2026-11-18):
 
@@ -73,11 +77,12 @@ Write each spec on a Director branch, merge it, then run the unit
 (`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-045`,
 infra `INFRA-006`.
 
-1. **`FRONTEND-045`, test harness on both versions:** the `@types/node`,
+1. **Done (#27–#31).** `FRONTEND-045`, test harness on both versions: the `@types/node`,
    `jsdom` and `msw` rows above, each written to work on today's and the new
    version. Then tick `@types/node` 26, `vitest` 5, `jsdom` 31, `msw` 3.
-2. **`FRONTEND-046`, vite 8 ready:** declare `Stats.module`'s budget. Tick
-   `vite` 8, then `plugin-react` 6.
+2. **`FRONTEND-046`, vite 8 ready** (spec written): the budget measures the
+   entry with its static imports, and declares `Stats.module`. Tick `vite` 8,
+   merge, then tick `plugin-react` 6.
 3. **`FRONTEND-047`, React 19 ready:** the 16 rule sites, the extra request,
    trim, then declare the entry budget. Tick React, then `eslint` 10.
 4. **`FRONTEND-048`, clean-up:** drop msw 2's option, jsdom 25's Blob path
@@ -120,6 +125,19 @@ one-line verdict per PR (merge, hold, needs a unit). A failed major is a
 reason to hold it, not to loosen a test.
 
 ## Mechanics learned the hard way
+
+- **Probe a major before its spec**, from today's `main`, in a throwaway
+  worktree (`npm install -D <pkg>@<major>`, never committed). Run the suite
+  in the foreground, sharded: `npx vitest run --shard=1/3 --maxWorkers=2
+  --reporter=json --outputFile=<scratch>`. The full suite in one process gets
+  reaped for memory on this machine, and crashed workers inflate the count.
+- **An assertion that stops at its first `expect` hides the rest.** Re-measure
+  what it checks yourself (FRONTEND-046's entry split hid behind one row).
+- **`src/test/**` is the test role's**, so a harness-only unit's
+  implementation commits are test-role commits; guard-check each by role.
+- **A unit's spec PR, then its `agent/<ID>` PR, then the human ticks the
+  majors.** Each Renovate PR is reviewed for what CI cannot see and merged
+  one at a time: they share the lockfile, Renovate rebases the next.
 
 - A bump that CI passes can still break the deploy: read the `cdk diff` step
   after the merge, and the human approves the deploy only after that.
