@@ -14,8 +14,8 @@ points for a correct pick and are ranked on leaderboards, and every game shows
 "Our prediction", the app's own forecast. The work is of two kinds. Requests
 (make a pick, read a board) are small and per user. Computing ratings and
 predictions and settling picks is batch work that must run after new results
-are loaded, which the results scraper (`Prompts/38`, whose
-first deliverable is ADR 0036) delivers within about an hour of a game ending. The project
+are loaded, which the results scraper (`Prompts/38`, final
+scores from balldontlie's free tier, box scores later from Kaggle) delivers within about an hour of a game ending. The project
 already runs batch work as functions beside the API on the shared image:
 `SportsDataLoad`, `SportsDataRefresh`, the notifications consumer
 (`wiki/CodeContext/Modules/0x02b-events-loading.md`, `0x05-notifications.md`).

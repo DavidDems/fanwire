@@ -54,9 +54,12 @@ Verify each: `git log origin/main`, `gh pr list`,
 
 - Nothing of predictions exists. The next free ADR is after 0039; the next
   module file is `0x09`.
-- **Depends on `38` being merged and live**: its first deliverable takes ADR
-  0036 and `EVENTS-018`, and it may use more `EVENTS-` ids. Take the next free
-  `EVENTS-` id at spec time. The new prefix is `PREDICTIONS-001`.
+- **Depends on `38` being live**: the scraper writes the current season's
+  final scores from balldontlie's free tier (box scores still come from
+  Kaggle), and loads only after its 14-game-day shadow run. Until then,
+  results arrive 24–48 h late from Kaggle and settlement waits on them. `38`
+  takes its own ADR and `EVENTS-` ids, so check the next free ones at spec
+  time. The new prefix is `PREDICTIONS-001`.
 - `scheduled_games` holds the 2026-27 schedule, and `ScheduleGameOut` exposes
   `nba_game_id` and `time_tbd`.
 
