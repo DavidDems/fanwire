@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-046",
+  "objective": "The bundle-budget test holds a vite 8 (Rolldown) build to the same budget as a vite 7 one: the entry is the entry chunk plus every chunk it statically imports, and Stats.module's vite 8 size is declared, so Renovate's vite 8 and @vitejs/plugin-react 6 PRs can merge unchanged.",
+  "acceptance_criteria": [
+    "Start gate: FRONTEND-045 and the four majors it unblocked (#28 to #31) have merged, and no other PR that changes frontend/ is open. The branch is cut from a main that holds them.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because bundle-budget.ts has no function that measures an entry together with its static imports, and lazy outputs still include chunks the entry imports statically.",
+    "The entry is the entry chunk plus the transitive closure of its static imports (Rollup's chunk.imports, not dynamicImports). The entry JS gzip and raw that the test compares with BASE are the sums over that closure, each file gzipped on its own as today. A chunk in the closure is not a lazy output, so it is never named in BASE.lazy or a unit file. A pure helper in bundle-budget.ts computes the closure from a build's output; bundle-budget-combine.test.ts (or a new test file under src/test) pins it with a synthetic output: an entry importing a chunk that imports another, plus a dynamic-only chunk. The first three are the entry; the dynamic one is lazy; a cycle terminates.",
+    "On vite 7 (today) the closure is the entry chunk alone, so every measured number is unchanged and no BASE value moves. Say so in the PR with the measurement.",
+    "The entry CSS rule is unchanged: the entry chunk imports exactly one stylesheet. If a closure chunk imports a stylesheet on vite 8, it is part of the entry CSS sum, and the test says so.",
+    "frontend/src/test/bundle-budgets/FRONTEND-046.ts declares, in the test commit, changed: Stats.module at 650 bytes gzip (vite 7 builds 377 and vite 8 502 on b6cde48). Its comment says why: Rolldown keeps the CSS-module map and its helper in that chunk. It declares nothing else and no entry growth.",
+    "Proof on both versions. Today's: the frontend container, typecheck, lint and build are green. New: in a throwaway worktree of this branch, npm install -D vite@8 @vitejs/plugin-react@6 (never committed: package.json and the lockfile are forbidden), then typecheck, lint, build and the full suite (alone, sharded if memory is short) are green. Report the entry closure on vite 8: its files and its gzip and raw sums (about 149.1 kB and 474.4 kB on b6cde48, under BASE's 151.7 kB and the 480 kB raw cap).",
+    "vite.config.ts is unchanged: optimizeDeps.esbuildOptions stays (vite 8 warns it is deprecated, and dev-server-config.test.ts pins it). FRONTEND-048 moves it to rolldownOptions once vite 7 is gone.",
+    "No production source change, no new dependency, no package.json or lockfile change.",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md's bundle-budget fact says the entry is the entry chunk plus its static imports, why (Rolldown splits the entry into preloaded chunks), and updates its stale numbers to BASE's."
+  ],
+  "allowed_paths": [
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/test/bundle-budget.test.ts",
+    "frontend/src/test/bundle-budget-combine.test.ts",
+    "frontend/src/test/bundle-budget-entry.test.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-046.ts",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/api/**",
+    "frontend/src/components/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/**",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budgets/FRONTEND-037.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-040.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-043.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-044.ts",
+    "frontend/src/test/bundle-budgets/USERS-008.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
