@@ -25,11 +25,23 @@ answers; don't re-ask them). The human starts one session per track with:
 | 5 | `34-outstanding-work-5-frontend.md` | Frontend fixes, tidy-ups, UI docs, browser rows |
 | 6 | `35-outstanding-work-6-account-lifecycle.md` | `USERS-005`, `USERS-009` activation, `AUTH-001` |
 | 7 | `36-outstanding-work-7-agent-system.md` | Key-free pipeline checks and metrics |
-| 8 | `37-outstanding-work-8-review-skills.md` | `wiki-review` and `ai-review` skills and prompts. Last |
+| 8 | `37-outstanding-work-8-review-skills.md` | `wiki-review` and `ai-review` skills and prompts. Last of the Outstanding-work tracks |
+
+After track 8 and the results scraper (`38`), the predictions tracks, in
+this order ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md)):
+
+| Track | File | What |
+|---|---|---|
+| P1 | `39-predictions-1-backend-core.md` | `predictions` module, picks and lock, settlement, boards, the API contract (flag off) |
+| P2 | `40-predictions-2-batch-integrations.md` | `SportsDataLoaded`, `PredictionsBatch`, `picks_settled` notification, shared picks |
+| P3 | `41-predictions-3-elo-model.md` | `elo-mov-1`, its out-of-sample backtest, live forecasts |
+| P4 | `42-predictions-4-pick-ui.md` | "Our prediction", its record page, the pick control |
+| P5 | `43-predictions-5-boards-launch.md` | Leaderboards, my picks, sharing, the launch (flag on) |
+| P6 | `44-predictions-6-ai-model.md` | A machine-learning model against Elo. Parked until P3 is live |
 
 A track is done when its backlog rows are deleted, each changed module's
 reference states the new fact, its prompt is deleted, this table loses its
-row, and `Timeline/` has one line. When track 8 is done, delete this file.
+row, and `Timeline/` has one line. When the last track in these tables is done, delete this file.
 
 ## How every track runs
 
