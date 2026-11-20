@@ -82,7 +82,7 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 ## Predictions
 
 Users pick NBA winners, earn non-monetary points and are ranked; every game
-shows "Our prediction" ([ADR 0037](../wiki/GeneralContext/Decisions/0037-predictions-module-and-batch-lambda.md)–[0039](../wiki/GeneralContext/Decisions/0039-our-prediction-disclosure-and-immutability.md)).
+shows "Our prediction" ([ADR 0037](../wiki/GeneralContext/Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../wiki/GeneralContext/Decisions/0040-predictions-track-answers.md); 0040 holds the human's answers).
 Runs after the Outstanding-work tracks and the results scraper (`Prompts/38`),
 in this order. One row per track; its brief lists the units.
 
@@ -92,7 +92,7 @@ in this order. One row per track; its brief lists the units.
 | **Predictions track 40**: `SportsDataLoaded` on `PostEventBus`, the `PredictionsBatch` Lambda and daily run, the `picks_settled` notification, the `pick` post attachment | `hand` | — | ADR 0037 | `Prompts/40-predictions-2-batch-integrations.md`. After 39 |
 | **Predictions track 41**: the `elo-mov-1` model, its out-of-sample backtest, live forecasts and the model record | `hand` | — | ADR 0039 | `Prompts/41-predictions-3-elo-model.md`. After 40; first verify 538's parameters from an archived copy |
 | **Predictions track 42**: "Our prediction", its record page and the pick control in the frontend | `hand` | — | ADR 0038, 0039 | `Prompts/42-predictions-4-pick-ui.md`. After 41 |
-| **Predictions track 43**: leaderboards, Beat the model, my picks, sharing, the settled notification's UI, and the launch | `hand` | — | ADR 0038 | `Prompts/43-predictions-5-boards-launch.md`. After 42; a navigation decision first |
+| **Predictions track 43**: leaderboards, Beat the model, my picks, sharing, the settled notification's UI, and the launch | `hand` | — | ADR 0038 | `Prompts/43-predictions-5-boards-launch.md`. After 42; navigation decided in ADR 0040 (a Rankings item) |
 | **Predictions track 44**: a machine-learning model compared with Elo (TabPFN, LightGBM, a Bayesian/Kalman rating model) | `hand` | — | ADR 0039 item 6 | **Parked** until 41 is live. `Prompts/44-predictions-6-ai-model.md` |
 
 ## Backend and infra

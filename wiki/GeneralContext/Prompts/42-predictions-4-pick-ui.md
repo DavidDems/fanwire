@@ -25,7 +25,8 @@ its PR body.
 1. `29-outstanding-work.md` "How every track runs".
 2. ADRs [0038](../Decisions/0038-picks-scoring-and-leaderboards.md) and
    [0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md)
-   (what must be shown and how it is worded).
+   (what must be shown and how it is worded), and [0040](../Decisions/0040-predictions-track-answers.md) items 10–14 (the
+   human's answers for this track).
 3. `wiki/CodeContext/FrontendUI/index.md`, then ADRs 0010–0018 as it lists
    them, `direction.md`, `tokens.md`, `components-shared.md`,
    `components-sports.md`, `components-map-pages.md` (`GamePage`,
@@ -53,11 +54,13 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 One PR each, test-first (a failing Vitest first, per `verification.md`; no
 snapshots), with a browser pass reported per `verification-browser.md`.
 
-0. **Specs (Director PR).** Ask the human, with mock-ups in the
-   `AskUserQuestion` preview:
-   - how the forecast reads on the game page (a proposal follows);
-   - whether schedule cards carry the pick control or only the forecast;
-   - the label on the pick buttons (team abbreviation or name).
+0. **Specs (Director PR).** The human's answers are [ADR 0040](../Decisions/0040-predictions-track-answers.md) items 12–14:
+   - the game page shows text, then a neutral split bar, then the link;
+   - the upcoming-game card on the Schedule tab carries the forecast and the
+     pick buttons (there is no Picks tab);
+   - the buttons read "BOS +10".
+
+   No margin is shown (item 10). Don't re-ask them.
 1. **Types and the API layer (`FRONTEND-0xx`).** `npm run gen:api-types`;
    `features/predictions/api.ts` (TanStack Query keys, invalidation on a pick);
    the switch: the UI renders nothing for predictions when the API answers 404,
@@ -98,7 +101,8 @@ each new view, and with the flag off the app looks exactly as before.
 
 ## How the human wants the work done
 
-- Ask with `AskUserQuestion`, mock-ups in the preview, recommendation first.
+- The human's answers are ADR 0040; `AskUserQuestion` (mock-ups in the
+  preview) only for a question it doesn't answer.
 - A worktree per unit; subagents never run `git`. Run the frontend suite alone.
 
 ## Mechanics learned the hard way
@@ -112,9 +116,9 @@ each new view, and with the flag off the app looks exactly as before.
 
 ## Design notes (starting points, not decisions)
 
-- Proposal for the game page: under the score block, a row reading
-  "Our prediction  BOS 64 % · MIA 36 %", with the bar under it and the link at
-  the end. On a schedule card, one line: "BOS 64 %".
+- Decided (ADR 0040): under the score block, "Our prediction", then
+  "BOS 64 % ▇▇▇░ 36 % MIA", then "How accurate is this? →". On an upcoming
+  card: "Our prediction BOS 64 %", the two buttons and "Locks 7:30 PM ET".
 - A pick never hides the forecast, and the forecast never suggests a pick: no
   "lock of the day", no odds format (ADR 0039).
 - States can use `Badge` variants. A new variant is a `components-shared.md`

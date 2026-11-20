@@ -61,8 +61,8 @@ A candidate ships only if a holdout backtest improves the Brier score, and only
 as a new version (ADR 0039).
 
 **The margin divisor** is checked, not fitted: report the mean absolute error
-of the expected margin. The UI shows a margin ("by about 4") only if the human
-accepts that number.
+of the expected margin. The margin is stored but not shown in v1
+([ADR 0040](../Decisions/0040-predictions-track-answers.md) item 10).
 
 ## Running it
 

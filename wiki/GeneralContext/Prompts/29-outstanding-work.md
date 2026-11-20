@@ -28,7 +28,7 @@ answers; don't re-ask them). The human starts one session per track with:
 | 8 | `37-outstanding-work-8-review-skills.md` | `wiki-review` and `ai-review` skills and prompts. Last of the Outstanding-work tracks |
 
 After track 8 and the results scraper (`38`), the predictions tracks, in
-this order ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md)):
+this order ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md)):
 
 | Track | File | What |
 |---|---|---|

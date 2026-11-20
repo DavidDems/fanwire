@@ -30,7 +30,7 @@ restricted-tree edit is named in its PR body.
 2. ADR 0038; [`39-predictions-design.md`](39-predictions-design.md)
    "Leaderboards" and "Abuse cases";
    [ADR 0017](../Decisions/0017-navigation-and-home-rail.md) (navigation and the
-   home rail).
+   home rail), as amended by ADR [0040](../Decisions/0040-predictions-track-answers.md) items 15–18.
 3. `wiki/CodeContext/FrontendUI/index.md` and the files track 42 read;
    `layout.md` (one template per route).
 4. `wiki/CodeContext/Modules/0x08l-…` (track 42's part), `0x08e-frontend-notifications.md`,
@@ -51,13 +51,18 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
 One PR each, test-first, each with a browser pass.
 
-0. **Specs (Director PR).** Ask the human, with mock-ups:
-   - where the boards live in the navigation: a new nav item, a tab inside
-     Schedule, or a rail card. This changes ADR 0017's navigation, so the answer
-     becomes a new ADR;
-   - the launch date and wording;
-   - whether the home rail gets a "Your picks this week" card.
-1. **Leaderboards (`FRONTEND-0xx`).** A lazy route with:
+0. **Specs (Director PR).** The human's answers are [ADR 0040](../Decisions/0040-predictions-track-answers.md) items 15–18; don't
+   re-ask them. Navigation unit (`FRONTEND-0xx`, first):
+   - a new top-level **Rankings** route;
+   - the phone bottom bar becomes Home, Schedule, Rankings, Stats, Sign out
+     (no hamburger);
+   - Notifications becomes a header icon at the top right, left of the avatar;
+   - the tablet and desktop sidebar lists every item, Rankings included.
+
+   Tests: the shell's links per width (`within()`, as the two Search links are
+   scoped today), and the notification badge in the header. `layout.md` and
+   `components-map-pages.md` are updated (Director PR).
+1. **Rankings (`FRONTEND-0xx`).** The lazy Rankings route with:
    - `SegmentedTabs` "Points" / "Beat the model";
    - a period select (this month, earlier months, the season);
    - a "Global" / "Following" toggle;
@@ -68,10 +73,13 @@ One PR each, test-first, each with a browser pass.
    - the minimum stated above the table;
    - an empty state; a guest gets "Sign in to see your friends".
 2. **My picks and the record (`FRONTEND-0xx`).**
-   - "Your picks": open, then settled, with filters, paged by `before_id`.
+   - "Your picks" on the user's own profile (ADR 0040 item 16): open, then
+     settled, with filters, paged by `before_id`.
    - The profile gains a record line ("38–21 · 412 pts · vs our prediction
      9–6") for any user, showing settled picks only.
-3. **Notifications and sharing (`FRONTEND-0xx`).**
+3. **The rail, notifications and sharing (`FRONTEND-0xx`).**
+   - The home rail's "Your picks this week" card: open picks and the month
+     rank, linking to Rankings and the profile.
    - The `picks_settled` row in the notifications list, linking to "Your picks".
    - "Share" on a pick opens compose with the `pick` attachment.
    - A post card renders the pick preview (game, picked team, value, state), as
@@ -96,7 +104,9 @@ One PR each, test-first, each with a browser pass.
 
 ## How the human wants the work done
 
-- Ask with `AskUserQuestion`, mock-ups in the preview, recommendation first.
+- The human's answers are ADR 0040; `AskUserQuestion` (mock-ups in the
+  preview) only for a question it doesn't answer. Launch has no announcement
+  post (item 18).
 - A worktree per unit; subagents never run `git`. Run the frontend suite alone.
 - The deploy waits for the human's approval.
 
@@ -104,8 +114,8 @@ One PR each, test-first, each with a browser pass.
 
 - **Run the frontend suite alone**: beside the others it flakes.
 - **The entry chunk is about 1 kB under its limit**: every new route is lazy.
-- **A keyboard reader reaches the home rail late** (backlog, Frontend): a rail
-  card makes that worse until that item is fixed. Say so if one is chosen.
+- **A keyboard reader reaches the home rail late** (backlog, Frontend): the
+  rail card makes that worse, so fix that item first or say so in the PR.
 
 ## Design notes (starting points, not decisions)
 
@@ -114,9 +124,8 @@ One PR each, test-first, each with a browser pass.
 - Shared ranks read "T-2", with "Tied for 2nd" as the accessible text.
 - The ghost row is the honest baseline: "Our prediction, if it picked every
   game".
-- Proposal for the navigation: a "Picks" tab inside Schedule (no new nav item,
-  no ADR 0017 change), with the boards one tap away. A nav item is the
-  alternative, if the human wants predictions prominent.
+- Navigation is decided (ADR 0040 item 15, amending ADR 0017): Rankings is a
+  top-level item, and picks live in the upcoming-game card.
 
 ## Limits
 

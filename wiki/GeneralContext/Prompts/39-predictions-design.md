@@ -43,15 +43,16 @@ ADR 0038 gives the rule and why. Facts for the implementation:
     see whether they beat it.
   - Picking every game earns more points than picking a few, which is intended:
     it is an engagement game, and accuracy is shown beside the points.
-- **Community split** ("64 % of fans picked BOS"): proposal, shown only after
-  the lock, so it never herds picks.
+- **Community split** ("64 % of fans picked BOS"): decided (ADR 0040), shown
+  only after the lock, so it never herds picks.
 
 ## Leaderboards (decided: month and season, global and following, Beat the model)
 
-Proposals for track 39 to settle and record in `0x09-predictions.md`:
+Decided where marked (ADR 0040); the rest are proposals for track 39 to
+record in `0x09-predictions.md`:
 
-- **Minimums (global only):** 15 settled picks for the month, 50 for the
-  season, and 10 disagreements for Beat the model. A user below the minimum
+- **Minimums (global only, decided):** 15 settled picks for the month, 50 for
+  the season, and 10 disagreements for Beat the model. A user below the minimum
   sees their own row, marked "N more picks to qualify". Following boards have
   no minimum.
 - **Order:** points, descending, with a shared rank on a tie. Inside a tie,
@@ -84,11 +85,10 @@ Proposals for track 39 to settle and record in `0x09-predictions.md`:
 
    The attack is to cover every combination of outcomes with many accounts, so
    that one of them is perfect. The minimums make that cost 2^N accounts for N
-   picks. **Human decision for track 39** (`AskUserQuestion`): should global
-   boards also need a verified email, or an account at least 7 days old? A
-   verified email gates appearing on a public board, not use, so it can sit
-   beside ADR 0031. Account lifecycle (track 6) adds no sign-up limit.
-3. **Bots.** A per-user limit on pick writes (proposal: 300 an hour, the same
+   picks. **Decided** (ADR 0040): global boards also need a verified email,
+   which gates a public listing, not use, so ADR 0031 stands. Account
+   lifecycle (track 6) adds no sign-up limit.
+3. **Bots.** A per-user limit on pick writes (decided: 300 an hour, the same
    counting shape as `PostCountRateLimiter`), behind WAF. A bot that picks
    every game with the model only reaches the ghost row.
 4. **Leaking picks.** Another user's open picks are hidden until the lock.
