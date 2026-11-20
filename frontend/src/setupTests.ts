@@ -199,10 +199,13 @@ server.listen(unhandled);
 // and jsdom 31's default stylesheet hides `[popover]:not(:popover-open)`, so an
 // open menu would be missing from every role query. An author rule outranks a
 // user-agent one whatever its specificity. Test-only: the browser opens the
-// popover for real.
-const popoverShown = document.createElement("style");
-popoverShown.textContent = "[popover] { display: block; }";
-document.head.append(popoverShown);
+// popover for real. Only under jsdom: a `@vitest-environment node` file has no
+// document.
+if (typeof document !== "undefined") {
+  const popoverShown = document.createElement("style");
+  popoverShown.textContent = "[popover] { display: block; }";
+  document.head.append(popoverShown);
+}
 
 afterEach(() => {
   // `globals: false`, so Testing Library registers no auto-cleanup of its own.
