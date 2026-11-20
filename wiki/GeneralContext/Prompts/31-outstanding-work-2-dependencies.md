@@ -47,6 +47,12 @@ superseding ADR can correct it, if the human wants one.
   and in the foreground: on this 8 GB machine Claude Code reaps background
   jobs under memory pressure.
 
+Done since: PR #21 (`npm non-major`) merged after #23 gave Renovate
+`allow-remote=all` (npm 12's `EALLOWREMOTE` on `aws-cdk-lib`'s bundled tarball).
+The four unit-1 majors re-probed together on 2026-11-20 (118 of 3,671 red);
+`.ai/tasks/FRONTEND-045/brief.md` has the corrected causes, including one
+msw 3 failure in `deactivated.test.tsx` the table below lacks.
+
 Probe findings (each major alone from `main`; file and line on 2026-11-18):
 
 | Major | Needs |

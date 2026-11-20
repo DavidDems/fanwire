@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-045",
+  "objective": "The frontend's test harness and the two 'Post about' links work unchanged on today's versions and on @types/node 26, vitest 5, jsdom 31 and msw 3, so Renovate's PRs for those majors can merge as they are.",
+  "acceptance_criteria": [
+    "Start gate: no other PR that changes frontend/ is open. The branch is cut from a main that holds PR #21 (npm non-major).",
+    "Test-first: commit the failing tests alone before the implementation. On today's versions they fail because bytesOf reads only jsdom 25's _buffer, the harness has no author rule showing [popover], setupTests passes msw 3 no onUnhandledFrame, and both 'Post about' links put their space inside VisuallyHidden.",
+    "Blob bytes: form-data-file-names.ts reads a jsdom Blob's bytes on jsdom 25 and on jsdom 31 the way Vitest 5's own bridge does: jsdom's implForWrapper from jsdom/lib/generated/idl/utils.js or jsdom/lib/jsdom/living/generated/utils.js, falling back to the own Symbol('impl'), then the impl's _bytes, falling back to _buffer. A Blob neither path reads throws a message naming the Blob. bytesOf is exported for harness.test.ts, which pins each path: a fake impl with only _bytes and one with only _buffer both yield their bytes.",
+    "Types: bytesOf and the Impl type use Uint8Array<ArrayBuffer>, so npm run typecheck passes on @types/node 22 and 26.",
+    "Popovers: setupTests.ts adds one test-only author style rule, [popover] { display: block }, with a comment saying why: jsdom 31's default stylesheet hides [popover]:not(:popover-open), and jsdom implements no showPopover(), so an open Menu is otherwise hidden from role queries. No production CSS changes. harness.test.ts pins that a rendered [popover] element is found by getByRole.",
+    "msw: setupTests.ts listens with one options object that sets onUnhandledRequest: 'error' (msw 2) and onUnhandledFrame: 'error' (msw 3), with a comment saying each version reads its own key. An unhandled request fails the test on both, and harness.test.ts pins that.",
+    "'Post about' links: BoxScore.tsx and PlayerPage.tsx render Post{' '} before VisuallyHidden, and the hidden text starts with 'about', not a space. jsdom 31 drops a leading space inside the hidden span, which names the link 'Postabout …'. Each link's accessible name is unchanged on jsdom 25: 'Post about Scottie Barnes’s game', 'Post about LeBron James’s regular season'. The post-about tests pin that the hidden text has no leading space.",
+    "msw 3 leak: on msw 3, deactivated.test.tsx 'from the recovery screen, the route the viewer was on renders' fails when run after the other tests of its describe, and passes alone: Recover account stays disabled and the composer never renders. Find the cause, fix it in the harness or the test helpers, and say in the PR what it was. It passes on msw 2 today. No test is skipped, loosened or reordered to hide it.",
+    "Proof on both version sets. Today's: the frontend container, typecheck, lint and build are green. New: in a throwaway worktree of this branch, install @types/node@26 vitest@5 @vitest/coverage-v8@5 jsdom@31 msw@3 (npm install -D, never committed: package.json and the lockfile are forbidden here), then typecheck, lint and the full suite (run alone, sharded if memory is short) are green. Report both test counts in the PR.",
+    "No production behaviour or visual change: the only source edits outside src/test and setupTests.ts are the two 'Post about' spaces. If the bundle-budget test asks for a declaration, frontend/src/test/bundle-budgets/FRONTEND-045.ts declares only what it names.",
+    "No new dependency, no package.json or lockfile change, no Renovate PR merged by the unit.",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md 'Test harness facts' records the two Blob byte paths, the [popover] rule, the dual msw option and the msw 3 leak's cause; wiki/CodeContext/Modules/0x08i-frontend-stats.md records where the 'Post about' link's space sits and why."
+  ],
+  "allowed_paths": [
+    "frontend/src/setupTests.ts",
+    "frontend/src/test/**",
+    "frontend/src/features/games/BoxScore.tsx",
+    "frontend/src/features/games/post-about.test.tsx",
+    "frontend/src/features/players/PlayerPage.tsx",
+    "frontend/src/features/players/post-about.test.tsx",
+    "frontend/src/features/players/post-about-overlay.test.tsx",
+    "frontend/src/routes/deactivated.test.tsx",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/Modules/0x08i-frontend-stats.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/vite.config.ts",
+    "frontend/src/api/**",
+    "frontend/src/styles/**",
+    "frontend/src/components/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/Modules/0x08i-frontend-stats.md",
+    "wiki/CodeContext/FrontendUI/verification.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
