@@ -12,6 +12,7 @@ repository's own history, so no test names a real one.
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -57,9 +58,18 @@ def put(repo, path, body, kind="reference"):
 
 
 def commit(repo, message="fixture"):
+    """Commit, then reword until the short hash has a letter and a digit:
+    an all-digit `1734442` is a number, not a hash, and `archive_refs`
+    rightly leaves it alone, so a test citing it would fail ~4% of runs."""
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", message)
-    return git(repo, "rev-parse", "HEAD")
+    sha = git(repo, "rev-parse", "HEAD")
+    n = 0
+    while not (re.search(r"[a-f]", sha[:7]) and re.search(r"\d", sha[:7])):
+        n += 1
+        git(repo, "commit", "-q", "--amend", "-m", f"{message} {n}")
+        sha = git(repo, "rev-parse", "HEAD")
+    return sha
 
 
 def run(*args):

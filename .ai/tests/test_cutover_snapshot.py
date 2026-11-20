@@ -19,6 +19,7 @@ Every fixture is a throwaway repository; no test names a real commit.
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -93,6 +94,13 @@ def source(tmp_path):
     git(root, "add", ".")
     git(root, "commit", "-q", "-m", "first")
     first = git(root, "rev-parse", "HEAD")
+    # An all-digit short hash is a number to archive-refs, not a hash; reword
+    # until it has a letter and a digit, or the rewrite test fails ~4% of runs.
+    n = 0
+    while not (re.search(r"[a-f]", first[:7]) and re.search(r"\d", first[:7])):
+        n += 1
+        git(root, "commit", "-q", "--amend", "-m", f"first {n}")
+        first = git(root, "rev-parse", "HEAD")
     for task_id, state in TASKS.items():
         task(root, task_id, state)
     put(root, ".ai/telemetry/README.md", "Telemetry lives here.\n")
