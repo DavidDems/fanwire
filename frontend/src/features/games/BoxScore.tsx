@@ -379,9 +379,9 @@ function PlayerRow({
               className={styles.postLink}
             >
               <SquarePenIcon size={16} />
-              Post
+              Post{" "}
               <VisuallyHidden>
-                {` about ${fullName(player)}’s game`}
+                {`about ${fullName(player)}’s game`}
               </VisuallyHidden>
             </Link>
           )}

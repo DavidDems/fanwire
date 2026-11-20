@@ -29,6 +29,7 @@ import { deactivatedShown } from "../../test/account";
 import { renderAppAt, type Visitor } from "../../test/app-route";
 import { attachServer, summaryShown, textOf } from "../../test/attach";
 import {
+  expectSpaceOutsideHiddenText,
   composeLinks,
   composeTarget,
   playerCareerAddress,
@@ -105,6 +106,8 @@ describe("each career row: a 'Post about this' link, signed in", () => {
     expect(toRegular).toHaveAccessibleName(/regular/i);
     expect(toPlayoffs).toHaveAccessibleName(/LeBron James/);
     expect(toPlayoffs).toHaveAccessibleName(/playoff/i);
+    expectSpaceOutsideHiddenText(toRegular);
+    expectSpaceOutsideHiddenText(toPlayoffs);
   });
 
   it("the career table holds just those two", async () => {
