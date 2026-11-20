@@ -87,6 +87,7 @@ Live:
 - **`06-nba-data.md`**: sports data on the Eoin Moore Kaggle dataset. Left: the API-SPORTS clean-up (Outstanding-work track 3). The daily Kaggle refresh (`EVENTS-008`) is live.
 - **`10`–`15`, the system track:** `11` (metrics) is Outstanding-work track 7 and `10`'s deliverable 4 is replaced by track 8's review skills. `12`–`15` need API spend and are parked ([ADR 0035](Decisions/0035-outstanding-work-answers.md)).
 - **`19-dependency-upkeep.md`**: Renovate upkeep. Left: the `@types/node` v24 major, then the close-out.
+- **`38-results-scraper.md`** (2026-11-19), with its part `38-results-scraper-api.md`: same-night final scores from the balldontlie API's free tier, run on the human's PC, live after a 14-game-day shadow test; Kaggle keeps supplying box scores. Runs after the Outstanding-work tracks and before predictions. Nothing built yet.
 
 ### Timeline
 `wiki/GeneralContext/Timeline/`: the project's history as `changelog` volumes, one physical line per milestone with its PRs cited as `fanwire-archive#N`: [2026-09](Timeline/2026-09.md), [2026-10](Timeline/2026-10.md), [2026-11](Timeline/2026-11.md). A volume that would pass 1,000 words is followed by another (`2026-11b.md`), never trimmed.
