@@ -13,10 +13,13 @@
  * or removes and how far it may grow the entry (R12, R13). Against the
  * combined budget:
  *
- * - The entry JS chunk stays within its gzip and raw ceilings, and never
- *   past 480 kB raw (R1).
- * - The entry CSS (the stylesheet the entry chunk imports) stays within its
- *   gzip ceiling.
+ * - The entry JS stays within its gzip and raw ceilings, and never past
+ *   480 kB raw (R1). The entry is the entry chunk plus every chunk it
+ *   imports statically, transitively (FRONTEND-046): Rolldown (vite 8) splits
+ *   the entry into chunks `index.html` preloads, which load with it. Each file
+ *   is gzipped on its own and the sizes summed. On vite 7 it is one chunk.
+ * - The entry CSS (the stylesheet the entry chunk imports, plus any a chunk
+ *   of the entry's closure imports) stays within its gzip ceiling.
  * - Every lazy output (JS chunk or stylesheet) no unit declares stays within
  *   0.1 kB gzip of its base size; every declared one stays within its
  *   ceiling; a removed one is gone; no output appears that nobody declared;
@@ -33,6 +36,7 @@ import {
   FILE_RAW_LIMIT,
   TOLERANCE,
   combine,
+  entryClosure,
   type UnitBudget,
 } from "./bundle-budget";
 import { SRC_DIR } from "./css";
@@ -81,15 +85,31 @@ function chunks(): Rollup.OutputChunk[] {
   );
 }
 
+/** The entry chunk and every chunk it imports statically, transitively. */
+function entryChunks(): Rollup.OutputChunk[] {
+  return entryClosure(entryChunk(), chunks());
+}
+
+/** Every stylesheet a chunk of the entry's closure imports. */
+function entryCssFiles(): Set<string> {
+  return new Set(
+    entryChunks().flatMap((chunk) => [
+      ...(chunk.viteMetadata?.importedCss ?? []),
+    ]),
+  );
+}
+
 /**
- * Every lazy output by budget name → gzip bytes: each non-entry JS chunk by
- * its chunk name, and each stylesheet but the entry's as `css:<asset name>`.
- * A list, not a map, so two outputs with one name can be seen.
+ * Every lazy output by budget name → gzip bytes: each JS chunk outside the
+ * entry's closure by its chunk name, and each stylesheet but the entry's as
+ * `css:<asset name>`. A list, not a map, so two outputs with one name can be
+ * seen.
  */
 function lazyOutputs(): [string, number][] {
-  const entryCss = new Set(entryChunk().viteMetadata?.importedCss ?? []);
+  const entry = new Set(entryChunks().map((chunk) => chunk.fileName));
+  const entryCss = entryCssFiles();
   const js = chunks()
-    .filter((chunk) => !chunk.isEntry)
+    .filter((chunk) => !entry.has(chunk.fileName))
     .map((chunk) => [chunk.name, measure(chunk).gzip] as [string, number]);
   const css = output
     .filter(
@@ -145,15 +165,16 @@ describe("the production bundle (UI-010 Baseline c, Prompt 20 R1, R12, R13)", ()
     expect(chunks().length).toBeGreaterThan(1);
   });
 
-  it("keeps the entry JS chunk within its gzip and raw ceilings", () => {
-    const entry = measure(entryChunk());
+  it("keeps the entry JS (the entry chunk and its static imports) within its gzip and raw ceilings", () => {
+    const files = entryChunks().map(measure);
+    const label = files.map((file) => file.fileName).join(" + ");
+    const gzip = files.reduce((sum, file) => sum + file.gzip, 0);
+    const raw = files.reduce((sum, file) => sum + file.raw, 0);
 
-    expect(entry.gzip, `${entry.fileName} gzip bytes`).toBeLessThanOrEqual(
+    expect(gzip, `${label} gzip bytes`).toBeLessThanOrEqual(
       budget.entryJsGzipMax,
     );
-    expect(entry.raw, `${entry.fileName} raw bytes`).toBeLessThanOrEqual(
-      budget.entryJsRawMax,
-    );
+    expect(raw, `${label} raw bytes`).toBeLessThanOrEqual(budget.entryJsRawMax);
   });
 
   it("keeps the entry CSS within its gzip ceiling", () => {
@@ -162,11 +183,18 @@ describe("the production bundle (UI-010 Baseline c, Prompt 20 R1, R12, R13)", ()
       importedCss,
       "the entry chunk imports exactly one stylesheet",
     ).toHaveLength(1);
-    const asset = output.find((file) => file.fileName === importedCss[0]);
-    expect(asset, `${importedCss[0]} is in the output`).toBeDefined();
 
-    const css = measure(asset as Rollup.OutputAsset);
-    expect(css.gzip, `${css.fileName} gzip bytes`).toBeLessThanOrEqual(
+    // A chunk of the entry's closure that imports a stylesheet (Rolldown may
+    // split one off) loads it with the entry, so it counts here too.
+    const files = [...entryCssFiles()].map((fileName) => {
+      const asset = output.find((file) => file.fileName === fileName);
+      expect(asset, `${fileName} is in the output`).toBeDefined();
+      return measure(asset as Rollup.OutputAsset);
+    });
+    const label = files.map((file) => file.fileName).join(" + ");
+    const gzip = files.reduce((sum, file) => sum + file.gzip, 0);
+
+    expect(gzip, `${label} gzip bytes`).toBeLessThanOrEqual(
       budget.entryCssGzipMax,
     );
   });
