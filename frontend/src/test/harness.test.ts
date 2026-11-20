@@ -11,6 +11,10 @@
  * unit has to remember. A red test is not.
  */
 import { File as NodeFile } from "node:buffer";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { screen } from "@testing-library/react";
 
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -19,6 +23,7 @@ import { describe, expect, it } from "vitest";
 // under test. Neither file may be moved into a hook or a dynamic import here.
 import { apiClient } from "../api/client";
 import { config } from "../config";
+import { bytesOf } from "./form-data-file-names";
 import { server } from "./server";
 
 describe("the test environment supplies every VITE_* value", () => {
@@ -183,5 +188,80 @@ describe("msw intercepts a client built at module load", () => {
 
     expect(error).toBeUndefined();
     expect(data).toEqual({ status: "ok" });
+  });
+});
+
+describe("a jsdom Blob's bytes are read on jsdom 25 and on jsdom 31", () => {
+  // A request body is built synchronously and every public reader of a jsdom
+  // Blob is asynchronous, so `form-data-file-names.ts` reads jsdom's internal
+  // bytes, as Vitest's own bridge does. jsdom 25 keeps them as `_buffer` under
+  // an own `Symbol("impl")`; jsdom 31 as `_bytes` behind a private field that
+  // only its `implForWrapper` reaches. Each path is pinned with a stand-in.
+  it("reads a real Blob", () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+
+    expect(bytesOf(new Blob([bytes]))).toEqual(bytes);
+  });
+
+  it.each(["_bytes", "_buffer"])(
+    "reads an impl that keeps them as %s",
+    (key) => {
+      const bytes = new Uint8Array([9, 8, 7]);
+      const blob = { [Symbol("impl")]: { [key]: bytes } } as unknown as Blob;
+
+      expect(bytesOf(blob)).toEqual(bytes);
+    },
+  );
+
+  it("names what it could not read", () => {
+    expect(() => bytesOf({} as Blob)).toThrow(/jsdom Blob/);
+  });
+});
+
+describe("an open menu is visible to role queries", () => {
+  // `Menu` opens its list with `showPopover()`, which jsdom does not implement,
+  // and jsdom 31's default stylesheet hides `[popover]:not(:popover-open)`. An
+  // author rule outranks a user-agent one whatever its specificity, so the
+  // harness's test-only rule is what keeps an open menu in the tree.
+  it("declares [popover] { display: block }", () => {
+    const rules = [...document.styleSheets].flatMap((sheet) => [
+      ...sheet.cssRules,
+    ]);
+    const popover = rules.find(
+      (rule): rule is CSSStyleRule =>
+        rule instanceof CSSStyleRule && rule.selectorText === "[popover]",
+    );
+
+    expect(popover?.style.display).toBe("block");
+  });
+
+  it("finds a popover list by its role", () => {
+    const list = document.createElement("ul");
+    list.setAttribute("role", "menu");
+    list.setAttribute("aria-label", "Harness menu");
+    list.setAttribute("popover", "manual");
+    document.body.append(list);
+
+    try {
+      expect(screen.getByRole("menu", { name: "Harness menu" })).toBe(list);
+    } finally {
+      list.remove();
+    }
+  });
+});
+
+describe("an unhandled request fails the test on msw 2 and on msw 3", () => {
+  it("passes each version its own option", () => {
+    // msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`; each ignores
+    // the other's. Without msw 3's, an unhandled request only warns.
+    // From the repository root (the container) or from `frontend/`.
+    const file = ["src/setupTests.ts", "frontend/src/setupTests.ts"]
+      .map((path) => join(process.cwd(), path))
+      .find((path) => existsSync(path));
+    if (file === undefined) throw new Error("setupTests.ts not found");
+    const source = readFileSync(file, "utf8");
+
+    expect(source).toMatch(/onUnhandledRequest:\s*"error"/);
+    expect(source).toMatch(/onUnhandledFrame:\s*"error"/);
   });
 });

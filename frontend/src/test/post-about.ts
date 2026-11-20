@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import { expect } from "vitest";
 
 /**
  * The "Post about this" kit (`FRONTEND-017`): reading where a stats page's
@@ -64,6 +65,18 @@ export function playerCareerAddress(
 
 /** The name every "Post about this" link's accessible name starts from. */
 export const POST_ABOUT = /post about/i;
+
+/**
+ * The space between "Post" and the hidden rest of the name is visible text,
+ * outside `VisuallyHidden`. jsdom 31 drops a leading space inside the hidden
+ * span and names the link "Postabout …"; a screen reader may do the same.
+ */
+export function expectSpaceOutsideHiddenText(link: HTMLElement): void {
+  const hidden = link.querySelector(".visually-hidden");
+  expect(hidden, "the link's hidden text").not.toBeNull();
+  expect(hidden?.textContent ?? "").toMatch(/^about /);
+  expect(link.textContent ?? "").toMatch(/^Post about /);
+}
 
 /** Every "Post about …" link under `root`. */
 export function postAboutLinks(root: HTMLElement): HTMLElement[] {

@@ -45,6 +45,7 @@ import {
   unplayedGameDetail,
 } from "../../test/attach";
 import {
+  expectSpaceOutsideHiddenText,
   composeLinks,
   composeTarget,
   gameFinalAddress,
@@ -215,6 +216,7 @@ describe("each played box-score row: a 'Post about …' link, signed in", () => 
         expect(links[0]).toHaveAccessibleName(
           new RegExp(escapeRegExp(fullName(player))),
         );
+        expectSpaceOutsideHiddenText(links[0]);
         expect(composeTarget(links[0].getAttribute("href"))).toEqual(
           playerGameAddress(player.line_id, GAME.id),
         );
