@@ -184,7 +184,25 @@ if (
 // replaced `globalThis.fetch` before any module captures it, and an ordinary
 // static `import { apiClient }` is intercepted. `src/test/harness.test.ts`
 // pins it.
-server.listen({ onUnhandledRequest: "error" });
+//
+// msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`, and each ignores
+// the other's key, so one object carries both (FRONTEND-045, until
+// FRONTEND-048 drops msw 2's). A variable rather than a literal, so neither
+// version's types reject the key it does not know.
+const unhandled = {
+  onUnhandledRequest: "error",
+  onUnhandledFrame: "error",
+} as const;
+server.listen(unhandled);
+
+// `Menu` opens its list with `showPopover()`, which jsdom does not implement,
+// and jsdom 31's default stylesheet hides `[popover]:not(:popover-open)`, so an
+// open menu would be missing from every role query. An author rule outranks a
+// user-agent one whatever its specificity. Test-only: the browser opens the
+// popover for real.
+const popoverShown = document.createElement("style");
+popoverShown.textContent = "[popover] { display: block; }";
+document.head.append(popoverShown);
 
 afterEach(() => {
   // `globals: false`, so Testing Library registers no auto-cleanup of its own.

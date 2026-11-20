@@ -339,9 +339,9 @@ function CareerRow({
               className={styles.postLink}
             >
               <SquarePenIcon size={16} />
-              Post
+              Post{" "}
               <VisuallyHidden>
-                {` about ${post.name}’s ${label.toLowerCase()}`}
+                {`about ${post.name}’s ${label.toLowerCase()}`}
               </VisuallyHidden>
             </Link>
           )}
@@ -454,7 +454,10 @@ function PlayerPointsChart({
   const bottom = 142;
   const points = plotted.map((game, index) => ({
     game,
-    x: plotted.length < 2 ? (left + right) / 2 : left + ((right - left) * index) / (plotted.length - 1),
+    x:
+      plotted.length < 2
+        ? (left + right) / 2
+        : left + ((right - left) * index) / (plotted.length - 1),
     y: bottom - (game.points / top) * (bottom - topY),
   }));
 
@@ -471,8 +474,22 @@ function PlayerPointsChart({
             const y = bottom - (tick / top) * (bottom - topY);
             return (
               <g key={tick}>
-                <line className={styles.chartGrid} x1={left} x2={right} y1={y} y2={y} />
-                <text className={styles.chartAxis} x={left - 8} y={y + 4} textAnchor="end"> {tick} </text>
+                <line
+                  className={styles.chartGrid}
+                  x1={left}
+                  x2={right}
+                  y1={y}
+                  y2={y}
+                />
+                <text
+                  className={styles.chartAxis}
+                  x={left - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                >
+                  {" "}
+                  {tick}{" "}
+                </text>
               </g>
             );
           })}
@@ -505,7 +522,13 @@ function PlayerPointsChart({
             />
           ))}
           {points.map(({ game, x }, index) => (
-            <text key={index} className={styles.chartAxis} x={x} y={166} textAnchor="middle">
+            <text
+              key={index}
+              className={styles.chartAxis}
+              x={x}
+              y={166}
+              textAnchor="middle"
+            >
               {format(parseISO(game.date), "MMM d")}
             </text>
           ))}
@@ -517,7 +540,9 @@ function PlayerPointsChart({
             : "At least two completed games are needed to draw a line."}
         </p>
       )}
-      <ScrollTable caption={`Points for ${name}, last ${plotted.length} completed games`}>
+      <ScrollTable
+        caption={`Points for ${name}, last ${plotted.length} completed games`}
+      >
         <thead>
           <tr>
             <ColumnHeader label="Date" name />
@@ -527,7 +552,9 @@ function PlayerPointsChart({
         <tbody>
           {plotted.map((game) => (
             <tr key={game.game_id}>
-              <th scope="row" className={styles.name}>{formatGameDate(game.date)}</th>
+              <th scope="row" className={styles.name}>
+                {formatGameDate(game.date)}
+              </th>
               <td>{game.points}</td>
             </tr>
           ))}
