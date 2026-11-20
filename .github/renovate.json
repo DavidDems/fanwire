@@ -14,6 +14,7 @@
   "branchPrefix": "renovate/",
   "labels": ["dependencies"],
   "prConcurrentLimit": 5,
+  "npmrc": "allow-remote=all",
   "customManagers": [
     {
       "customType": "regex",
