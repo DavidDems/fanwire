@@ -87,6 +87,7 @@ Live:
 - **`06-nba-data.md`**: sports data on the Eoin Moore Kaggle dataset. Left: the API-SPORTS clean-up (Outstanding-work track 3). The daily Kaggle refresh (`EVENTS-008`) is live.
 - **`10`–`15`, the system track:** `11` (metrics) is Outstanding-work track 7 and `10`'s deliverable 4 is replaced by track 8's review skills. `12`–`15` need API spend and are parked ([ADR 0035](Decisions/0035-outstanding-work-answers.md)).
 - **`19-dependency-upkeep.md`**: Renovate upkeep. Left: the `@types/node` v24 major, then the close-out.
+- **`39`–`44`, the predictions tracks** (2026-11-19): users pick NBA winners, earn points and are ranked, and every game shows "Our prediction" with its honest record ([ADR 0037](Decisions/0037-predictions-module-and-batch-lambda.md)–[0039](Decisions/0039-our-prediction-disclosure-and-immutability.md)). Run after the results scraper (`38`), in order: `39` backend core (parts `39-predictions-data.md`, `39-predictions-design.md`), `40` batch and integrations, `41` Elo model (part `41-elo-model-spec.md`), `42` pick UI, `43` boards and launch. `44`, a machine-learning model, is parked until `41` is live. Nothing built yet.
 
 ### Timeline
 `wiki/GeneralContext/Timeline/`: the project's history as `changelog` volumes, one physical line per milestone with its PRs cited as `fanwire-archive#N`: [2026-09](Timeline/2026-09.md), [2026-10](Timeline/2026-10.md), [2026-11](Timeline/2026-11.md). A volume that would pass 1,000 words is followed by another (`2026-11b.md`), never trimmed.
