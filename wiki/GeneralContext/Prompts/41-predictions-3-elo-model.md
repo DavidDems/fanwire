@@ -43,18 +43,19 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 - The full history (2003-04 onward) loads into a throwaway Postgres on port
   5433 in about 133 s (`0x02b` "Measured"), from `C:\data\nba` or
   `C:\data\nba-refresh`.
-- **FiveThirtyEight's method page is offline** (`41-elo-model-spec.md`
-  "Sources").
+- **FiveThirtyEight's site is gone**; the human pasted the archived article
+  (`41-elo-model-spec.md` "Sources"), all but its footnotes.
 
 ## Deliverables
 
 One PR each, test-first.
 
-0. **Verify the parameters (Director PR).** The session asks the human once
-   to paste the archived 538 page's paragraphs. It records exact quotes in
-   `41-elo-model-spec.md` and corrects any value the archive contradicts. If
-   no copy settles a value, it proceeds with the restated value, marked
-   unverified ([ADR 0040](../Decisions/0040-predictions-track-answers.md) item 8); it doesn't wait.
+0. **Check the margin formula against 538's data (no human step).** The
+   article is quoted in `41-elo-model-spec.md` "Sources"; only its footnoted
+   margin-of-victory formula is unconfirmed. Replay 538's own `nba-elo`
+   ratings as that section describes, and record the result there. A value
+   that can't be confirmed is used as restated and marked unverified
+   ([ADR 0040](../Decisions/0040-predictions-track-answers.md) item 8).
 1. **The model (`PREDICTIONS-0xx`).**
    - `PredictionModel` (Strategy): `replay(final_games) -> ratings`,
      `predict(game, ratings) -> Forecast`.

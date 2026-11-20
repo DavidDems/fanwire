@@ -128,8 +128,7 @@ record in `0x09-predictions.md`:
   The sources above are law-firm commentary, and none addresses a no-prize
   game directly.
 
-## Sources not reachable (2026-11-19)
+## FiveThirtyEight's method
 
-FiveThirtyEight's methodology pages now redirect to `abcnews.com/politics`, and
-this session's fetch tool refuses `web.archive.org`. The Elo track reads an
-archived copy in a browser; see `41-elo-model-spec.md` "Sources".
+FiveThirtyEight's site is gone. The human pasted its archived Elo article on
+2026-11-19; it is quoted in `41-elo-model-spec.md` "Sources".

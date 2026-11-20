@@ -42,8 +42,10 @@ answer still asks; anything answered here is not re-asked.
 
 **Track 41, the Elo model**
 
-8. **If the archived 538 page can't settle a value**, the session proceeds with
-   the restated values (`Prompts/41-elo-model-spec.md`) and marks each
+8. **538's method is taken from the archived article**, which the human
+   pasted on 2026-11-19 (quoted in `Prompts/41-elo-model-spec.md`). The
+   footnoted margin formula is checked against 538's published game-by-game
+   ratings. A value that can't be confirmed is used as restated and marked
    unverified in `0x09` and on the record page. No wait on the human.
 9. **The backtest is published as measured**, with no approval step, provided
    it uses the untuned parameters on 2005-06 to 2025-26. The PR shows the
