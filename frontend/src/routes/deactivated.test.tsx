@@ -316,10 +316,13 @@ describe("recovering the account (criterion 12)", () => {
     );
 
     // FRONTEND-020: the composer is a dialog titled Compose (its title an h2).
-    const dialog = await screen.findByRole("dialog", { name: "Compose" });
-    expect(
-      await within(dialog).findByRole("textbox", { name: /post/i }),
-    ).toBeInTheDocument();
+    // Found after recovery, not before: a recovery inside ComposeModal's
+    // 500 ms grace unmounts the dialog until the composer's chunk arrives, so
+    // a dialog held from before the click is detached and never fills.
+    const textbox = await screen.findByRole("textbox", { name: /post/i });
+    expect(screen.getByRole("dialog", { name: "Compose" })).toContainElement(
+      textbox,
+    );
     expect(app.router.state.location.pathname).toBe("/compose");
     expect(queryDeactivatedBanner()).toBeNull();
   });
