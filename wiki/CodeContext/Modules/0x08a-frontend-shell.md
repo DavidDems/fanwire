@@ -56,12 +56,16 @@ that here as usual.
   listeners, observers, `matchMedia`, `requestAnimationFrame` or
   `useLayoutEffect` (`components/ui/ui-css.test.ts`).
 - **The bundle has a budget test**, `src/test/bundle-budget.test.ts`. It
-  runs Vite's `build()` in vitest and pins the entry JS (149.6 kB gzip,
-  471.0 kB raw), the entry CSS (6.25 kB gzip), every other chunk to within
+  runs Vite's `build()` in vitest and pins the entry JS (`BASE` in
+  `src/test/bundle-budget.ts`: 152.2 kB gzip, 479.1 kB raw, never past
+  480 kB raw), the entry CSS (7.03 kB gzip), every other chunk to within
   0.1 kB of its recorded size (and no new one), and no file of 500,000 bytes.
-  **A unit that adds or grows a lazy chunk updates its table, in its test
-  commit, with the reason.** This thread's later specs carry it forward
-  (brief 20, R1).
+  **The entry is the entry chunk plus every chunk it imports statically**
+  (`entryClosure`, FRONTEND-046): Rolldown (vite 8) splits the entry into
+  chunks `index.html` preloads, so they are summed as the entry, never named
+  as lazy outputs; on vite 7 it is the entry chunk alone. **A unit that adds
+  or grows a lazy chunk declares it in `src/test/bundle-budgets/<UNIT>.ts`,
+  in its test commit, with the reason** (brief 20, R1, R12).
 
 ### Team icons (`FRONTEND-031`)
 
