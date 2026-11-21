@@ -79,3 +79,54 @@ describe("combine", () => {
     ).toThrow(/both declare ComposePage/);
   });
 });
+
+describe("a dependency major (FRONTEND-047, ADR 0041)", () => {
+  const react19 = { name: "react 19", decision: "ADR 0041" };
+
+  it("may grow the entry past 1 kB gzip when its file names the major and its ADR", () => {
+    const budget = combine([
+      {
+        unit: "A",
+        dependencyMajor: react19,
+        entryJsGzipGrowth: 25_000,
+        entryJsRawGrowth: 85_000,
+      },
+    ]);
+
+    expect(budget.entryJsGzipMax).toBe(BASE.entryJsGzip + TOLERANCE + 25_000);
+    expect(budget.entryJsRawMax).toBe(
+      Math.min(
+        BASE.entryJsRaw + TOLERANCE + 85_000,
+        ENTRY_JS_RAW_HARD_MAX + 85_000,
+      ),
+    );
+  });
+
+  it("lifts the 480 kB raw cap by exactly the major's raw growth, and no more", () => {
+    const budget = combine([
+      {
+        unit: "A",
+        dependencyMajor: react19,
+        entryJsGzipGrowth: 2_000,
+        entryJsRawGrowth: 10_000,
+      },
+      { unit: "B", entryJsRawGrowth: 100_000 },
+    ]);
+
+    expect(budget.entryJsRawMax).toBe(ENTRY_JS_RAW_HARD_MAX + 10_000);
+  });
+
+  it.each<[string, UnitBudget["dependencyMajor"]]>([
+    ["without one", undefined],
+    ["with an empty name", { name: "", decision: "ADR 0041" }],
+    ["with a decision that is no ADR", { name: "react 19", decision: "0041" }],
+    [
+      "with an ADR that is not four digits",
+      { name: "react 19", decision: "ADR 41" },
+    ],
+  ])("refuses an entry growth over 1 kB gzip %s", (_name, dependencyMajor) => {
+    expect(() =>
+      combine([{ unit: "A", entryJsGzipGrowth: 1_001, dependencyMajor }]),
+    ).toThrow(/entry growth|dependency major/);
+  });
+});

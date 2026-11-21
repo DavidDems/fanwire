@@ -423,6 +423,46 @@ describe("Season → Team season → Back, through a state adapter", () => {
     expect(tableProblems(main)).toEqual([]);
   });
 
+  it("charts the running record: each game's bars are the wins and losses after it", async () => {
+    // FRONTEND-047: the running count is built without reassigning anything
+    // during render (react-hooks 7's `immutability` rule); the bars keep it.
+    renderState();
+    const user = userEvent.setup();
+    await openBoston(user);
+
+    const chart = await screen.findByRole("img", {
+      name: /^Wins and losses after each game/,
+    });
+    const bars = [...chart.querySelectorAll("g")].map((group) =>
+      [...group.querySelectorAll("rect")].map((rect) =>
+        Number(rect.getAttribute("height")),
+      ),
+    );
+    const ordered = [...testTeamSeason().games].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.game_id - b.game_id,
+    );
+    const expected = ordered.map((_game, index) => {
+      const played = ordered.slice(0, index + 1);
+      const wins = played.filter((game) => game.won).length;
+      return [wins, played.length - wins];
+    });
+    expect(bars).toHaveLength(expected.length);
+    expect(
+      bars.every((pair) => pair.length === 2),
+      "a win bar and a loss bar per game",
+    ).toBe(true);
+
+    // Heights are counts on one scale: divide out the tallest bar's.
+    const most = Math.max(...expected.flat());
+    const unit = Math.max(...bars.flat()) / most;
+    expect(bars.map(([wins, losses]) => [wins / unit, losses / unit])).toEqual(
+      expected.map(([wins, losses]) => [
+        expect.closeTo(wins, 6),
+        expect.closeTo(losses, 6),
+      ]),
+    );
+  });
+
   it("moves focus to the team level's heading when it opens", async () => {
     renderState();
     const user = userEvent.setup();
