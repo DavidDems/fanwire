@@ -1,15 +1,15 @@
 {
   "schema": 1,
   "task_id": "FRONTEND-046",
-  "objective": "The bundle-budget test holds a vite 8 (Rolldown) build to the same budget as a vite 7 one: the entry is the entry chunk plus every chunk it statically imports, and Stats.module's vite 8 size is declared, so Renovate's vite 8 and @vitejs/plugin-react 6 PRs can merge unchanged.",
+  "objective": "The bundle-budget test holds a vite 8 (Rolldown) build to the same budget as a vite 7 one: the entry is the entry chunk plus every chunk it statically imports, and the outputs vite 8 moves past tolerance against the base folded at 85e3527 are declared, so Renovate's vite 8 and @vitejs/plugin-react 6 PRs can merge unchanged.",
   "acceptance_criteria": [
-    "Start gate: FRONTEND-045 and the four majors it unblocked (#28 to #31) have merged, and no other PR that changes frontend/ is open. The branch is cut from a main that holds them.",
+    "Start gate: FRONTEND-045 and the four majors it unblocked (#28 to #31) have merged, and so has the Director PR that folded FRONTEND-037, 040, 043 and 044 and USERS-008 into BASE and deleted their files. No other PR that changes frontend/ is open. The branch is cut from a main that holds them.",
     "Test-first: commit the failing tests alone before the implementation. They fail today because bundle-budget.ts has no function that measures an entry together with its static imports, and lazy outputs still include chunks the entry imports statically.",
     "The entry is the entry chunk plus the transitive closure of its static imports (Rollup's chunk.imports, not dynamicImports). The entry JS gzip and raw that the test compares with BASE are the sums over that closure, each file gzipped on its own as today. A chunk in the closure is not a lazy output, so it is never named in BASE.lazy or a unit file. A pure helper in bundle-budget.ts computes the closure from a build's output; bundle-budget-combine.test.ts (or a new test file under src/test) pins it with a synthetic output: an entry importing a chunk that imports another, plus a dynamic-only chunk. The first three are the entry; the dynamic one is lazy; a cycle terminates.",
     "On vite 7 (today) the closure is the entry chunk alone, so every measured number is unchanged and no BASE value moves. Say so in the PR with the measurement.",
-    "The entry CSS rule is unchanged: the entry chunk imports exactly one stylesheet. If a closure chunk imports a stylesheet on vite 8, it is part of the entry CSS sum, and the test says so.",
-    "frontend/src/test/bundle-budgets/FRONTEND-046.ts declares, in the test commit, changed: Stats.module at 650 bytes gzip (vite 7 builds 377 and vite 8 502 on b6cde48). Its comment says why: Rolldown keeps the CSS-module map and its helper in that chunk. It declares nothing else and no entry growth.",
-    "Proof on both versions. Today's: the frontend container, typecheck, lint and build are green. New: in a throwaway worktree of this branch, npm install -D vite@8 @vitejs/plugin-react@6 (never committed: package.json and the lockfile are forbidden), then typecheck, lint, build and the full suite (alone, sharded if memory is short) are green. Report the entry closure on vite 8: its files and its gzip and raw sums (about 149.1 kB and 474.4 kB on b6cde48, under BASE's 151.7 kB and the 480 kB raw cap).",
+    "The entry CSS rule is unchanged: the entry chunk imports exactly one stylesheet. The entry CSS the test compares with BASE is the sum over every stylesheet a chunk of the closure imports, each gzipped on its own, and the test says so. On vite 8 that is index.css plus InlineAlert.css, which Rolldown splits off with InlineAlert's chunk.",
+    "frontend/src/test/bundle-budgets/FRONTEND-046.ts declares, in the test commit, exactly what vite 8 moves past the base's tolerance (measured on the folded base, vite 8.3.8 and plugin-react 6.3.0): changed ComposePage at 3,900 bytes gzip (vite 7 3,642, vite 8 3,745), changed StatsNav.module at 700 (vite 7 655, vite 8 504: a shrink, but undeclared outputs are held to ±100 B), and entryCssGzipGrowth 400 (vite 7 7,031; vite 8 7,066 + 275 = 7,341, because a second file gzips with its own overhead). Its comment gives each measurement and says why: Rolldown's chunking and its CSS-module helper. It declares nothing else and no entry JS growth. Stats.module (454 vs 502) is within tolerance of the folded base and is not declared.",
+    "Proof on both versions. Today's: the frontend container, typecheck, lint and build are green. New: in a throwaway worktree of this branch, npm install -D vite@8 @vitejs/plugin-react@6 (never committed: package.json and the lockfile are forbidden), then typecheck, lint, build and the full suite (alone, sharded if memory is short) are green. Report the entry closure on vite 8: its files and its gzip and raw sums (149,210 and 474,565 bytes on 85e3527, under BASE's 152,248 and 479,071).",
     "vite.config.ts is unchanged: optimizeDeps.esbuildOptions stays (vite 8 warns it is deprecated, and dev-server-config.test.ts pins it). FRONTEND-048 moves it to rolldownOptions once vite 7 is gone.",
     "No production source change, no new dependency, no package.json or lockfile change.",
     "wiki/CodeContext/Modules/0x08a-frontend-shell.md's bundle-budget fact says the entry is the entry chunk plus its static imports, why (Rolldown splits the entry into preloaded chunks), and updates its stale numbers to BASE's."
@@ -41,12 +41,7 @@
     "frontend/src/components/**",
     "frontend/src/features/**",
     "frontend/src/routes/**",
-    "frontend/src/styles/**",
-    "frontend/src/test/bundle-budgets/FRONTEND-037.ts",
-    "frontend/src/test/bundle-budgets/FRONTEND-040.ts",
-    "frontend/src/test/bundle-budgets/FRONTEND-043.ts",
-    "frontend/src/test/bundle-budgets/FRONTEND-044.ts",
-    "frontend/src/test/bundle-budgets/USERS-008.ts"
+    "frontend/src/styles/**"
   ],
   "required_context": [
     "wiki/CodeContext/Modules/0x08-frontend.md",

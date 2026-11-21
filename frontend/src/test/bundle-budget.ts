@@ -45,67 +45,69 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on origin/main 2e29dac (after
- * EVENTS-013, #351), folding in every unit whose file was still here:
- * FRONTEND-031, 034, 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013
- * and the records-tab-header change, all merged. One tree, so every number
- * is its single measurement. Earlier folds: FRONTEND-030 at 9d0012f,
+ * The base, measured by this test's own build on main 85e3527 (vite 7),
+ * folding in every unit whose file was still here: FRONTEND-037, 040, 043
+ * and 044 and USERS-008, all merged. One tree, so every number is its
+ * single measurement. Earlier folds: 2e29dac (FRONTEND-031, 034, 035, 036,
+ * 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at 9d0012f,
  * EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99, USERS-004 and
  * FRONTEND-023, 024, 026 and 027 at 4795f19. The entry, its stylesheet, and
  * every lazy output → gzip bytes. Measure with the test's build, not
  * `npm run build`: under Vitest the build inlines `test.env`'s `VITE_*`
  * values, which makes the entry about 0.2 kB larger raw.
- *
- * Partial fold on main 00933ce: only USERS-008's AccountSettings JS and CSS
- * are remeasured (2,336 and 403 gzip bytes). All other base measurements and
- * USERS-008's entry growth remain unchanged for a later complete fold.
  */
 export const BASE = {
-  entryJsGzip: 151_669,
-  entryJsRaw: 477_274,
-  entryCssGzip: 7_023,
+  entryJsGzip: 152_248,
+  entryJsRaw: 479_071,
+  entryCssGzip: 7_031,
   lazy: {
-    AccountSettings: 2_336,
+    AccountSettings: 2_335,
     "AuthPage.module": 158,
-    ComposePage: 3_878,
+    ComposePage: 3_642,
     ConfirmPage: 1_054,
-    errors: 239,
-    ForgotPasswordPage: 1_082,
-    format: 433,
-    GamePage: 4_080,
-    HistoryPage: 1_048,
-    NotificationsPage: 1_741,
+    errors: 241,
+    ForgotPasswordPage: 1_083,
+    format: 489,
+    GameCard: 611,
+    GamePage: 3_905,
+    HistoryPage: 1_047,
+    NotificationsPage: 1_742,
+    ok: 150,
     PeriodScores: 471,
     PlayerPage: 3_932,
-    PlayerResults: 819,
-    PlayersTab: 573,
-    ProfilePage: 2_836,
-    ProfileSetupPage: 1_412,
-    RecentGames: 1_417,
-    RecordsTab: 6_394,
-    SeasonsTab: 1_701,
-    SegmentedTabs: 701,
-    SignInPage: 988,
+    PlayerResults: 824,
+    PlayersTab: 590,
+    ProfilePage: 2_837,
+    ProfileSetupPage: 1_413,
+    RecentGames: 739,
+    RecordsTab: 5_859,
+    SchedulePage: 2_267,
+    SeasonsTab: 1_737,
+    SegmentedTabs: 700,
+    SignInPage: 987,
     SignUpPage: 920,
-    stats: 760,
-    "Stats.module": 377,
-    "StatsNav.module": 485,
-    StatsNavigator: 3_762,
+    stats: 714,
+    "Stats.module": 454,
+    "StatsNav.module": 655,
+    StatsNavigator: 3_813,
     StatsPage: 401,
-    StatsPicker: 2_224,
-    VisuallyHidden: 140,
+    StatsPicker: 2_256,
+    useQueries: 1_526,
+    VisuallyHidden: 142,
     "css:AccountSettings.css": 403,
     "css:AuthPage.css": 273,
-    "css:ComposePage.css": 411,
-    "css:GamePage.css": 1_081,
+    "css:ComposePage.css": 366,
+    "css:GameCard.css": 499,
+    "css:GamePage.css": 856,
     "css:HistoryPage.css": 174,
     "css:NotificationsPage.css": 496,
     "css:PlayerPage.css": 879,
     "css:ProfilePage.css": 724,
-    "css:RecentGames.css": 760,
+    "css:RecentGames.css": 244,
+    "css:SchedulePage.css": 557,
     "css:SegmentedTabs.css": 432,
-    "css:Stats.css": 490,
-    "css:StatsNav.css": 1_446,
+    "css:Stats.css": 491,
+    "css:StatsNav.css": 1_813,
     "css:StatsPage.css": 398,
     "css:StatsPicker.css": 466,
   } as Record<string, number>,

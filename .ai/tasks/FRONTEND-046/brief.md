@@ -38,11 +38,25 @@ chunks would count as new lazy outputs. So the budget must measure the entry as 
 entry chunk plus its static-import closure. On vite 7 nothing is split off the entry, so
 the numbers don't change.
 
-Other lazy outputs move on vite 8 (`GamePage`, `RecentGames`, `ComposePage`,
-`RecordsTab`, `SchedulePage`, `GameCard`, `useQueries`, `ok`), but all of them **shrink**
-and all are already declared by unfolded unit files (`FRONTEND-037`, `040`, `043`,
-`044`). A declared output has a ceiling, not a ±100 B band, so they pass. Don't touch
-those files: two files declaring the same output is a conflict `combine` refuses.
+**Correction (2026-11-20, on running the unit).** The paragraph this replaces said every
+other moved output shrinks under an unfolded unit file's ceiling. One does not: the
+failing test stops at its first `expect`, so the probe never saw `ComposePage` at 3,745
+against `FRONTEND-040`'s 3,700. Five merged units' files (`FRONTEND-037`, `040`, `043`,
+`044`, `USERS-008`) had never been folded, so the Director PR that corrects this spec folds
+them into `BASE` on `main` 85e3527 (vite 7) and deletes them. Against that base, vite 8
+(8.3.8 with plugin-react 6.3.0) moves three things past tolerance:
+
+| Output | vite 7 (BASE) | vite 8 | Declared |
+|---|---|---|---|
+| `ComposePage` | 3,642 | 3,745 | changed, 3,900 |
+| `StatsNav.module` | 655 | 504 | changed, 700 (a shrink; undeclared outputs are held to ±100 B) |
+| entry CSS | 7,031 | 7,066 + 275 (`InlineAlert.css`) | `entryCssGzipGrowth` 400 |
+
+`Stats.module` (454 → 502) is now within tolerance and is not declared. Several outputs
+grow by 79 to 96 B on vite 8 (`ProfileSetupPage` +96, `ForgotPasswordPage` +87,
+`NotificationsPage` +85, `SignUpPage` +82): inside tolerance, but if Renovate's vite 8
+patch differs, rerun the probe before blaming the bump. The vite 8 entry closure is
+149,210 gzip and 474,565 raw on 85e3527.
 
 ## Traps
 
