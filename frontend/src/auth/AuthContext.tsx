@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 
 import type { AuthService, AuthSession, CredentialsInput } from "./AuthService";
@@ -49,13 +56,19 @@ export interface AuthProviderProps {
 export function AuthProvider({ authService, children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
+  // A different service is a restore not yet made: loading again, set while
+  // rendering (the previous service kept in state), not from the effect.
+  const [restoring, setRestoring] = useState(authService);
+  if (restoring !== authService) {
+    setRestoring(authService);
+    setStatus("loading");
+  }
 
   useEffect(() => {
     // Restore once, on mount, from the service. The service answers this from
     // its own token store; the provider itself makes no HTTP request, so a cold
     // start renders the guest feed without asking the API anything.
     let listening = true;
-    setStatus("loading");
 
     authService.refreshSession().then(
       (restored) => {

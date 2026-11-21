@@ -16,6 +16,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -33,7 +34,10 @@ let observedService: AuthService | null = null;
 
 function Probe() {
   const { session, status, signIn, signOut, authService } = useAuth();
-  observedService = authService;
+  // Recorded after the render commits: a render reassigns nothing outside it.
+  useEffect(() => {
+    observedService = authService;
+  }, [authService]);
 
   return (
     <div>
@@ -75,7 +79,9 @@ describe("useAuth", () => {
     // Validate at the boundary: a component rendered outside the provider is a
     // wiring mistake, and a silently-anonymous context would turn it into a
     // logged-out user who cannot work out why.
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
 
     expect(() => render(<Probe />)).toThrow(/AuthProvider/i);
 
@@ -89,7 +95,9 @@ describe("AuthProvider", () => {
 
     renderWithAuth(<Probe />, { authService: service });
 
-    expect(await screen.findByText("status: authenticated")).toBeInTheDocument();
+    expect(
+      await screen.findByText("status: authenticated"),
+    ).toBeInTheDocument();
     expect(screen.getByText(`email: ${TEST_EMAIL}`)).toBeInTheDocument();
     expect(service.callsTo("refreshSession")).toHaveLength(1);
   });
@@ -99,6 +107,33 @@ describe("AuthProvider", () => {
 
     expect(await screen.findByText("status: anonymous")).toBeInTheDocument();
     expect(screen.getByText("email: nobody")).toBeInTheDocument();
+  });
+
+  it("goes back to loading for a new service, until that one restores", async () => {
+    // FRONTEND-047: the reset moved from the restore effect into render; a
+    // provider handed a different service still reports loading first.
+    const first = new FakeAuthService();
+    const second = new FakeAuthService({ session: testSession() });
+    const view = render(
+      <AuthProvider authService={first}>
+        <Probe />
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("status: anonymous")).toBeInTheDocument();
+
+    const resume = second.pause();
+    view.rerender(
+      <AuthProvider authService={second}>
+        <Probe />
+      </AuthProvider>,
+    );
+    expect(screen.getByText("status: loading")).toBeInTheDocument();
+
+    resume();
+    expect(
+      await screen.findByText("status: authenticated"),
+    ).toBeInTheDocument();
+    expect(second.callsTo("refreshSession")).toHaveLength(1);
   });
 
   it("reports loading until the restore settles, never anonymous", async () => {
@@ -112,7 +147,9 @@ describe("AuthProvider", () => {
 
     resume();
 
-    expect(await screen.findByText("status: authenticated")).toBeInTheDocument();
+    expect(
+      await screen.findByText("status: authenticated"),
+    ).toBeInTheDocument();
   });
 
   it("makes no HTTP request of its own on a cold start", async () => {
@@ -131,9 +168,13 @@ describe("AuthProvider", () => {
 
     await user.click(screen.getByRole("button", { name: "sign in" }));
 
-    expect(await screen.findByText("status: authenticated")).toBeInTheDocument();
+    expect(
+      await screen.findByText("status: authenticated"),
+    ).toBeInTheDocument();
     expect(screen.getByText(`email: ${TEST_EMAIL}`)).toBeInTheDocument();
-    expect(service.callsTo("signIn")).toEqual([{ email: TEST_EMAIL, password: TEST_PASSWORD }]);
+    expect(service.callsTo("signIn")).toEqual([
+      { email: TEST_EMAIL, password: TEST_PASSWORD },
+    ]);
   });
 
   it("clears the session on sign-out, through the service", async () => {

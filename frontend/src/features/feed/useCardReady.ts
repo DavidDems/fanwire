@@ -139,8 +139,12 @@ export function useCardReady(post: PostView, inWindow: boolean): CardReadiness {
   const hasPending = pending.length > 0;
 
   // Read by the effects, so a picture settling does not restart the others.
+  // Kept current by an effect declared before them: effects run in order, so
+  // each one reads this render's value.
   const settledRef = useRef(settled);
-  settledRef.current = settled;
+  useEffect(() => {
+    settledRef.current = settled;
+  }, [settled]);
 
   useEffect(() => {
     if (!preparing) return;

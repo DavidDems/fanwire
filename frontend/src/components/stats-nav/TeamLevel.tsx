@@ -265,13 +265,25 @@ function RecordChart({
   const ordered = [...games].sort(
     (a, b) => a.date.localeCompare(b.date) || a.game_id - b.game_id,
   );
-  let wins = 0;
-  let losses = 0;
-  const rows = ordered.map((game) => {
-    if (game.won) wins += 1;
-    else losses += 1;
-    return { game, wins, losses, month: format(parseISO(game.date), "MMM") };
-  });
+  // Each game with the record after it: a running count, built without
+  // reassigning anything once the rows exist.
+  const rows = ordered.reduce<
+    { game: TeamSeasonGameOut; wins: number; losses: number; month: string }[]
+  >((built, game) => {
+    const previous = built[built.length - 1];
+    const won = game.won ? 1 : 0;
+    return [
+      ...built,
+      {
+        game,
+        wins: (previous?.wins ?? 0) + won,
+        losses: (previous?.losses ?? 0) + 1 - won,
+        month: format(parseISO(game.date), "MMM"),
+      },
+    ];
+  }, []);
+  const wins = rows[rows.length - 1]?.wins ?? 0;
+  const losses = rows[rows.length - 1]?.losses ?? 0;
   const scale = Math.max(wins, losses, 1);
   const slot = (right - left) / rows.length;
   const width = Math.min(24, Math.max(1, slot * 0.7));

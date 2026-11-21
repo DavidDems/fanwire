@@ -66,7 +66,21 @@ that here as usual.
   chunks `index.html` preloads, so they are summed as the entry, never named
   as lazy outputs; on vite 7 it is the entry chunk alone. **A unit that adds
   or grows a lazy chunk declares it in `src/test/bundle-budgets/<UNIT>.ts`,
-  in its test commit, with the reason** (brief 20, R1, R12).
+  in its test commit, with the reason** (brief 20, R1, R12). A unit grows
+  the entry by at most 1 kB gzip, **except a dependency major**: a unit file
+  that names the major and its decision (`dependencyMajor`, "ADR NNNN") may
+  declare more, and its raw growth lifts the 480 kB raw cap by as much
+  (FRONTEND-047). React 19 is the first, at 172.6 kB gzip and 554.1 kB raw
+  (nine chunks; the growth is `react-dom` 19's). `/search` stays in the
+  entry: `SearchPage` shares its code with the home page's search rail, and
+  lazy-loading it made the entry larger.
+- **The react-hooks 7 rules hold on React 18 and 19** (FRONTEND-047): no ref
+  read or written while rendering, no module variable reassigned, no
+  synchronous `setState` in an effect body. A reset on a prop change keeps the
+  previous value in state and sets during render (`AuthProvider`'s service,
+  `MediaWidget`'s reset count, `AppLayout`'s finishing deletion), and a ref
+  the effects read is kept current by an effect (`useCardReady`). No
+  `eslint-disable` for a react-hooks rule.
 
 ### Team icons (`FRONTEND-031`)
 

@@ -166,13 +166,19 @@ export function MediaWidget({ mediator, tools }: MediaWidgetProps) {
   // for an older one is dropped, so it never lands in the next one's place.
   const generation = useRef(0);
 
-  useEffect(() => {
-    // Clearing the composer clears the image with it. The draft alone cannot
-    // say this happened (an emptied draft and a never-filled one are the same
-    // value), so the reset counter is what the widget watches.
-    generation.current += 1;
+  // Clearing the composer clears the image with it. The draft alone cannot
+  // say this happened (an emptied draft and a never-filled one are the same
+  // value), so the reset counter is what the widget watches: the image and
+  // its failure go while rendering (the last count kept in state), and the
+  // effect drops any upload still answering for the old image.
+  const [seenResets, setSeenResets] = useState(resetCount);
+  if (seenResets !== resetCount) {
+    setSeenResets(resetCount);
     setChosen(null);
     setFailure(null);
+  }
+  useEffect(() => {
+    generation.current += 1;
   }, [resetCount]);
 
   useEffect(() => {

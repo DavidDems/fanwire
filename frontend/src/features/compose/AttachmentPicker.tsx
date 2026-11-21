@@ -22,13 +22,24 @@ export interface AddressLink {
   gameId: number | null;
 }
 
+/**
+ * The summaries of the links attached in one compose context (a mediator and
+ * a pre-filled address): a new context starts with none.
+ */
+interface Summaries {
+  mediator: ComposeMediator;
+  key: string;
+  byLink: ReadonlyMap<string, string>;
+}
+
+const NO_SUMMARIES: ReadonlyMap<string, string> = new Map();
+
 /** Summaries survive picker unmounts and mediator Undo. */
 export function useAttachments(
   mediator: ComposeMediator,
   prefill: AddressLink | null,
 ) {
   const draft = useSyncExternalStore(mediator.subscribe, mediator.getDraft);
-  const summaries = useRef(new Map<string, string>());
   const check = useQuery({
     queryKey: [
       "compose",
@@ -46,25 +57,46 @@ export function useAttachments(
     retry: false,
     staleTime: Infinity,
   });
-  const prefillApplied = useRef(false);
   const key =
     prefill === null ? "" : `${dataLinkKey(prefill.link)}|${prefill.gameId}`;
-  const context = useRef({ mediator, key });
-  if (context.current.mediator !== mediator || context.current.key !== key) {
-    context.current = { mediator, key };
-    prefillApplied.current = false;
-    summaries.current.clear();
+  const [summaries, setSummaries] = useState<Summaries>(() => ({
+    mediator,
+    key,
+    byLink: NO_SUMMARIES,
+  }));
+  // Summaries kept for another context are not this one's.
+  const byLink =
+    summaries.mediator === mediator && summaries.key === key
+      ? summaries.byLink
+      : NO_SUMMARIES;
+  // The pre-filled link's summary is the check's answer, while it is this
+  // context's link.
+  const prefillSummary =
+    prefill !== null && check.data?.ok === true
+      ? { link: dataLinkKey(prefill.link), text: check.data.summary }
+      : null;
+  function summaryOf(link: DataLink): string | undefined {
+    const at = dataLinkKey(link);
+    return (
+      byLink.get(at) ??
+      (prefillSummary?.link === at ? prefillSummary.text : undefined)
+    );
   }
 
+  // The context the pre-filled link was last attached in: once per context.
+  const prefillApplied = useRef<{
+    mediator: ComposeMediator;
+    key: string;
+  } | null>(null);
   useEffect(() => {
     // Once per mount: StrictMode re-runs the effect, and a second send would
     // put a second snapshot on the undo history.
-    if (prefill === null || prefillApplied.current) return;
-    if (check.data?.ok !== true) return;
-    prefillApplied.current = true;
-    summaries.current.set(dataLinkKey(prefill.link), check.data.summary);
+    if (prefill === null || check.data?.ok !== true) return;
+    const applied = prefillApplied.current;
+    if (applied?.mediator === mediator && applied.key === key) return;
+    prefillApplied.current = { mediator, key };
     mediator.send("attachment", { kind: "link-attached", link: prefill.link });
-  }, [prefill, check.data, mediator]);
+  }, [prefill, check.data, mediator, key]);
 
   let addressNote: ReactNode = null;
   if (prefill !== null && draft.dataLink === null) {
@@ -82,8 +114,7 @@ export function useAttachments(
         {draft.dataLink === null ? null : (
           <section className={styles.summary} aria-label="Attached stats">
             <p className={styles.summaryText}>
-              {summaries.current.get(dataLinkKey(draft.dataLink)) ??
-                describeBareLink(draft.dataLink)}
+              {summaryOf(draft.dataLink) ?? describeBareLink(draft.dataLink)}
             </p>
             <Button
               type="button"
@@ -100,7 +131,15 @@ export function useAttachments(
       </>
     ),
     attach: (link: DataLink, summary: string) => {
-      summaries.current.set(dataLinkKey(link), summary);
+      setSummaries((previous) => ({
+        mediator,
+        key,
+        byLink: new Map(
+          previous.mediator === mediator && previous.key === key
+            ? previous.byLink
+            : NO_SUMMARIES,
+        ).set(dataLinkKey(link), summary),
+      }));
       mediator.send("attachment", { kind: "link-attached", link });
     },
   };

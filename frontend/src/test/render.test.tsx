@@ -17,6 +17,7 @@
  */
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { cleanup, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -32,7 +33,10 @@ let captured: Captured | null = null;
 function Probe() {
   const queryClient = useQueryClient();
   const { pathname } = useLocation();
-  captured = { queryClient, pathname };
+  // Recorded after the render commits: a render reassigns nothing outside it.
+  useEffect(() => {
+    captured = { queryClient, pathname };
+  }, [queryClient, pathname]);
   return <p>probe rendered</p>;
 }
 
@@ -60,7 +64,9 @@ describe("renderWithProviders", () => {
   it("disables query retries", () => {
     renderWithProviders(<Probe />);
 
-    expect(captured?.queryClient.getDefaultOptions().queries?.retry).toBe(false);
+    expect(captured?.queryClient.getDefaultOptions().queries?.retry).toBe(
+      false,
+    );
   });
 
   it("gives every render its own QueryClient", () => {

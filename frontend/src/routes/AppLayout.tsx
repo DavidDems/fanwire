@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useEffect,
-  useRef,
-  useState,
-  type ComponentType,
-} from "react";
+import { createContext, useRef, useState, type ComponentType } from "react";
 import {
   Link,
   Navigate,
@@ -193,12 +187,11 @@ export function AppLayout() {
   const navigate = useNavigate();
   const composeState = useComposeLinkState();
   const [finishingDeletion, setFinishingDeletion] = useState(false);
-
-  useEffect(() => {
-    if (finishingDeletion && location.pathname === "/") {
-      setFinishingDeletion(false);
-    }
-  }, [finishingDeletion, location.pathname]);
+  // Arriving home ends the deletion: cleared while rendering, not from an
+  // effect, so the notice is never drawn at "/" in between.
+  if (finishingDeletion && location.pathname === "/") {
+    setFinishingDeletion(false);
+  }
 
   return (
     <>
