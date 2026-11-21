@@ -46,7 +46,7 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   `DELETE /users/me/data`. Failure remains retryable. After 204, cancel queries
   and synchronously retire the protected `Outlet` through
   `AccountDeletionNavigation`, then sign out, clear cache and replace with `/`.
-  The shell resets finishing state at home commit. `auth/account.ts` validates
+  The shell clears finishing state while rendering home (FRONTEND-047). `auth/account.ts` validates
   `accountDeleted` notice state; `AppLayout` displays "Your account and data have
   been deleted." via `StatusLine`. Backend: [[0x01c-users-routes]].
 - **Recover** sends one disabled-in-flight `POST /users/me/recover`; success
