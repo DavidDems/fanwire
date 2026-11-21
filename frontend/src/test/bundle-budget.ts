@@ -17,14 +17,53 @@
  * same output are a real conflict, which `combine` refuses.
  *
  * **Names.** A JS chunk is its Rollup chunk name (no hash); a lazy stylesheet
- * is `css:` and its asset name, e.g. `css:ComposePage.css`. The entry chunk
- * and the stylesheet it imports are budgeted on their own.
+ * is `css:` and its asset name, e.g. `css:ComposePage.css`. The entry and
+ * the stylesheets it imports are budgeted on their own, and the entry is the
+ * entry chunk plus its static imports (`entryClosure`), so no chunk of it is
+ * ever a lazy output named here.
  *
  * Every number is in bytes, gzip by `zlib.gzipSync` at the default level;
  * 1 kB = 1000 bytes, as Vite reports it.
  */
 
 const KB = 1000;
+
+/** The fields of a Rollup output chunk `entryClosure` reads. */
+export interface StaticImporter {
+  fileName: string;
+  /** Static imports only; Rollup keeps dynamic ones in `dynamicImports`. */
+  imports: readonly string[];
+}
+
+/**
+ * The entry chunk and every chunk it imports statically, transitively
+ * (FRONTEND-046). Rolldown (vite 8) splits the entry into chunks
+ * `index.html` preloads; they load with the entry, so they are the entry.
+ * Rollup (vite 7) builds one entry chunk, so there it is the entry alone.
+ * A chunk reached only through a dynamic import is lazy and not followed.
+ * An import the output does not hold throws.
+ */
+export function entryClosure<C extends StaticImporter>(
+  entry: C,
+  chunks: readonly C[],
+): C[] {
+  const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const seen = new Map<string, C>([[entry.fileName, entry]]);
+  const pending = [entry];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    for (const fileName of next.imports) {
+      if (seen.has(fileName)) continue;
+      const imported = byName.get(fileName);
+      if (imported === undefined)
+        throw new Error(
+          `${next.fileName} imports ${fileName}, which is not in the output`,
+        );
+      seen.set(fileName, imported);
+      pending.push(imported);
+    }
+  }
+  return [...seen.values()];
+}
 
 /** What one unit changes in the bundle, in `bundle-budgets/<UNIT>.ts`. */
 export interface UnitBudget {
