@@ -69,7 +69,10 @@ export function entryClosure<C extends StaticImporter>(
 export interface UnitBudget {
   /** The unit's id, e.g. `FRONTEND-018`; the file is named after it. */
   unit: string;
-  /** How far the unit may grow the entry JS chunk, gzip. At most 1000. */
+  /**
+   * How far the unit may grow the entry JS, gzip. At most 1000, unless the
+   * unit lands a dependency major (`dependencyMajor`).
+   */
   entryJsGzipGrowth?: number;
   /** How far the unit may grow the entry JS chunk, raw. */
   entryJsRawGrowth?: number;
@@ -81,6 +84,12 @@ export interface UnitBudget {
   added?: Record<string, number>;
   /** Lazy outputs in the base the unit removes. Each must be gone. */
   removed?: string[];
+  /**
+   * The dependency major this unit lands, and the decision that lets its
+   * entry growth past 1 kB gzip and past the 480 kB raw cap (ADR 0041, after
+   * ADR 0036). Only such a unit may; its raw growth lifts the cap by as much.
+   */
+  dependencyMajor?: { name: string; decision: string };
 }
 
 /**
@@ -161,13 +170,19 @@ export const BASE = {
  */
 export const TOLERANCE = 0.1 * KB;
 
-/** The most one unit may grow the entry JS chunk, gzip (R13, as the skeptic revised it). */
+/**
+ * The most one unit may grow the entry JS, gzip (R13, as the skeptic revised
+ * it), unless it lands a dependency major (ADR 0041).
+ */
 export const ENTRY_GROWTH_PER_UNIT_MAX = 1 * KB;
 
 /** No output file may be this many bytes raw or more (Vite's warning). */
 export const FILE_RAW_LIMIT = 500_000;
 
-/** The entry's raw ceiling, whatever units declare (R1). */
+/**
+ * The entry's raw ceiling (R1), whatever units declare, except that a
+ * dependency major's raw growth lifts it by as much (ADR 0041).
+ */
 export const ENTRY_JS_RAW_HARD_MAX = 480 * KB;
 
 /** What the build is held to once every unit's declarations are applied. */
@@ -192,6 +207,7 @@ export function combine(units: UnitBudget[]): Budget {
   let entryJsGzipMax = BASE.entryJsGzip + TOLERANCE;
   let entryJsRawMax = BASE.entryJsRaw + TOLERANCE;
   let entryCssGzipMax = BASE.entryCssGzip + TOLERANCE;
+  let rawCap = ENTRY_JS_RAW_HARD_MAX;
   const claimed = new Map<string, string>();
 
   function claim(output: string, unit: string): void {
@@ -202,13 +218,26 @@ export function combine(units: UnitBudget[]): Budget {
   }
 
   for (const budget of units) {
+    const major = budget.dependencyMajor;
+    if (
+      major !== undefined &&
+      (major.name.trim() === "" || !/^ADR \d{4}$/.test(major.decision))
+    )
+      throw new Error(
+        `${budget.unit}: a dependency major needs a name and its decision as "ADR NNNN"`,
+      );
     const growth = budget.entryJsGzipGrowth ?? 0;
-    if (growth < 0 || growth > ENTRY_GROWTH_PER_UNIT_MAX)
+    if (
+      growth < 0 ||
+      (major === undefined && growth > ENTRY_GROWTH_PER_UNIT_MAX)
+    )
       throw new Error(
         `${budget.unit}: entry growth ${growth} is outside 0..${ENTRY_GROWTH_PER_UNIT_MAX}`,
       );
+    const rawGrowth = budget.entryJsRawGrowth ?? 0;
     entryJsGzipMax += growth;
-    entryJsRawMax += budget.entryJsRawGrowth ?? 0;
+    entryJsRawMax += rawGrowth;
+    if (major !== undefined) rawCap += rawGrowth;
     entryCssGzipMax += budget.entryCssGzipGrowth ?? 0;
 
     for (const [output, max] of Object.entries(budget.changed ?? {})) {
@@ -237,7 +266,7 @@ export function combine(units: UnitBudget[]): Budget {
 
   return {
     entryJsGzipMax,
-    entryJsRawMax: Math.min(entryJsRawMax, ENTRY_JS_RAW_HARD_MAX),
+    entryJsRawMax: Math.min(entryJsRawMax, rawCap),
     entryCssGzipMax,
     lazyMax,
     unchanged,
