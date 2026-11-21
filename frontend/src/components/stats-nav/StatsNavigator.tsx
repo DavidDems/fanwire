@@ -67,6 +67,25 @@ function levelName(level: StatsLevel, views?: LevelViews) {
 }
 
 /**
+ * A level the caller draws (`levelViews.view`), rendered as a component of its
+ * own, so its controls reach `move` as props rather than through a call
+ * during this component's render.
+ */
+function CallerLevel({
+  views,
+  level,
+  onOpen,
+  onReplace,
+}: {
+  views: LevelViews;
+  level: StatsLevel;
+  onOpen(level: StatsLevel): void;
+  onReplace(level: StatsLevel): void;
+}) {
+  return <>{views.view(level, { open: onOpen, replace: onReplace })}</>;
+}
+
+/**
  * The stats navigator (FRONTEND-018): a stack of levels shown as a
  * breadcrumb ("Stats path"), a Back control when the stack is deeper than
  * one, and the top level's heading and view. It is router-agnostic: the
@@ -136,10 +155,14 @@ export function StatsNavigator({
           />
         );
       default:
-        return levelViews?.view(top, {
-          open: (level) => move(() => open(level)),
-          replace,
-        });
+        return levelViews === undefined ? null : (
+          <CallerLevel
+            views={levelViews}
+            level={top}
+            onOpen={(level) => move(() => open(level))}
+            onReplace={replace}
+          />
+        );
     }
   }
 
