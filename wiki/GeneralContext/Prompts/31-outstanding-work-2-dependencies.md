@@ -80,14 +80,14 @@ infra `INFRA-006`.
 1. **Done (#27–#31).** `FRONTEND-045`, test harness on both versions: the `@types/node`,
    `jsdom` and `msw` rows above, each written to work on today's and the new
    version. Then tick `@types/node` 26, `vitest` 5, `jsdom` 31, `msw` 3.
-2. **`FRONTEND-046`, vite 8 ready** (spec #32, corrected by the fold PR on
-   `director/frontend-046-fold`): the budget measures the entry with its
-   static imports, and declares `ComposePage`, `StatsNav.module` and the
-   entry CSS against the folded base. The unit is built on `agent/FRONTEND-046`
-   (local, rebased onto the fold) and pushed once the fold merges. Tick
-   `vite` 8, merge, then tick `plugin-react` 6.
-3. **`FRONTEND-047`, React 19 ready:** the 16 rule sites, the extra request,
-   trim, then declare the entry budget. Tick React, then `eslint` 10.
+2. **Done (#32–#36).** `FRONTEND-046`, vite 8 ready: the budget measures the
+   entry with its static imports; #33 folded five merged units; `vite` 8 and
+   `plugin-react` 6 merged.
+3. **`FRONTEND-047`, React 19 ready** (spec on `director/frontend-047-spec`,
+   with ADR 0041 and `BASE` re-folded on vite 8 at a777aae): the 16
+   react-hooks 7 sites, the `/search` trim, and React 19's entry growth
+   declared as a dependency major. The old extra-request finding is gone.
+   Tick React, merge, then tick `eslint` 10 (probe: it adds no error).
 4. **`FRONTEND-048`, clean-up:** drop msw 2's option, jsdom 25's Blob path
    and `esbuildOptions` for `rolldownOptions`.
 5. **`INFRA-006`, Python 3.15:** the two `PYTHON_3_12` in `infra/lib/`;
@@ -137,6 +137,12 @@ reason to hold it, not to loosen a test.
 - **An assertion that stops at its first `expect` hides the rest.** Re-measure
   what it checks yourself (FRONTEND-046's entry split hid behind one row,
   and `ComposePage` behind the first lazy assertion).
+- **React 19's entry growth** (+23.4 kB gzip, +79.5 kB raw, all
+  `react-dom`) is past R1's 480 kB raw cap and R13's 1 kB per unit; the human
+  chose to raise the cap for a declared dependency major
+  ([ADR 0041](../Decisions/0041-react-19-entry-budget.md)), not to trim 75 kB
+  or hold React. FRONTEND-048's spec folds FRONTEND-047 and sets
+  `ENTRY_JS_RAW_HARD_MAX` to the measured entry plus about 1%.
 - **Fold merged units' budget files into `BASE` before measuring a major
   against it** (`bundle-budget.ts`): an unfolded file's ceiling is a
   vite 7 measurement, and only the base can be re-measured.
