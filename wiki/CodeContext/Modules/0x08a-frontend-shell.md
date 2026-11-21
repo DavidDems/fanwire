@@ -57,8 +57,9 @@ that here as usual.
   `useLayoutEffect` (`components/ui/ui-css.test.ts`).
 - **The bundle has a budget test**, `src/test/bundle-budget.test.ts`. It
   runs Vite's `build()` in vitest and pins the entry JS (`BASE` in
-  `src/test/bundle-budget.ts`: 152.2 kB gzip, 479.1 kB raw, never past
-  480 kB raw), the entry CSS (7.03 kB gzip), every other chunk to within
+  `src/test/bundle-budget.ts`: 149.2 kB gzip, 474.6 kB raw on vite 8, never
+  past 480 kB raw), the entry CSS (7.34 kB gzip, `index.css` plus
+  `InlineAlert.css`), every other chunk to within
   0.1 kB of its recorded size (and no new one), and no file of 500,000 bytes.
   **The entry is the entry chunk plus every chunk it imports statically**
   (`entryClosure`, FRONTEND-046): Rolldown (vite 8) splits the entry into
