@@ -31,50 +31,52 @@ here, last. Nobody edits `package.json` by hand to land a major.
 
 Done: model names (PR #9); github-actions non-major, `ruff`, `k6`,
 `actions/checkout` v7, `date-fns` 4, `jest-dom` 7, `zustand` 5 (#11–#17,
-deployed). 2026-11-20: `npm non-major` (#21, after #23 gave Renovate
-`allow-remote=all` for npm 12's `EALLOWREMOTE` on `aws-cdk-lib`'s bundled
-tarball), a short-hash test flake (#25), **unit 1 `FRONTEND-045`** (#27), then
-its four majors `@types/node` 26, `jsdom` 31, `vitest` 5, `msw` 3 (#28–#31,
-deploy running at hand-over). **Unit 2's spec `FRONTEND-046`** is a Director PR
-on `director/frontend-046-spec`; once it merges, run the unit. ADR 0026 lines 38–40 still call the model switch pending; only a
-superseding ADR can correct it, if the human wants one.
+deployed); `npm non-major` (#21, #23 `allow-remote=all`), a test flake
+(#25). **Units 1–3 are done:**
+`FRONTEND-045` (#27) and its four majors (#28–#31); `FRONTEND-046` (#32, #33
+the fold, #34) and `vite` 8, `plugin-react` 6 (#35, #36); `FRONTEND-047`
+(#37 spec with [ADR 0041](../Decisions/0041-react-19-entry-budget.md), #38).
+ADR 0026 lines 38–40 still call the model switch pending; only a superseding
+ADR can correct it, if the human wants one.
 
-## Where things stand (2026-11-20), verify, don't trust
+## Where things stand (2026-11-21, hand-over), verify, don't trust
 
-- Dashboard issue #2: `npm non-major` ticked (it carries `typescript-eslint`
-  8.73.0, which closes Dependabot #1; probe: no resource or IAM change, the
-  templates differ only in `CDKMetadata` and CDK's own handler hashes).
-  `claude CLI` now offers 2.1.326: the human runs its `--help` for both D2b
-  flags before ticking. Every major is unticked.
+`main` 6939ae2 still runs React 18 and eslint 9; FRONTEND-047 made the code
+pass on React 19, react-hooks 7 and eslint 10 (proof in #38). Dependency
+Dashboard issue #2, unticked:
+
+| Item | Verdict |
+|---|---|
+| `react monorepo` major | **Merge** (FRONTEND-047 proved it). Tick first. |
+| `eslint monorepo` 10 | **Merge**, after React (react-hooks 7 needs it; probe: no new error). |
+| `npm non-major` (`@tanstack/react-query`, `msw`, `react-router-dom`, `vitest`) | Merge after the two majors, alone: it shares the lockfile. |
+| `github-actions non-major` (`codeql-action`, `scorecard-action`), `ruff` 0.17.6 | Merge; read the diff for what CI cannot see. |
+| `claude CLI` 2.1.327 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
+| `jest-dom` 8 | **New, unprobed.** Probe alone from `main`; if it needs code, a dual-version unit like 045. |
+| `python` 3.15 | `INFRA-006` first. |
+| `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
+| `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
+
 - Dependabot #4 (`infra/`, `minimatch` bundled in `aws-cdk-lib`, which no
   override reaches): upstream-blocked; or the human dismisses it.
-- Frontend baseline alone: 212 files / 3,671 tests, 267 s. Run suites alone
-  and in the foreground: on this 8 GB machine Claude Code reaps background
-  jobs under memory pressure.
+- Frontend suite on 6939ae2: 217 files / 3,698 tests. Run suites alone and in
+  the foreground: on this 8 GB machine Claude Code reaps background jobs under
+  memory pressure.
 
-Rows 1–3 of the table below are done (`FRONTEND-045`; its brief has the
-corrected causes). `vite` 8 + `plugin-react` 6 re-probed on `b6cde48`: one
-test red, the bundle budget, because Rolldown splits the entry into preloaded
-chunks (`.ai/tasks/FRONTEND-046/brief.md`).
-
-Probe findings (each major alone from `main`; file and line on 2026-11-18):
+Probe findings still open (each major alone from `main`); the done rows'
+causes are in `.ai/tasks/FRONTEND-045`–`047/brief.md`:
 
 | Major | Needs |
 |---|---|
-| `@types/node` 26 | `src/test/form-data-file-names.ts`: `Impl._buffer` and `bytesOf` as `Uint8Array<ArrayBuffer>` (fine on 22 too). infra passes. |
-| `vitest` 5 + `jsdom` 31 | 117 tests red: a test-only `[popover]{display:block}` in `setupTests.ts`; `Post{" "}` outside `VisuallyHidden` at `BoxScore.tsx:382`, `PlayerPage.tsx:342`; Blob bytes via jsdom's `implForWrapper(blob)._bytes`, the old symbol `_buffer` kept for 25. |
-| `msw` 3 | `setupTests.ts:187` `onUnhandledFrame: "error"`; msw 2 knows only `onUnhandledRequest`. Its lockfile needs npm 11. |
-| `vite` 8, then `plugin-react` 6 | lazy `Stats.module` 377 → 502 B; `optimizeDeps.esbuildOptions` deprecated for `rolldownOptions` (pinned by `dev-server-config.test.ts`). plugin-react 6 requires vite 8. |
-| React 19 (+ react-hooks 7) | entry 175.6 KB gzip vs 153.3 KB; `AccountSettings.test.tsx:168` sees an extra `GET /users/me`; 16 react-hooks 7 errors (10 `refs`, 3 `set-state-in-effect`, 2 `globals`, 1 `immutability`). |
-| `eslint` 10 | after React (react-hooks 5 peers eslint ≤9); infra passes. |
 | `typescript` 7 | held: typescript-eslint, ts-jest, `openapi-typescript` refuse it. |
 | `python` 3.15 | wheels install; CDK 2.277 has `PYTHON_3_15`; suite unproven. |
-| `postgres` 18 | CDK has `VER_18`; not run. |
+| `postgres` 18/19 | CDK has `VER_18`; 19 unchecked; not run. |
+| `jest-dom` 8 | not probed. |
 
 ## Unit plan, in order
 
 Write each spec on a Director branch, merge it, then run the unit
-(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-045`,
+(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-048`,
 infra `INFRA-006`.
 
 1. **Done (#27–#31).** `FRONTEND-045`, test harness on both versions: the `@types/node`,
@@ -83,40 +85,40 @@ infra `INFRA-006`.
 2. **Done (#32–#36).** `FRONTEND-046`, vite 8 ready: the budget measures the
    entry with its static imports; #33 folded five merged units; `vite` 8 and
    `plugin-react` 6 merged.
-3. **`FRONTEND-047`, React 19 ready** (spec on `director/frontend-047-spec`,
-   with ADR 0041 and `BASE` re-folded on vite 8 at a777aae): the 16
-   react-hooks 7 sites, the `/search` trim, and React 19's entry growth
-   declared as a dependency major. The old extra-request finding is gone.
-   Tick React, merge, then tick `eslint` 10 (probe: it adds no error).
-4. **`FRONTEND-048`, clean-up:** drop msw 2's option, jsdom 25's Blob path
-   and `esbuildOptions` for `rolldownOptions`.
+3. **Done (#37, #38).** `FRONTEND-047`, React 19 ready: the 16 react-hooks 7
+   sites fixed on both versions, `combine`'s `dependencyMajor` exception, React
+   19's entry declared (+25,000 gzip, +85,000 raw). No trim: a lazy `/search`
+   made the entry larger. **The human ticks React, then `eslint` 10.**
+4. **`FRONTEND-048`, clean-up**, once React and eslint 10 are on `main`. Its
+   spec PR (Director) first **folds FRONTEND-047**: measure `main` with the
+   probe below, write React 19's numbers into `BASE`, set
+   `ENTRY_JS_RAW_HARD_MAX` to the measured entry raw plus about 1% (ADR 0041;
+   about 559.7 kB), delete `bundle-budgets/FRONTEND-047.ts`. The unit then
+   drops msw 2's option (`setupTests.ts`, `onUnhandledRequest`), jsdom 25's
+   Blob path (`src/test/form-data-file-names.ts`, the `_buffer` symbol) and
+   moves `optimizeDeps.esbuildOptions` to `rolldownOptions` (`vite.config.ts`,
+   pinned by `dev-server-config.test.ts`). Keep `dependencyMajor`: it is narrow.
 5. **`INFRA-006`, Python 3.15:** the two `PYTHON_3_12` in `infra/lib/`;
    prove the backend suite on 3.15. Tick `python runtime` (workflows, Lambda
    image). mypy's `python_version` in `backend/pyproject.toml` is a manifest,
    so a Director edit (`requires-python >=3.12` already admits 3.15).
-6. **`INFRA-007`, Postgres 18:** `VER_18` with `allowMajorVersionUpgrade`, and
-   `backend/tests/conftest.py:65`. The human snapshots RDS before approving
-   the deploy. Tick `postgres runtime`.
+6. **`INFRA-007`, Postgres:** ADR 0036 says 18; Renovate now offers the
+   docker tag 19. Probe first: does `aws-cdk-lib` have `PostgresEngineVersion`
+   `VER_19`, and does RDS offer 19 in the stack's region? If both, ask the
+   human 18 or 19 (`AskUserQuestion`); if not, do 18 and hold the docker tag
+   at 18 (a `renovate.json` rule, Director). Then `allowMajorVersionUpgrade`,
+   `backend/tests/conftest.py:65`, and the human snapshots RDS before
+   approving the deploy, then runs the Migration Lambda if asked.
 7. **Close-out** (deliverable 5).
 
-## Deliverables (in this order)
+## Deliverables
 
-1. **The three alerts.** Find the parent that pulls each one in. Prefer
-   a parent bump; use an `overrides` entry only when none exists. A Director
-   PR (manifests are denied to unit roles). `npm audit` in `frontend/` and
-   `infra/` stays clean at the CI's audit level.
-2. **Non-major groups first**, then actions: the human ticks each box on the
-   dashboard; you review each PR for what CI cannot see (the synthesized
-   stack for `aws-cdk` and `aws-cdk-lib`, the pinned CLI for
-   `@anthropic-ai/claude-code`). Never approve a bump that moves the CLI
-   without reading `.ai/docs/handoff.md` §10.1 D2b.
-3. **Majors, one per PR**, toolchain before UI: `@types/node`, `eslint`,
-   `vitest` with `jsdom`, `msw`, `date-fns`, `zustand`, `@testing-library`,
-   `@vitejs/plugin-react`; then `vite`; then `typescript` 7 and the React
-   major last, each alone. A major that needs source changes is a `hand` unit
-   with a spec (a frontend source edit is not a Director edit). Hold
-   `python` 3.15 and `postgres` 18 until the AWS-side runtime and the RDS
-   engine version support them: report, don't force.
+1. **The alerts:** done but Dependabot #4 (above).
+2. **Non-majors:** the human ticks each; you review each PR for what CI
+   cannot see (the synthesized stack for `aws-cdk` and `aws-cdk-lib`; never
+   a CLI bump without `.ai/docs/handoff.md` §10.1 D2b).
+3. **Majors, one per PR**, by the unit plan. One that needs source changes is
+   a `hand` unit with a spec.
 4. **Model names (item 11).** Done, PR #9.
 5. **Close-out.** Delete `Prompts/19`; the dashboard shows nothing pending
    that you didn't decide; say in the PR which majors are held and why.
@@ -143,6 +145,23 @@ reason to hold it, not to loosen a test.
   ([ADR 0041](../Decisions/0041-react-19-entry-budget.md)), not to trim 75 kB
   or hold React. FRONTEND-048's spec folds FRONTEND-047 and sets
   `ENTRY_JS_RAW_HARD_MAX` to the measured entry plus about 1%.
+- **`docker compose run --rm frontend-test` reuses a built image**: it
+  tests whatever was copied at the last build. Run `docker compose build
+  frontend-test` first (check the file count moved). FRONTEND-047's first
+  container run tested stale code.
+- **Measure the bundle with a scratch probe**, not the budget test (it stops
+  at its first failing assertion): a vitest file under `src/test/` that runs
+  `build()` exactly as `bundle-budget.test.ts` does, takes
+  `entryClosure(entry, chunks)`, and writes each closure chunk's and lazy
+  output's gzip and raw size to a file (vitest swallows `console.log`).
+  Delete it before committing. `chunk.modules[id].renderedLength` gives a
+  per-package breakdown.
+- **CI flake:** `features/feed/delete-focus.test.tsx` "a failed delete keeps
+  the confirm open" failed once on #38's CI and passed on rerun and 5/5
+  locally. If it recurs, write a backlog row.
+- **Pin a refactor's behaviour on today's code, then mutate:** put the old
+  production files back, check the new tests pass, then remove the guarded
+  line and check they fail (FRONTEND-047 did this for two of its pins).
 - **Fold merged units' budget files into `BASE` before measuring a major
   against it** (`bundle-budget.ts`): an unfolded file's ceiling is a
   vite 7 measurement, and only the base can be re-measured.
