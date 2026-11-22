@@ -34,7 +34,7 @@
     "vitest": "^5.0.0",
     "jsdom": "^31.0.0",
     "@testing-library/react": "^16.0.0",
-    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/user-event": "^14.5.0",
     "msw": "^3.0.0",
     "eslint": "^10.0.0",
