@@ -168,7 +168,7 @@ if (
   };
 }
 
-// `onUnhandledRequest: "error"` belongs here, on listen — `setupServer()` takes
+// `onUnhandledFrame: "error"` belongs here, on listen — `setupServer()` takes
 // no options. It is the whole point of the harness: a request nobody wrote a
 // handler for fails the test instead of leaving a component stuck in its
 // loading state while the assertion about that loading state passes.
@@ -184,16 +184,7 @@ if (
 // replaced `globalThis.fetch` before any module captures it, and an ordinary
 // static `import { apiClient }` is intercepted. `src/test/harness.test.ts`
 // pins it.
-//
-// msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`, and each ignores
-// the other's key, so one object carries both (FRONTEND-045, until
-// FRONTEND-048 drops msw 2's). A variable rather than a literal, so neither
-// version's types reject the key it does not know.
-const unhandled = {
-  onUnhandledRequest: "error",
-  onUnhandledFrame: "error",
-} as const;
-server.listen(unhandled);
+server.listen({ onUnhandledFrame: "error" });
 
 // `Menu` opens its list with `showPopover()`, which jsdom does not implement,
 // and jsdom 31's default stylesheet hides `[popover]:not(:popover-open)`, so an
