@@ -100,7 +100,9 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   closes; Tab or focus leaving closes it.
 - **Confirms are `ConfirmDialog`** (`Dialog` with `role="alertdialog"`, no
   Close button, focus on Cancel, an `InlineAlert` inside on failure, which
-  keeps it open). **Nested rule**: a confirm opened in the thread modal is a
+  keeps it open). The action is `disabled` in flight, which drops its focus to
+  `<body>`; a failure puts focus back on it unless the reader moved focus
+  elsewhere inside (`FRONTEND-048`). **Nested rule**: a confirm opened in the thread modal is a
   `<dialog>` inside its `<dialog>`; React hands the inner `cancel` and `close`
   to the outer handlers too, so `Dialog` acts only on events whose target is
   its own element. Escape or Cancel closes only the confirm; the modal flow's
