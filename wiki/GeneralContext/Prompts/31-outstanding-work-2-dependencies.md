@@ -38,29 +38,40 @@ the fold, #34) and `vite` 8, `plugin-react` 6 (#35, #36); `FRONTEND-047`
 (#37 spec with [ADR 0041](../Decisions/0041-react-19-entry-budget.md), #38).
 2026-11-22: React 19 (#40), `eslint` 10 (#41), `jest-dom` 8 (#42; probe: no
 change needed, 3,698 tests green). `FRONTEND-048` fixes the delete-focus flake
-(below) before `npm non-major` (#43) merges.
+(below) before `npm non-major` (#43) merges. 2026-11-23: `FRONTEND-048`
+(#44, #45), `npm non-major` (#43), and #46: the `FRONTEND-049` spec, React 19
+folded into `BASE` (cap 560,300 raw), `vite.config.ts` on
+`rolldownOptions.transform.define`.
 ADR 0026 lines 38–40 still call the model switch pending; only a superseding
 ADR can correct it, if the human wants one.
 
-## Where things stand (2026-11-23), verify, don't trust
+## Where things stand (2026-11-23, hand-over), verify, don't trust
 
-`main` 66fbb9b runs React 19, eslint 10, jest-dom 8. 2026-11-22/23:
-`FRONTEND-048` (#44 spec, #45: a failed confirm's focus, which was the
-delete-focus flake) and `npm non-major` (#43) merged. Dependency Dashboard
-issue #2:
+`main` 1a9615d: React 19, eslint 10, jest-dom 8, the fold (#46). **Next: run
+the `FRONTEND-049` unit** (spec and brief on `main`, `.ai/tasks/FRONTEND-049/`).
+No frontend PR is open, so its start gate holds.
+
+Open Renovate PRs, each reviewed 2026-11-23; the human merges one at a time,
+"Update branch" on the next:
+
+| PR | Verdict |
+|---|---|
+| #49 `ruff` 0.17.6 | **Merge** (all green, `backend-ruff` and `mypy` included). |
+| #47 `github-actions non-major` | **Merge once `renovate/stability-days` is green.** SHAs checked: `codeql-action` is the `v4` tag (v4.39.4), `scorecard-action` is `v2.6.0`'s commit. |
+| #48 `claude CLI` 2.1.329 | **Merge after** the human's `--help` shows `--setting-sources` and `--strict-mcp-config` (`.ai/docs/handoff.md` §10.1 D2b). |
+
+On the dashboard, not yet PRs:
 
 | Item | Verdict |
 |---|---|
-| `github-actions non-major` (`codeql-action`, `scorecard-action`), `ruff` 0.17.6 | Merge; read the diff for what CI cannot see. |
-| `claude CLI` 2.1.329 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
-| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its `cdk diff`/synth for what CI cannot see. |
+| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its synth (`cd infra; npm run synth`, compare with `main`'s) for what CI cannot see. |
 | `python` 3.15 | `INFRA-006` first. |
 | `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
 | `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
 
 - Dependabot #4 (`infra/`, `minimatch` bundled in `aws-cdk-lib`, which no
   override reaches): upstream-blocked; or the human dismisses it.
-- Frontend suite on 6939ae2: 217 files / 3,698 tests. Run suites alone and in
+- Frontend suite on 1a9615d: 217 files / 3,702 tests. Run suites alone and in
   the foreground: on this 8 GB machine Claude Code reaps background jobs under
   memory pressure.
 
@@ -129,6 +140,20 @@ one-line verdict per PR (merge, hold, needs a unit). A failed major is a
 reason to hold it, not to loosen a test.
 
 ## Mechanics learned the hard way
+
+- **`frontend/vite.config.ts` is no role's to write** (`code_agent` writes
+  `frontend/src/**` only), so a change to it goes in the Director's spec PR,
+  with its own proof (#46: a forced dev pre-bundle, plus a control without
+  the define).
+- **A unit's PR can be cut before its spec merges**: branch `agent/<ID>` from
+  the spec branch. Once the spec merges (a merge commit), "Update branch"
+  leaves only the unit's commits; `guard-gate` passes only after that.
+- **Timing races in tests: hold, don't hope.** The post stubs have
+  `hold()` (`src/test/post-menu.ts`); hold the response until the in-flight
+  state renders, then release. A window that records requests must start
+  after the shell's own `GET /users/me` (await the Account menu).
+- **A CI red on a Renovate PR is not the bump until shown.** #43's and #45's
+  reds were existing races; reproduce on the PR branch, then on `main`.
 
 - **Probe a major before its spec**, from today's `main`, in a throwaway
   worktree (`npm install -D <pkg>@<major>`, never committed). Run the suite
