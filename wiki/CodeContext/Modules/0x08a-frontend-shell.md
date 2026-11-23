@@ -172,10 +172,9 @@ anybody has to remember:
   and does the conversion itself, names included; `setupTests.ts` imports it
   **before** msw, which builds its `Request` from the global. It reads the
   bytes the way Vitest's own bridge does, because a request body is built
-  synchronously: jsdom 31 keeps them as `_bytes` behind a private field that
-  only its generated `implForWrapper` reaches, and jsdom 25 as `_buffer` under
-  an own `Symbol("impl")`. `bytesOf` tries both (`FRONTEND-045`, until
-  `FRONTEND-048` drops jsdom 25's). `harness.test.ts` and
+  synchronously: jsdom keeps them as `_bytes` behind a private field that only
+  its generated `implForWrapper` reaches, and `bytesOf` reads that one path,
+  throwing on anything that is not a jsdom `Blob`. `harness.test.ts` and
   `MediaWidget.test.tsx` pin it. Vitest 5 has the
   same bridge, so this stays until upstream keeps file names.
 - **The harness carries three things for Node 24 and later** (`FRONTEND-025`).
@@ -192,11 +191,9 @@ anybody has to remember:
   without `--localstorage-file`, and Vitest copies a jsdom key only when the
   global lacks it, so `setupTests.ts` copies jsdom's storage over a global that is
   `undefined`. Node 20 rejects that flag, so it cannot be the fix.
-- **`setupTests.ts` passes msw both versions' unhandled-request key**
-  (`FRONTEND-045`). msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`,
-  and each ignores the other's, so one options object, held in a variable so
-  neither version's types reject the key they lack, carries both as `"error"`.
-  `FRONTEND-048` drops msw 2's.
+- **`setupTests.ts` listens with `onUnhandledFrame: "error"`**, msw 3's key.
+  Without it an unhandled request only warns, so a component stuck in its
+  loading state passes the assertion about that loading state.
 - **A test-only author rule, `[popover] { display: block }`**, is appended to
   the document by `setupTests.ts` (`FRONTEND-045`). jsdom 31's default
   stylesheet hides `[popover]:not(:popover-open)`, and jsdom implements no
