@@ -12,13 +12,17 @@ export default defineConfig({
   plugins: [react()],
   // `amazon-cognito-identity-js` bundles the `buffer` polyfill, which reads
   // Node's `global`. The production build copes with that, but the dev
-  // server's esbuild pre-bundle does not, and `npm run dev` rendered an empty
-  // page (`ReferenceError: global is not defined`). Scoped to the dev
+  // server's dependency pre-bundle does not, and `npm run dev` rendered an
+  // empty page (`ReferenceError: global is not defined`). Scoped to the dev
   // pre-bundle, so application code and the production bundle are untouched.
-  // Pinned by src/dev-server-config.test.ts.
+  // Rolldown's `transform.define` since vite 8, which deprecated esbuild's
+  // `esbuildOptions.define` and maps it to this. Pinned by
+  // src/dev-server-config.test.ts.
   optimizeDeps: {
-    esbuildOptions: {
-      define: { global: "globalThis" },
+    rolldownOptions: {
+      transform: {
+        define: { global: "globalThis" },
+      },
     },
   },
   server: {

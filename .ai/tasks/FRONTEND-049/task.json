@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-049",
+  "objective": "Track 2's clean-up: now that msw 3, jsdom 31, vite 8 and React 19 are on main, the test harness drops the support it kept for msw 2 and jsdom 25, the dev-server pin holds the Rolldown form of the pre-bundle define, the bundle tests stop naming the old 480 kB cap, and AccountSettings' notifications test stops catching the shell's late profile request.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged. It folds FRONTEND-047 and FRONTEND-048 into BASE (main 66fbb9b), sets ENTRY_JS_RAW_HARD_MAX to 560,300, deletes bundle-budgets/FRONTEND-047.ts and moves vite.config.ts's optimizeDeps define to rolldownOptions.transform.define. The branch is cut from a main that holds it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because setupTests.ts still passes msw 2's onUnhandledRequest and bytesOf still reads jsdom 25's _buffer.",
+    "msw: setupTests.ts calls server.listen({ onUnhandledFrame: 'error' }) with no onUnhandledRequest key and no dual-version variable; the comment says why the option matters, not which versions read it. harness.test.ts 'passes each version its own option' becomes a pin that the source has onUnhandledFrame: 'error' and no onUnhandledRequest. An unhandled request still fails a test (the existing pin stays green).",
+    "jsdom: form-data-file-names.ts reads a Blob's bytes only the jsdom 31 way: implForWrapper from jsdom/lib/generated/idl/utils.js, then the impl's _bytes. The jsdom 25 module path, the own Symbol('impl') fallback, _buffer and the Buffer-view comment go. A Blob it cannot read still throws a message naming what it could not read. harness.test.ts's it.each over _bytes and _buffer becomes: a real Blob's bytes are read, and an object that is not a jsdom Blob throws. No pin depends on jsdom 25.",
+    "dev-server-config.test.ts pins vite 8's form: optimizeDeps has rolldownOptions.transform.define with global as globalThis, and no esbuildOptions anywhere in vite.config.ts. Its header comment names Rolldown's pre-bundle instead of esbuild's. The second test (global never rewritten outside optimizeDeps) is unchanged.",
+    "AccountSettings.test.tsx 'keeps the enabled notifications policy checked and disabled' waits for the shell's profile request to finish (the Account menu, as the first test in the file does) before it starts recording requests. The shell's GET /users/me starts after the checkbox renders (measured 3/3 on main 8bdeb5b), so the one-tick window caught it under CI load (#45's first run). The window and the assertion toEqual([]) stay as strict as they are.",
+    "bundle-budget-combine.test.ts: the two titles that say '480 kB' name the raw cap (ENTRY_JS_RAW_HARD_MAX) instead. No assertion changes.",
+    "Remaining comments that name FRONTEND-048 as the unit that drops msw 2 or jsdom 25 (setupTests.ts, form-data-file-names.ts) are gone with the code they describe.",
+    "Proof: the frontend container (rebuilt image, alone), typecheck, lint (0 problems) and build are green. No production source outside setupTests.ts changes.",
+    "No new dependency, no package.json, lockfile, eslint.config.js or vite.config.ts change.",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md 'Test harness facts' states one msw option and one Blob byte path, with no dual-version wording left."
+  ],
+  "allowed_paths": [
+    "frontend/src/setupTests.ts",
+    "frontend/src/test/form-data-file-names.ts",
+    "frontend/src/test/harness.test.ts",
+    "frontend/src/test/bundle-budget-combine.test.ts",
+    "frontend/src/dev-server-config.test.ts",
+    "frontend/src/features/account/AccountSettings.test.tsx",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/api/**",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/test/bundle-budgets/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

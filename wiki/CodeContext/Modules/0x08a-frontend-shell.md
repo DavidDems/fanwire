@@ -57,8 +57,8 @@ that here as usual.
   `useLayoutEffect` (`components/ui/ui-css.test.ts`).
 - **The bundle has a budget test**, `src/test/bundle-budget.test.ts`. It
   runs Vite's `build()` in vitest and pins the entry JS (`BASE` in
-  `src/test/bundle-budget.ts`: 149.2 kB gzip, 474.6 kB raw on vite 8, never
-  past 480 kB raw), the entry CSS (7.34 kB gzip, `index.css` plus
+  `src/test/bundle-budget.ts`: 172.7 kB gzip, 554.7 kB raw on vite 8 and
+  React 19, never past `ENTRY_JS_RAW_HARD_MAX`, 560.3 kB raw), the entry CSS (7.34 kB gzip, `index.css` plus
   `InlineAlert.css`), every other chunk to within
   0.1 kB of its recorded size (and no new one), and no file of 500,000 bytes.
   **The entry is the entry chunk plus every chunk it imports statically**
@@ -69,9 +69,9 @@ that here as usual.
   in its test commit, with the reason** (brief 20, R1, R12). A unit grows
   the entry by at most 1 kB gzip, **except a dependency major**: a unit file
   that names the major and its decision (`dependencyMajor`, "ADR NNNN") may
-  declare more, and its raw growth lifts the 480 kB raw cap by as much
-  (FRONTEND-047). React 19 is the first, at 172.6 kB gzip and 554.1 kB raw
-  (nine chunks; the growth is `react-dom` 19's). `/search` stays in the
+  declare more, and its raw growth lifts the raw cap by as much
+  (FRONTEND-047). React 19 was the first (+23.4 kB gzip, all `react-dom` 19's);
+  its fold reset the cap from 480 kB to the measured entry plus 1% (ADR 0041). `/search` stays in the
   entry: `SearchPage` shares its code with the home page's search rail, and
   lazy-loading it made the entry larger.
 - **The react-hooks 7 rules hold on React 18 and 19** (FRONTEND-047): no ref
