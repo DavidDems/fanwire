@@ -35,66 +35,59 @@ Done (PRs): model names (#9); non-majors and small majors (#11–#17, #21,
 (#32–#36); `FRONTEND-047`, [ADR 0041](../Decisions/0041-react-19-entry-budget.md),
 React 19, `eslint` 10 (#37–#41); `jest-dom` 8 (#42); `FRONTEND-048`, the
 delete-focus flake (#44, #45); the `FRONTEND-049` spec and the React 19 fold
-(#46). Each unit's causes are in `.ai/tasks/FRONTEND-045`–`049/brief.md`.
+(#46); `ruff` 0.17.6 (#49), `claude CLI` (#48). Each unit's causes are in `.ai/tasks/FRONTEND-045`–`049/brief.md`.
 ADR 0026 lines 38–40 still call the model switch pending; only a superseding
 ADR can correct it, if the human wants one.
 
-## Where things stand (2026-11-23, hand-over), verify, don't trust
+## Where things stand (2026-11-23, second hand-over), verify, don't trust
 
-`main` 1a9615d: React 19, eslint 10, jest-dom 8, the fold (#46). **Next: run
-the `FRONTEND-049` unit** (spec and brief on `main`, `.ai/tasks/FRONTEND-049/`).
-No frontend PR is open, so its start gate holds.
-
-Open Renovate PRs, each reviewed 2026-11-23; the human merges one at a time,
-"Update branch" on the next:
+`main` 6060e4d. **Open, for the human:**
 
 | PR | Verdict |
 |---|---|
-| #49 `ruff` 0.17.6 | **Merge** (all green, `backend-ruff` and `mypy` included). |
-| #47 `github-actions non-major` | **Merge once `renovate/stability-days` is green.** SHAs checked: `codeql-action` is the `v4` tag (v4.39.4), `scorecard-action` is `v2.6.0`'s commit. |
-| #48 `claude CLI` 2.1.329 | **Merge after** the human's `--help` shows `--setting-sources` and `--strict-mcp-config` (`.ai/docs/handoff.md` §10.1 D2b). |
+| #51 `FRONTEND-049` | All green. Merge. |
+| Director PR, `INFRA-006` and `INFRA-007` specs | Merge; then the Director runs `INFRA-006`, then `INFRA-007`. |
+| #47 `github-actions non-major` | Merge once `renovate/stability-days` is green (SHAs checked 2026-11-23). |
 
 On the dashboard, not yet PRs:
 
 | Item | Verdict |
 |---|---|
-| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its synth (`cd infra; npm run synth`, compare with `main`'s) for what CI cannot see. |
-| `python` 3.15 | `INFRA-006` first. |
-| `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
+| `npm non-major` (`typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its synth against `main`'s. |
+| `python` 3.15 | Tick after `INFRA-006` merges; merge once CI's backend-test is green on the 3.15 image. |
+| `postgres` docker tag **19** | Hold. Needs `allowedVersions: "<19"` on the `postgres runtime` rule first (Director, `.github/renovate.json`; this session's edit was blocked by the auto-mode classifier, so the human makes it or approves it), then tick for 18 after `INFRA-007`. |
 | `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
 
 - Dependabot #4 (`infra/`, `minimatch` bundled in `aws-cdk-lib`, which no
   override reaches): upstream-blocked; or the human dismisses it.
-- Frontend suite on 1a9615d: 217 files / 3,702 tests. Run suites alone and in
-  the foreground: on this 8 GB machine Claude Code reaps background jobs under
-  memory pressure.
+- Frontend suite on #51: 217 files / 3,703 tests. Run suites alone and in
+  the foreground: on this 8 GB machine Claude Code reaps background jobs.
+- **Local backend container:** every database test errors at testcontainers'
+  Reaper, on 3.12 `main` as on 3.15 (722 pass, 1,803 error, both). Setting
+  `TESTCONTAINERS_RYUK_DISABLED` hangs instead. CI is the backend proof.
 
 ## Unit plan, in order
 
 Write each spec on a Director branch, merge it, then run the unit
-(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-050`,
-infra `INFRA-006`.
+(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-050`, infra `INFRA-008`.
 
 1.–3. **Done**: `FRONTEND-045`, `046`, `047` and their majors (above).
-4. **`FRONTEND-049`, clean-up. Next.** Spec on `main` (#46), which also
-   folds FRONTEND-047 and 048 into `BASE` (172,748 gzip, 554,736 raw), sets `ENTRY_JS_RAW_HARD_MAX` to 560,300 and moves
-   `vite.config.ts` to `rolldownOptions.transform.define` (no role may write
-   it). The unit drops msw 2's option and jsdom 25's Blob path, tightens
-   `dev-server-config.test.ts`, and fixes the AccountSettings race (#45's first
-   CI run: the shell's `GET /users/me` starts after the checkbox renders).
-   Keep `dependencyMajor`: it is narrow.
-5. **`INFRA-006`, Python 3.15:** the two `PYTHON_3_12` in `infra/lib/`;
-   prove the backend suite on 3.15 (probe: wheels install; CDK 2.277 has
-   `PYTHON_3_15`). Tick `python runtime` (workflows, Lambda
-   image). mypy's `python_version` in `backend/pyproject.toml` is a manifest,
-   so a Director edit (`requires-python >=3.12` already admits 3.15).
-6. **`INFRA-007`, Postgres:** ADR 0036 says 18; Renovate now offers the
-   docker tag 19. Probe first: does `aws-cdk-lib` have `PostgresEngineVersion`
-   `VER_19`, and does RDS offer 19 in the stack's region? If both, ask the
-   human 18 or 19 (`AskUserQuestion`); if not, do 18 and hold the docker tag
-   at 18 (a `renovate.json` rule, Director). Then `allowMajorVersionUpgrade`,
-   `backend/tests/conftest.py:65`, and the human snapshots RDS before
-   approving the deploy, then runs the Migration Lambda if asked.
+4. **`FRONTEND-049`, clean-up: #51**, green, waiting for merge. About ten
+   test comments still say msw runs with `onUnhandledRequest`; outside its
+   paths, left for track 5.
+5. **`INFRA-006`, Python 3.15:** spec in the open Director PR. The two zip
+   Lambdas to `PYTHON_3_15`. Probed: CDK 2.277 has it; the 3.15 image builds,
+   `mypy` (also `--python-version 3.15`) clean, 722 non-database tests pass as
+   on 3.12. Then the human ticks `python runtime`; then a Director PR moves
+   mypy's `python_version`, `build-deployment.md`'s image row and
+   `.ai/docs/architecture.md`'s "Python 3.12".
+6. **`INFRA-007`, Postgres 18:** spec in the same PR. CDK 2.277 has no
+   Postgres `VER_19` (stops at `VER_18_3`; the `VER_19_*` are Oracle), so 18,
+   no question for the human. `VER_18` with `allowMajorVersionUpgrade`,
+   `conftest.py` on 18. The human checks 18 is a `ValidUpgradeTarget` of the
+   live minor (no AWS CLI on the Director's machine) and snapshots before
+   approving the deploy. `build-deployment.md`'s compose line follows the
+   Renovate PR.
 7. **Close-out** (deliverable 5).
 
 ## Deliverables
