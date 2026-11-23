@@ -26,7 +26,7 @@ describe("combine", () => {
     expect(budget.unchanged).toEqual(BASE.lazy);
   });
 
-  it("adds each unit's entry growth, and caps the raw entry at 480 kB", () => {
+  it("adds each unit's entry growth, and caps the raw entry at ENTRY_JS_RAW_HARD_MAX", () => {
     const budget = combine([
       { unit: "A", entryJsGzipGrowth: 1_000, entryJsRawGrowth: 5_000 },
       { unit: "B", entryJsGzipGrowth: 100, entryJsRawGrowth: 50_000 },
@@ -102,7 +102,7 @@ describe("a dependency major (FRONTEND-047, ADR 0041)", () => {
     );
   });
 
-  it("lifts the 480 kB raw cap by exactly the major's raw growth, and no more", () => {
+  it("lifts the raw cap (ENTRY_JS_RAW_HARD_MAX) by exactly the major's raw growth, and no more", () => {
     const budget = combine([
       {
         unit: "A",
