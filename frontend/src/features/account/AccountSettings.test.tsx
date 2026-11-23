@@ -153,6 +153,9 @@ describe("Account settings", () => {
     expect(checkbox).toBeChecked();
     expect(checkbox).toBeDisabled();
     expect(screen.getByText("On for every account for now")).toBeInTheDocument();
+    // The shell's own GET /users/me starts after the checkbox renders: wait for
+    // it to land (the Account menu), or the window below can catch it.
+    await screen.findByRole("button", { name: "Account menu" });
 
     const requests: string[] = [];
     const listener = ({ request }: { request: Request }) => {

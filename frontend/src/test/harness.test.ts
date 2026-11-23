@@ -191,30 +191,30 @@ describe("msw intercepts a client built at module load", () => {
   });
 });
 
-describe("a jsdom Blob's bytes are read on jsdom 25 and on jsdom 31", () => {
+describe("a jsdom Blob's bytes are read synchronously", () => {
   // A request body is built synchronously and every public reader of a jsdom
   // Blob is asynchronous, so `form-data-file-names.ts` reads jsdom's internal
-  // bytes, as Vitest's own bridge does. jsdom 25 keeps them as `_buffer` under
-  // an own `Symbol("impl")`; jsdom 31 as `_bytes` behind a private field that
-  // only its `implForWrapper` reaches. Each path is pinned with a stand-in.
+  // bytes, as Vitest's own bridge does: the impl that jsdom's generated
+  // `implForWrapper` reaches, and its `_bytes`. There is one path, so a
+  // stand-in that only looks like an impl is not a Blob.
   it("reads a real Blob", () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
 
     expect(bytesOf(new Blob([bytes]))).toEqual(bytes);
   });
 
-  it.each(["_bytes", "_buffer"])(
-    "reads an impl that keeps them as %s",
-    (key) => {
-      const bytes = new Uint8Array([9, 8, 7]);
-      const blob = { [Symbol("impl")]: { [key]: bytes } } as unknown as Blob;
-
-      expect(bytesOf(blob)).toEqual(bytes);
-    },
-  );
-
-  it("names what it could not read", () => {
-    expect(() => bytesOf({} as Blob)).toThrow(/jsdom Blob/);
+  it.each([
+    ["a plain object", {}],
+    [
+      "an own Symbol('impl') holding _bytes",
+      { [Symbol("impl")]: { _bytes: new Uint8Array([9]) } },
+    ],
+    [
+      "an own Symbol('impl') holding _buffer",
+      { [Symbol("impl")]: { _buffer: new Uint8Array([9]) } },
+    ],
+  ])("throws, naming what it could not read, on %s", (_name, notABlob) => {
+    expect(() => bytesOf(notABlob as unknown as Blob)).toThrow(/jsdom Blob/);
   });
 });
 
@@ -250,10 +250,10 @@ describe("an open menu is visible to role queries", () => {
   });
 });
 
-describe("an unhandled request fails the test on msw 2 and on msw 3", () => {
-  it("passes each version its own option", () => {
-    // msw 2 reads `onUnhandledRequest`, msw 3 `onUnhandledFrame`; each ignores
-    // the other's. Without msw 3's, an unhandled request only warns.
+describe("an unhandled request fails the test", () => {
+  it("listens with onUnhandledFrame: 'error', msw 3's one option", () => {
+    // Without it an unhandled request only warns, and a component stuck in its
+    // loading state passes the assertion about that loading state.
     // From the repository root (the container) or from `frontend/`.
     const file = ["src/setupTests.ts", "frontend/src/setupTests.ts"]
       .map((path) => join(process.cwd(), path))
@@ -261,7 +261,7 @@ describe("an unhandled request fails the test on msw 2 and on msw 3", () => {
     if (file === undefined) throw new Error("setupTests.ts not found");
     const source = readFileSync(file, "utf8");
 
-    expect(source).toMatch(/onUnhandledRequest:\s*"error"/);
     expect(source).toMatch(/onUnhandledFrame:\s*"error"/);
+    expect(source).not.toMatch(/onUnhandledRequest/);
   });
 });
