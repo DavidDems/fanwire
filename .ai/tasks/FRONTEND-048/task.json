@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-048",
+  "objective": "A ConfirmDialog whose action fails keeps keyboard focus inside the dialog: when the in-flight request ends in failure and focus has left the dialog (the action button was disabled while it had focus, so the browser moved focus to the body), focus returns to the action button, so trying again is one press. delete-focus.test.tsx's failed-delete case stops depending on request timing.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged. The branch is cut from a main that holds it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because nothing puts focus back after a failed request whose pending render committed first.",
+    "delete-focus.test.tsx, 'a failed delete keeps the confirm open, with focus in it': hold the DELETE response with deletePostStub's hold(), wait until the Delete button is disabled, then release a 403. Assert the alert shows, the post is still there, and the Delete button inside the confirm has focus. The test is deterministic: it fails on today's code every run, not only under load.",
+    "Dialog.test.tsx gains a ConfirmDialog describe that pins, through a small harness that drives pending and failure as PostMenu does: focus starts on Cancel; after the action is pressed, pending turns true, then false with a failure, the action button has focus and the InlineAlert is inside the dialog; if focus is somewhere inside the dialog when the failure arrives (for example the reader tabbed to Cancel), it stays there; a pending that ends without a failure (the caller closing the confirm, or staying open) does not move focus.",
+    "The fix is in frontend/src/components/ui/Dialog.tsx (ConfirmBody) only. The action keeps its native disabled attribute while pending (one press is one request). No new prop on ConfirmDialog, no change to PostMenu or any other caller: the Report confirm and the account confirms get the fix by sharing ConfirmBody.",
+    "Works on React 18 and 19 with react-hooks 7: no eslint-disable comment, eslint.config.js unchanged, no React 19-only API. Lint, typecheck and build stay green.",
+    "No new dependency, no package.json, lockfile, CSS or vite.config.ts change.",
+    "The module reference states the new fact: wiki/CodeContext/Modules/0x08k-frontend-account.md, the 'Confirms are ConfirmDialog' entry (a failure puts focus back on the action when it had left the dialog)."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/ui/Dialog.tsx",
+    "frontend/src/components/ui/Dialog.test.tsx",
+    "frontend/src/features/feed/delete-focus.test.tsx",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/index.html",
+    "frontend/src/api/**",
+    "frontend/src/styles/**",
+    "frontend/src/test/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md",
+    "wiki/CodeContext/FrontendUI/components-shared.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

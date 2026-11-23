@@ -36,6 +36,9 @@ deployed); `npm non-major` (#21, #23 `allow-remote=all`), a test flake
 `FRONTEND-045` (#27) and its four majors (#28–#31); `FRONTEND-046` (#32, #33
 the fold, #34) and `vite` 8, `plugin-react` 6 (#35, #36); `FRONTEND-047`
 (#37 spec with [ADR 0041](../Decisions/0041-react-19-entry-budget.md), #38).
+2026-11-22: React 19 (#40), `eslint` 10 (#41), `jest-dom` 8 (#42; probe: no
+change needed, 3,698 tests green). `FRONTEND-048` fixes the delete-focus flake
+(below) before `npm non-major` (#43) merges.
 ADR 0026 lines 38–40 still call the model switch pending; only a superseding
 ADR can correct it, if the human wants one.
 
@@ -47,12 +50,9 @@ Dashboard issue #2, unticked:
 
 | Item | Verdict |
 |---|---|
-| `react monorepo` major | **Merge** (FRONTEND-047 proved it). Tick first. |
-| `eslint monorepo` 10 | **Merge**, after React (react-hooks 7 needs it; probe: no new error). |
-| `npm non-major` (`@tanstack/react-query`, `msw`, `react-router-dom`, `vitest`) | Merge after the two majors, alone: it shares the lockfile. |
+| `npm non-major` (`@tanstack/react-query`, `msw`, `react-router-dom`, `vitest`) | #43: CI's one red is the delete-focus flake, not the bump. Rerun and merge, after `FRONTEND-048` if it lands first. |
 | `github-actions non-major` (`codeql-action`, `scorecard-action`), `ruff` 0.17.6 | Merge; read the diff for what CI cannot see. |
 | `claude CLI` 2.1.327 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
-| `jest-dom` 8 | **New, unprobed.** Probe alone from `main`; if it needs code, a dual-version unit like 045. |
 | `python` 3.15 | `INFRA-006` first. |
 | `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
 | `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
@@ -71,12 +71,11 @@ causes are in `.ai/tasks/FRONTEND-045`–`047/brief.md`:
 | `typescript` 7 | held: typescript-eslint, ts-jest, `openapi-typescript` refuse it. |
 | `python` 3.15 | wheels install; CDK 2.277 has `PYTHON_3_15`; suite unproven. |
 | `postgres` 18/19 | CDK has `VER_18`; 19 unchecked; not run. |
-| `jest-dom` 8 | not probed. |
 
 ## Unit plan, in order
 
 Write each spec on a Director branch, merge it, then run the unit
-(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-048`,
+(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-049`,
 infra `INFRA-006`.
 
 1. **Done (#27–#31).** `FRONTEND-045`, test harness on both versions: the `@types/node`,
@@ -88,8 +87,8 @@ infra `INFRA-006`.
 3. **Done (#37, #38).** `FRONTEND-047`, React 19 ready: the 16 react-hooks 7
    sites fixed on both versions, `combine`'s `dependencyMajor` exception, React
    19's entry declared (+25,000 gzip, +85,000 raw). No trim: a lazy `/search`
-   made the entry larger. **The human ticks React, then `eslint` 10.**
-4. **`FRONTEND-048`, clean-up**, once React and eslint 10 are on `main`. Its
+   made the entry larger. React and `eslint` 10 merged (#40, #41).
+4. **`FRONTEND-049`, clean-up**, once React and eslint 10 are on `main`. Its
    spec PR (Director) first **folds FRONTEND-047**: measure `main` with the
    probe below, write React 19's numbers into `BASE`, set
    `ENTRY_JS_RAW_HARD_MAX` to the measured entry raw plus about 1% (ADR 0041;
@@ -143,7 +142,7 @@ reason to hold it, not to loosen a test.
   `react-dom`) is past R1's 480 kB raw cap and R13's 1 kB per unit; the human
   chose to raise the cap for a declared dependency major
   ([ADR 0041](../Decisions/0041-react-19-entry-budget.md)), not to trim 75 kB
-  or hold React. FRONTEND-048's spec folds FRONTEND-047 and sets
+  or hold React. FRONTEND-049's spec folds FRONTEND-047 and sets
   `ENTRY_JS_RAW_HARD_MAX` to the measured entry plus about 1%.
 - **`docker compose run --rm frontend-test` reuses a built image**: it
   tests whatever was copied at the last build. Run `docker compose build
@@ -156,9 +155,11 @@ reason to hold it, not to loosen a test.
   output's gzip and raw size to a file (vitest swallows `console.log`).
   Delete it before committing. `chunk.modules[id].renderedLength` gives a
   per-package breakdown.
-- **CI flake:** `features/feed/delete-focus.test.tsx` "a failed delete keeps
-  the confirm open" failed once on #38's CI and passed on rerun and 5/5
-  locally. If it recurs, write a backlog row.
+- **CI flake, fixed by `FRONTEND-048`:** `features/feed/delete-focus.test.tsx`
+  "a failed delete keeps the confirm open" (#38, #43) was a real defect: the
+  disabled-while-pending action drops focus to `<body>`, and nothing restored it
+  after a failure. It showed only when the pending render beat the 403. Hold
+  the response with the stub's gate to make such a race deterministic.
 - **Pin a refactor's behaviour on today's code, then mutate:** put the old
   production files back, check the new tests pass, then remove the guarded
   line and check they fail (FRONTEND-047 did this for two of its pins).
