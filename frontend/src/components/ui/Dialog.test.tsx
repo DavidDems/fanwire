@@ -25,7 +25,7 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { Dialog } from "./Dialog";
+import { ConfirmDialog, Dialog } from "./Dialog";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -337,4 +337,99 @@ it("takes initial focus from a browser-selected scroller and puts it on Close", 
       { name: "Close" },
     ),
   ).toHaveFocus();
+});
+
+/**
+ * FRONTEND-048 — a confirm's action is disabled while its request is in
+ * flight, and a focused element that becomes disabled loses focus to the body
+ * (the focus fixup rule; no event fires). A failure keeps the confirm open, so
+ * it puts focus back on the action, unless the reader has moved it elsewhere
+ * inside the confirm. Driven by rerendering `pending` and `failure` the way
+ * `PostMenu` does.
+ */
+describe("a ConfirmDialog whose request fails", () => {
+  function confirmAt(pending: boolean, failure: string | null) {
+    return (
+      <ConfirmDialog
+        open
+        title="Delete this post?"
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        pending={pending}
+        failure={failure}
+      >
+        <p>It cannot be brought back.</p>
+      </ConfirmDialog>
+    );
+  }
+
+  function parts() {
+    const confirm = screen.getByRole("alertdialog", {
+      name: "Delete this post?",
+    });
+    return {
+      confirm,
+      cancel: within(confirm).getByRole("button", { name: "Cancel" }),
+      action: within(confirm).getByRole("button", { name: "Delete" }),
+    };
+  }
+
+  it("starts with focus on Cancel", async () => {
+    render(confirmAt(false, null));
+    await waitFor(() => expect(parts().cancel).toHaveFocus());
+  });
+
+  it("puts focus back on the action when the failure arrives and focus had left", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(confirmAt(false, null));
+    const { confirm, action } = parts();
+    await user.click(action);
+    rerender(confirmAt(true, null));
+    expect(action).toBeDisabled();
+    // The fixup lands after the disabling render, not inside it.
+    await waitFor(() =>
+      expect(confirm.contains(document.activeElement)).toBe(false),
+    );
+
+    rerender(
+      confirmAt(false, "This post is not yours, so it cannot be deleted."),
+    );
+
+    expect(within(confirm).getByRole("alert")).toBeInTheDocument();
+    await waitFor(() => expect(action).toHaveFocus());
+  });
+
+  it("leaves focus where the reader put it inside the confirm", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(confirmAt(false, null));
+    const { cancel, action } = parts();
+    await user.click(action);
+    rerender(confirmAt(true, null));
+    cancel.focus();
+
+    rerender(confirmAt(false, "We could not delete it just now."));
+
+    // Let any effect run before asserting nothing moved.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancel).toHaveFocus();
+  });
+
+  it("does not move focus when the request ends without a failure", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(confirmAt(false, null));
+    const { confirm, action } = parts();
+    await user.click(action);
+    rerender(confirmAt(true, null));
+    await waitFor(() =>
+      expect(confirm.contains(document.activeElement)).toBe(false),
+    );
+
+    rerender(confirmAt(false, null));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(action).not.toHaveFocus();
+    expect(confirm.contains(document.activeElement)).toBe(false);
+  });
 });

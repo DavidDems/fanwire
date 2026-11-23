@@ -97,14 +97,21 @@ describe("after deleting a post from a list, focus stays in the list", () => {
     expect(heading).toHaveAttribute("tabindex", "-1");
   });
 
-  it("a failed delete keeps the confirm open, with focus in it", async () => {
+  it("a failed delete keeps the confirm open, with focus back on Delete", async () => {
     const { user, confirm, deletion } = await openDelete([FIRST, MINE]);
     deletion.fail(403);
+    // Held until Delete is disabled: a focused button that becomes disabled
+    // loses focus to the body, and the failure has to bring it back. Without
+    // the hold the 403 can win the race and the button is never disabled.
+    const release = deletion.hold();
+    const action = within(confirm).getByRole("button", { name: "Delete" });
 
-    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+    await user.click(action);
+    await waitFor(() => expect(action).toBeDisabled());
+    release();
 
     expect(await within(confirm).findByRole("alert")).toBeInTheDocument();
     expect(screen.getByText(MINE_TEXT)).toBeInTheDocument();
-    expect(confirm.contains(document.activeElement)).toBe(true);
+    await waitFor(() => expect(action).toHaveFocus());
   });
 });
