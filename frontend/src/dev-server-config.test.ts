@@ -4,9 +4,12 @@
  * The Cognito SDK bundles the `buffer` polyfill, which reads
  * Node's `global` at module load. In a production build Rollup's CommonJS
  * handling copes with it. In the dev server Vite pre-bundles dependencies with
- * esbuild, which leaves `global` alone, so the browser throws
- * `ReferenceError: global is not defined` and `#root` stays empty. Measured
- * with Playwright MCP on 2026-10-07 against Vite 7.3.7.
+ * Rolldown (vite 8), which leaves `global` alone unless told otherwise, so the
+ * browser throws `ReferenceError: global is not defined` and `#root` stays
+ * empty. Measured with Playwright MCP on 2026-10-07 against Vite 7.3.7 (then
+ * esbuild's pre-bundle); the Rolldown form was proven on a forced vite 8
+ * pre-bundle (FRONTEND-049's spec). `esbuildOptions` is vite 7's spelling,
+ * which vite 8 only maps over with a deprecation warning.
  *
  * The fix is scoped to the dev pre-bundle (`optimizeDeps`), so it never
  * rewrites `global` in application code or in the production bundle.
@@ -47,9 +50,20 @@ describe("vite.config.ts lets the dev server load the Cognito SDK", () => {
   it("defines global as globalThis for the dev dependency pre-bundle", () => {
     const optimizeDeps = objectAfter(readViteConfig(), "optimizeDeps");
     expect(optimizeDeps, "an optimizeDeps block").not.toBeNull();
-    const define = objectAfter(optimizeDeps ?? "", "define");
-    expect(define, "optimizeDeps.esbuildOptions.define").not.toBeNull();
+    const rolldownOptions = objectAfter(optimizeDeps ?? "", "rolldownOptions");
+    expect(rolldownOptions, "optimizeDeps.rolldownOptions").not.toBeNull();
+    const transform = objectAfter(rolldownOptions ?? "", "transform");
+    expect(transform, "optimizeDeps.rolldownOptions.transform").not.toBeNull();
+    const define = objectAfter(transform ?? "", "define");
+    expect(
+      define,
+      "optimizeDeps.rolldownOptions.transform.define",
+    ).not.toBeNull();
     expect(define).toMatch(GLOBAL_TO_GLOBALTHIS);
+  });
+
+  it("uses no esbuildOptions, vite 7's spelling", () => {
+    expect(readViteConfig()).not.toMatch(/esbuildOptions/);
   });
 
   it("does not rewrite global for application code or the production build", () => {
