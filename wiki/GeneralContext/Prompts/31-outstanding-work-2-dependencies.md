@@ -29,76 +29,63 @@ in this track removes old-version support. vite 8's and React 19's growth are
 declared budgets (React trims first). Python 3.15 and Postgres 18 are done
 here, last. Nobody edits `package.json` by hand to land a major.
 
-Done: model names (PR #9); github-actions non-major, `ruff`, `k6`,
-`actions/checkout` v7, `date-fns` 4, `jest-dom` 7, `zustand` 5 (#11–#17,
-deployed); `npm non-major` (#21, #23 `allow-remote=all`), a test flake
-(#25). **Units 1–3 are done:**
-`FRONTEND-045` (#27) and its four majors (#28–#31); `FRONTEND-046` (#32, #33
-the fold, #34) and `vite` 8, `plugin-react` 6 (#35, #36); `FRONTEND-047`
-(#37 spec with [ADR 0041](../Decisions/0041-react-19-entry-budget.md), #38).
-2026-11-22: React 19 (#40), `eslint` 10 (#41), `jest-dom` 8 (#42; probe: no
-change needed, 3,698 tests green). `FRONTEND-048` fixes the delete-focus flake
-(below) before `npm non-major` (#43) merges.
+Done (PRs): model names (#9); non-majors and small majors (#11–#17, #21,
+#23, #43); `FRONTEND-045` and `@types/node` 26, `jsdom` 31,
+`vitest` 5, `msw` 3 (#27–#31); `FRONTEND-046` and `vite` 8, `plugin-react` 6
+(#32–#36); `FRONTEND-047`, [ADR 0041](../Decisions/0041-react-19-entry-budget.md),
+React 19, `eslint` 10 (#37–#41); `jest-dom` 8 (#42); `FRONTEND-048`, the
+delete-focus flake (#44, #45); the `FRONTEND-049` spec and the React 19 fold
+(#46). Each unit's causes are in `.ai/tasks/FRONTEND-045`–`049/brief.md`.
 ADR 0026 lines 38–40 still call the model switch pending; only a superseding
 ADR can correct it, if the human wants one.
 
-## Where things stand (2026-11-23), verify, don't trust
+## Where things stand (2026-11-23, hand-over), verify, don't trust
 
-`main` 66fbb9b runs React 19, eslint 10, jest-dom 8. 2026-11-22/23:
-`FRONTEND-048` (#44 spec, #45: a failed confirm's focus, which was the
-delete-focus flake) and `npm non-major` (#43) merged. Dependency Dashboard
-issue #2:
+`main` 1a9615d: React 19, eslint 10, jest-dom 8, the fold (#46). **Next: run
+the `FRONTEND-049` unit** (spec and brief on `main`, `.ai/tasks/FRONTEND-049/`).
+No frontend PR is open, so its start gate holds.
+
+Open Renovate PRs, each reviewed 2026-11-23; the human merges one at a time,
+"Update branch" on the next:
+
+| PR | Verdict |
+|---|---|
+| #49 `ruff` 0.17.6 | **Merge** (all green, `backend-ruff` and `mypy` included). |
+| #47 `github-actions non-major` | **Merge once `renovate/stability-days` is green.** SHAs checked: `codeql-action` is the `v4` tag (v4.39.4), `scorecard-action` is `v2.6.0`'s commit. |
+| #48 `claude CLI` 2.1.329 | **Merge after** the human's `--help` shows `--setting-sources` and `--strict-mcp-config` (`.ai/docs/handoff.md` §10.1 D2b). |
+
+On the dashboard, not yet PRs:
 
 | Item | Verdict |
 |---|---|
-| `github-actions non-major` (`codeql-action`, `scorecard-action`), `ruff` 0.17.6 | Merge; read the diff for what CI cannot see. |
-| `claude CLI` 2.1.329 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
-| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its `cdk diff`/synth for what CI cannot see. |
+| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its synth (`cd infra; npm run synth`, compare with `main`'s) for what CI cannot see. |
 | `python` 3.15 | `INFRA-006` first. |
 | `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
 | `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
 
 - Dependabot #4 (`infra/`, `minimatch` bundled in `aws-cdk-lib`, which no
   override reaches): upstream-blocked; or the human dismisses it.
-- Frontend suite on 6939ae2: 217 files / 3,698 tests. Run suites alone and in
+- Frontend suite on 1a9615d: 217 files / 3,702 tests. Run suites alone and in
   the foreground: on this 8 GB machine Claude Code reaps background jobs under
   memory pressure.
-
-Probe findings still open (each major alone from `main`); the done rows'
-causes are in `.ai/tasks/FRONTEND-045`–`047/brief.md`:
-
-| Major | Needs |
-|---|---|
-| `typescript` 7 | held: typescript-eslint, ts-jest, `openapi-typescript` refuse it. |
-| `python` 3.15 | wheels install; CDK 2.277 has `PYTHON_3_15`; suite unproven. |
-| `postgres` 18/19 | CDK has `VER_18`; 19 unchecked; not run. |
 
 ## Unit plan, in order
 
 Write each spec on a Director branch, merge it, then run the unit
-(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-049`,
+(`Architecture/director-sessions.md`). Next free frontend id `FRONTEND-050`,
 infra `INFRA-006`.
 
-1. **Done (#27–#31).** `FRONTEND-045`, test harness on both versions: the `@types/node`,
-   `jsdom` and `msw` rows above, each written to work on today's and the new
-   version. Then tick `@types/node` 26, `vitest` 5, `jsdom` 31, `msw` 3.
-2. **Done (#32–#36).** `FRONTEND-046`, vite 8 ready: the budget measures the
-   entry with its static imports; #33 folded five merged units; `vite` 8 and
-   `plugin-react` 6 merged.
-3. **Done (#37, #38).** `FRONTEND-047`, React 19 ready: the 16 react-hooks 7
-   sites fixed on both versions, `combine`'s `dependencyMajor` exception, React
-   19's entry declared (+25,000 gzip, +85,000 raw). No trim: a lazy `/search`
-   made the entry larger. React and `eslint` 10 merged (#40, #41).
-4. **`FRONTEND-049`, clean-up.** Spec on `director/frontend-049-spec`, which
-   also folds FRONTEND-047 and 048 into `BASE` (main 66fbb9b: 172,748 gzip,
-   554,736 raw), sets `ENTRY_JS_RAW_HARD_MAX` to 560,300 and moves
+1.–3. **Done**: `FRONTEND-045`, `046`, `047` and their majors (above).
+4. **`FRONTEND-049`, clean-up. Next.** Spec on `main` (#46), which also
+   folds FRONTEND-047 and 048 into `BASE` (172,748 gzip, 554,736 raw), sets `ENTRY_JS_RAW_HARD_MAX` to 560,300 and moves
    `vite.config.ts` to `rolldownOptions.transform.define` (no role may write
    it). The unit drops msw 2's option and jsdom 25's Blob path, tightens
    `dev-server-config.test.ts`, and fixes the AccountSettings race (#45's first
    CI run: the shell's `GET /users/me` starts after the checkbox renders).
    Keep `dependencyMajor`: it is narrow.
 5. **`INFRA-006`, Python 3.15:** the two `PYTHON_3_12` in `infra/lib/`;
-   prove the backend suite on 3.15. Tick `python runtime` (workflows, Lambda
+   prove the backend suite on 3.15 (probe: wheels install; CDK 2.277 has
+   `PYTHON_3_15`). Tick `python runtime` (workflows, Lambda
    image). mypy's `python_version` in `backend/pyproject.toml` is a manifest,
    so a Director edit (`requires-python >=3.12` already admits 3.15).
 6. **`INFRA-007`, Postgres:** ADR 0036 says 18; Renovate now offers the
@@ -130,6 +117,20 @@ reason to hold it, not to loosen a test.
 
 ## Mechanics learned the hard way
 
+- **`frontend/vite.config.ts` is no role's to write** (`code_agent` writes
+  `frontend/src/**` only), so a change to it goes in the Director's spec PR,
+  with its own proof (#46: a forced dev pre-bundle, plus a control without
+  the define).
+- **A unit's PR can be cut before its spec merges**: branch `agent/<ID>` from
+  the spec branch. Once the spec merges (a merge commit), "Update branch"
+  leaves only the unit's commits; `guard-gate` passes only after that.
+- **Timing races in tests: hold, don't hope.** The post stubs have
+  `hold()` (`src/test/post-menu.ts`); hold the response until the in-flight
+  state renders, then release. A window that records requests must start
+  after the shell's own `GET /users/me` (await the Account menu).
+- **A CI red on a Renovate PR is not the bump until shown.** #43's and #45's
+  reds were existing races; reproduce on the PR branch, then on `main`.
+
 - **Probe a major before its spec**, from today's `main`, in a throwaway
   worktree (`npm install -D <pkg>@<major>`, never committed). Run the suite
   in the foreground, sharded: `npx vitest run --shard=1/3 --maxWorkers=2
@@ -138,12 +139,6 @@ reason to hold it, not to loosen a test.
 - **An assertion that stops at its first `expect` hides the rest.** Re-measure
   what it checks yourself (FRONTEND-046's entry split hid behind one row,
   and `ComposePage` behind the first lazy assertion).
-- **React 19's entry growth** (+23.4 kB gzip, +79.5 kB raw, all
-  `react-dom`) is past R1's 480 kB raw cap and R13's 1 kB per unit; the human
-  chose to raise the cap for a declared dependency major
-  ([ADR 0041](../Decisions/0041-react-19-entry-budget.md)), not to trim 75 kB
-  or hold React. FRONTEND-049's spec folds FRONTEND-047 and sets
-  `ENTRY_JS_RAW_HARD_MAX` to the measured entry plus about 1%.
 - **`docker compose run --rm frontend-test` reuses a built image**: it
   tests whatever was copied at the last build. Run `docker compose build
   frontend-test` first (check the file count moved). FRONTEND-047's first
@@ -155,11 +150,6 @@ reason to hold it, not to loosen a test.
   output's gzip and raw size to a file (vitest swallows `console.log`).
   Delete it before committing. `chunk.modules[id].renderedLength` gives a
   per-package breakdown.
-- **CI flake, fixed by `FRONTEND-048`:** `features/feed/delete-focus.test.tsx`
-  "a failed delete keeps the confirm open" (#38, #43) was a real defect: the
-  disabled-while-pending action drops focus to `<body>`, and nothing restored it
-  after a failure. It showed only when the pending render beat the 403. Hold
-  the response with the stub's gate to make such a race deterministic.
 - **Pin a refactor's behaviour on today's code, then mutate:** put the old
   production files back, check the new tests pass, then remove the guarded
   line and check they fail (FRONTEND-047 did this for two of its pins).
