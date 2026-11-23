@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-007",
+  "objective": "Track 2, unit 6: move RDS from Postgres 16 to Postgres 18 (aws-cdk-lib 2.277 has no PostgresEngineVersion.VER_19) as an in-place major version upgrade of the existing instance, and run the backend suite's testcontainers Postgres on 18.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged, and the branch is cut from a main that holds it. Holding Renovate's postgres group below 19 (allowedVersions in .github/renovate.json) is a separate Director change that must land before the human ticks that group.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because the instance synthesizes EngineVersion 16 and no AllowMajorVersionUpgrade.",
+    "data-stack.test.ts asserts the AWS::RDS::DBInstance has Engine postgres, EngineVersion 18 and AllowMajorVersionUpgrade true, and that its logical id is the one main synthesizes (an upgrade in place, not a new instance).",
+    "infra/lib/data-stack.ts uses rds.PostgresEngineVersion.VER_18 and allowMajorVersionUpgrade: true. deletionProtection, removalPolicy SNAPSHOT, storage, encryption, backups and autoMinorVersionUpgrade are unchanged. No parameter group is added: the instance keeps the engine's default group, which moves to the 18 family with it.",
+    "backend/tests/conftest.py starts postgres:18-alpine, and its docstring names 18. It is a test-role commit.",
+    "The PR body carries a before/after synth diff of cdk.out/*.template.json for every stack: only the DBInstance's EngineVersion and AllowMajorVersionUpgrade change. No resource is added, removed or replaced.",
+    "infra/iam/** is unchanged unless a cfn-exec-policy test fails; then the policy, the test's TYPE_TO_IAM and the PR body change together, and the human rolls the policy out before the deploy.",
+    "The PR body gives the human, as an ordered list of single-line PowerShell commands: before approving the deploy, read the live engine version, confirm 18 is in its ValidUpgradeTarget in ca-central-1, and take a manual snapshot and wait for it; after the deploy, confirm the engine version reads 18.x. It says the Migration Lambda is not needed (no schema change) and that the upgrade takes the database offline for some minutes.",
+    "npm run build, npm run lint, npm test and npm run synth pass in infra/, and CI's backend-test passes on postgres:18-alpine. Nobody runs cdk deploy.",
+    "Not in this unit: docker-compose.yml's postgres tags (Renovate's postgres runtime PR, once the group is held below 19, merged unchanged).",
+    "wiki/CodeContext/Modules/0x00-architecture.md or 0x00a-architecture-infra.md states Postgres 18 wherever it names the engine version."
+  ],
+  "allowed_paths": [
+    "infra/lib/data-stack.ts",
+    "infra/test/**",
+    "backend/tests/conftest.py",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "backend/app/**",
+    "backend/alembic/**",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/build-deployment.md"
+  ],
+  "required_skills": ["infra-cdk", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

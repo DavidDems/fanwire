@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-006",
+  "objective": "Track 2, unit 5: move the two inline zip Lambdas, the App stack's origin-verify authorizer and the Auth stack's pre-sign-up trigger, from python3.12 to python3.15, so every Python the app deploys matches the 3.15 Lambda image that Renovate's python runtime group brings.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged, and the branch is cut from a main that holds it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because both functions synthesize Runtime python3.12.",
+    "app-stack.test.ts's origin-verify test and auth-stack.test.ts's pre-sign-up test expect Runtime python3.15.",
+    "A new test synthesizes every stack in every synth mode the suite already uses and asserts that every AWS::Lambda::Function either has PackageType Image and no Runtime, or has Runtime python3.15. Nothing that synthesizes today may be skipped to make it pass.",
+    "infra/lib/app-stack.ts and infra/lib/auth-stack.ts use lambda.Runtime.PYTHON_3_15. Their inline code is unchanged; the PR body says why it runs on 3.15 (standard-library hmac and os, and boto3, which the managed 3.15 runtime includes).",
+    "The PR body carries a before/after synth diff of cdk.out/*.template.json for every stack: only the two functions' Runtime changes. No resource is added, removed or replaced, and no logical id moves.",
+    "infra/iam/** is unchanged: changing a function's runtime is lambda:UpdateFunctionConfiguration, which CloudFormation's role already holds. Every cfn-exec-policy, iam-policy and permissions-boundary test passes in every domain mode.",
+    "npm run build, npm run lint, npm test and npm run synth pass in infra/. Nobody runs cdk deploy.",
+    "Not in this unit: setup-python's python-version, docker/backend.Dockerfile's base image (Renovate's python runtime PR, merged unchanged) and mypy's python_version (a Director manifest edit after that PR).",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md states the zip Lambdas' runtime if it names one, and names no python3.12."
+  ],
+  "allowed_paths": [
+    "infra/lib/app-stack.ts",
+    "infra/lib/auth-stack.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "backend/**",
+    "frontend/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md",
+    "wiki/CodeContext/Standards/aws-stack.md",
+    "wiki/CodeContext/Standards/build-deployment.md"
+  ],
+  "required_skills": ["infra-cdk", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
