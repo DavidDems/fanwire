@@ -255,7 +255,8 @@ export interface ConfirmDialogProps {
  * back on what opened it: for a post's confirms, the menu button.
  *
  * **A failure keeps it open**, as an alert inside it, so the reader can try
- * again or cancel knowing nothing happened.
+ * again or cancel knowing nothing happened. Focus that left with the disabled
+ * action comes back to it, so trying again is one press.
  */
 export function ConfirmDialog({ open, ...rest }: ConfirmDialogProps) {
   return open ? <OpenConfirm {...rest} /> : null;
@@ -297,17 +298,36 @@ function ConfirmBody({
   destructive = false,
 }: Omit<ConfirmDialogProps, "open" | "title"> & { descriptionId: string }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const actionRef = useRef<HTMLButtonElement>(null);
+  // `pending` as the last effect saw it: only the end of a request moves
+  // focus, never the mount (which starts on Cancel) or a render in between.
+  const wasPendingRef = useRef(pending);
 
   useEffect(() => {
     cancelRef.current?.focus();
   }, []);
+
+  // A focused button that becomes disabled loses focus to the body, with no
+  // `focusout`, so the request's failure has to bring it back. Focus the
+  // reader moved elsewhere in the confirm (Cancel) stays where they put it.
+  useEffect(() => {
+    const ended = wasPendingRef.current && !pending;
+    wasPendingRef.current = pending;
+    const action = actionRef.current;
+    if (!ended || failure === null || action === null) return;
+    const confirm = action.closest("dialog");
+    if (confirm !== null && confirm.contains(document.activeElement)) return;
+    action.focus();
+  }, [pending, failure]);
 
   return (
     <div className={styles.confirm}>
       <div id={descriptionId} className={styles.question}>
         {children}
       </div>
-      {failure === null ? null : <InlineAlert id={failureId}>{failure}</InlineAlert>}
+      {failure === null ? null : (
+        <InlineAlert id={failureId}>{failure}</InlineAlert>
+      )}
       <div className={styles.answers}>
         {/* Native buttons styled as `Button`s: `Button` passes no ref. */}
         <button
@@ -319,6 +339,7 @@ function ConfirmBody({
           Cancel
         </button>
         <button
+          ref={actionRef}
           type="button"
           className={`${buttonClass("primary", "md")}${destructive ? ` ${styles.destructive}` : ""}`}
           onClick={onConfirm}
