@@ -17,72 +17,27 @@ import { File as NodeFile } from "node:buffer";
  *
  * The bytes are read from jsdom's internal Blob implementation, exactly as
  * Vitest's own bridge reads them: a request body is built synchronously, and
- * every public reader of a jsdom `Blob` is asynchronous. Two jsdom layouts are
- * read (FRONTEND-045, until FRONTEND-048 drops jsdom 25's):
+ * every public reader of a jsdom `Blob` is asynchronous. jsdom keeps the
+ * implementation behind a private field that only its generated
+ * `implForWrapper` reaches, and the bytes there as `_bytes`.
  *
- * - jsdom 31 keeps the implementation behind a private field that only its
- *   generated `implForWrapper` reaches, and the bytes as `_bytes`.
- * - jsdom 25 keeps it under an own `Symbol("impl")`, and the bytes as
- *   `_buffer`.
- *
- * `src/test/harness.test.ts` pins both.
+ * `src/test/harness.test.ts` pins it.
  */
 import { createRequire } from "node:module";
 
-type Impl = {
-  _bytes?: Uint8Array<ArrayBuffer>;
-  _buffer?: Uint8Array<ArrayBuffer>;
-};
+type Impl = { _bytes?: Uint8Array<ArrayBuffer> };
 
-type ImplForWrapper = (wrapper: unknown) => Impl | null | undefined;
-
-// jsdom has no "exports" map, so its generated bindings resolve by path. They
-// moved in jsdom 28.1; the first path is today's, the second jsdom 25's.
-const JSDOM_UTILS = [
+// jsdom has no "exports" map, so its generated bindings resolve by path.
+const { implForWrapper } = createRequire(import.meta.url)(
   "jsdom/lib/generated/idl/utils.js",
-  "jsdom/lib/jsdom/living/generated/utils.js",
-];
-
-function loadImplForWrapper(): ImplForWrapper | null {
-  const require = createRequire(import.meta.url);
-  for (const id of JSDOM_UTILS) {
-    try {
-      const { implForWrapper } = require(id) as {
-        implForWrapper?: ImplForWrapper;
-      };
-      if (typeof implForWrapper === "function") return implForWrapper;
-    } catch {
-      // Not this jsdom's layout: try the next.
-    }
-  }
-  return null;
-}
-
-const implForWrapper = loadImplForWrapper();
-
-function implOf(blob: Blob): Impl | undefined {
-  const viaBindings = implForWrapper?.(blob);
-  if (viaBindings) return viaBindings;
-  const symbol = Object.getOwnPropertySymbols(blob).find(
-    (candidate) => candidate.description === "impl",
-  );
-  return symbol === undefined
-    ? undefined
-    : (blob as unknown as Record<symbol, Impl>)[symbol];
-}
+) as { implForWrapper: (wrapper: unknown) => Impl | null };
 
 /** A jsdom `Blob`'s bytes, read synchronously. Exported for `harness.test.ts`. */
 export function bytesOf(blob: Blob): Uint8Array<ArrayBuffer> {
-  const impl = implOf(blob);
-  const bytes = impl?._bytes ?? impl?._buffer;
+  const bytes = implForWrapper(blob)?._bytes;
   if (bytes === undefined)
     throw new Error("not a jsdom Blob: found no bytes to read");
-  // jsdom 25's are a Node `Buffer`: view the same memory as a plain array.
-  return new Uint8Array(
-    bytes.buffer,
-    bytes.byteOffset,
-    bytes.byteLength,
-  ) as Uint8Array<ArrayBuffer>;
+  return bytes;
 }
 
 const BaseRequest = globalThis.Request;
