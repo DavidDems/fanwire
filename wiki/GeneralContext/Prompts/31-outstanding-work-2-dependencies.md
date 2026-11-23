@@ -42,17 +42,18 @@ change needed, 3,698 tests green). `FRONTEND-048` fixes the delete-focus flake
 ADR 0026 lines 38–40 still call the model switch pending; only a superseding
 ADR can correct it, if the human wants one.
 
-## Where things stand (2026-11-21, hand-over), verify, don't trust
+## Where things stand (2026-11-23), verify, don't trust
 
-`main` 6939ae2 still runs React 18 and eslint 9; FRONTEND-047 made the code
-pass on React 19, react-hooks 7 and eslint 10 (proof in #38). Dependency
-Dashboard issue #2, unticked:
+`main` 66fbb9b runs React 19, eslint 10, jest-dom 8. 2026-11-22/23:
+`FRONTEND-048` (#44 spec, #45: a failed confirm's focus, which was the
+delete-focus flake) and `npm non-major` (#43) merged. Dependency Dashboard
+issue #2:
 
 | Item | Verdict |
 |---|---|
-| `npm non-major` (`@tanstack/react-query`, `msw`, `react-router-dom`, `vitest`) | #43: CI's one red is the delete-focus flake, not the bump. Rerun and merge, after `FRONTEND-048` if it lands first. |
 | `github-actions non-major` (`codeql-action`, `scorecard-action`), `ruff` 0.17.6 | Merge; read the diff for what CI cannot see. |
-| `claude CLI` 2.1.327 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
+| `claude CLI` 2.1.329 | The human runs its `--help` for both D2b flags (`.ai/docs/handoff.md` §10.1) before ticking. |
+| `npm non-major` (new: `typescript-eslint` parts, `aws-cdk-lib`) | Waiting on stability days. Review its `cdk diff`/synth for what CI cannot see. |
 | `python` 3.15 | `INFRA-006` first. |
 | `postgres` docker tag **19** | **The group now offers 19, not 18.** See unit 6. |
 | `typescript` 7 | Held upstream (typescript-eslint, ts-jest, `openapi-typescript`). |
@@ -88,15 +89,14 @@ infra `INFRA-006`.
    sites fixed on both versions, `combine`'s `dependencyMajor` exception, React
    19's entry declared (+25,000 gzip, +85,000 raw). No trim: a lazy `/search`
    made the entry larger. React and `eslint` 10 merged (#40, #41).
-4. **`FRONTEND-049`, clean-up**, once React and eslint 10 are on `main`. Its
-   spec PR (Director) first **folds FRONTEND-047**: measure `main` with the
-   probe below, write React 19's numbers into `BASE`, set
-   `ENTRY_JS_RAW_HARD_MAX` to the measured entry raw plus about 1% (ADR 0041;
-   about 559.7 kB), delete `bundle-budgets/FRONTEND-047.ts`. The unit then
-   drops msw 2's option (`setupTests.ts`, `onUnhandledRequest`), jsdom 25's
-   Blob path (`src/test/form-data-file-names.ts`, the `_buffer` symbol) and
-   moves `optimizeDeps.esbuildOptions` to `rolldownOptions` (`vite.config.ts`,
-   pinned by `dev-server-config.test.ts`). Keep `dependencyMajor`: it is narrow.
+4. **`FRONTEND-049`, clean-up.** Spec on `director/frontend-049-spec`, which
+   also folds FRONTEND-047 and 048 into `BASE` (main 66fbb9b: 172,748 gzip,
+   554,736 raw), sets `ENTRY_JS_RAW_HARD_MAX` to 560,300 and moves
+   `vite.config.ts` to `rolldownOptions.transform.define` (no role may write
+   it). The unit drops msw 2's option and jsdom 25's Blob path, tightens
+   `dev-server-config.test.ts`, and fixes the AccountSettings race (#45's first
+   CI run: the shell's `GET /users/me` starts after the checkbox renders).
+   Keep `dependencyMajor`: it is narrow.
 5. **`INFRA-006`, Python 3.15:** the two `PYTHON_3_12` in `infra/lib/`;
    prove the backend suite on 3.15. Tick `python runtime` (workflows, Lambda
    image). mypy's `python_version` in `backend/pyproject.toml` is a manifest,

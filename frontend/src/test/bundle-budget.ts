@@ -93,11 +93,12 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on main a777aae (vite 8,
- * @vitejs/plugin-react 6), folding in FRONTEND-046, merged. The entry is
- * the entry chunk plus its static imports (`entryClosure`), seven chunks
- * on vite 8; its CSS is `index.css` plus `InlineAlert.css`. One tree, so
- * every number is its single measurement. Earlier folds: 85e3527 (vite 7;
+ * The base, measured by this test's own build on main 66fbb9b (vite 8,
+ * React 19), folding in FRONTEND-047 (React 19, ADR 0041) and FRONTEND-048,
+ * both merged. The entry is the entry chunk plus its static imports
+ * (`entryClosure`), nine chunks; its CSS is `index.css` plus
+ * `InlineAlert.css`. One tree, so every number is its single measurement.
+ * Earlier folds: a777aae (vite 8; FRONTEND-046), 85e3527 (vite 7;
  * FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac (FRONTEND-031, 034,
  * 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at
  * 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99,
@@ -107,43 +108,43 @@ export interface UnitBudget {
  * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 149_210,
-  entryJsRaw: 474_565,
+  entryJsGzip: 172_748,
+  entryJsRaw: 554_736,
   entryCssGzip: 7_341,
   lazy: {
-    AccountSettings: 2_359,
+    AccountSettings: 2_389,
     "AuthPage.module": 139,
-    ComposePage: 3_745,
-    ConfirmPage: 1_133,
-    errors: 232,
-    ForgotPasswordPage: 1_170,
-    format: 491,
+    ComposePage: 3_853,
+    ConfirmPage: 1_163,
+    errors: 231,
+    ForgotPasswordPage: 1_200,
+    format: 489,
     GameCard: 635,
-    GamePage: 3_854,
-    HistoryPage: 1_115,
-    NotificationsPage: 1_827,
+    GamePage: 3_884,
+    HistoryPage: 1_113,
+    NotificationsPage: 1_852,
     ok: 140,
-    PeriodScores: 493,
-    PlayerPage: 3_854,
-    PlayerResults: 879,
-    PlayersTab: 609,
-    ProfilePage: 2_887,
-    ProfileSetupPage: 1_509,
-    RecentGames: 784,
-    RecordsTab: 5_877,
-    SchedulePage: 2_253,
-    SeasonsTab: 1_728,
-    SegmentedTabs: 694,
-    SignInPage: 1_066,
-    SignUpPage: 1_002,
-    stats: 696,
-    "Stats.module": 502,
+    PeriodScores: 494,
+    PlayerPage: 3_855,
+    PlayerResults: 902,
+    PlayersTab: 640,
+    ProfilePage: 2_908,
+    ProfileSetupPage: 1_538,
+    RecentGames: 783,
+    RecordsTab: 5_915,
+    SchedulePage: 2_282,
+    SeasonsTab: 1_760,
+    SegmentedTabs: 726,
+    SignInPage: 1_097,
+    SignUpPage: 1_028,
+    stats: 697,
+    "Stats.module": 528,
     "StatsNav.module": 504,
-    StatsNavigator: 3_832,
-    StatsPage: 426,
-    StatsPicker: 2_220,
-    useQueries: 1_489,
-    VisuallyHidden: 153,
+    StatsNavigator: 3_929,
+    StatsPage: 429,
+    StatsPicker: 2_258,
+    useQueries: 1_506,
+    VisuallyHidden: 155,
     "css:AccountSettings.css": 403,
     "css:AuthPage.css": 273,
     "css:ComposePage.css": 357,
@@ -181,9 +182,11 @@ export const FILE_RAW_LIMIT = 500_000;
 
 /**
  * The entry's raw ceiling (R1), whatever units declare, except that a
- * dependency major's raw growth lifts it by as much (ADR 0041).
+ * dependency major's raw growth lifts it by as much (ADR 0041). 480 kB until
+ * React 19; its fold set it to the measured React 19 entry (554,736 raw)
+ * plus about 1%, rounded up to 100 B.
  */
-export const ENTRY_JS_RAW_HARD_MAX = 480 * KB;
+export const ENTRY_JS_RAW_HARD_MAX = 560_300;
 
 /** What the build is held to once every unit's declarations are applied. */
 export interface Budget {
