@@ -77,7 +77,6 @@ Live brief and unit order: `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Delete the API-SPORTS infra resources**: the idempotency and live-score tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their exports | `hand` | — | `EVENTS-003` (fanwire-archive#142, deployed 2026-10-14) | Track 3. Needs a spec. The two `RETAIN` resources (`IdempotencyTable`, `ApiSportsKey`) are deleted by hand afterwards: decided, nothing else uses them (ADR 0035) |
 
 ## Predictions
 
@@ -99,12 +98,8 @@ in this order. One row per track; its brief lists the units.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **`lambda-vpc-eni` self-deny**: a `Deny` on the ENI actions conditioned on `lambda:SourceFunctionArn` (`ArnLike` `Fanwire-App-*`) in `backendFunction` | `hand` | — | `0x00b-architecture-iam-gaps.md` → the `lambda-vpc-eni` waiver | Check how `infra/test/iam-policy.test.ts` treats a `Deny`. Proven only by a deploy plus a logged-in `/api/users/me` |
-| **A GuardDuty-findings alarm**: route Medium/High findings to the alarm topic (EventBridge rule → SNS) | `director` | — | `incident-runbook-inventory.md` Known gaps, after `INFRA-004` | Findings live in the delegated-admin account (`fanwire-log-archive`), not the workload account that holds the topic, so the routing crosses accounts. Needs a design first |
 | **A friendlier 429 message**: the frontend shows a generic failure when `POST /posts` or a repost is rate-limited | `hand` | — | `POSTS-002` (fanwire-archive#183), "Not in this task" | `createPost` treats every non-2xx alike. A "slow down" line where the composer shows errors |
 | **A missing post is a no-op for the `PostCreated` consumer**, and maybe the REPOST notification goes on un-repost | `hand` | — | `POSTS-001` (fanwire-archive#161), `0x03a-posts-post.md` Open decisions | `notifications/` treats a missing post as a malformed event (`MissingReferenceError`, retried, then the DLQ), so a repost undone before the consumer runs lands in the DLQ. The notification also outlives the undo |
-| **`0x00a` "Alarms" says 21; `infra/test/alarms.test.ts` pins 23** | `hand` | — | CUT-11, fanwire-archive#398 "Carried over" | Make the doc match the test |
-| **Small open decisions from the compaction**: migrations stay manual (revisit with the permissions boundary); per-user rate limits (`0x00b`); the incident inventory may be missing the sports-data bucket; `dev-auth-setup` "mirrors" vs prod's pre-sign-up auto-confirm | `director` | — | CUT-11, fanwire-archive#398 "Carried over" | Check each against the code before acting |
 
 ## Launch adjustments (Track D sequence)
 

@@ -81,7 +81,7 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 Live:
 
-- **`29-outstanding-work.md`** (2026-11-17): the order of the Outstanding-work tracks still to run (`32`–`37`; track 1, the Kaggle refresh, and track 2, dependencies, are done) that finish everything in `TODO/02-backlog.md`, and the rules each shares. Track 3, infra housekeeping, is next; track 8, the review skills, is last.
+- **`29-outstanding-work.md`** (2026-11-17): the order of the Outstanding-work tracks still to run (`33`–`37`; track 1, the Kaggle refresh, track 2, dependencies, and track 3, infra housekeeping, are done) that finish everything in `TODO/02-backlog.md`, and the rules each shares. Track 4, backend product, is next; track 8, the review skills, is last.
 - **`22-launch-adjustments.md`**: Track D. `USERS-009` is merged but dormant (`ACCOUNT_LIFECYCLE_ENABLED=false`); activation, `AUTH-001` (native Cognito only) and `USERS-005` are Outstanding-work track 6. `AUTH-002` and `AUTH-003` are dropped.
 - **`04-cheap-automations.md`**: the four Haiku 5.5 automations are built and live. Proving two fixes live needs API spend, so it is parked ([ADR 0035](Decisions/0035-outstanding-work-answers.md)). `jev` stays off.
 - **`06-nba-data.md`**: sports data on the Eoin Moore Kaggle dataset. Left: the API-SPORTS clean-up (Outstanding-work track 3). The daily Kaggle refresh (`EVENTS-008`) is live.
