@@ -815,7 +815,7 @@ export class AppStack extends cdk.Stack {
       ],
     });
     const fn = new lambda.Function(this, 'OriginVerifyAuthorizer', {
-      runtime: lambda.Runtime.PYTHON_3_12,
+      runtime: lambda.Runtime.PYTHON_3_15,
       handler: 'index.handler',
       code: lambda.Code.fromInline(
         [
