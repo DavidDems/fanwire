@@ -11,13 +11,16 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   // `amazon-cognito-identity-js` bundles the `buffer` polyfill, which reads
-  // Node's `global`. The production build copes with that, but the dev
-  // server's dependency pre-bundle does not, and `npm run dev` rendered an
-  // empty page (`ReferenceError: global is not defined`). Scoped to the dev
-  // pre-bundle, so application code and the production bundle are untouched.
+  // Node's `global` at module load. Browsers have no `global`, so without a
+  // rewrite the page renders empty (`ReferenceError: global is not defined`).
+  // Vite 7's Rollup CommonJS plugin rewrote it in the production build;
+  // Rolldown (vite 8) does not, and the live site went blank. This `define`
+  // covers the production build; the dev server's dependency pre-bundle needs
+  // its own, below. Pinned by src/dev-server-config.test.ts, and the built
+  // code by src/test/bundle-budget.test.ts.
+  define: { global: "globalThis" },
   // Rolldown's `transform.define` since vite 8, which deprecated esbuild's
-  // `esbuildOptions.define` and maps it to this. Pinned by
-  // src/dev-server-config.test.ts.
+  // `esbuildOptions.define` and maps it to this.
   optimizeDeps: {
     rolldownOptions: {
       transform: {
