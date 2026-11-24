@@ -35,14 +35,6 @@ changes a workflow.
     `--permission-mode acceptEdits` suits a worker that runs a tool
     (`Prompts/13`). Each needs metered runs; the human revisits only by
     choosing to spend.
-18. `director`: Spec validation that rejects an acceptance criterion with no
-    observable predicate (caught today only by the red-baseline gate). Track 7.
-19. `director`: A CI check that a PR's base is `main` (stacked PRs merged
-    top-down never reached it). Track 7.
-20. `director`: Local guards: `agentctl selfcheck` asserting each workspace's
-    `node_modules` is installed, refusing `git stash` in agent sessions (the
-    stack is shared across worktrees), and a port pre-flight before
-    `docker compose run`. Track 7.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
@@ -56,7 +48,6 @@ Each brief is in `wiki/GeneralContext/Prompts/`.
 | Brief | Mode | Now |
 |---|---|---|
 | `10-docs-structure.md` | `director` | Deliverable 4 is replaced by the `wiki-review` skill, track 8 |
-| `11-metrics-every-mode.md` | `director` | Deliverables 4 and 5 (VERSION/changelog, reporting), track 7 |
 | `12`–`15` (evals, worker shell, learning loop, context graph) | `director` | Parked: each needs metered API runs to build or score |
 
 ## Workflow ideas, not yet designed

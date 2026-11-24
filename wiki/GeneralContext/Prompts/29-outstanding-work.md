@@ -23,7 +23,6 @@ answers; don't re-ask them). The human starts one session per track with:
 | 4 | `33-outstanding-work-4-backend-product.md` | Email availability field, username rule, follows feed, `PostCreated` consumer |
 | 5 | `34-outstanding-work-5-frontend.md` | Frontend fixes, tidy-ups, UI docs, browser rows |
 | 6 | `35-outstanding-work-6-account-lifecycle.md` | `USERS-005`, `USERS-009` activation, `AUTH-001` |
-| 7 | `36-outstanding-work-7-agent-system.md` | Key-free pipeline checks and metrics |
 | 8 | `37-outstanding-work-8-review-skills.md` | `wiki-review` and `ai-review` skills and prompts. Last of the Outstanding-work tracks |
 
 After track 8 and the results scraper (`38`), the predictions tracks, in

@@ -246,6 +246,7 @@ The human's decisions on this review are numbered ADRs; each item names its owne
 6. **§9.2 item 5: keep `action_required` on bot-authored PRs**, with fork-PR approval and the deleted gateway key: [ADR 0023](../../wiki/GeneralContext/Decisions/0023-human-gates-on-agent-work.md).
 7. **D2b's worker-isolation choice:** see [ADR 0002](../../wiki/GeneralContext/Decisions/0002-worker-credential-isolation.md).
 8. **Work modes (2026-10-09, after `MEDIA-002`'s USD $2.65):** code is hand-run, the API is for cheap automation: [ADR 0027](../../wiki/GeneralContext/Decisions/0027-work-modes.md).
+9. **Key-free checks (2026-11-24, track 7):** pipeline `VERSION`, `metrics report`, spec validation, `pr-base`, local guards. Briefs `04`, `12`-`15` parked ([ADR 0035](../../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
 
 ### 10.4 The backlog as test load
 
