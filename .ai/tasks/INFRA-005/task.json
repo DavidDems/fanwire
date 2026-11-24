@@ -1,22 +1,25 @@
 {
   "schema": 1,
   "task_id": "INFRA-005",
-  "objective": "Delete the infra API-SPORTS left behind, which has had no consumer since EVENTS-003: the idempotency and live-score cache tables and the API-SPORTS secret from Fanwire-Data, the ingestion-retry queue, its DLQ, their policies and the DLQ's alarm from Fanwire-Messaging, and all seven of their exports. Synth only: the two RETAIN resources are named in the PR for the human to delete by hand.",
+  "objective": "Delete the infra API-SPORTS left behind, which has had no consumer since EVENTS-003: the idempotency and live-score cache tables and the API-SPORTS secret from Fanwire-Data, the ingestion-retry queue, its DLQ, their policies and the DLQ's alarm from Fanwire-Messaging, all seven of their exports, and docker-compose.yml's dynamodb-local service that existed only for those tables. Synth only: the two RETAIN resources are named in the PR, with their physical ids, for the human to delete by hand.",
   "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged into outstanding-track-3-phase-2, this run's integration branch for phase 2. The unit's branch is cut from an outstanding-track-3-phase-2 that holds it. Its PR into main is titled \"merge only after track 3's deploy is green\" and is not merged by any agent.",
     "Test-first: commit the failing tests alone before the implementation. They fail today because every resource and export below still synthesizes.",
     "Fanwire-Data no longer synthesizes IdempotencyTable22A5A209 (AWS::DynamoDB::Table, RETAIN), LiveScoreCacheTable277AE7C2 (AWS::DynamoDB::Table, Delete) or ApiSportsKey4432EB4A (AWS::SecretsManager::Secret, RETAIN), and has no AWS::DynamoDB::Table at all.",
     "Fanwire-Data no longer has the outputs ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97, ExportsOutputFnGetAttLiveScoreCacheTable277AE7C2Arn3F1E2DD3, ExportsOutputRefApiSportsKey4432EB4A2C8D0DDC, ExportsOutputRefIdempotencyTable22A5A209F6C0179A or ExportsOutputRefLiveScoreCacheTable277AE7C28479FE72.",
     "Fanwire-Messaging no longer synthesizes IngestionRetryQueueD528F9A2 and IngestionRetryDlqAD1363B6 (AWS::SQS::Queue), IngestionRetryQueuePolicy60151471 and IngestionRetryDlqPolicy72728599 (AWS::SQS::QueuePolicy) or IngestionRetryDlqDepthAlarm7CDD189B (AWS::CloudWatch::Alarm), and no longer has the outputs ExportsOutputFnGetAttIngestionRetryQueueD528F9A2Arn07FDF528 or ExportsOutputFnGetAttIngestionRetryDlqAD1363B6Arn3F8A5660.",
     "A test over every stack in every synth mode asserts that no resource's logical id and no output contains IdempotencyTable, LiveScoreCache, ApiSports or IngestionRetry, and that no template contains an Fn::ImportValue naming them.",
-    "alarms.test.ts's pinned count falls from 21 to 20, with its comment saying 2 DLQ alarms. Every other alarm is unchanged.",
-    "What stays: the database secret, the origin-verify secret, the notification and media-scan-result queues and DLQs with their logical ids, the CMK and its description and policy, the VPC's DynamoDB gateway endpoint, and the NAT egress rule. The Data key's template is byte-identical before and after.",
+    "alarms.test.ts's pinned EXPECTED_ALARM_COUNT falls from 26 to 25, with its comment saying 2 DLQ alarms (notification, media-scan-result). Every other alarm is unchanged. wiki/CodeContext/Modules/0x00a-architecture-infra.md's \"Alarms\" paragraph says 25 and its breakdown drops ingestion-retry; its Fanwire-Messaging row lists two queues and two DLQ-depth alarms.",
+    "What stays: the database secret, the origin-verify secret, the Kaggle API token secret and its export, the RDS instance export, the notification and media-scan-result queues and DLQs with their logical ids, the CMK and its description and policy, the VPC's DynamoDB gateway endpoint, and the NAT egress rule. The Data key's template is byte-identical before and after.",
     "Nothing still reads what is removed. The PR body shows the search and its result for: secrets, env vars, Lambda code, schedules and event source mappings, IAM statements, tests, infra/test/cfn-exec-policy.test.ts and infra/iam/. git grep over infra/lib, infra/bin and backend/app finds no code reading those resources, only comments.",
     "infra/iam/** is unchanged and CloudFormation's role needs no new version: dynamodb:*, sqs:*, secretsmanager:* and cloudwatch:* stay, because this deploy's deletes use them. Every cfn-exec-policy, iam-policy and permissions-boundary test passes in every domain mode.",
     "No code path changes: every remaining Lambda's env vars, IAM statements and triggers are identical before and after. The App template is byte-identical apart from anything the PR explains line by line.",
     "The PR body carries a before/after synth diff of cdk.out/*.template.json for all eight stacks, each stack either marked identical or with its changes listed. Only the resources and outputs above are removed, plus at most the Fanwire-Data stack description. No resource is added or replaced.",
-    "The PR body names IdempotencyTable22A5A209 and ApiSportsKey4432EB4A as RETAIN and gives the human, as an ordered list of single-line PowerShell commands: before approving the deploy, the seven list-imports checks and capturing both physical ids; after it, deleting both. It says the physical ids cannot be read from the stack once the deploy has removed them.",
+    "The PR body states the expected deploy in cdk diff terms: Fanwire-Data: [-] IdempotencyTable22A5A209 (RETAIN, orphaned), [-] LiveScoreCacheTable277AE7C2 (deleted), [-] ApiSportsKey4432EB4A (RETAIN, orphaned) and [-] the five Outputs; Fanwire-Messaging: [-] the two queues, the two queue policies, the DLQ alarm and the two Outputs; every other stack: no change.",
+    "The PR body names IdempotencyTable22A5A209 and ApiSportsKey4432EB4A as RETAIN with their physical ids from the brief (they cannot be read from the stack after the deploy), and gives the human single-line PowerShell commands, each with --profile fanwire-workload --region ca-central-1: before approving the deploy, the seven aws cloudformation list-imports checks, each to answer that the export is not imported by any stack; after the deploy, aws dynamodb delete-table on the table and its check (aws dynamodb describe-table answering ResourceNotFoundException), then aws secretsmanager delete-secret --secret-id <the ARN> --recovery-window-in-days 7 and its check (aws secretsmanager describe-secret showing a DeletedDate). It says the secret is fully gone only after the 7-day window, and that --force-delete-without-recovery is the human's alternative to remove it now. No command reads the secret's value.",
+    "docker-compose.yml no longer has the dynamodb-local service, the header comment's \"a local DynamoDB for the idempotency-key / live-score-cache tables\" line, backend-test's depends_on entry for dynamodb-local or its AWS_ENDPOINT_URL_DYNAMODB env var. docker compose config parses and every remaining service still starts. The PR body shows git grep -n -E \"dynamodb-local|DYNAMODB_HOST_PORT|AWS_ENDPOINT_URL_DYNAMODB\" over backend/, frontend/, .github/, docker/ and scripts, with its result: exactly the three monkeypatch.delenv(\"AWS_ENDPOINT_URL_DYNAMODB\", raising=False) lines the brief lists, which are out of the unit's paths and harmless, and nothing else.",
     "npm run build, npm run lint, npm test and npm run synth pass in infra/. Comments that say these resources stay are corrected in data-stack.ts, messaging-stack.ts, app-stack.ts and network-stack.ts. Nobody runs cdk deploy.",
-    "wiki/CodeContext/Modules/0x00-architecture.md's stack table and wiki/CodeContext/Modules/0x02-events.md's storage passage no longer list the removed resources."
+    "wiki/CodeContext/Modules/0x00-architecture.md's stack table, 0x00a-architecture-infra.md, 0x00b-architecture-iam-gaps.md, 0x02-events.md's storage passage and 0x02a-events-schema.md no longer list the removed resources or dynamodb-local as present."
   ],
   "allowed_paths": [
     "infra/lib/data-stack.ts",
@@ -25,6 +28,7 @@
     "infra/lib/network-stack.ts",
     "infra/lib/app.ts",
     "infra/test/**",
+    "docker-compose.yml",
     "wiki/CodeContext/Modules/0x00-architecture.md",
     "wiki/CodeContext/Modules/0x00a-architecture-infra.md",
     "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md",
@@ -43,8 +47,7 @@
     "infra/cdk.json",
     "backend/**",
     "frontend/**",
-    "docker/**",
-    "docker-compose.yml"
+    "docker/**"
   ],
   "required_context": [
     "wiki/CodeContext/Modules/0x00-architecture.md",
