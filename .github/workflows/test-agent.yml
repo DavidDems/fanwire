@@ -267,7 +267,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.15"
       - run: pip install "pytest>=8.3"
       - name: Run agent infrastructure test suite
         working-directory: .ai
@@ -283,7 +283,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.15"
           # This job installed the whole dev tree - moto, testcontainers,
           # pillow - from scratch on every run, in parallel with the backend
           # image doing the same thing.
@@ -320,7 +320,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.15"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
