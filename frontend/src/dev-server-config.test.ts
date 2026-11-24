@@ -1,18 +1,19 @@
 /**
- * `npm run dev` must render, not just `npm run build`.
+ * `npm run dev` and the production build must both render.
  *
- * The Cognito SDK bundles the `buffer` polyfill, which reads
- * Node's `global` at module load. In a production build Rollup's CommonJS
- * handling copes with it. In the dev server Vite pre-bundles dependencies with
- * Rolldown (vite 8), which leaves `global` alone unless told otherwise, so the
- * browser throws `ReferenceError: global is not defined` and `#root` stays
- * empty. Measured with Playwright MCP on 2026-10-07 against Vite 7.3.7 (then
- * esbuild's pre-bundle); the Rolldown form was proven on a forced vite 8
- * pre-bundle (FRONTEND-049's spec). `esbuildOptions` is vite 7's spelling,
- * which vite 8 only maps over with a deprecation warning.
+ * The Cognito SDK bundles the `buffer` polyfill, which reads Node's `global`
+ * at module load. Browsers have no `global`, so an unrewritten reference
+ * throws `ReferenceError: global is not defined` and `#root` stays empty.
  *
- * The fix is scoped to the dev pre-bundle (`optimizeDeps`), so it never
- * rewrites `global` in application code or in the production bundle.
+ * - **Dev server.** Vite 8 pre-bundles dependencies with Rolldown, which
+ *   leaves `global` alone unless told otherwise. Measured with Playwright MCP
+ *   on 2026-10-07; the Rolldown form was proven on a forced vite 8 pre-bundle
+ *   (FRONTEND-049's spec). `esbuildOptions` is vite 7's spelling, which vite 8
+ *   only maps over with a deprecation warning.
+ * - **Production build.** Under vite 7 Rollup's CommonJS plugin rewrote
+ *   `global`; Rolldown does not, and the vite 8 bump (#35) shipped a bundle
+ *   that blanked the live site. A top-level `define` covers the build.
+ *   `src/test/bundle-budget.test.ts` checks the built code itself.
  *
  * jsdom can't run the dev server, so this pins the config itself, and
  * `FrontendUI/verification-browser.md` §3a's Playwright check covers the browser.
@@ -46,7 +47,7 @@ function objectAfter(source: string, key: string): string | null {
 
 const GLOBAL_TO_GLOBALTHIS = /\bglobal\s*:\s*["']globalThis["']/;
 
-describe("vite.config.ts lets the dev server load the Cognito SDK", () => {
+describe("vite.config.ts lets the browser load the Cognito SDK", () => {
   it("defines global as globalThis for the dev dependency pre-bundle", () => {
     const optimizeDeps = objectAfter(readViteConfig(), "optimizeDeps");
     expect(optimizeDeps, "an optimizeDeps block").not.toBeNull();
@@ -66,10 +67,11 @@ describe("vite.config.ts lets the dev server load the Cognito SDK", () => {
     expect(readViteConfig()).not.toMatch(/esbuildOptions/);
   });
 
-  it("does not rewrite global for application code or the production build", () => {
+  it("defines global as globalThis for the production build too", () => {
     const config = readViteConfig();
     const optimizeDeps = objectAfter(config, "optimizeDeps") ?? "";
-    const outside = config.replace(optimizeDeps, "");
-    expect(outside).not.toMatch(GLOBAL_TO_GLOBALTHIS);
+    const define = objectAfter(config.replace(optimizeDeps, ""), "define");
+    expect(define, "a top-level define block").not.toBeNull();
+    expect(define).toMatch(GLOBAL_TO_GLOBALTHIS);
   });
 });
