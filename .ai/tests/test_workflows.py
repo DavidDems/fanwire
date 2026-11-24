@@ -2865,8 +2865,8 @@ class TestRenovateNeverMergesAnything:
         return found
 
     def test_runtimes_move_only_when_asked_and_never_inside_a_non_major_group(self, config):
-        """A runtime is chosen by what AWS runs: the Lambda is PYTHON_3_12 and
-        RDS is Postgres 16 (infra/lib). The first Dashboard put Python 3.15
+        """A runtime is chosen by what AWS runs: the zip Lambdas are PYTHON_3_15
+        and RDS is Postgres 18 (infra/lib). The first Dashboard put Python 3.15
         inside "github-actions non-major" and the Lambda base image 3.14
         inside "docker non-major": a routine bump would have tested and
         shipped a Python the zip Lambda does not run. Each runtime gets its

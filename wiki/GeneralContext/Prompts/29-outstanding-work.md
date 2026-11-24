@@ -19,7 +19,6 @@ answers; don't re-ask them). The human starts one session per track with:
 
 | Track | File | What |
 |---|---|---|
-| 2 | `31-outstanding-work-2-dependencies.md` | Dependabot alerts, Renovate's majors, model names |
 | 3 | `32-outstanding-work-3-infra-housekeeping.md` | API-SPORTS clean-up, alarms, IAM and alarm gaps, small open decisions |
 | 4 | `33-outstanding-work-4-backend-product.md` | Email availability field, username rule, follows feed, `PostCreated` consumer |
 | 5 | `34-outstanding-work-5-frontend.md` | Frontend fixes, tidy-ups, UI docs, browser rows |

@@ -81,12 +81,11 @@ No module reaches into another module's tables directly — see `wiki/CodeContex
 
 Live:
 
-- **`29-outstanding-work.md`** (2026-11-17): the order of the Outstanding-work tracks still to run (`31`–`37`; track 1, the Kaggle refresh, is built) that finish everything in `TODO/02-backlog.md`, and the rules each shares. Track 2, dependencies, is under way (`31` holds the probe results and the human's open ticks); track 8, the review skills, is last.
+- **`29-outstanding-work.md`** (2026-11-17): the order of the Outstanding-work tracks still to run (`32`–`37`; track 1, the Kaggle refresh, and track 2, dependencies, are done) that finish everything in `TODO/02-backlog.md`, and the rules each shares. Track 3, infra housekeeping, is next; track 8, the review skills, is last.
 - **`22-launch-adjustments.md`**: Track D. `USERS-009` is merged but dormant (`ACCOUNT_LIFECYCLE_ENABLED=false`); activation, `AUTH-001` (native Cognito only) and `USERS-005` are Outstanding-work track 6. `AUTH-002` and `AUTH-003` are dropped.
 - **`04-cheap-automations.md`**: the four Haiku 5.5 automations are built and live. Proving two fixes live needs API spend, so it is parked ([ADR 0035](Decisions/0035-outstanding-work-answers.md)). `jev` stays off.
 - **`06-nba-data.md`**: sports data on the Eoin Moore Kaggle dataset. Left: the API-SPORTS clean-up (Outstanding-work track 3). The daily Kaggle refresh (`EVENTS-008`) is live.
 - **`10`–`15`, the system track:** `11` (metrics) is Outstanding-work track 7 and `10`'s deliverable 4 is replaced by track 8's review skills. `12`–`15` need API spend and are parked ([ADR 0035](Decisions/0035-outstanding-work-answers.md)).
-- **`19-dependency-upkeep.md`**: Renovate upkeep. Left: the `@types/node` v24 major, then the close-out.
 - **`38-results-scraper.md`** (2026-11-19), with its part `38-results-scraper-api.md`: same-night final scores from the balldontlie API's free tier, run on the human's PC, live after a 14-game-day shadow test; Kaggle keeps supplying box scores. Runs after the Outstanding-work tracks and before predictions. Nothing built yet.
 - **`39`–`44`, the predictions tracks** (2026-11-19): users pick NBA winners, earn points and are ranked, and every game shows "Our prediction" with its honest record ([ADR 0037](Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](Decisions/0040-predictions-track-answers.md); 0040 holds the human's answers, so the sessions run without asking). Run after the results scraper (`38`), in order: `39` backend core (parts `39-predictions-data.md`, `39-predictions-design.md`), `40` batch and integrations, `41` Elo model (part `41-elo-model-spec.md`), `42` pick UI, `43` boards and launch. `44`, a machine-learning model, is parked until `41` is live. Nothing built yet.
 
