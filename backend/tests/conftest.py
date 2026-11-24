@@ -57,12 +57,13 @@ def _postgres_server():
     """One Postgres *server* for the whole suite.
 
     This replaces 39 byte-identical `scope="module"` fixtures that each started
-    their own `postgres:16-alpine`. Measured locally, every extra module added
+    their own `postgres:16-alpine`. It is now one `postgres:18-alpine`, the
+    major RDS runs (INFRA-007). Measured locally, every extra module added
     ~4.5-5.4s of container startup while the tests inside it took well under a
     second: the suite's cost scaled with the number of FILES, not with the
     amount of testing in them.
     """
-    with PostgresContainer("postgres:16-alpine") as pg:
+    with PostgresContainer("postgres:18-alpine") as pg:
         yield pg
 
 
