@@ -3875,3 +3875,27 @@ class TestMetricsPublicationWritesDataAndExecutesOnlyMainTools:
         assert '--scan-offset "$(( (GITHUB_RUN_NUMBER - 1) * 50 ))"' in job_block(wf, "collect")
         for job in ("collect", "publish"):
             assert re.search(r"timeout-minutes:\s*\d+", job_block(wf, job))
+
+
+class TestThePipelineVersionIsChecked:
+    """metrics deliverable 4: a PR that changes the pipeline must bump
+    `.ai/VERSION` and touch the changelog, checked by CI, deterministically."""
+
+    @pytest.fixture(scope="class")
+    def job(self):
+        text = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
+        return job_block(text, "agent-infra-test")
+
+    def test_the_job_diffs_against_the_pr_base(self, job):
+        assert "fetch-depth: 0" in job
+        assert "python .ai/bin/agentctl.py version check --base" in job
+        assert "github.event.pull_request.base.sha" in job
+
+    def test_other_events_pass_without_a_base(self, job):
+        step = job.split("agentctl.py version check", 1)[0].rsplit("- name:", 1)[1]
+        assert "pull_request" in step
+
+    def test_the_job_stays_read_only(self, job):
+        assert "permissions:" not in job or "contents: write" not in job
+        text = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
+        assert "\npermissions:\n  contents: read\n" in text

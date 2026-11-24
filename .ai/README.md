@@ -89,6 +89,7 @@ Nothing depends on an agent session staying alive.
 python .ai/bin/agentctl.py status              # board of every task
 python .ai/bin/agentctl.py selfcheck           # prove the machinery works, free
 python .ai/bin/agentctl.py state show <ID>     # why a task is where it is
+python .ai/bin/agentctl.py version check --base <ref>   # pipeline change needs VERSION + CHANGELOG
 python .ai/bin/agentctl.py prompt <ID> --role code_agent   # what an agent was told
 python .ai/bin/agentctl.py telemetry report    # what it cost
 gh api --paginate repos/DavidDems/fanwire/issues/comments > comments.json
