@@ -89,7 +89,7 @@ Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deplo
 Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deploy: migrations and sports data]] "Load sports data".
 
 ## Local dev (`docker-compose.yml`)
-`postgres` (`postgres:18-alpine`, real Postgres matching RDS's 18, not sqlite) and `dynamodb-local` back the one-shot `backend-test` and `frontend-test`; `backend-dev` is the browser-clickable dev API on `http://localhost:8001`; a `perf` profile adds `postgres-perf`, `backend-perf` and `k6`. Dev/test tooling only, never deployed.
+`postgres` (`postgres:18-alpine`, real Postgres matching RDS's 18, not sqlite) backs the one-shot `backend-test` and `frontend-test`; `backend-dev` is the browser-clickable dev API on `http://localhost:8001`; a `perf` profile adds `postgres-perf`, `backend-perf` and `k6`. Dev/test tooling only, never deployed.
 
 ## Parts
 - [[wiki/CodeContext/Standards/build-deployment-packages|Packages]] — backend, frontend and infra dependencies; why CDK is TypeScript.

@@ -23,11 +23,10 @@ acting on it.
 | Functions outside the VPC | `Fanwire-App` | `OriginVerifyAuthorizer`, `SportsDataRefresh` |
 | Network | `Fanwire-Network` | `vpc-0259c7c65d0a58371`; app subnets `subnet-0e68161ab23330f65`, `subnet-028cef17a50cc7fbb`; Lambda SG `sg-0c98e281c22be6d0c`; one NAT instance |
 | Database | `Fanwire-Data` | `Postgres` (RDS), CMK-encrypted, data subnets only |
-| Tables | `Fanwire-Data` | `IdempotencyTable`, `LiveScoreCacheTable` |
 | Key | `Fanwire-Data` | `Key` — the one CMK (RDS, S3 media, DynamoDB, SQS, Secrets Manager) |
 | Buckets | `Fanwire-Storage` | quarantine `fanwire-storage-quarantinebucketfdbda180-wbd8njkzttkf`; `PublicMediaBucket`; `FrontendBucket`; sports data `SportsDataBucket` `fanwire-storage-sportsdatabucketbe0c4682-mpq0jeekssck` (output `SportsDataBucketName`; the NBA dataset CSVs, read only by `SportsDataLoad`; RETAIN, not scanned) |
 | Malware scan | `Fanwire-Storage` | GuardDuty Malware Protection plan `e0d078028fa35d2cdba2`, `ACTIVE` on `uploads/` |
-| Queues | `Fanwire-Messaging` | notifications, media scan results, ingestion retry — each with a DLQ (e.g. `Fanwire-Messaging-NotificationDlq467FCAE6-nWWbotTUIAPC`) |
+| Queues | `Fanwire-Messaging` | notifications, media scan results — each with a DLQ (e.g. `Fanwire-Messaging-NotificationDlq467FCAE6-nWWbotTUIAPC`) |
 | Event bus | `Fanwire-Messaging` | `PostEventBus` |
 | Alarm topic | `Fanwire-Messaging` | `AlarmTopic`; ARN in `Fanwire-App`'s `AlarmTopicArn` output |
 
