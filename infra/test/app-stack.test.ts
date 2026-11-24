@@ -167,7 +167,7 @@ describe('App stack: functions', () => {
   test('origin-verify authorizer: small zip function outside the VPC', () => {
     const others = Object.values(functions()).filter((f) => f.Properties?.PackageType !== 'Image');
     expect(others).toHaveLength(1);
-    expect(others[0]?.Properties?.Runtime).toBe('python3.12');
+    expect(others[0]?.Properties?.Runtime).toBe('python3.15');
     expect(others[0]?.Properties?.VpcConfig).toBeUndefined();
   });
 });
