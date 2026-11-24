@@ -107,38 +107,19 @@ describe('Data stack', () => {
     });
   });
 
-  describe('DynamoDB (on-demand, CMK)', () => {
-    test('idempotency table is aws-lambda-powertools Idempotency compatible: pk `id`, TTL `expiration`', () => {
-      tpl().hasResourceProperties('AWS::DynamoDB::Table', {
-        BillingMode: 'PAY_PER_REQUEST',
-        KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
-        TimeToLiveSpecification: { AttributeName: 'expiration', Enabled: true },
-        SSESpecification: Match.objectLike({ SSEEnabled: true, SSEType: 'KMS', KMSMasterKeyId: Match.anyValue() }),
-      });
-    });
-
-    test('live-score cache table: TTL on, on-demand, CMK', () => {
-      tpl().hasResourceProperties('AWS::DynamoDB::Table', {
-        BillingMode: 'PAY_PER_REQUEST',
-        KeySchema: [{ AttributeName: 'pk', KeyType: 'HASH' }],
-        TimeToLiveSpecification: { AttributeName: 'expires_at', Enabled: true },
-        SSESpecification: Match.objectLike({ SSEEnabled: true, SSEType: 'KMS' }),
-      });
-      tpl().resourceCountIs('AWS::DynamoDB::Table', 2);
-    });
+  test('no DynamoDB table: the idempotency and live-score cache tables went with API-SPORTS (INFRA-005)', () => {
+    tpl().resourceCountIs('AWS::DynamoDB::Table', 0);
   });
 
   describe('secrets', () => {
-    test('four CMK-encrypted secrets: DB credentials, API-SPORTS key placeholder, CloudFront origin-verify value, Kaggle API token placeholder', () => {
-      tpl().resourceCountIs('AWS::SecretsManager::Secret', 4);
+    test('three CMK-encrypted secrets: DB credentials, CloudFront origin-verify value, Kaggle API token placeholder', () => {
+      tpl().resourceCountIs('AWS::SecretsManager::Secret', 3);
       for (const s of Object.values(resourcesOfType(raw(), 'AWS::SecretsManager::Secret'))) {
         expect(s.Properties?.KmsKeyId).toBeDefined();
         // never a literal value committed in code/template
         expect(s.Properties?.SecretString).toBeUndefined();
+        expect(String(s.Properties?.Description ?? '')).not.toMatch(/API-SPORTS/);
       }
-      tpl().hasResourceProperties('AWS::SecretsManager::Secret', {
-        Description: Match.stringLikeRegexp('API-SPORTS'),
-      });
       tpl().hasResourceProperties('AWS::SecretsManager::Secret', {
         Description: Match.stringLikeRegexp('origin-verify'),
       });
@@ -175,35 +156,38 @@ describe('Data stack', () => {
 });
 
 /**
- * EVENTS-003 removed every consumer of the API-SPORTS resources from the App
- * stack, but the resources stay, and so do their exports: the deployed
- * Fanwire-App still imports them, and CloudFormation refuses to update
- * Fanwire-Data if an export in use disappears. Each export is pinned by the
- * exact name the deployed App stack imports, with the value it carried. A
- * later infra unit deletes the resources and these exports together.
+ * INFRA-005: EVENTS-003 removed every consumer of the API-SPORTS resources and
+ * its deploy stopped Fanwire-App importing their exports, so the resources and
+ * the five exports go together. The two RETAIN ones (the idempotency table and
+ * the API-SPORTS secret) are orphaned by the deploy and deleted by hand.
  */
-describe('Data stack: API-SPORTS resources stay, still exported (EVENTS-003)', () => {
+describe('Data stack: API-SPORTS resources and their exports are gone (INFRA-005)', () => {
   const outputs = () => (raw().Outputs ?? {}) as Record<string, { Value?: unknown; Export?: { Name?: unknown } }>;
 
-  const EXPORTS = [
-    ['ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97', { 'Fn::GetAtt': ['IdempotencyTable22A5A209', 'Arn'] }],
-    ['ExportsOutputFnGetAttLiveScoreCacheTable277AE7C2Arn3F1E2DD3', { 'Fn::GetAtt': ['LiveScoreCacheTable277AE7C2', 'Arn'] }],
-    ['ExportsOutputRefApiSportsKey4432EB4A2C8D0DDC', { Ref: 'ApiSportsKey4432EB4A' }],
-    ['ExportsOutputRefIdempotencyTable22A5A209F6C0179A', { Ref: 'IdempotencyTable22A5A209' }],
-    ['ExportsOutputRefLiveScoreCacheTable277AE7C28479FE72', { Ref: 'LiveScoreCacheTable277AE7C2' }],
-  ] as const;
+  test.each(['IdempotencyTable22A5A209', 'LiveScoreCacheTable277AE7C2', 'ApiSportsKey4432EB4A'])(
+    '%s no longer synthesizes',
+    (logicalId) => {
+      expect(Object.keys(raw().Resources ?? {})).not.toContain(logicalId);
+    },
+  );
 
-  test.each(EXPORTS)('exports %s under the name the deployed App stack imports', (outputId, value) => {
-    const output = outputs()[outputId];
-    expect(Object.keys(outputs())).toContain(outputId);
-    expect(output?.Export?.Name).toBe(`${STACK_NAMES.data}:${outputId}`);
-    expect(output?.Value).toEqual(value);
+  test.each([
+    'ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97',
+    'ExportsOutputFnGetAttLiveScoreCacheTable277AE7C2Arn3F1E2DD3',
+    'ExportsOutputRefApiSportsKey4432EB4A2C8D0DDC',
+    'ExportsOutputRefIdempotencyTable22A5A209F6C0179A',
+    'ExportsOutputRefLiveScoreCacheTable277AE7C28479FE72',
+  ])('output %s is gone', (outputId) => {
+    expect(Object.keys(outputs())).not.toContain(outputId);
   });
 
-  test('the idempotency table, the live-score cache table and the API-SPORTS secret still synthesize', () => {
+  test('what stays: the CMK, RDS, the origin-verify and Kaggle secrets, and the Kaggle and RDS exports', () => {
     const resources = raw().Resources ?? {};
-    expect(resources.IdempotencyTable22A5A209?.Type).toBe('AWS::DynamoDB::Table');
-    expect(resources.LiveScoreCacheTable277AE7C2?.Type).toBe('AWS::DynamoDB::Table');
-    expect(resources.ApiSportsKey4432EB4A?.Type).toBe('AWS::SecretsManager::Secret');
+    expect(resources.Key961B73FD?.Type).toBe('AWS::KMS::Key');
+    expect(resources.Postgres9DC8BB04?.Type).toBe('AWS::RDS::DBInstance');
+    expect(resources.OriginVerifyED6A82E8?.Type).toBe('AWS::SecretsManager::Secret');
+    expect(resources.KaggleApiToken964B5948?.Type).toBe('AWS::SecretsManager::Secret');
+    expect(outputs().ExportsOutputRefKaggleApiToken964B59487D5E2AC7?.Value).toEqual({ Ref: 'KaggleApiToken964B5948' });
+    expect(outputs().ExportsOutputRefPostgres9DC8BB0479C34812?.Value).toEqual({ Ref: 'Postgres9DC8BB04' });
   });
 });
