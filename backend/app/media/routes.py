@@ -52,9 +52,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session, get_settings
-from app.media.dependencies import get_s3_client
+from app.media.dependencies import get_s3_client, get_upload_rate_limiter
 from app.media.models import Media, MediaStatus
 from app.media.pipeline import ImageUploadPipeline
+from app.media.rate_limit import UploadRateLimiter
 from app.media.schemas import CreateUploadRequest, CreateUploadResponse, MediaOut
 from app.settings import Settings
 from app.users.dependencies import get_current_user
@@ -75,13 +76,19 @@ _EXTENSION_BY_MIME_TYPE: dict[str, str] = {
 }
 
 
-@router.post("/uploads", status_code=status.HTTP_201_CREATED, response_model=CreateUploadResponse)
+@router.post(
+    "/uploads",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CreateUploadResponse,
+    responses={status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Upload rate limit exceeded"}},
+)
 def create_upload(
     body: CreateUploadRequest,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     s3_client: Any = Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
+    rate_limiter: UploadRateLimiter = Depends(get_upload_rate_limiter),
 ) -> CreateUploadResponse:
     # Fail-fast UX check only -- see module docstring. Not the trust
     # boundary; ImageUploadPipeline.validate_type is.
@@ -92,6 +99,12 @@ def create_upload(
         )
 
     fence_users(session, [current_user.id])
+    # The per-user upload limit (POSTS-010), after the mime check (a bad type
+    # stays 400 at the limit) and before anything is written or presigned.
+    if not rate_limiter.is_allowed(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="upload rate limit exceeded"
+        )
     media = Media(uploader_id=current_user.id, status=MediaStatus.UPLOADED)
     session.add(media)
     session.flush()  # assign media.id before building the S3 key, don't commit yet

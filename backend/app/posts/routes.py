@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_event_bus, get_session
 from app.eventbus import PostEventBus
 from app.posts.data_link import DataLinkRefused
-from app.posts.dependencies import get_publish_post_facade
+from app.posts.dependencies import get_publish_post_facade, get_report_rate_limiter
 from app.posts.facade import (
     CreatePostRequest as FacadePostRequest,
 )
@@ -45,13 +45,14 @@ from app.posts.facade import (
     PublishPostFacade,
 )
 from app.posts.models import Post
-from app.posts.moderation import PostRejected, RateLimitExceeded
+from app.posts.moderation import PostRejected, RateLimiter, RateLimitExceeded
 from app.posts.schemas import CreatePostRequest, PostOut
 from app.posts.service import (
     AlreadyLikedError,
     NotLikedError,
     NotPostOwnerError,
     PlainRepostDeleteError,
+    ReportRateLimitExceeded,
     RepostInUseError,
     delete_post,
     like_post,
@@ -78,6 +79,12 @@ def _post_not_found() -> HTTPException:
 # moderation refusal.
 _RATE_LIMITED: dict[int | str, dict[str, object]] = {
     status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Post rate limit exceeded"}
+}
+
+# The report route's own 429: the reporter's report limit (POSTS-010,
+# app.posts.service.ReportRateLimitExceeded), not the post limit.
+_REPORT_RATE_LIMITED: dict[int | str, dict[str, object]] = {
+    status.HTTP_429_TOO_MANY_REQUESTS: {"description": "Report rate limit exceeded"}
 }
 
 
@@ -262,17 +269,33 @@ def unrepost(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
-@router.post("/{post_id}/report", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/{post_id}/report",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=_REPORT_RATE_LIMITED,
+)
 def report(
     post_id: int,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     event_bus: PostEventBus = Depends(get_event_bus),
+    rate_limiter: RateLimiter = Depends(get_report_rate_limiter),
 ) -> None:
     # Idempotent per report_post's own contract -- 204 whether this was the
     # first report or a repeat; the caller can't (and doesn't need to)
-    # distinguish the two from the response.
+    # distinguish the two from the response. 429 when the reporter's limit
+    # refuses a new report (a repeat or an unknown post never reaches it).
     try:
-        report_post(session, event_bus, post_id=post_id, reporter_id=current_user.id)
+        report_post(
+            session,
+            event_bus,
+            post_id=post_id,
+            reporter_id=current_user.id,
+            rate_limiter=rate_limiter,
+        )
     except PostNotFoundError as exc:
         raise _post_not_found() from exc
+    except ReportRateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)
+        ) from exc
