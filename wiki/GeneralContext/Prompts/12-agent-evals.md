@@ -4,6 +4,8 @@ type: prompt
 
 # 12 — Agent evals: a fixed task suite that scores every change to the system
 
+*Update, 2026-11-24: parked for API cost. Agent evals need metered API runs to score every change; revisit only if the human chooses to spend ([ADR 0035](../Decisions/0035-outstanding-work-answers.md)).*
+
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System
 track, step 4 of 7.** Needs `11`'s unit record and pipeline version. `13`,

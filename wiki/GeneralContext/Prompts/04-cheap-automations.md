@@ -4,6 +4,8 @@ type: prompt
 
 # 04 — Cheap automations: four narrow model calls around the hand-run workflow
 
+*Update, 2026-11-24: parked for API cost. The cheap automations need metered API runs to prove live; revisit only if the human chooses to spend ([ADR 0035](../Decisions/0035-outstanding-work-answers.md)).*
+
 *Update, 2026-11-11 (CUT-03): compacted to what is true now. The run-by-run
 history is in `wiki/GeneralContext/Timeline/` and git.*
 
