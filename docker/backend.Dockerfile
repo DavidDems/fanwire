@@ -8,7 +8,7 @@
 # Lambda deployment model called out in reference/AWS Stack.md, and it's an
 # Amazon Linux image so Pillow's native deps build cleanly.
 
-FROM public.ecr.aws/lambda/python:3.12 AS base
+FROM public.ecr.aws/lambda/python:3.15 AS base
 WORKDIR ${LAMBDA_TASK_ROOT}
 COPY backend/pyproject.toml ./
 RUN pip install --no-cache-dir .
