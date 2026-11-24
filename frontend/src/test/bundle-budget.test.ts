@@ -165,6 +165,26 @@ describe("the production bundle (UI-010 Baseline c, Prompt 20 R1, R12, R13)", ()
     expect(chunks().length).toBeGreaterThan(1);
   });
 
+  // Browsers have no Node `global`. The Cognito SDK's `buffer` polyfill reads
+  // `global.TYPED_ARRAY_SUPPORT` at module load, so one bare reference in the
+  // entry throws `ReferenceError: global is not defined` and the page stays
+  // blank. Rollup's CommonJS plugin rewrote it under vite 7; Rolldown (vite 8)
+  // does not, and that shipped. jsdom and Node both define `global`, so no
+  // rendering test can see this — only the built code can.
+  it("references no bare Node `global`, which browsers do not define", () => {
+    const bareGlobal = /(?<![\w$.])global(?![\w$:])/g;
+    const offenders = chunks().flatMap((chunk) =>
+      [...chunk.code.matchAll(bareGlobal)].map(
+        (match) =>
+          `${chunk.fileName}: …${chunk.code.slice(
+            Math.max(0, match.index - 40),
+            match.index + 40,
+          )}…`,
+      ),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps the entry JS (the entry chunk and its static imports) within its gzip and raw ceilings", () => {
     const files = entryChunks().map(measure);
     const label = files.map((file) => file.fileName).join(" + ");

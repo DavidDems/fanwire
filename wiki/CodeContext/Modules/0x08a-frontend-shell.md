@@ -61,6 +61,11 @@ that here as usual.
   React 19, never past `ENTRY_JS_RAW_HARD_MAX`, 560.3 kB raw), the entry CSS (7.34 kB gzip, `index.css` plus
   `InlineAlert.css`), every other chunk to within
   0.1 kB of its recorded size (and no new one), and no file of 500,000 bytes.
+  **The same build must hold no bare Node `global`**: the Cognito SDK's
+  `buffer` polyfill reads it, browsers lack it, and jsdom defines it, so only
+  the built code shows it. Rolldown (vite 8) stopped rewriting it and the
+  live site rendered blank; `vite.config.ts`'s top-level `define` maps it to
+  `globalThis`.
   **The entry is the entry chunk plus every chunk it imports statically**
   (`entryClosure`, FRONTEND-046): Rolldown (vite 8) splits the entry into
   chunks `index.html` preloads, so they are summed as the entry, never named
