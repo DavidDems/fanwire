@@ -208,3 +208,24 @@ GitHub push permissions must wait until the workflow lands on main; local
 bare-repository tests do not prove those remote permissions. No manual action
 is needed before merge. After merge, a scheduled run or eligible task merge
 can establish that proof; manual dispatch is optional.
+
+## Report
+
+`agentctl metrics report` prints the `philosophy.md` section 9 metrics from the
+published records, one row per ISO week of `merged_at`, mode and pipeline
+version. It reads a `records/` directory or a git ref holding one; it never
+writes, fetches or calls a model:
+
+```powershell
+git fetch origin metrics
+python .ai/bin/agentctl.py metrics report --ref origin/metrics
+python .ai/bin/agentctl.py metrics report --records "$env:TEMP/records"
+```
+
+Columns: `units` and `backfilled` (how many of them were collected
+retrospectively), `cost`, `human_delta` (lines), `rounds` and `comments`
+(review), and `red_ci` (red over total CI runs). Cost is the mean of known
+dollars; where only subscription units exist it reads `subscription`, and `-`
+means unknown, never zero. Each mean excludes null values and shows the number
+of units that had one as `[n]`. Every record passes the publisher's validator;
+the first invalid one fails the command naming its file.

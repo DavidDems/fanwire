@@ -19,7 +19,7 @@ state. Nothing is duplicated between them: a task spec names the
 | **How the whole thing fits together** | [docs/architecture.md](docs/architecture.md) |
 | **What each agent may touch** | [docs/permissions.md](docs/permissions.md) |
 | **Every state and transition** | [docs/state-machine.md](docs/state-machine.md) |
-| **Collecting a merged unit's measurements** | [docs/metrics.md](docs/metrics.md) — schema, attribution, unknowns and artifact commands |
+| **Collecting or reading unit measurements** | [docs/metrics.md](docs/metrics.md) — schema, attribution, unknowns, artifact commands, `agentctl metrics report` |
 | **What happens if an agent is manipulated** | [docs/threat-model.md](docs/threat-model.md) |
 
 ## In one paragraph
@@ -50,7 +50,8 @@ Nothing depends on an agent session staying alive.
 │   ├── decision.py          the typed-decision contract (jev's answers)
 │   ├── doclint.py           the documentation linter (docs/doclint.md)
 │   ├── telemetry.py         append-only invocation records
-│   └── metrics.py           deterministic measurements of merged units
+│   ├── metrics.py           deterministic measurements of merged units
+│   ├── metricsreport.py     the by-week/mode/version report over those records
 ├── bin/
 │   ├── agentctl.py          the only supported way to touch workflow state
 │   ├── invoke_agent.sh      provider seam: run an agent, get prose
