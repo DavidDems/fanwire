@@ -74,10 +74,8 @@ export const ALARM_THRESHOLDS = {
  * human (`sportsDataLoad()`, `sportsDataRefresh()`).
  *
  * The API-SPORTS ingestion function, its schedule, retry trigger and async
- * destination, and the API's live-score cache grant are gone (EVENTS-003).
- * The resources they used (Data's idempotency table, live-score cache table
- * and API-SPORTS secret; Messaging's ingestion-retry queue and DLQ) stay,
- * still exported by their own stacks, until a later infra unit removes them.
+ * destination, and the API's live-score cache grant are gone (EVENTS-003),
+ * and so are the resources they used (INFRA-005).
  * Every function has its own role with explicit, enumerated statements --
  * no grant*() helpers, no managed policies (see test/iam-policy.test.ts).
  */
