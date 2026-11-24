@@ -63,7 +63,7 @@ export class AuthStack extends cdk.Stack {
       resources: [`${preSignUpLogGroup.logGroupArn}:log-stream:*`],
     }));
     const preSignUp = new lambda.Function(this, 'PreSignUpTrigger', {
-      runtime: lambda.Runtime.PYTHON_3_12,
+      runtime: lambda.Runtime.PYTHON_3_15,
       handler: 'index.handler',
       code: lambda.Code.fromInline(
         'def handler(event, context):\n' +

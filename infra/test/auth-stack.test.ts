@@ -54,7 +54,7 @@ describe('Auth stack (Cognito)', () => {
     const functionProperties = functionResource.Properties ?? {};
     const code = (functionProperties.Code as Record<string, unknown>).ZipFile as string;
 
-    expect(functionProperties.Runtime).toBe('python3.12');
+    expect(functionProperties.Runtime).toBe('python3.15');
     expect(functionProperties.Timeout as number).toBeLessThanOrEqual(5);
     expect(functionProperties.VpcConfig).toBeUndefined();
     expect(code).toMatch(/autoConfirmUser["']\]\s*=\s*True/);
