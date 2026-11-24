@@ -12,7 +12,7 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: fanwire
       POSTGRES_PASSWORD: fanwire
@@ -125,7 +125,7 @@ services:
   # so every run seeds from empty and runs stay comparable.
   postgres-perf:
     profiles: ["perf"]
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: fanwire
       POSTGRES_PASSWORD: fanwire
