@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     post_rate_limit_per_minute: PositiveInt = 10
     post_rate_limit_per_hour: PositiveInt = 100
 
+    # Per-user report limits for app.posts.moderation.ReportCountRateLimiter
+    # and media-upload limits for app.media.rate_limit.MediaCountRateLimiter
+    # (POSTS-010; every Media row counts, whatever its status). PositiveInt,
+    # like the post limits, so a bad value fails when Settings is built.
+    report_rate_limit_per_minute: PositiveInt = 5
+    report_rate_limit_per_hour: PositiveInt = 10
+    media_upload_rate_limit_per_minute: PositiveInt = 5
+    media_upload_rate_limit_per_hour: PositiveInt = 20
+
     # app.posts.moderation.HeuristicSpamScorer: a post scoring at or above
     # the threshold is refused, and an account younger than
     # spam_new_account_hours is new (a new account posting a link scores

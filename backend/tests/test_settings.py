@@ -288,6 +288,51 @@ def test_settings_rejects_a_post_rate_limit_that_is_not_a_positive_integer(
         Settings()
 
 
+# --- POSTS-010: per-user report and media-upload rate limits ----------------
+
+_REPORT_UPLOAD_LIMIT_ENV = {
+    "report_rate_limit_per_minute": "REPORT_RATE_LIMIT_PER_MINUTE",
+    "report_rate_limit_per_hour": "REPORT_RATE_LIMIT_PER_HOUR",
+    "media_upload_rate_limit_per_minute": "MEDIA_UPLOAD_RATE_LIMIT_PER_MINUTE",
+    "media_upload_rate_limit_per_hour": "MEDIA_UPLOAD_RATE_LIMIT_PER_HOUR",
+}
+
+
+@pytest.mark.parametrize(
+    ("field", "default"),
+    [
+        ("report_rate_limit_per_minute", 5),
+        ("report_rate_limit_per_hour", 10),
+        ("media_upload_rate_limit_per_minute", 5),
+        ("media_upload_rate_limit_per_hour", 20),
+    ],
+)
+def test_settings_defaults_report_and_upload_rate_limits(monkeypatch, field, default):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.delenv(_REPORT_UPLOAD_LIMIT_ENV[field], raising=False)
+    settings = Settings(_env_file=None)
+    assert getattr(settings, field) == default
+
+
+@pytest.mark.parametrize("field", sorted(_REPORT_UPLOAD_LIMIT_ENV))
+def test_settings_reads_report_and_upload_rate_limits_from_env(monkeypatch, field):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_REPORT_UPLOAD_LIMIT_ENV[field], "37")
+    settings = Settings()
+    assert getattr(settings, field) == 37
+
+
+@pytest.mark.parametrize("field", sorted(_REPORT_UPLOAD_LIMIT_ENV))
+@pytest.mark.parametrize("bad_value", ["0", "-1", "abc", "1.5"])
+def test_settings_rejects_a_report_or_upload_rate_limit_that_is_not_a_positive_integer(
+    monkeypatch, field, bad_value
+):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@host:5432/db")
+    monkeypatch.setenv(_REPORT_UPLOAD_LIMIT_ENV[field], bad_value)
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 # --- POSTS-003: the heuristic spam scorer's threshold and new-account age ---
 
 _SPAM_ENV = {

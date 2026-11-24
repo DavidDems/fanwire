@@ -182,8 +182,11 @@ class SpamScoreCheck(ModerationCheck):
 
 
 class RateLimiter(abc.ABC):
-    """Narrow injected interface. The real implementation is
-    PostCountRateLimiter, which counts the author's own posts. The DynamoDB
+    """Narrow injected interface. The real implementations are
+    PostCountRateLimiter, which counts the author's own posts, and
+    ReportCountRateLimiter, which counts the reporter's own reports
+    (POSTS-010; app.posts.service.report_post's limit, not part of this
+    chain). media/ has its own interface, app.media.rate_limit. The DynamoDB
     cache check wiki/CodeContext/Standards/security.md mentions is not
     built: the post count needs no new infrastructure, and the edge
     controls (WAF per-IP rule, API stage throttle) cover per-IP and global
@@ -236,6 +239,38 @@ class PostCountRateLimiter(RateLimiter):
     def is_allowed(self, user_id: int) -> bool:
         minute_count, hour_count = self._session.execute(
             _RECENT_POST_COUNTS, {"author_id": user_id}
+        ).one()
+        return bool(minute_count < self._per_minute and hour_count < self._per_hour)
+
+
+# _RECENT_POST_COUNTS' shape over the (reporter_id, created_at) index: every
+# Report row counts, against the database's now() (Report.created_at's
+# default), strict `>`.
+_RECENT_REPORT_COUNTS = text(
+    "SELECT count(*) FILTER (WHERE created_at > now() - interval '1 minute'), count(*) "
+    "FROM reports "
+    "WHERE reporter_id = :reporter_id AND created_at > now() - interval '1 hour'"
+)
+
+
+class ReportCountRateLimiter(RateLimiter):
+    """Sliding-window limit on the user's own reports (POSTS-010), used by
+    app.posts.service.report_post. Allowed while the user has fewer than
+    `per_minute` reports in the last minute AND fewer than `per_hour` in the
+    last hour.
+
+    Count-then-insert is not atomic: reports racing at the limit can each
+    see the same count and all pass, overshooting by a few. Acceptable for
+    an abuse limit, as for PostCountRateLimiter -- deliberately no lock."""
+
+    def __init__(self, session: Session, per_minute: int, per_hour: int) -> None:
+        self._session = session
+        self._per_minute = per_minute
+        self._per_hour = per_hour
+
+    def is_allowed(self, user_id: int) -> bool:
+        minute_count, hour_count = self._session.execute(
+            _RECENT_REPORT_COUNTS, {"reporter_id": user_id}
         ).one()
         return bool(minute_count < self._per_minute and hour_count < self._per_hour)
 
