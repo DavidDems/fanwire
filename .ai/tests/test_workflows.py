@@ -3899,3 +3899,71 @@ class TestThePipelineVersionIsChecked:
         assert "permissions:" not in job or "contents: write" not in job
         text = (WORKFLOWS / "test-agent.yml").read_text(encoding="utf-8")
         assert "\npermissions:\n  contents: read\n" in text
+
+
+class TestThePrBaseIsAllowed:
+    """Backlog 19: stacked PRs merged top-down never reached main. A PR's base
+    must be `main` or an `outstanding-track-*` integration branch; the
+    `pr-base` job enforces it and `gate` (the required check) needs it."""
+
+    JOB = "pr-base"
+
+    @pytest.fixture
+    def text(self) -> str:
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def job(self, text: str) -> str:
+        marker = f"\n  {self.JOB}:\n"
+        assert marker in text, f"test-agent.yml has no `{self.JOB}` job"
+        lines = []
+        for line in text.split(marker, 1)[1].splitlines():
+            if line.startswith("  ") and not line.startswith("   ") and line.strip():
+                break
+            lines.append(line)
+        return "\n".join(lines)
+
+    def test_it_runs_on_pull_requests_only(self, job):
+        assert "if: github.event_name == 'pull_request'" in job
+
+    def test_it_is_read_only(self, job, text):
+        assert "write" not in job
+        assert "\npermissions:\n  contents: read\n" in text
+
+    def test_the_ref_arrives_through_env_not_interpolation(self, job):
+        assert "BASE_REF: ${{ github.event.pull_request.base.ref }}" in job
+        for body in run_bodies(job):
+            assert "${{" not in body
+
+    def test_it_uses_no_third_party_action(self, job):
+        assert "uses:" not in job
+
+    def test_the_gate_needs_it(self, text):
+        gate = text.split("\n  gate:\n", 1)[1]
+        assert f"- {self.JOB}\n" in gate.split("runs-on:", 1)[0]
+
+    @pytest.mark.parametrize(
+        "base", ["main", "outstanding-track-7", "outstanding-track-12"]
+    )
+    def test_an_allowed_base_passes(self, job, tmp_path, base):
+        (body,) = run_bodies(job)
+        code, _ = run_step_body(body, {"BASE_REF": base}, tmp_path)
+        assert code == 0
+
+    @pytest.mark.parametrize(
+        "base",
+        [
+            "agent/EVENTS-008",
+            "agent/X-1",
+            "director/foo",
+            "feature/x",
+            "outstanding",
+            "xoutstanding-track-7",
+            "main2",
+            "",
+        ],
+    )
+    def test_any_other_base_fails(self, job, tmp_path, base):
+        (body,) = run_bodies(job)
+        code, _ = run_step_body(body, {"BASE_REF": base}, tmp_path)
+        assert code != 0
