@@ -647,14 +647,15 @@ describe('App stack: sports data load (EVENTS-002)', () => {
     }
   });
 
-  test('its policy is the three every function has plus s3:GetObject on nba-eoin/* of the bucket', () => {
+  // INFRA-008: four, with the ENI self-deny beside the ENI allow.
+  test('its policy is the four every VPC function has plus s3:GetObject on nba-eoin/* of the bucket', () => {
     const statements = statementsForRole(roleOf(load()));
     const common = statementsForRole(roleOf(fn('migration')[1]));
-    expect(common).toHaveLength(3);
-    expect(statements).toHaveLength(4);
-    expect(statements.slice(0, 3).map((st) => st.Sid)).toEqual(common.map((st) => st.Sid));
+    expect(common).toHaveLength(4);
+    expect(statements).toHaveLength(5);
+    expect(statements.slice(0, 4).map((st) => st.Sid)).toEqual(common.map((st) => st.Sid));
 
-    const extra = statements[3]!;
+    const extra = statements[4]!;
     expect(extra.Effect).toBe('Allow');
     expect(extra.Action).toBe('s3:GetObject');
     const resource = JSON.stringify(extra.Resource);
@@ -786,5 +787,102 @@ describe('App stack: sports data refresh (EVENTS-008)', () => {
         if (text.includes('*')) expect(text).toContain('/nba-eoin/*');
       }
     }
+  });
+});
+
+/**
+ * INFRA-008: AWS's Lambda VPC guide recommends denying the six ENI actions to
+ * the function's own code. `lambda:SourceFunctionArn` is present only on calls
+ * that code makes, so the Lambda service keeps managing the ENIs.
+ */
+describe('App stack: ENI self-deny (INFRA-008)', () => {
+  const ENI_ACTIONS = [
+    'ec2:CreateNetworkInterface',
+    'ec2:DescribeNetworkInterfaces',
+    'ec2:DescribeSubnets',
+    'ec2:DeleteNetworkInterface',
+    'ec2:AssignPrivateIpAddresses',
+    'ec2:UnassignPrivateIpAddresses',
+  ];
+  const IN_VPC = ['api', 'media', 'notifications', 'accountDeletion', 'migration', 'sportsDataLoad'] as const;
+  const bySid = (statements: Record<string, unknown>[], sid: string) => statements.filter((st) => st.Sid === sid);
+  /** Renders an Fn::Join / Ref value as one string, `${Ref}` for each reference. */
+  const flatten = (v: unknown): string => {
+    if (typeof v === 'string') return v;
+    const o = v as Record<string, unknown>;
+    if (o && typeof o.Ref === 'string') return `\${${o.Ref}}`;
+    if (o && Array.isArray(o['Fn::Join'])) {
+      const [sep, parts] = o['Fn::Join'] as [string, unknown[]];
+      return parts.map(flatten).join(sep);
+    }
+    throw new Error(`unexpected value ${JSON.stringify(v)}`);
+  };
+  const denyOf = (template: ReturnType<typeof raw>, kind: (typeof IN_VPC)[number]) => {
+    const [, f] = Object.entries(resourcesOfType(template, 'AWS::Lambda::Function')).find(([, r]) =>
+      JSON.stringify((r.Properties?.ImageConfig as { Command?: string[] })?.Command) === JSON.stringify([HANDLERS[kind]]),
+    )!;
+    const roleId = roleOf(f);
+    return Object.values(resourcesOfType(template, 'AWS::IAM::Policy'))
+      .filter((p) => ((p.Properties?.Roles ?? []) as { Ref?: string }[]).some((r) => r.Ref === roleId))
+      .flatMap((p) => (p.Properties?.PolicyDocument as { Statement: Record<string, unknown>[] }).Statement)
+      .filter((st) => st.Sid === 'DenyVpcNetworkInterfacesFromFunctionCode');
+  };
+  const conditionValue = (deny: Record<string, unknown>) =>
+    flatten((deny.Condition as { ArnLike: Record<string, unknown> }).ArnLike['lambda:SourceFunctionArn']);
+
+  test.each(IN_VPC)('%s policy: the VpcNetworkInterfaces Allow is unchanged', (kind) => {
+    const allow = bySid(statementsForRole(roleOf(fn(kind)[1])), 'VpcNetworkInterfaces');
+    expect(allow).toEqual([
+      { Sid: 'VpcNetworkInterfaces', Effect: 'Allow', Action: expect.arrayContaining(ENI_ACTIONS), Resource: '*' },
+    ]);
+    expect(allow[0]!.Action).toHaveLength(ENI_ACTIONS.length);
+  });
+
+  test.each(IN_VPC)('%s policy: denies the same six actions to calls from its own code', (kind) => {
+    const deny = bySid(statementsForRole(roleOf(fn(kind)[1])), 'DenyVpcNetworkInterfacesFromFunctionCode');
+    expect(deny).toHaveLength(1);
+    expect(deny[0]).toEqual({
+      Sid: 'DenyVpcNetworkInterfacesFromFunctionCode',
+      Effect: 'Deny',
+      Action: expect.arrayContaining(ENI_ACTIONS),
+      Resource: '*',
+      Condition: { ArnLike: { 'lambda:SourceFunctionArn': expect.anything() } },
+    });
+    expect(deny[0]!.Action).toHaveLength(ENI_ACTIONS.length);
+    expect(conditionValue(deny[0]!)).toBe(
+      'arn:${AWS::Partition}:lambda:ca-central-1:294321867941:function:Fanwire-App-*',
+    );
+  });
+
+  test('the condition follows the stack account and region, never a literal', () => {
+    const other = synthFanwire({ account: '111122223333', region: 'eu-west-1' }).json(STACK_NAMES.app);
+    for (const kind of IN_VPC) {
+      const deny = denyOf(other, kind);
+      expect(deny).toHaveLength(1);
+      expect(conditionValue(deny[0]!)).toBe(
+        'arn:${AWS::Partition}:lambda:eu-west-1:111122223333:function:Fanwire-App-*',
+      );
+    }
+  });
+
+  test('the sports data refresh (outside the VPC) and the origin-verify authorizer hold neither statement', () => {
+    const authorizerPolicies = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy'))
+      .filter(([id]) => id.startsWith('OriginVerifyPolicy'));
+    expect(authorizerPolicies).toHaveLength(1);
+    const authorizer = authorizerPolicies.flatMap(
+      ([, p]) => (p.Properties?.PolicyDocument as { Statement: Record<string, unknown>[] }).Statement,
+    );
+    for (const statements of [statementsForRole(roleOf(fn('sportsDataRefresh')[1])), authorizer]) {
+      const sids = statements.map((st) => st.Sid);
+      expect(sids).not.toContain('VpcNetworkInterfaces');
+      expect(sids).not.toContain('DenyVpcNetworkInterfacesFromFunctionCode');
+      expect(JSON.stringify(statements)).not.toContain('ec2:');
+    }
+  });
+
+  test('no function in the App stack sets FunctionName, so generated names keep the Fanwire-App- prefix', () => {
+    const fns = Object.entries(functions());
+    expect(fns.length).toBe(8);
+    expect(fns.filter(([, f]) => f.Properties?.FunctionName !== undefined).map(([id]) => id)).toEqual([]);
   });
 });
