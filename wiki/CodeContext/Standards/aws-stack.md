@@ -20,11 +20,10 @@ Optimized for near-zero idle cost with room to scale if traffic grows. Every com
 ## Data
 - **RDS Postgres (db.t4g.micro)** as the primary datastore. This domain is relational at its core — users, follows, posts, threads, mentions joining to events — and Postgres gives real joins, transactions, and full-text search (`tsvector`) for the search/ module, all of which a feed app needs constantly.
 - Accept ~$12–15/mo for RDS after the 12-month free tier. Do **not** use Aurora Serverless v2 at this scale — it bills a non-zero minimum ACU continuously even near-idle, more expensive than a small RDS instance for low traffic.
-- **DynamoDB, on-demand**, only ever a cache/idempotency store — never the system of record. Its two tables (`IdempotencyTable`, `LiveScoreCacheTable`) have had no consumer since `EVENTS-003` retired API-SPORTS ingestion; they are kept until a later infra unit removes them. No idle cost, which is exactly right for data that's disposable.
+- **DynamoDB, on-demand**, only ever a cache/idempotency store — never the system of record. No table exists: the two API-SPORTS tables went with `INFRA-005`. No idle cost, which is exactly right for data that's disposable, if one is ever needed.
 
 ## Sports data
 - Game and stats data is the NBA dataset (CSVs under `nba-eoin/` in the sports-data bucket), loaded into Postgres by the `SportsDataLoad` Lambda, invoked by hand ([[wiki/CodeContext/Modules/0x02b-events-loading|0x02b]]; [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deploy]] "Load sports data"). No live provider is polled.
-- The API-SPORTS secret and the ingestion-retry queue + DLQ remain with no consumer since `EVENTS-003`, kept until a later infra unit removes them.
 
 ## Media uploads
 - Client never uploads to a public bucket directly. Backend issues a short-lived, scoped **presigned S3 upload URL** with stricter limits than anything else in the app: max ~5MB per image, allow-list `image/jpeg`, `image/png`, `image/webp` only — reject everything else, including SVG (it can carry executable/script content).

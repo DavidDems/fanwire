@@ -27,11 +27,11 @@ const HANDLERS = {
 
 /**
  * EVENTS-003 retired API-SPORTS: the ingestion function is gone, and with it
- * every consumer of the resources below. The resources themselves stay in the
- * Data and Messaging stacks, still exported (see data-stack.test.ts and
- * messaging-stack.test.ts), for a later unit to delete once the App stack no
- * longer imports them. Matched as fragments of their logical ids, which is how
- * both a same-stack Ref and a cross-stack Fn::ImportValue name them.
+ * every consumer of the resources below. INFRA-005 then deleted the resources
+ * themselves from the Data and Messaging stacks (see data-stack.test.ts,
+ * messaging-stack.test.ts and api-sports-retired.test.ts). Matched as
+ * fragments of their logical ids, which is how both a same-stack Ref and a
+ * cross-stack Fn::ImportValue name them.
  */
 const RETIRED_INGESTION_HANDLER = 'app.events.lambda_handler.handler';
 const RETIRED_RESOURCE_IDS = ['ApiSportsKey', 'LiveScoreCacheTable', 'IdempotencyTable', 'IngestionRetry'] as const;

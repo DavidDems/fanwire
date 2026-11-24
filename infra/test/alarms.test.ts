@@ -34,16 +34,16 @@ const SYNTH_MODES: Record<string, Record<string, unknown>> = {
 /**
  * The pinned alarm count, the same in every synth mode. Changing it is a
  * deliberate change to this line:
- *   3 DLQ (notification, ingestion-retry, media-scan-result)
+ *   2 DLQ (notification, media-scan-result)
  * + 3 HTTP API ($default 5xx, Latency p95, Latency p99)
  * + 2 x 8 Lambda functions in Fanwire-App (Errors + Throttles each: Api, Media,
  *   Notifications, Migration, SportsDataLoad, SportsDataRefresh,
  *   OriginVerifyAuthorizer, AccountDeletion)
  * + 3 RDS (CPUUtilization, FreeStorageSpace, DatabaseConnections)
  * + 1 SportsDataConflictsAlarm (Fanwire/SportsData GamesConflicting; EVENTS-008)
- * = 26 (was 23: SportsDataRefresh Errors, SportsDataRefresh Throttles, SportsDataConflictsAlarm)
+ * = 25 (was 26: INFRA-005 removed the ingestion-retry DLQ and its alarm)
  */
-const EXPECTED_ALARM_COUNT = 3 + 3 + 2 * 8 + 3 + 1;
+const EXPECTED_ALARM_COUNT = 2 + 3 + 2 * 8 + 3 + 1;
 
 beforeAll(() => {
   ensureFrontendDist();
@@ -209,8 +209,8 @@ describe('alarm topic (Fanwire-Messaging)', () => {
 });
 
 describe('dead-letter queue alarms (Fanwire-Messaging)', () => {
-  test('the three DLQs are derived from the redrive policies', () => {
-    expect(deadLetterQueueIds()).toHaveLength(3);
+  test('the two DLQs are derived from the redrive policies', () => {
+    expect(deadLetterQueueIds()).toHaveLength(2);
   });
 
   test('every DLQ alarms on ApproximateNumberOfMessagesVisible: Maximum > 0 over one 5-minute period', () => {
