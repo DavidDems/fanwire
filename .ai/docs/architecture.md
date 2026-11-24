@@ -139,7 +139,7 @@ DEMO-001 fix: read the version from package metadata
 
 ## Zero-dependency deterministic core
 
-`.ai/agentlib/` is standard-library Python 3.12 with no third-party imports.
+`.ai/agentlib/` is standard-library Python 3.15 (CI's `setup-python`) with no third-party imports.
 It is the security and correctness boundary around every model invocation, so
 it must run in any orchestrator step without an install, a lockfile, or a
 parser someone else maintains.

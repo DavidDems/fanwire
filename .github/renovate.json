@@ -72,7 +72,7 @@
       ]
     },
     {
-      "description": "Python runtime: setup-python's python-version and the Lambda base image, one PR, only when ticked. Must match lambda.Runtime.PYTHON_3_12 in infra/lib/app-stack.ts, which Renovate does not track: move that in the same PR.",
+      "description": "Python runtime: setup-python's python-version and the Lambda base image, one PR, only when ticked. Must match lambda.Runtime.PYTHON_3_x on the two zip functions in infra/lib/app-stack.ts and infra/lib/auth-stack.ts, which Renovate does not track: move those first, in a hand unit (INFRA-006 did 3.15; infra/test/lambda-runtimes.test.ts pins them). The two halves can arrive as separate PRs when one tag is younger than the other.",
       "matchDepNames": ["python", "public.ecr.aws/lambda/python"],
       "groupName": "python runtime",
       "dependencyDashboardApproval": true
@@ -84,8 +84,9 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Postgres in docker-compose.yml, only when ticked. Must match rds.PostgresEngineVersion in infra/lib/data-stack.ts (VER_16), which Renovate does not track: local tests should run the version RDS runs.",
+      "description": "Postgres in docker-compose.yml, only when ticked. Must match rds.PostgresEngineVersion in infra/lib/data-stack.ts, which Renovate does not track: local tests should run the version RDS runs. Held below 19 until aws-cdk-lib has PostgresEngineVersion.VER_19 (2.277 stops at VER_18_3; INFRA-007 moves RDS to 18).",
       "matchDepNames": ["postgres"],
+      "allowedVersions": "<19",
       "groupName": "postgres runtime",
       "dependencyDashboardApproval": true
     }
