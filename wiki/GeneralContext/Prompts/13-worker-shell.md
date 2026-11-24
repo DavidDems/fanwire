@@ -4,6 +4,8 @@ type: prompt
 
 # 13 — Worker shell: let workers run their own checks, inside a small blast radius
 
+*Update, 2026-11-24: parked for API cost. Building or scoring this needs metered API runs, so it is not scheduled; revisit only if the human chooses to spend ([ADR 0035](../Decisions/0035-outstanding-work-answers.md)).*
+
 **Brief for a Director session** (a high-tier model, driven turn by turn by
 the human). Self-contained: read this file, then what it names. **System
 track, step 5 of 7.** It's the first change the eval suite (`12`) judges.
