@@ -73,6 +73,7 @@ from agentlib import (
     orchestrator,
     promptbuild,
     shadow,
+    version,
 )
 from agentlib import (
     spec as spec_mod,
@@ -542,6 +543,7 @@ def cmd_telemetry_from_run(args) -> int:
         started_at=args.started,
         outcome=args.result,
     )
+    rec.setdefault("pipeline_version", _pipeline_version())
     try:
         path = tm.record(
             REPO_ROOT / cfg["telemetry"]["root"], rec, prices=cfg["telemetry"].get("prices", {})
@@ -734,11 +736,35 @@ def cmd_metrics_collect(args) -> int:
 # --------------------------------------------------------------------------- telemetry
 
 
+def cmd_version_check(args) -> int:
+    try:
+        problems = version.check(REPO_ROOT, args.base)
+    except version.VersionError as exc:
+        die(str(exc), FAILED)
+    for problem in problems:
+        print(f"version check: {problem}", file=sys.stderr)
+    if problems:
+        die("pipeline changed without a version bump and changelog entry", FAILED)
+    print("version check: ok")
+    return OK
+
+
+def _pipeline_version() -> str | None:
+    """The working tree's `.ai/VERSION`, or None if absent or not semver."""
+    try:
+        text = (AI_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text if version.parse(text) is not None else None
+
+
 def cmd_telemetry_record(args) -> int:
     cfg = config()
     root = REPO_ROOT / cfg["telemetry"]["root"]
     try:
-        path = tm.record(root, _json(Path(args.file)), prices=cfg["telemetry"].get("prices", {}))
+        rec = _json(Path(args.file))
+        rec.setdefault("pipeline_version", _pipeline_version())
+        path = tm.record(root, rec, prices=cfg["telemetry"].get("prices", {}))
     except tm.TelemetryError as exc:
         die(str(exc), FAILED)
     print(path.relative_to(REPO_ROOT))
@@ -1118,6 +1144,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagnostic-json", action="store_true", help="emit bounded failure evidence on stderr"
     )
     met_collect.set_defaults(func=cmd_metrics_collect)
+
+    ver = sub.add_parser("version", help="pipeline version").add_subparsers(
+        dest="sub", required=True
+    )
+    ver_check = ver.add_parser(
+        "check", help="pipeline changes need a VERSION bump and changelog entry"
+    )
+    ver_check.add_argument("--base", required=True, help="git ref to diff against")
+    ver_check.set_defaults(func=cmd_version_check)
 
     tel = sub.add_parser("telemetry").add_subparsers(dest="sub", required=True)
     tel_rec = tel.add_parser("record")

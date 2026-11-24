@@ -3892,7 +3892,7 @@ class TestThePipelineVersionIsChecked:
         assert "github.event.pull_request.base.sha" in job
 
     def test_other_events_pass_without_a_base(self, job):
-        step = job.split("version check", 1)[0].rsplit("- name:", 1)[1]
+        step = job.split("agentctl.py version check", 1)[0].rsplit("- name:", 1)[1]
         assert "pull_request" in step
 
     def test_the_job_stays_read_only(self, job):

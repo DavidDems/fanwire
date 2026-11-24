@@ -102,7 +102,12 @@ the total commits field.
 The field definitions also live beside the schema in the
 [collector module](../agentlib/metrics.py). Unknown measurements stay null;
 successful source reads establishing no events produce zero. Collection consumes
-stored hand usage but does not read transcripts or enforce versions. Publication
+stored hand usage but does not read transcripts. The version is enforced by CI,
+not collection: `agentctl version check --base <ref>` (`agentlib/version.py`) fails
+a PR that changes `.ai/agentlib`, `.ai/bin`, `.ai/prompts`, `.ai/skills`,
+`policy.json`, `config.json` or an `agent-*.yml` workflow unless `.ai/VERSION`
+rose (semver) and `.ai/CHANGELOG.md` changed. Telemetry records carry
+`pipeline_version` too. Publication
 is a separate boundary described below.
 
 ## Hand-session usage
