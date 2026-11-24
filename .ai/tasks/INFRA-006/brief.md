@@ -23,7 +23,10 @@ merges unchanged.
 ## The unit
 
 - **Red first:** the two existing runtime assertions flip to `python3.15`, and one sweep
-  over every stack pins that no zip function is left on another runtime.
+  over every stack pins that no zip function of ours is left on another runtime. The
+  Lambdas `aws-cdk-lib` adds itself (cross-region export writer and reader, bucket
+  deployment) run on a runtime CDK picks, so the sweep names them as its only exceptions
+  (this line was corrected at the track's close-out; the first wording missed them).
 - **Implementation:** two lines.
 - **The synth diff is the review.** Only `Runtime` on the origin-verify authorizer (App)
   and the pre-sign-up trigger (Auth) changes.

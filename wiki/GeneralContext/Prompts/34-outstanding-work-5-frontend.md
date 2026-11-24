@@ -35,7 +35,10 @@ documentation follow-up is a Director PR.
    `src/lib/`; one shared `ScrollTable`; one `fetchTeams` in `api/`; one
    media-URL join; delete the caller-less `GameScore`, `ChevronDownIcon`,
    `UserIcon`; a scrim token for `Dialog`'s backdrop; the stale `LikeButton`
-   comments. Tests are the behaviour's proof: none may change.
+   comments; the test comments that still say msw runs with
+   `onUnhandledRequest: "error"` (since msw 3 it is `onUnhandledFrame`,
+   `setupTests.ts`; `grep -rn onUnhandledRequest frontend/src` lists ten, and
+   `harness.test.ts`'s assertion that `setupTests.ts` no longer names it stays). Tests are the behaviour's proof: none may change.
 3. **`Field` layouts:** a checkbox layout (then delete `EmailPreference`'s
    `.preference > div` exception) and a row layout for search.
 4. **A friendlier 429:** a "slow down" line in the composer and repost

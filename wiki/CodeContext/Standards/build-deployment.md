@@ -18,7 +18,7 @@ Nothing runs as a long-lived container in production: compute is Lambda, the fro
 
 | Piece | Dockerfile | Base image | Deployed how |
 |---|---|---|---|
-| API Lambda | `docker/backend.Dockerfile`, target `lambda` | `public.ecr.aws/lambda/python:3.12` | Pushed to ECR, referenced by a CDK `lambda.Function` (`Code.fromEcrImage`), `cmd` = `app.main.handler` |
+| API Lambda | `docker/backend.Dockerfile`, target `lambda` | `public.ecr.aws/lambda/python:3.15` | Pushed to ECR, referenced by a CDK `lambda.Function` (`Code.fromEcrImage`), `cmd` = `app.main.handler` |
 | Media, notifications, account-deletion Lambdas | same image, own `cmd` | same | Same ECR image, no separate image to build/scan/patch: `app.media.lambda_handler.handler`, `app.notifications.lambda_handler.handler`, `app.account_deletion_handler.handler` |
 | Migration runner | same image, own `cmd` | same | `app.migrate.handler`. **Invoked by a human, by nothing else** — no rule, schedule, event source mapping or custom resource (`INFRA-003`; [[wiki/CodeContext/Modules/0x00b-architecture-iam-gaps|0x00b]] "Known gaps") |
 | Sports-data load | same image, own `cmd` | same | `app.events.load_handler.handler`. Invoked by a human only (`EVENTS-002`) |
@@ -89,7 +89,7 @@ Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deplo
 Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deploy: migrations and sports data]] "Load sports data".
 
 ## Local dev (`docker-compose.yml`)
-`postgres` (`postgres:16-alpine`, real Postgres matching RDS, not sqlite) and `dynamodb-local` back the one-shot `backend-test` and `frontend-test`; `backend-dev` is the browser-clickable dev API on `http://localhost:8001`; a `perf` profile adds `postgres-perf`, `backend-perf` and `k6`. Dev/test tooling only, never deployed.
+`postgres` (`postgres:18-alpine`, real Postgres matching RDS's 18, not sqlite) and `dynamodb-local` back the one-shot `backend-test` and `frontend-test`; `backend-dev` is the browser-clickable dev API on `http://localhost:8001`; a `perf` profile adds `postgres-perf`, `backend-perf` and `k6`. Dev/test tooling only, never deployed.
 
 ## Parts
 - [[wiki/CodeContext/Standards/build-deployment-packages|Packages]] — backend, frontend and infra dependencies; why CDK is TypeScript.

@@ -98,7 +98,7 @@ gets a second. Run them in order. Steps 1–3 only read.
 12. **Count rows** with the Postgres client in Docker (no local install needed). Non-zero counts and a head
     revision equal to the newest file in `backend/alembic/versions/` mean the restore holds real data:
     ```powershell
-    docker run --rm -e PGPASSWORD postgres:16 psql -h host.docker.internal -p 15432 -U fanwire_admin -d fanwire -c "select (select count(*) from users) as users, (select count(*) from posts) as posts, (select count(*) from games) as games, (select version_num from alembic_version) as head;"
+    docker run --rm -e PGPASSWORD postgres:18 psql -h host.docker.internal -p 15432 -U fanwire_admin -d fanwire -c "select (select count(*) from users) as users, (select count(*) from posts) as posts, (select count(*) from games) as games, (select version_num from alembic_version) as head;"
     ```
 13. **Clean up, in this order.** Stop the port forward with Ctrl+C in the second window. Then forget the password,
     delete the copy (the identifier is the copy's, never the source's; production also has deletion
