@@ -70,6 +70,7 @@ from agentlib import (
     guard,
     handusage,
     metrics,
+    metricsreport,
     orchestrator,
     promptbuild,
     shadow,
@@ -733,6 +734,21 @@ def cmd_metrics_collect(args) -> int:
     return OK
 
 
+def cmd_metrics_report(args) -> int:
+    try:
+        if bool(args.records) == bool(args.ref):
+            die("give exactly one of --records DIR or --ref GITREF")
+        units = (
+            metricsreport.load_directory(args.records)
+            if args.records
+            else metricsreport.load_ref(args.ref, REPO_ROOT)
+        )
+        print(metricsreport.render(units))
+    except metricsreport.ReportError as exc:
+        die(str(exc))
+    return OK
+
+
 # --------------------------------------------------------------------------- telemetry
 
 
@@ -1144,6 +1160,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagnostic-json", action="store_true", help="emit bounded failure evidence on stderr"
     )
     met_collect.set_defaults(func=cmd_metrics_collect)
+    met_report = met.add_parser(
+        "report", help="by week and mode: units, cost, human interventions, red CI"
+    )
+    met_report.add_argument("--records", help="directory of records/<TASK-ID>.json files")
+    met_report.add_argument("--ref", help="git ref holding records/, e.g. origin/metrics")
+    met_report.set_defaults(func=cmd_metrics_report)
 
     ver = sub.add_parser("version", help="pipeline version").add_subparsers(
         dest="sub", required=True

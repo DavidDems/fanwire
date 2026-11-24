@@ -1,4 +1,4 @@
-"""`agentctl metrics report`: §9 metrics by ISO week, mode and pipeline version.
+"""`agentctl metrics report`: section 9 metrics by ISO week, mode and pipeline version.
 
 Unknowns (null) are excluded from every mean and the count of known values is
 shown as `[n]`; they are never zero. Git-reading tests scrub every GIT_*
@@ -77,16 +77,16 @@ def header(text):
 def test_groups_by_iso_week_of_merged_at_mode_and_version(tmp_path, mod):
     records = write(
         tmp_path / "r",
-        record("A-1", merged_at="2026-11-16T00:30:00Z"),  # Monday, W47
-        record("A-2", merged_at="2026-11-22T23:00:00Z"),  # Sunday, still W47
-        record("A-3", merged_at="2026-11-23T01:00:00Z"),  # W48
-        record("A-4", mode="auto", cost_usd=1.0, cost_source="provider"),
-        record("A-5", pipeline_version="1.0.0"),
+        record("A-001", merged_at="2026-11-16T00:30:00Z"),  # Monday, W47
+        record("A-002", merged_at="2026-11-22T23:00:00Z"),  # Sunday, still W47
+        record("A-003", merged_at="2026-11-23T01:00:00Z"),  # W48
+        record("A-004", mode="auto", cost_usd=1.0, cost_source="provider"),
+        record("A-005", pipeline_version="1.0.0"),
     )
     out = mod.render(mod.load_directory(records))
     head = header(out)
     units = head.index("units")
-    assert row(out, "2026-W47", "hand")[units] == "2"  # A-1, A-2 (version -)
+    assert row(out, "2026-W47", "hand")[units] == "2"  # A-001, A-2 (version -)
     assert row(out, "2026-W48", "hand")[units] == "1"
     assert row(out, "2026-W47", "auto")[units] == "1"
     versions = [ln.split()[head.index("version")] for ln in out.splitlines() if "2026-W47 " in ln]
@@ -96,9 +96,9 @@ def test_groups_by_iso_week_of_merged_at_mode_and_version(tmp_path, mod):
 def test_means_exclude_nulls_and_show_known_count(tmp_path, mod):
     records = write(
         tmp_path / "r",
-        record("A-1", human_delta_lines=10, review_rounds=2),
-        record("A-2", human_delta_lines=20, review_rounds=None),
-        record("A-3", human_delta_lines=None, review_rounds=None),
+        record("A-001", human_delta_lines=10, review_rounds=2),
+        record("A-002", human_delta_lines=20, review_rounds=None),
+        record("A-003", human_delta_lines=None, review_rounds=None),
     )
     out = mod.render(mod.load_directory(records))
     cells = row(out, "2026-W47", "hand")
@@ -109,7 +109,7 @@ def test_means_exclude_nulls_and_show_known_count(tmp_path, mod):
 
 
 def test_all_unknown_is_a_dash_not_zero(tmp_path, mod):
-    records = write(tmp_path / "r", record("A-1", review_comments=None))
+    records = write(tmp_path / "r", record("A-001", review_comments=None))
     out = mod.render(mod.load_directory(records))
     assert row(out, "2026-W47", "hand")[header(out).index("comments")] == "-"
 
@@ -117,12 +117,12 @@ def test_all_unknown_is_a_dash_not_zero(tmp_path, mod):
 def test_cost_is_honest_for_subscription_unknown_and_priced(tmp_path, mod):
     records = write(
         tmp_path / "r",
-        record("S-1"),  # subscription, null dollars
+        record("S-001"),  # subscription, null dollars
         record(
-            "U-1", mode="auto", cost_usd=None, cost_source=None, merged_at="2026-11-24T00:00:00Z"
+            "U-001", mode="auto", cost_usd=None, cost_source=None, merged_at="2026-11-24T00:00:00Z"
         ),
-        record("P-1", mode="auto", cost_usd=1.0, cost_source="provider"),
-        record("P-2", mode="auto", cost_usd=3.0, cost_source="estimate"),
+        record("P-001", mode="auto", cost_usd=1.0, cost_source="provider"),
+        record("P-002", mode="auto", cost_usd=3.0, cost_source="estimate"),
     )
     out = mod.render(mod.load_directory(records))
     cost = header(out).index("cost")
@@ -134,9 +134,9 @@ def test_cost_is_honest_for_subscription_unknown_and_priced(tmp_path, mod):
 def test_red_ci_share_and_backfilled_count(tmp_path, mod):
     records = write(
         tmp_path / "r",
-        record("A-1", ci_runs=4, red_ci_runs=1, backfilled=True),
-        record("A-2", ci_runs=6, red_ci_runs=2),
-        record("A-3", ci_runs=None, red_ci_runs=None),
+        record("A-001", ci_runs=4, red_ci_runs=1, backfilled=True),
+        record("A-002", ci_runs=6, red_ci_runs=2),
+        record("A-003", ci_runs=None, red_ci_runs=None),
     )
     out = mod.render(mod.load_directory(records))
     cells = row(out, "2026-W47", "hand")
@@ -146,17 +146,17 @@ def test_red_ci_share_and_backfilled_count(tmp_path, mod):
 
 
 def test_output_is_deterministic_and_empty_input_is_clear(tmp_path, mod):
-    records = write(tmp_path / "r", record("B-1"), record("A-1", mode="auto"))
+    records = write(tmp_path / "r", record("B-001"), record("A-001", mode="auto"))
     first = mod.render(mod.load_directory(records))
     assert first == mod.render(mod.load_directory(records))
     assert "no records" in mod.render([]).lower()
 
 
 def test_invalid_record_fails_clearly(tmp_path, mod):
-    bad = record("A-1")
+    bad = record("A-001")
     bad["surprise"] = 1
     records = write(tmp_path / "r", bad)
-    with pytest.raises(mod.ReportError, match="A-1"):
+    with pytest.raises(mod.ReportError, match="A-001"):
         mod.load_directory(records)
 
 
@@ -185,13 +185,13 @@ def test_ref_reading_ignores_inherited_git_env(tmp_path, mod, monkeypatch):
 
     git("init", "-q", "-b", "main")
     git("checkout", "-q", "--orphan", "metrics")
-    write(repo / "records", record("A-1", human_delta_lines=4), record("A-2", mode="auto"))
+    write(repo / "records", record("A-001", human_delta_lines=4), record("A-002", mode="auto"))
     git("add", "records")
     git("commit", "-q", "-m", "records")
     # A hostile inherited GIT_DIR must not redirect the read.
     monkeypatch.setenv("GIT_DIR", str(tmp_path / "elsewhere"))
     loaded = mod.load_ref("metrics", repo)
-    assert sorted(r["task_id"] for r in loaded) == ["A-1", "A-2"]
+    assert sorted(r["task_id"] for r in loaded) == ["A-001", "A-002"]
 
 
 def test_missing_ref_fails_clearly(tmp_path, mod):
@@ -211,7 +211,7 @@ def run_cli(*args):
 
 
 def test_cli_prints_table_from_records_dir(tmp_path):
-    records = write(tmp_path / "r", record("A-1", human_delta_lines=8))
+    records = write(tmp_path / "r", record("A-001", human_delta_lines=8))
     result = run_cli("--records", str(records))
     assert result.returncode == 0, result.stderr
     assert "2026-W47" in result.stdout and "8[1]" in result.stdout
@@ -220,7 +220,7 @@ def test_cli_prints_table_from_records_dir(tmp_path):
 def test_cli_requires_exactly_one_source_and_rejects_bad_records(tmp_path):
     assert run_cli().returncode != 0
     assert run_cli("--records", str(tmp_path), "--ref", "x").returncode != 0
-    bad = record("A-1")
+    bad = record("A-001")
     bad["mode"] = "robot"
     result = run_cli("--records", str(write(tmp_path / "r", bad)))
-    assert result.returncode != 0 and "A-1" in result.stderr
+    assert result.returncode != 0 and "A-001" in result.stderr
