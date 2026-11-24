@@ -23,7 +23,8 @@ thing, write state.
   agentctl docs dupes                   repeated and near-repeated Markdown paragraphs
   agentctl docs archive-refs            PR numbers and hashes to fanwire-archive (dry run)
   agentctl addresses                    fail on a personal email address in a tracked file
-  agentctl selfcheck                    prove the machinery works, no tokens spent
+  agentctl selfcheck [--workspaces]     prove the machinery works, no tokens spent
+  agentctl preflight ports              fail if a docker-compose host port is already bound
 
 Exit codes: 0 success, 1 the thing being checked failed, 2 usage/IO error.
 """
@@ -69,6 +70,7 @@ from agentlib import (
     doclint,
     guard,
     handusage,
+    localguards,
     metrics,
     metricsreport,
     orchestrator,
@@ -991,6 +993,9 @@ def cmd_selfcheck(args) -> int:
     if breach.ok:
         problems.append("guard did NOT stop a worker writing agent infrastructure")
 
+    if getattr(args, "workspaces", False):
+        problems += localguards.workspace_problems(REPO_ROOT)
+
     if problems:
         print(f"selfcheck: {len(problems)} problem(s)", file=sys.stderr)
         for p in problems:
@@ -1225,10 +1230,38 @@ def build_parser() -> argparse.ArgumentParser:
     addr.set_defaults(func=cmd_addresses)
 
     sub.add_parser("status", help="board of every task").set_defaults(func=cmd_status)
-    sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent").set_defaults(
-        func=cmd_selfcheck
+    sc = sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent")
+    sc.add_argument(
+        "--workspaces",
+        action="store_true",
+        help="also require node_modules in each npm workspace (local only; skipped when CI=true)",
     )
+    sc.set_defaults(func=cmd_selfcheck)
+
+    pf = sub.add_parser("preflight", help="local checks before a command runs")
+    pfs = pf.add_subparsers(dest="preflight_cmd", required=True)
+    pp = pfs.add_parser("ports", help="fail if a host port docker-compose publishes is already bound")
+    pp.add_argument("--compose-file", default="docker-compose.yml")
+    pp.add_argument("--service", action="append", help="check only this service and its dependencies")
+    pp.set_defaults(func=cmd_preflight_ports)
     return p
+
+
+def cmd_preflight_ports(args) -> int:
+    path = Path(args.compose_file)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    try:
+        found = localguards.port_collisions(path, services=args.service)
+    except OSError as exc:
+        print(f"preflight ports: {exc}", file=sys.stderr)
+        return USAGE
+    if found:
+        for c in found:
+            print(f"preflight ports: {c.message()}", file=sys.stderr)
+        return FAILED
+    print("preflight ports: every published host port is free")
+    return OK
 
 
 def cmd_docs_lint(args) -> int:
