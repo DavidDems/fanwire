@@ -77,6 +77,22 @@ describe('Data stack', () => {
       });
     });
 
+    test('Postgres 18, upgraded in place: same logical id, major upgrade allowed, snapshot on delete (INFRA-007)', () => {
+      // aws-cdk-lib 2.277 has no PostgresEngineVersion.VER_19, so 18. A moved
+      // logical id would make CloudFormation create a second, empty instance
+      // instead of upgrading the live one.
+      const instances = resourcesOfType(raw(), 'AWS::RDS::DBInstance');
+      expect(Object.keys(instances)).toEqual(['Postgres9DC8BB04']);
+      const db = instances.Postgres9DC8BB04;
+      expect(db?.Properties?.Engine).toBe('postgres');
+      expect(db?.Properties?.EngineVersion).toBe('18');
+      expect(db?.Properties?.AllowMajorVersionUpgrade).toBe(true);
+      expect(db?.Properties?.AutoMinorVersionUpgrade).toBe(true);
+      expect(db?.Properties?.DBParameterGroupName).toBeUndefined();
+      expect(db?.DeletionPolicy).toBe('Snapshot');
+      expect(db?.UpdateReplacePolicy).toBe('Snapshot');
+    });
+
     test('credentials are generated into Secrets Manager (CMK-encrypted), never a literal password', () => {
       const db = Object.values(resourcesOfType(raw(), 'AWS::RDS::DBInstance'))[0];
       expect(JSON.stringify(db?.Properties?.MasterUserPassword)).toContain('{{resolve:secretsmanager:');
