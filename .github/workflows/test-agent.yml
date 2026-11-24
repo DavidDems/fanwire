@@ -497,6 +497,27 @@ jobs:
           case "$base" in *[!0]*) ;; *) base=HEAD ;; esac
           python .ai/bin/agentctl.py docs lint --base "$base"
 
+  # Backlog 19: stacked PRs merged top-down never reached main. A PR's base
+  # must be `main` or an `outstanding-track-*` integration branch. Runs on
+  # pull_request only; on push/dispatch it is skipped, which `gate` accepts.
+  # The base ref is attacker-influenced text, so it comes in through env and
+  # is never interpolated into the script.
+  pr-base:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an allowed base branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          case "$BASE_REF" in
+            main|outstanding-track-*) echo "base '$BASE_REF' is allowed" ;;
+            *)
+              echo "::error::PR base '$BASE_REF' is not allowed; target main or an outstanding-track-* branch"
+              exit 1
+              ;;
+          esac
+
   # One check that always reports, whatever the filter decided.
   #
   # Required status checks name a JOB, and a job the filter skipped never
@@ -524,6 +545,7 @@ jobs:
       - openapi-drift
       - npm-audit
       - infra-synth
+      - pr-base
     runs-on: ubuntu-latest
     steps:
       - name: Report the gate
