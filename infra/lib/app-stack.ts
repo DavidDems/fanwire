@@ -685,6 +685,14 @@ export class AppStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: `fanwire ${id} Lambda`,
     });
+    const eniActions = [
+      'ec2:CreateNetworkInterface',
+      'ec2:DescribeNetworkInterfaces',
+      'ec2:DescribeSubnets',
+      'ec2:DeleteNetworkInterface',
+      'ec2:AssignPrivateIpAddresses',
+      'ec2:UnassignPrivateIpAddresses',
+    ];
     const policy = new iam.Policy(this, `${id}Policy`, {
       roles: [role],
       statements: [
@@ -698,15 +706,27 @@ export class AppStack extends cdk.Stack {
           : [
               new iam.PolicyStatement({
                 sid: 'VpcNetworkInterfaces',
-                actions: [
-                  'ec2:CreateNetworkInterface',
-                  'ec2:DescribeNetworkInterfaces',
-                  'ec2:DescribeSubnets',
-                  'ec2:DeleteNetworkInterface',
-                  'ec2:AssignPrivateIpAddresses',
-                  'ec2:UnassignPrivateIpAddresses',
-                ],
+                actions: eniActions,
                 resources: ['*'],
+              }),
+              // AWS's recommended self-deny (Lambda guide, VPC access ->
+              // required IAM permissions): lambda:SourceFunctionArn is set
+              // only on calls the function's own code makes, so the Lambda
+              // service keeps managing the ENIs while that code cannot.
+              // Matched on the stack-name prefix of the generated function
+              // names: a per-function ARN would make this policy depend on
+              // the function, which already depends on the policy (a cycle).
+              new iam.PolicyStatement({
+                sid: 'DenyVpcNetworkInterfacesFromFunctionCode',
+                effect: iam.Effect.DENY,
+                actions: eniActions,
+                resources: ['*'],
+                conditions: {
+                  ArnLike: {
+                    'lambda:SourceFunctionArn':
+                      `arn:${this.partition}:lambda:${this.region}:${this.account}:function:${this.stackName}-*`,
+                  },
+                },
               }),
             ]),
         // Environment variables are encrypted with the CMK.
