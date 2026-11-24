@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          python-version: "3.12"
+          python-version: "3.15"
 
       # The failed run's evidence, through the API. No key in this step.
       - name: Fetch the failed run's log and job list
@@ -198,7 +198,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         if: steps.find.outputs.id != ''
         with:
-          python-version: "3.12"
+          python-version: "3.15"
 
       # Exit 1 means there was nothing to mark (not the summary, or an unusable
       # value); that is not a failure of the job. Any other code is.
