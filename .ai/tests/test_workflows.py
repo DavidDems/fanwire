@@ -2539,6 +2539,7 @@ NOT_A_CHECK = {
     "npm-audit",
     "infra-synth",
     "perf-advisory",
+    "pr-base",
     "gate",
 }
 
