@@ -20,7 +20,7 @@ The IAM gate (`infra/test/iam-policy.test.ts`, runs in CI) walks every policy do
 - `cdk-cross-region-export-parameters`: `parameter/cdk/exports/*` (writer) and `parameter/cdk/exports/Fanwire-Cdn/*` (reader), from `crossRegionReferences`.
 - `cdk-custom-resource-basic-execution`: `AWSLambdaBasicExecutionRole` on those two CDK cross-region custom-resource provider roles. They are the only managed policy and the only custom-resource Lambdas in the app.
 
-Grants are never used. `grant*()` emits wildcard actions such as `kms:GenerateDataKey*`, so every role has hand-written statements. Constructs that would append grants to the CMK's policy (Secret, Queue, Bucket, Table) receive an imported `Key.fromKeyArn` handle instead.
+Grants are never used. `grant*()` emits wildcard actions such as `kms:GenerateDataKey*`, so every role has hand-written statements. Constructs that would append grants to the CMK's policy (Secret, Queue, Bucket) receive an imported `Key.fromKeyArn` handle instead.
 
 ## Known gaps
 - `DATABASE_URL` is assembled from secret dynamic references, so the password sits in each function's environment. It is encrypted with the CMK, but anyone allowed `lambda:GetFunctionConfiguration` plus `kms:Decrypt` can read it, and secret rotation would break it. **Deferred:** reading DB credentials from Secrets Manager at cold start instead of assembling `DATABASE_URL` from a dynamic reference; `app.dependencies`/`app.settings` take a single `database_url` connection string as-is.
