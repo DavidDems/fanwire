@@ -57,7 +57,10 @@ export class DataStack extends cdk.Stack {
     const keyRef = kms.Key.fromKeyArn(this, 'KeyRef', this.key.keyArn);
 
     this.database = new rds.DatabaseInstance(this, 'Postgres', {
-      engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
+      engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_18 }),
+      // An in-place major upgrade of the live instance (INFRA-007, 16 to 18):
+      // CloudFormation refuses a major EngineVersion change without it.
+      allowMajorVersionUpgrade: true,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       vpc: network.vpc,
       vpcSubnets: { subnetGroupName: NetworkStack.DATA_SUBNETS },
