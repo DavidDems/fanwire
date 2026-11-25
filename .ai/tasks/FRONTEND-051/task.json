@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-051",
+  "objective": "Make room in the entry chunk by loading the Cognito SDK (amazon-cognito-identity-js, with its buffer polyfill and @aws-crypto dependencies) lazily through a new DeferredAuthService, so the entry no longer carries it and drops from about 554.8 kB raw to about 464 kB raw against the 560.3 kB ceiling.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-051 is cut from the tip of the integration branch outstanding-track-5 after the FRONTEND-050 budget fold (bundle-budgets/FRONTEND-050.ts is gone and BASE.entryJsRaw is 554_756).",
+    "Test-first: commit the failing tests alone before the implementation. frontend/src/auth/DeferredAuthService.test.ts fails today because frontend/src/auth/DeferredAuthService.ts does not exist.",
+    "frontend/src/auth/DeferredAuthService.ts exports a class DeferredAuthService that implements AuthService (from ./AuthService) and whose constructor takes one argument, a loader of type () => Promise<AuthService>. It imports nothing from amazon-cognito-identity-js or ./CognitoAuthService.",
+    "Delegation: each async method of AuthService (signUp, confirmSignUp, resendConfirmationCode, signIn, forgotPassword, confirmForgotPassword, refreshSession, getIdToken, reauthenticate, emailVerified, requestEmailVerification, confirmEmailVerification) awaits the loaded service, calls the same method on it with the same arguments, and resolves to its result. The test pins every one of the twelve, each with its arguments and its result.",
+    "Loading starts at construction: the constructor calls the loader exactly once before any method is called, so session restore is not delayed by a second round trip. A test pins that the loader has been called once after construction alone, and that later calls while it is pending or after it resolved do not call it again.",
+    "signOut() stays synchronous and returns undefined. Called after the load has resolved, it calls the loaded service's signOut() at once, in the same tick. Called while the load is pending, it does not throw, and the loaded service's signOut() is called as soon as the load resolves. Tests pin both cases.",
+    "A failed load is not cached: while the loader's promise rejects, every call that waited on it rejects with that error; the next method call calls the loader again, and when that load succeeds, the call delegates and resolves. A test pins reject-then-retry-succeeds.",
+    "An AuthError (or any rejection) thrown by the loaded service's method reaches the caller unchanged: the same object, not wrapped. A test pins this with an AuthError from the inner service.",
+    "src/App.tsx stays the one place that chooses the implementation: it builds the service as new DeferredAuthService(() => import(\"./auth/CognitoAuthService\").then((m) => new m.CognitoAuthService())), has no static import of ./auth/CognitoAuthService, and hands that one instance unchanged to installTokenProvider and AuthProvider. App.tsx still names CognitoAuthService (auth/app-wiring.test.tsx checks it). CognitoAuthService.ts is unchanged and stays the only file importing the SDK (auth/sdk-isolation.test.ts).",
+    "Bundle: the test commit adds frontend/src/test/bundle-budgets/FRONTEND-051.ts declaring added: { CognitoAuthService: N }, where N is the new lazy chunk's measured gzip size rounded up to the next 100 B (expect about 26_500), and nothing else: the entry shrinking needs no declaration. bundle-budget.test.ts stays green and no budget is loosened. If any other lazy output appears, disappears or moves past tolerance, stop and record it.",
+    "Optional: a structural check that the built entry closure holds no amazon-cognito-identity-js code. If added, it goes in the unit's own new file frontend/src/auth/cognito-lazy.test.ts in the test commit, not in bundle-budget.test.ts.",
+    "Unchanged: every existing test, untouched and green; CognitoAuthService.ts, tokenProvider.ts, AuthContext.tsx, vite.config.ts and bundle-budget.ts. The define: { global: \"globalThis\" } in vite.config.ts covers the new lazy chunk (bundle-budget.test.ts's bare-global check scans every chunk and stays green).",
+    "Proof: the entry's raw and gzip size after the unit, measured with the test's build, is recorded in the PR (expect about 464 kB raw, 147 kB gzip). npm run lint reports 0 problems; npm run typecheck and npm run build are green. The suite is run in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2).",
+    "No new dependency; no change outside the allowed paths.",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md states that the Cognito SDK loads lazily through DeferredAuthService, why (room in the entry under ADR 0041's raw cap), how signOut and a failed load behave, and that App.tsx still chooses the implementation in one place."
+  ],
+  "allowed_paths": [
+    "frontend/src/auth/DeferredAuthService.ts",
+    "frontend/src/auth/DeferredAuthService.test.ts",
+    "frontend/src/auth/cognito-lazy.test.ts",
+    "frontend/src/App.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-051.ts",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/auth/CognitoAuthService.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
