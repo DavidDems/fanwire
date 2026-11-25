@@ -13,14 +13,15 @@ describe `LikeButton`, which UI-009 replaced.
 ## The human's rule: no test changes
 
 The existing tests, unchanged and green, are the proof that behaviour did not change.
-The only test edits allowed are comment-only, in
-`features/search/search-isolation.test.ts` and `features/search/SearchPage.test.tsx`
-(their `LikeButton` mentions). So there is no red test and `require_red_baseline` is
+The only test edits allowed are comment-only: the two search tests'
+`LikeButton` mentions and the stale msw comments (Director's amendment, below). Every
+test and test-kit file's diff must be comments only: no code, assertion or test name
+changes. So there is no red test and `require_red_baseline` is
 `false` (`state-machine.md`: a waived baseline, said why here). The commits are:
 
-1. **test_agent**: the two comment edits, plus `bundle-budgets/FRONTEND-052.ts` if the
-   bundle moves (see Bundle). Measure on the finished implementation, then commit this
-   first.
+1. **test_agent**: the comment edits (the search tests and the msw comments), plus
+   `bundle-budgets/FRONTEND-052.ts` if the bundle moves (see Bundle). Measure on the
+   finished implementation, then commit this first.
 2. **code_agent**: the implementation.
 3. **context_maintainer**: the module docs.
 
@@ -74,6 +75,30 @@ nothing moves. Never touch `bundle-budget.ts` or `ENTRY_JS_RAW_HARD_MAX`: the ro
 FRONTEND-051 made is for later units. More than 200 B gzip on any lazy output, or 300 B
 on the entry: stop and report.
 
+## Amendment (Director): the msw comments are in scope
+
+The human's rule allows comment-only msw edits in tests. Since msw 3, `setupTests.ts`
+starts the server with `onUnhandledFrame: "error"`, but ten comments still say
+`onUnhandledRequest: "error"`. Change each one to `onUnhandledFrame`, keeping the
+sentence's meaning, in the test_agent commit:
+
+- `features/compose/ComposePage.test.tsx`
+- `features/feed/FeedRoute.test.tsx`
+- `features/notifications/EmailPreference.test.tsx`
+- `features/notifications/NotificationsPage.test.tsx`
+- `features/profile/FollowButton.test.tsx`
+- `routes/routes.test.tsx` (a `//` comment)
+- `test/app-route.tsx`
+- `test/compose.ts`
+- `test/server.test.ts`
+- `test/server.ts`
+
+`test/app-route.tsx`, `test/compose.ts` and `test/server.ts` are test kit, under
+`frontend/src/test/**`, which `test_agent` may write. Afterwards, `grep -rn
+onUnhandledRequest frontend/src` finds only `harness.test.ts`'s assertion that
+`setupTests.ts` no longer names it. That assertion stays. Check each file's diff before
+committing: comment lines only.
+
 ## Out of scope (back to the backlog for the human)
 
 The deliverable lists these, but under the no-test-changes rule none of them can be a
@@ -88,16 +113,10 @@ behaviour-unchanged tidy-up:
 - **Deleting `UserIcon`.** `icons.test.tsx` pins it.
 - **`ChevronDownIcon`** isn't caller-less: `Dialog.tsx` uses it (the Back icon), so
   there is nothing to delete.
-- **The test comments that still say msw runs with `onUnhandledRequest: "error"`**
-  (since msw 3 it is `onUnhandledFrame`). They sit in test files and the test kit
-  (`ComposePage.test.tsx`, `FeedRoute.test.tsx`, `EmailPreference.test.tsx`,
-  `NotificationsPage.test.tsx`, `FollowButton.test.tsx`, `routes.test.tsx`,
-  `test/app-route.tsx`, `test/compose.ts`, `test/server.ts`, `test/server.test.ts`).
-  The human allowed comment edits in the two search tests only. `harness.test.ts`'s
-  assertion stays as it is.
-- **`api/stats.test.ts`'s comment and test name** ("TEAMS_KEY is the one
-  features/profile and search spell") go stale once `features/profile` imports the
-  key. That's a test file, so it stays. The assertion still holds.
+- **`api/stats.test.ts`'s test name** ("TEAMS_KEY is the one features/profile and
+  search spell") goes stale once `features/profile` imports the key. A test name isn't
+  a comment, so it stays, and so does that file's header comment (the file isn't in
+  `allowed_paths`). The assertion still holds.
 
 ## For the Director afterwards (deliverable 8; `FrontendUI/` is not unit-writable)
 
