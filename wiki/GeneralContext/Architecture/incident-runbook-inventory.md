@@ -40,6 +40,11 @@ proves the path. Thresholds and reasons:
 `wiki/CodeContext/Modules/0x00a-architecture-infra.md` "Alarms". An alarm
 emails on a change of state, not every period, so one email can stand for a
 long outage. An OK email means it recovered.
+GuardDuty findings in this account of severity 4 or more (Medium, High,
+Critical) email through the same topic: `GuardDutyFindingRule` in
+`Fanwire-Messaging` (`INFRA-009`), on the default bus. A sample finding proves
+the path: `aws guardduty create-sample-findings` with one `--finding-types`
+value (without it, every type is created and each emails).
 
 | Alarm | First look |
 |---|---|
@@ -50,24 +55,6 @@ long outage. An OK email means it recovered.
 
 ## Known gaps
 
-- **GuardDuty findings raise no alarm.** They are checked by hand
-  ([Response](incident-runbook-response.md), "Trigger"). The human's design is
-  a same-account EventBridge rule in `fanwire-workload` routing Medium and High
-  findings (`source` `aws.guardduty`, `detail-type` `GuardDuty Finding`,
-  `detail.severity` ≥ 4; Medium is 4.0–6.9, High 7.0–8.9, Critical 9.0–10.0)
-  to the existing alarm topic, with no cross-account forwarding. It is not
-  built: AWS's GuardDuty documentation does not state that a member account's
-  own default event bus receives its own findings. ["Processing GuardDuty
-  findings with Amazon EventBridge"](https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings_eventbridge.html)
-  says only that rules in the administrator account receive findings from both
-  the administrator and member accounts; the account, organizations and
-  member-relationship pages are silent on a member's bus (members can view
-  their own findings, cannot archive them, and cannot set the EventBridge
-  notification frequency). The workload account has its own detector
-  (`62d0584d4d193d4f24a7a4a5f375baa2`). Options; the choice is the human's:
-  - (A) Build the same-account rule anyway and prove it with `aws guardduty create-sample-findings` in the workload account after the deploy (a human-run write), removing it if no email arrives.
-  - (B) A rule in the delegated administrator `fanwire-log-archive`, which the docs confirm receives member findings, forwarding to the workload topic or bus: a deploy into the log-archive account, which the human ruled out for now.
-  - (C) A managed notification outside CDK (AWS User Notifications or Security Hub).
 - **No S3 data events in CloudTrail** (management events only), so object-level reads and writes are not
   recorded. Cheap at this volume; not enabled.
 - Security Hub — optional at this budget per `wiki/CodeContext/Standards/security.md`, not part of this runbook.

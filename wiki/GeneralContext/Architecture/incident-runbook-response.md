@@ -9,14 +9,15 @@ of PowerShell with the `fanwire-workload` profile.
 
 ## Trigger
 
-Act on GuardDuty findings of **Medium or High** severity only. Low-severity findings are informational/noisy
+Act on GuardDuty findings of **Medium or higher** severity only (Medium, High, Critical: severity 4.0 and up). Low-severity findings are informational/noisy
 by design in GuardDuty and are not actioned under this runbook (revisit this threshold once real traffic
 exists and a baseline of "normal" Low findings is established).
 
-Detection of GuardDuty findings is **manual**: findings are only seen by periodically checking the
-GuardDuty console in `fanwire-log-archive` (delegated admin). The CloudWatch alarms
-([Inventory](incident-runbook-inventory.md), "Alarms") email on operational failures, not on findings. A
-push notification for findings (EventBridge → SNS → email) is not built.
+Findings in `fanwire-workload` of severity 4 or more **email the alarm topic** within minutes
+(`GuardDutyFindingRule`, [Inventory](incident-runbook-inventory.md), "Alarms"): the first line names the
+severity and finding type, the last the account, region and finding id. Findings in other accounts, and
+Low findings, are still seen only by checking the GuardDuty console in `fanwire-log-archive` (delegated
+admin).
 
 **A malware verdict on an upload is not an incident.** GuardDuty Malware Protection returning
 `THREATS_FOUND` for a quarantine object is the media pipeline working: `app.media.lambda_handler` moves that
