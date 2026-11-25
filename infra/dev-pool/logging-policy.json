@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteOwnLogGroup",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogGroup"],
+      "Resource": "arn:aws:logs:ca-central-1:294321867941:log-group:/aws/lambda/Fanwire-Users007-PreSignUp"
+    },
+    {
+      "Sid": "WriteOwnLogStreams",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ca-central-1:294321867941:log-group:/aws/lambda/Fanwire-Users007-PreSignUp:*"
+    }
+  ]
+}
