@@ -7,7 +7,7 @@ import type { paths } from "../api/schema";
  * The shared msw server. Tests mock the *network*, never the client, so every
  * test exercises the real generated `openapi-fetch` client, middleware and all.
  *
- * `setupTests.ts` starts this with `onUnhandledRequest: "error"` — a request
+ * `setupTests.ts` starts this with `onUnhandledFrame: "error"` — a request
  * nobody wrote a handler for is a test failure, not a silent pass.
  */
 

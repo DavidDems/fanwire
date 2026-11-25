@@ -14,7 +14,8 @@
  *   this folder reads a post's text or like data itself, and the only things
  *   taken from `features/feed` are `PostNode`, `PreparedPostNode` and `api`
  *   (the cache's root key, which
- *   `LikeButton`'s optimistic patch walks). Any other sibling feature is never
+ *   `TogglePostAction`'s optimistic patch walks,
+ *   `features/feed/PostAction.tsx`). Any other sibling feature is never
  *   imported ([[0x00-architecture]] Connection rule).
  *
  * The lexical check is deliberately modest and comment-stripped: stripping can
