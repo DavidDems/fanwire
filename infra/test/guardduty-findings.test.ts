@@ -100,7 +100,7 @@ describe('GuardDuty findings rule (INFRA-009)', () => {
     const open = topicStatements().filter(
       (s) =>
         s.Effect === 'Allow' &&
-        services(s).includes('events.amazonaws.com') &&
+        services(s).some((svc) => svc === 'events.amazonaws.com') &&
         actions(s).includes('sns:Publish') &&
         !JSON.stringify(s.Condition ?? {}).includes('"aws:SourceArn"'),
     );
