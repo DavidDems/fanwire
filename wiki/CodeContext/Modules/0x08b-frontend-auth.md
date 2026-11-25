@@ -87,7 +87,9 @@ profile fields; account lifecycle controls live on the separate, guarded
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
   `PublicUserOut` (which does not). The one thing they share, `ProfileSummary`,
   takes a username, two counts and the safe avatar rendering keys — **not a
-  user object** — so it cannot render a field it was never handed. Since
+  user object** — so it cannot render a field it was never handed. The
+  follower count reads "1 follower" at one and "N followers" otherwise, and
+  "N following" always (`FRONTEND-055`). Since
   `USERS-004` it can render the saved preset or public picture key without
   receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control
