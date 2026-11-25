@@ -93,61 +93,63 @@ export interface UnitBudget {
 }
 
 /**
- * The base, measured by this test's own build on the integration tip
- * 86bf9e6 (vite 8, React 19), folding in FRONTEND-053 (`Field`'s checkbox
- * and row layouts), merged. The entry is the entry chunk plus its static
- * imports (`entryClosure`), eleven chunks; its CSS is `index.css` plus
- * `InlineAlert.css`. One tree, so every number is its single measurement.
- * Earlier folds: b8d1299 (FRONTEND-052), 9ff6767 (FRONTEND-051), 028b493
- * (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19, ADR 0041, and
- * FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527 (vite 7;
- * FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac (FRONTEND-031, 034,
- * 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at
- * 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99,
- * USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19. The entry, its
- * stylesheets, and every lazy output → gzip bytes. Measure with the test's
- * build, not `npm run build`: under Vitest the build inlines `test.env`'s
- * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
+ * The base, measured by this test's own build on the integration tip 3084e22
+ * (vite 8, React 19), after FRONTEND-054 (one 429 line) and FRONTEND-055 ("1
+ * follower") merged; neither declared a bundle file, and the entry had
+ * drifted 80 B raw under the base. The entry is the entry chunk plus its
+ * static imports (`entryClosure`), eleven chunks; its CSS is `index.css`
+ * plus `InlineAlert.css`. One tree, so every number is its single
+ * measurement. Earlier folds: 86bf9e6 (FRONTEND-053), b8d1299
+ * (FRONTEND-052), 9ff6767 (FRONTEND-051), 028b493 (FRONTEND-050), 66fbb9b
+ * (FRONTEND-047, React 19, ADR 0041, and FRONTEND-048), a777aae (vite 8;
+ * FRONTEND-046), 85e3527 (vite 7; FRONTEND-037, 040, 043 and 044,
+ * USERS-008), 2e29dac (FRONTEND-031, 034, 035, 036, 038 and 039, USERS-006
+ * and 007, EVENTS-013), FRONTEND-030 at 9d0012f, EVENTS-012 at 4d714ef,
+ * EVENTS-011 and POSTS-008 at b1dfa99, USERS-004 and FRONTEND-023, 024, 026
+ * and 027 at 4795f19. The entry, its stylesheets, and every lazy output →
+ * gzip bytes. Measure with the test's build, not `npm run build`: under
+ * Vitest the build inlines `test.env`'s `VITE_*` values, which makes the
+ * entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 147_252,
-  entryJsRaw: 465_740,
+  entryJsGzip: 147_247,
+  entryJsRaw: 465_660,
   entryCssGzip: 7_457,
   lazy: {
-    AccountSettings: 2_404,
+    AccountSettings: 2_403,
     "AuthPage.module": 139,
     AuthService: 139,
     CognitoAuthService: 26_421,
-    ComposePage: 3_907,
-    ConfirmPage: 1_165,
+    ComposePage: 3_886,
+    ConfirmPage: 1_163,
     errors: 235,
-    ForgotPasswordPage: 1_201,
-    format: 491,
-    GameCard: 636,
-    GamePage: 3_885,
-    HistoryPage: 1_116,
-    NotificationsPage: 1_857,
+    ForgotPasswordPage: 1_199,
+    format: 490,
+    GameCard: 635,
+    GamePage: 3_882,
+    HistoryPage: 1_114,
+    NotificationsPage: 1_854,
     ok: 140,
-    PeriodScores: 497,
-    PlayerPage: 3_798,
-    PlayerResults: 905,
-    PlayersTab: 641,
-    ProfilePage: 2_903,
+    PeriodScores: 495,
+    PlayerPage: 3_791,
+    PlayerResults: 904,
+    PlayersTab: 639,
+    ProfilePage: 2_910,
     ProfileSetupPage: 1_540,
-    RecentGames: 786,
-    RecordsTab: 5_945,
-    SchedulePage: 2_286,
+    RecentGames: 785,
+    RecordsTab: 5_943,
+    SchedulePage: 2_283,
     ScrollTable: 283,
-    SeasonsTab: 1_765,
+    SeasonsTab: 1_761,
     SegmentedTabs: 726,
-    SignInPage: 1_099,
-    SignUpPage: 1_031,
+    SignInPage: 1_097,
+    SignUpPage: 1_029,
     stats: 697,
-    "Stats.module": 531,
+    "Stats.module": 529,
     "StatsNav.module": 504,
     StatsNavigator: 3_864,
     StatsPage: 429,
-    StatsPicker: 2_319,
+    StatsPicker: 2_318,
     useQueries: 1_507,
     VisuallyHidden: 155,
     "css:AccountSettings.css": 403,
