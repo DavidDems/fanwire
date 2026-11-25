@@ -15,7 +15,7 @@ export interface NetworkStackProps extends cdk.StackProps {
  * Egress (human decision 2026-09-18, wiki/CodeContext/Standards/aws-stack.md
  * "Explicitly rejected"): a NAT Gateway stays rejected; a single small NAT
  * *instance* (t4g.nano) gives the in-VPC Lambdas their path to the public
- * internet -- API-SPORTS for ingestion, Cognito's JWKS for the API -- and to
+ * internet -- Cognito's JWKS for the API -- and to
  * the AWS APIs that have no gateway endpoint (EventBridge, Secrets Manager,
  * SES, Cognito). S3 and DynamoDB go through their free gateway endpoints.
  * No interface endpoints: see 0x00a-architecture-infra.md "Infra (CDK) —
@@ -122,7 +122,7 @@ export class NetworkStack extends cdk.Stack {
       description: 'fanwire VPC Lambdas: HTTPS out, Postgres to the DB SG, nothing in',
       allowAllOutbound: false,
     });
-    // Internet (API-SPORTS, Cognito JWKS) and AWS APIs via the NAT instance;
+    // Internet (Cognito JWKS) and AWS APIs via the NAT instance;
     // S3/DynamoDB via gateway endpoints.
     this.lambdaSecurityGroup.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS via NAT instance / gateway endpoints');
 
