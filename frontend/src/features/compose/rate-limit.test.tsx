@@ -5,9 +5,9 @@
  * limiting") and the API stage throttle answers it from the edge with a body
  * of another shape, so what decides the message is the status alone: a JSON
  * body, the edge's body and no body at all all read the same. The wording is
- * asserted exactly, so changing it is a deliberate edit here. It names no
- * duration, because either window can trip it, and repeats neither the
- * server's detail nor the status.
+ * the shared RATE_LIMITED_MESSAGE, pinned exactly in src/lib/messages.test.ts
+ * (FRONTEND-054). It names no duration, because either window can trip it,
+ * and repeats neither the server's detail nor the status.
  *
  * Every other status keeps what it showed before this unit. Those cases are
  * green before the implementation: they are protection, not new behaviour.
@@ -26,6 +26,7 @@ import {
   uploadTicket,
 } from "../../test/compose";
 import { imageFileInput } from "../../test/compose-modal";
+import { RATE_LIMITED_MESSAGE } from "../../lib/messages";
 import { server } from "../../test/server";
 import { ComposePage } from "./ComposePage";
 import { InlineComposer } from "./InlineComposer";
@@ -33,10 +34,6 @@ import { refusalMessage } from "./dataLink";
 
 type CreatePostRequest = components["schemas"]["CreatePostRequest"];
 
-const COMPOSE_RATE_LIMITED =
-  "You are posting too quickly. Your draft is still here — please wait a little and try again.";
-const REPLY_RATE_LIMITED =
-  "You are posting too quickly. Your reply is still here — please wait a little and try again.";
 const GENERIC_FAILURE =
   "We could not post that. Your draft is still here — please try again.";
 const REPLY_FAILURE =
@@ -106,7 +103,7 @@ describe("ComposePage, a 429 from POST /posts", () => {
       await user.click(postButton());
 
       const alert = await theAlert();
-      expect(alert).toHaveTextContent(COMPOSE_RATE_LIMITED);
+      expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
       expectNoServerWordsOrDuration(alert);
     },
   );
@@ -119,7 +116,7 @@ describe("ComposePage, a 429 from POST /posts", () => {
     await user.click(postButton());
 
     const alert = await theAlert();
-    expect(alert).toHaveTextContent(COMPOSE_RATE_LIMITED);
+    expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
     expect(alert.parentElement).toContainElement(
       postButton() as HTMLButtonElement,
     );
@@ -140,7 +137,7 @@ describe("ComposePage, a 429 from POST /posts", () => {
     await user.click(postButton());
 
     const alert = await theAlert();
-    expect(alert).toHaveTextContent(COMPOSE_RATE_LIMITED);
+    expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
     expect(textBox()).toHaveValue("Raptors in 6");
     expect(screen.getByRole("img")).toBeInTheDocument();
 
@@ -160,7 +157,7 @@ describe("ComposePage, a 429 from POST /posts", () => {
     await user.click(postButton());
 
     const alert = await theAlert();
-    expect(alert).toHaveTextContent(COMPOSE_RATE_LIMITED);
+    expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
     expect(bodies[0]).toMatchObject({ is_repost: true, original_post_id: 7 });
     expect(textBox()).toHaveValue("Hot take on this");
 
@@ -226,7 +223,7 @@ describe("InlineComposer", () => {
     async (_name, answer) => {
       const alert = await replyAgainst(answer);
 
-      expect(alert).toHaveTextContent(REPLY_RATE_LIMITED);
+      expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
       expectNoServerWordsOrDuration(alert);
       expect(screen.getByRole("textbox", { name: /your reply/i })).toHaveValue(
         "Called it",
