@@ -81,15 +81,17 @@ stats reads are `src/api/stats.ts` (below, "The stats navigator").
 - **Every table** has a `caption` and `th` with `scope`, and sits in its own
   `ScrollTable` region (`role="region"` named by the caption, `tabIndex=0`,
   `overflow-x: auto`): at 360 px the tables scroll and the page does not
-  (checked in Chromium, 2026-10-16). Every Stats table, the leaders'
-  included, is the navigator's `ScrollTable` drawn by the navigator's own
-  stylesheet; `features/stats/Stats.module.css` holds no table rules since
-  `FRONTEND-019` (R24). The
-  players feature keeps its own older copy; it may now import the
-  navigator's instead, in a unit with `features/players/` in scope.
-- **Teams are fetched in three places now**: profile, `ProfileSetupPage`
-  and `src/api/stats.ts`. They share the `["events", "teams"]` cache key; moving
-  the fetch into `api/` is the fix, for a unit with all three in scope.
+  (checked in Chromium, 2026-10-16). Since `FRONTEND-052` every table is the
+  one shared `components/ui/ScrollTable` (with `ColumnHeader`), which owns the
+  markup and roles only and imports no stylesheet: each caller passes its own
+  classes. The stats navigator, the compose picker and the leaders pass the
+  navigator's `StatsNav.module.css` (`scroll`, `table`, `name`); the player
+  page passes `Players.module.css` (`scroll`, `table`, `caption`, `name`).
+  `features/stats/Stats.module.css` holds no table rules since `FRONTEND-019`
+  (R24).
+- **Teams are read in one place**, `src/api/stats.ts` (`fetchTeams`,
+  `TEAMS_KEY`, `["events", "teams"]`), used by `SeasonsTab`, `ProfileSettings`
+  and `ProfileSetupPage` (`FRONTEND-052` retired the profile and setup copies).
 
 ### "Post about this" (`FRONTEND-017`)
 
