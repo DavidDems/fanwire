@@ -302,6 +302,21 @@ def followed_user_ids(session: Session, user_id: int) -> list[int]:
     )
 
 
+def active_followed_user_ids(session: Session, user_id: int) -> list[int]:
+    """The ids of the active (non-soft-deleted) users `user_id` follows, in
+    one query. Public read helper for feed/ (FEED-003): a viewer whose
+    follows are all deactivated follows nobody active. followed_user_ids
+    stays all-follows for GET /users/me/following, so the follow button
+    still knows about a deactivated followee."""
+    return list(
+        session.scalars(
+            select(Follow.followed_user_id)
+            .join(User, User.id == Follow.followed_user_id)
+            .where(Follow.follower_user_id == user_id, User.deleted_at.is_(None))
+        ).all()
+    )
+
+
 @dataclass(frozen=True)
 class PublicProfile:
     """The subset of a User row other modules (feed/, search/) may read
