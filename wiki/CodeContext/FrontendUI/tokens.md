@@ -82,6 +82,7 @@ white and against Jet Black:
 | `--color-warning-subtle` | `#fdf1dc` | `#3d350f` | Warning background |
 | `--color-live` | `#c0176f` | `#f58cc8` | Live badge fill and dot |
 | `--color-on-live` | `#ffffff` | `#011d28` | Live badge label |
+| `--color-scrim` (`FRONTEND-052`) | `#011d28` | `#011d28` | Modal backdrop, at 0.6 opacity |
 
 Why the dark theme looks like this: [ADR 0011](../../GeneralContext/Decisions/0011-brand-palette.md).
 

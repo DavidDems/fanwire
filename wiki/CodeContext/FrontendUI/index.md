@@ -34,7 +34,7 @@ change says so in its PR and asks.
 | [`components-shared.md`](components-shared.md) | The shared components with variants, states and props as built, what is deliberately not built, and the icons. |
 | [`components-sports.md`](components-sports.md) | The score block, game state, team identity and `TeamIcon`, mentions in posts. |
 | [`components-map-pages.md`](components-map-pages.md) | The map from the shell, routes, search, games, schedule, stats and player views to what they use. |
-| [`components-map-posts.md`](components-map-posts.md) | The map from `FormField`, auth, feed, posts, threads, compose, notifications and profile to what they use. |
+| [`components-map-posts.md`](components-map-posts.md) | The map from `FormField`, auth, feed, posts, threads, compose, notifications, profile, account settings and history to what they use. |
 | [`accessibility.md`](accessibility.md) | WCAG 2.2 AA as numbered, testable statements (A1–A20), each tagged with how it's checked. |
 | [`verification.md`](verification.md) | What jsdom can and can't show (measured), what tests assert, the no-snapshot rule, how a unit fails first. |
 | [`verification-browser.md`](verification-browser.md) | The browser checks: Playwright MCP, the per-unit checklist and how it's reported, the gates. |
