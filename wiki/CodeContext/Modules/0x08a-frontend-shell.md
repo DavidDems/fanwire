@@ -45,7 +45,12 @@ that here as usual.
 - **`SearchInput`** wraps `Field` and an `input type="search"` with a leading
   `aria-hidden` `SearchIcon`. `SearchBar` uses it: the label, `name="q"`, the
   100 cap and `role="search"` are unchanged. Its text-padding rule is two
-  classes deep because `base.css` loads after module CSS in the build.
+  classes deep because `base.css` loads after module CSS in the build. An
+  optional `action` (`FRONTEND-053`) renders after the icon's wrapper inside
+  `Field`'s row layout, so the box takes the room and the action keeps its
+  width. `SearchBar` passes its Search button as the action: the box and the
+  button sit in one row in the box's `Field` root, still the form's submit
+  inside `role="search"`, and `Search.module.css` has no `.bar` rules.
 - **`SegmentedTabs`** is an in-page ARIA `tablist` (automatic activation,
   roving tab stop, ids from `useId`). `Tabs` stays the route tabs.
   **`FloatingButton`** is the 56 px fixed action, a `Link` or a button,

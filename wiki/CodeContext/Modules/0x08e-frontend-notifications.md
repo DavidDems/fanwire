@@ -68,8 +68,9 @@ preference is its own component. Clearing is a soft delete on the backend
   `hintText` and `describeField(id, { hint: true })`, so it is the control's
   accessible description. No interaction sends a `PUT`. The optimistic patch
   spreads the previous value, so a write in flight can't lose `email_available`
-  and read as unavailable. `.preference > div` wraps so the hint takes its own line
-  under the row, and `cursor: pointer` applies only while the box is enabled.
+  and read as unavailable. `EmailPreference` uses `Field`'s checkbox layout
+  (`FRONTEND-053`), which puts the hint on its own line under the row and sets
+  `cursor: pointer` only while the box is enabled; both are now `Field`'s.
   Native over `role="switch"`: focusable, space-operable and
   readable by assistive technology with no code. Request failures are a
   `role="alert"` beside the field rather than `Field`'s own message slot, which
@@ -82,8 +83,7 @@ preference is its own component. Clearing is a soft delete on the backend
 - **The preference card is there from the first render** (`UI-007`):
   `EmailPreference` renders its loading and failure lines inside the same
   one-row `Card` as the checkbox, so the list below doesn't jump when the read
-  lands. To put the checkbox before its label, the page's module CSS turns
-  `Field`'s root into a row from inside `.preference` (`.preference > div`).
-  That reaches into `Field`'s markup, which `Field` otherwise owns; it is
-  scoped to this one card, and a `Field` that grows a checkbox layout of its
-  own should replace it.
+  lands. The checkbox sits before its label through `Field`'s own checkbox
+  layout (`layout="checkbox"`, `FRONTEND-053`), in DOM order as well as on
+  screen; `.preference` is only the card's column of field and alert, and no
+  rule in `Notifications.module.css` reaches into `Field`'s markup.
