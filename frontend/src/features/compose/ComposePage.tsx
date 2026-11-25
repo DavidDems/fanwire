@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { StatusLine } from "../../components/ui/StatusLine";
+import { RATE_LIMITED_MESSAGE } from "../../lib/messages";
 import {
   PickerDialog,
   useAttachments,
@@ -93,9 +94,6 @@ import styles from "./ComposePage.module.css";
 
 const GENERIC_FAILURE =
   "We could not post that. Your draft is still here — please try again.";
-
-const RATE_LIMITED =
-  "You are posting too quickly. Your draft is still here — please wait a little and try again.";
 
 /** The address parameters that only mean something as part of a link. */
 const LINK_PARAMS = ["link", "ref", "game", "scope"] as const;
@@ -194,7 +192,7 @@ function asksForLink(params: URLSearchParams): boolean {
 /** What the user is told when `POST /posts` did not create the post. */
 function failureMessage(error: unknown): string {
   if (error instanceof PostNotCreated && error.status === 429) {
-    return RATE_LIMITED;
+    return RATE_LIMITED_MESSAGE;
   }
   if (error instanceof PostNotCreated && error.status === 422) {
     return refusalMessage(error.detail) ?? GENERIC_FAILURE;
