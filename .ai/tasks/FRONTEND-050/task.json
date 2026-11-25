@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-050",
+  "objective": "The profile-setup form tells a new member the username rule before they submit, and shows the server's username 422 on the field, so USERS-010's rule never reaches them as a surprise or as a banner.",
+  "acceptance_criteria": [
+    "Start gate: USERS-010 has merged into the integration branch outstanding-track-4, and agent/FRONTEND-050 is cut from its tip.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because the username field has no hint.",
+    "The Username field of ProfileSetupPage renders a standing hint through Field's hintText, with this exact text: 1 to 30 letters, numbers, underscores or dots. No two dots in a row, and no dot at the end. The input passes hint: true to describeField, so the hint is part of the input's accessible description (aria-describedby names profile-username-hint) before any submit, and stays in it alongside the error after a rejection.",
+    "A POST /users 422 whose detail[].loc ends in username, with USERS-010's msg (Use 1 to 30 letters, numbers, underscores or dots, with no two dots in a row and no dot at the end.), puts that msg verbatim on the username field: the input is aria-invalid, the message is in its accessible description, no InlineAlert renders, and the user stays on the form. A test pins this with that exact msg.",
+    "The form does not re-implement the rule: no regular expression, maxLength or pattern attribute for the username in ProfileSetupPage.tsx, which the file's header comment already argues (the server is the boundary; two copies drift). The header comment names the username rule beside the age gate as a server rule the form only surfaces. A submit with a rule-breaking username is still sent to the server.",
+    "Unchanged: the trimmed username is what is sent, the 409 banner text, the date-of-birth hint and every existing ProfileSetupPage test.",
+    "frontend/src/api/schema.d.ts is regenerated with npm run gen:api-types against USERS-010's backend/openapi.json and committed only if it changed (openapi-drift checks it).",
+    "Bundle: the test commit adds frontend/src/test/bundle-budgets/FRONTEND-050.ts declaring ProfileSetupPage's new gzip ceiling, measured, at most 120 bytes over its BASE value; no other output changes. bundle-budget.test.ts stays green and its budgets are not loosened. If the entry or another output moves, stop and record it.",
+    "Proof: the frontend container (rebuilt image, run alone), typecheck, lint (0 problems) and build are green. The suite is run in the foreground, sharded (npx vitest run --shard=N/3 --maxWorkers=2).",
+    "No new dependency; no change outside the allowed paths.",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md states that the profile-setup form shows the username rule as a hint and the server's username 422 on the field, without a client-side copy of the rule."
+  ],
+  "allowed_paths": [
+    "frontend/src/auth/ProfileSetupPage.tsx",
+    "frontend/src/auth/ProfileSetupPage.test.tsx",
+    "frontend/src/api/schema.d.ts",
+    "frontend/src/test/bundle-budgets/FRONTEND-050.ts",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/components/**",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budget.ts"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["frontend-unit", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
