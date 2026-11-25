@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-053",
+  "objective": "Give FormField's Field two layouts besides today's stacked one, a checkbox layout (the box before its label on one line) and a row layout (the control and one trailing action side by side under the label), and adopt them: EmailPreference uses the checkbox layout, so Notifications.module.css's .preference > div exception into Field's markup is deleted, and the search bar's box and Search button sit in one row through SearchInput's new action prop.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-053 is cut from the tip of the integration branch outstanding-track-5 after the FRONTEND-052 budget fold (bundle-budgets/FRONTEND-052.ts is gone and BASE.lazy has ScrollTable: 283).",
+    "Test-first: commit the failing tests alone before the implementation, with frontend/src/test/bundle-budgets/FRONTEND-053.ts. The new tests fail today because Field has no layout prop, SearchInput has no action prop and FormField.module.css has no .checkbox or .row rule.",
+    "Field (frontend/src/components/FormField.tsx) takes an optional prop layout?: \"stack\" | \"checkbox\" | \"row\", default \"stack\". With no layout, or \"stack\", the markup is exactly today's: a root div with the field class only, then label, the children, the hint, the error. auth/form-field.test.tsx stays untouched and green.",
+    "Checkbox layout: the root div carries the field class and a checkbox class from FormField.module.css. DOM order is the children (the checkbox input, a direct child of the root), then the label, then the hint, then the error. The ids, label htmlFor, describeField's aria-describedby and aria-invalid are unchanged, so the box's accessible name and description are unchanged. A new test pins the order, the class, the name and the description.",
+    "Checkbox layout CSS, in FormField.module.css only: .checkbox is a wrapping row (flex-direction: row; flex-wrap: wrap), items centred, at least var(--target-min) high; the checkbox input is 1.25rem square, flex: none, margin 0; the label takes the remaining width (flex: 1) so the whole line is the hit area; the hint and the error each take a line of their own (flex-basis: 100%); cursor: pointer is set only through selectors that contain :enabled (the input and the label after an enabled input), and at least one such rule exists. Tests read these from disk.",
+    "Row layout: the root div carries the field class and a row class. DOM order is the label, the children in order, the hint, the error. CSS in FormField.module.css: .row is display: grid with grid-template-columns: minmax(0, 1fr) auto and a column gap from a space token, and the label, the hint and the error span the full row (grid-column: 1 / -1), so the first child (the control) takes the room and a second child (an action) keeps its own width beside it. Tests read these from disk.",
+    "SearchInput (frontend/src/components/ui/SearchInput.tsx) takes an optional action?: ReactNode. Without it, SearchInput renders exactly as today (stack layout; every existing SearchInput.test.tsx test stays green). With it, SearchInput passes layout=\"row\" to Field and renders the action after the icon's wrapper, as the Field root's last child before the hint and error. New tests in SearchInput.test.tsx pin both cases.",
+    "SearchBar (frontend/src/features/search/SearchBar.tsx) passes its Search button to SearchInput as action: the box and the button share the box's Field root, the button follows the box, and both stay inside the form role=\"search\". The button keeps type=\"submit\", the name Search, variant primary and size md; the box keeps its label, name=\"q\", the 100 cap and BOX_ID. A new test in SearchBar.test.tsx pins the shared root and the order; every existing SearchBar, SearchPage and search-* test stays untouched and green (the home rail and /search use the one SearchBar).",
+    "Search.module.css: the .bar rules that stacked the box over the button (.bar, .bar input) are deleted, and SearchBar's form no longer uses a .bar class. SearchInput's own .wrapper .input already sets the box's width. No other search rule changes.",
+    "EmailPreference (frontend/src/features/notifications/EmailPreference.tsx) passes layout=\"checkbox\" to its Field; nothing else in it changes (the label text, EMAIL_FIELD_ID, the hint, the alert, the optimistic mutation). Notifications.module.css keeps .preference (the card's own column of field and alert) and deletes every rule that reaches into Field's markup: .preference > div, .preference input[type=\"checkbox\"], .preference label, the two cursor rules and .preference > div > p, with the comment above them. A new test pins that no selector in Notifications.module.css reaches inside .preference (no .preference followed by a combinator or a descendant), and that the checkbox's Field root has the checkbox class and the box precedes its label.",
+    "Two existing tests pin the deleted exception, so the test commit changes them, and only them, in frontend/src/features/notifications/notifications-style.test.tsx under \"the unavailable-email caption (NOTIFICATIONS-002)\": \"wraps to its own line under the row, rather than squeezing the label\" reads FormField.module.css's .checkbox rules instead of .preference > div (flex-wrap: wrap on .checkbox; flex-basis: 100% for its hint), and \"does not leave cursor: pointer on a disabled control or its label\" reads FormField.module.css instead of Notifications.module.css; the FIELD_ROW constant and its comment go with them. Their intent (the caption takes its own line; no pointer on a disabled box) is unchanged. Every other existing test is untouched.",
+    "CSS rule checks keep passing: the module-CSS scans (src/test/module-css.ts, src/test/css.ts and their callers, including auth-css.test.ts for FormField.module.css, notifications-css.test.ts, search-css.test.ts and components/ui/ui-css.test.ts), the tokens and base checks under src/styles/. Every value in the new rules is a token or a unitless/rem size as above; no px font size, no colour.",
+    "Bundle: the test commit adds frontend/src/test/bundle-budgets/FRONTEND-053.ts declaring entryJsGzipGrowth, entryJsRawGrowth and entryCssGzipGrowth, each the growth measured with this test's build on the finished implementation rounded up to the next 100 B, and changed: { \"css:NotificationsPage.css\": N }, N its measured gzip rounded up to the next 100 B. The Director's prototype measured entry JS +96 B gzip and +161 B raw, entry CSS +112 B and css:NotificationsPage.css 496 to 368 B, so expect about 100, 200, 200 and 400. entryJsGzipGrowth must stay within ENTRY_GROWTH_PER_UNIT_MAX (1000); if it would not, stop and report. If any other lazy output appears, disappears or moves past the 100 B tolerance, stop and record it. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths; no change to other Field callers (the auth pages, compose, profile, account, stats): they keep the stack layout by default.",
+    "Module docs: wiki/CodeContext/Modules/0x08-frontend.md's src/components row says Field has stack (default), checkbox and row layouts; 0x08a-frontend-shell.md's SearchInput entry names the action prop and the row layout, and that SearchBar's box and button sit in one row; 0x08e-frontend-notifications.md replaces the .preference > div text (the NOTIFICATIONS-002 entry and the UI-007 preference-card entry) with EmailPreference using Field's checkbox layout, the caption on its own line and the pointer only while enabled now being Field's.",
+    "Browser check (the Director's, after merge; not the unit's): the notifications preference card (available and unavailable states) and the search bar on /search and in the home rail (from 1217 px wide), in light and dark, at 360 and 1280 px wide: the box sits before its label on one line with the caption under it; the search box and button sit in one row with the button's full label visible and the box still usable in the 288 px rail; focus rings and the 44 px targets are intact."
+  ],
+  "allowed_paths": [
+    "frontend/src/components/FormField.tsx",
+    "frontend/src/components/FormField.module.css",
+    "frontend/src/components/FormField.test.tsx",
+    "frontend/src/components/ui/SearchInput.tsx",
+    "frontend/src/components/ui/SearchInput.test.tsx",
+    "frontend/src/features/notifications/EmailPreference.tsx",
+    "frontend/src/features/notifications/Notifications.module.css",
+    "frontend/src/features/notifications/notifications-style.test.tsx",
+    "frontend/src/features/search/SearchBar.tsx",
+    "frontend/src/features/search/Search.module.css",
+    "frontend/src/features/search/SearchBar.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-053.ts",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/Modules/0x08e-frontend-notifications.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/auth/**"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08a-frontend-shell.md",
+    "wiki/CodeContext/Modules/0x08e-frontend-notifications.md",
+    "wiki/CodeContext/FrontendUI/components-map-posts.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
