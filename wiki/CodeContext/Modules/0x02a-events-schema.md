@@ -74,7 +74,7 @@ An imported NBA game result. Its box score is `PlayerGameStats` (below).
 - None. [[wiki/CodeContext/Standards/gof-patterns|Gang of Four Example]] still assigns Abstract Factory, Adapter, Template Method (ingestion pipeline) and Proxy (live-score cache) to this module; that Standards file is stale, and a Director PR corrects it.
 
 ### AWS mapping
-RDS Postgres table (system of record), per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]. No DynamoDB involvement. The idempotency and live-score cache tables, the API-SPORTS secret and the ingestion-retry queue exist in `Fanwire-Data`/`Fanwire-Messaging` with no consumer, their CloudFormation exports kept alive with `exportValue`; a later infra unit deletes them.
+RDS Postgres table (system of record), per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]. No DynamoDB involvement.
 
 ### Security
 Not PII, not user-generated content. No per-row access control is needed: games, players and box scores are public read data served by the events API.

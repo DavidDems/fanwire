@@ -15,6 +15,7 @@ The **only** reporting-related table for v1, per [[wiki/GeneralContext/Architect
 - `reporter_id` — FK → `users.User`.
 - `created_at` — timestamptz.
 - Unique constraint on `(post_id, reporter_id)` — one report per user per post; re-submitting is a no-op, not a duplicate row.
+- Index `ix_reports_reporter_id_created_at` on `(reporter_id, created_at)` — the report rate limit's count (below); the unique constraint leads with `post_id`, so it cannot serve it.
 - `Post.reported` ([[0x03a-posts-post]]) is set true on the **first** `Report` row for that post and is never unset — there's no review step for it to be cleared by, by design (no moderation workflow).
 
 **Design principles**
@@ -27,7 +28,7 @@ The **only** reporting-related table for v1, per [[wiki/GeneralContext/Architect
 **AWS mapping** — RDS Postgres, table `reports`.
 
 **Security**
-- **Rate limiting** — reporting has no per-user limit of its own: the post rate limit (`POSTS-002`, [[0x03a-posts-post]] "Security") covers publishing only, not likes or reports. Only the edge controls (WAF per-IP rule, API stage throttle) bound it.
+- **Rate limiting** (`POSTS-010`) — a user may file at most `report_rate_limit_per_minute` (5) reports in the last minute and `report_rate_limit_per_hour` (10) in the last hour (`Settings`, `PositiveInt`, overridable from the environment). `app.posts.moderation.ReportCountRateLimiter`, behind the same `RateLimiter` interface as the post limit, counts every `Report` row by `reporter_id` in one statement against the database's `now()`, strict `>` (a report exactly a minute or an hour old no longer counts); `get_report_rate_limiter` wires it from `Settings`, and route tests override it with `FakeRateLimiter`. `report_post` checks it after the 404 and the repeat check, before the insert: a refusal raises `ReportRateLimitExceeded` and `POST /posts/{post_id}/report` answers **429** (declared in OpenAPI), with no `Report` row, `Post.reported` unchanged and no `PostReported`. A repeat report stays 204 and an unknown or deleted post stays 404 even at the limit. Count-then-insert is not atomic, so racing reports can overshoot by a few; no lock is taken. The edge controls (WAF per-IP rule, API stage throttle) still bound it per IP and globally.
 - **No moderation workflow, by design** — this is a v1 scope boundary, not an oversight; re-confirm against [[wiki/GeneralContext/Architecture/business-rules|Projects]] before adding any status/review field.
 
 **Open decisions**

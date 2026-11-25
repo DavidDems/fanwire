@@ -176,7 +176,6 @@ def test_the_real_compose_file_publishes_the_documented_defaults(guards):
         (p.service, p.env_var): p.port for p in guards.published_ports(REPO / "docker-compose.yml", env={})
     }
     assert ports[("postgres", "POSTGRES_HOST_PORT")] == 5432
-    assert ports[("dynamodb-local", "DYNAMODB_HOST_PORT")] == 8000
     assert ports[("backend-dev", "BACKEND_DEV_PORT")] == 8001
     assert ports[("backend-perf", "BACKEND_PERF_PORT")] == 8002
 

@@ -25,10 +25,10 @@ describe('Messaging stack', () => {
     tpl().hasResourceProperties('AWS::Events::EventBus', { Name: 'PostEventBus' });
   });
 
-  test('three work queues, each with its own DLQ; everything CMK-encrypted', () => {
-    expect(Object.keys(queues())).toHaveLength(6);
+  test('two work queues, each with its own DLQ; everything CMK-encrypted', () => {
+    expect(Object.keys(queues())).toHaveLength(4);
     for (const q of Object.values(queues())) expect(q.Properties?.KmsMasterKeyId).toBeDefined();
-    for (const purpose of ['notifications', 'ingestion-retry', 'media-scan-results']) {
+    for (const purpose of ['notifications', 'media-scan-results']) {
       const q = queues()[queueId(purpose)];
       const dlq = queueId(`${purpose}-dlq`);
       expect(q?.Properties?.RedrivePolicy).toEqual({
@@ -91,29 +91,34 @@ describe('Messaging stack', () => {
 });
 
 /**
- * EVENTS-003: the ingestion function is gone from the App stack, but the
- * ingestion-retry queue and its DLQ stay, still exported under the names the
- * deployed Fanwire-App imports, so the deploy does not fail on an export in
- * use. A later infra unit deletes them.
+ * INFRA-005: the ingestion-retry queue, its DLQ, their policies, the DLQ's alarm
+ * and the two exports are gone; the two remaining queues keep their logical ids.
  */
-describe('Messaging stack: ingestion-retry queue and DLQ stay, still exported (EVENTS-003)', () => {
+describe('Messaging stack: ingestion-retry queue and DLQ are gone (INFRA-005)', () => {
   const outputs = () => (raw().Outputs ?? {}) as Record<string, { Value?: unknown; Export?: { Name?: unknown } }>;
 
-  const EXPORTS = [
-    ['ExportsOutputFnGetAttIngestionRetryDlqAD1363B6Arn3F8A5660', { 'Fn::GetAtt': ['IngestionRetryDlqAD1363B6', 'Arn'] }],
-    ['ExportsOutputFnGetAttIngestionRetryQueueD528F9A2Arn07FDF528', { 'Fn::GetAtt': ['IngestionRetryQueueD528F9A2', 'Arn'] }],
-  ] as const;
-
-  test.each(EXPORTS)('exports %s under the name the deployed App stack imports', (outputId, value) => {
-    const output = outputs()[outputId];
-    expect(Object.keys(outputs())).toContain(outputId);
-    expect(output?.Export?.Name).toBe(`${STACK_NAMES.messaging}:${outputId}`);
-    expect(output?.Value).toEqual(value);
+  test.each([
+    'IngestionRetryQueueD528F9A2',
+    'IngestionRetryDlqAD1363B6',
+    'IngestionRetryQueuePolicy60151471',
+    'IngestionRetryDlqPolicy72728599',
+    'IngestionRetryDlqDepthAlarm7CDD189B',
+  ])('%s no longer synthesizes', (logicalId) => {
+    expect(Object.keys(raw().Resources ?? {})).not.toContain(logicalId);
   });
 
-  test('the ingestion-retry queue and its DLQ still synthesize', () => {
-    const resources = raw().Resources ?? {};
-    expect(resources.IngestionRetryQueueD528F9A2?.Type).toBe('AWS::SQS::Queue');
-    expect(resources.IngestionRetryDlqAD1363B6?.Type).toBe('AWS::SQS::Queue');
+  test.each([
+    'ExportsOutputFnGetAttIngestionRetryQueueD528F9A2Arn07FDF528',
+    'ExportsOutputFnGetAttIngestionRetryDlqAD1363B6Arn3F8A5660',
+  ])('output %s is gone', (outputId) => {
+    expect(Object.keys(outputs())).not.toContain(outputId);
+  });
+
+  test('the notification and media-scan-result queues and DLQs keep their logical ids', () => {
+    expect(Object.keys(queues()).sort()).toEqual(
+      ['MediaScanResultDlqA8B08F5C', 'MediaScanResultQueue9CA01DAB', 'NotificationDlq467FCAE6', 'NotificationQueue36610CC1'].sort(),
+    );
+    expect(queueId('notifications')).toBe('NotificationQueue36610CC1');
+    expect(queueId('media-scan-results')).toBe('MediaScanResultQueue9CA01DAB');
   });
 });

@@ -12,6 +12,7 @@ from app.db import make_engine
 
 BACKEND = Path(__file__).resolve().parents[1]
 PREVIOUS_HEAD = "217f70776078"
+LIFECYCLE_REVISION = "9c009a110001"
 ISSUER = "https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_lifecycle"
 
 
@@ -33,7 +34,10 @@ def test_lifecycle_has_one_new_additive_head(migration_case):
     script = ScriptDirectory.from_config(config)
     heads = script.get_heads()
     assert len(heads) == 1 and heads[0] != PREVIOUS_HEAD
-    assert script.get_revision(heads[0]).down_revision == PREVIOUS_HEAD
+    # The lifecycle revision chains onto the head before it; a later
+    # migration (POSTS-010's indexes) may sit on top of it.
+    assert LIFECYCLE_REVISION in {rev.revision for rev in script.walk_revisions("base", heads[0])}
+    assert script.get_revision(LIFECYCLE_REVISION).down_revision == PREVIOUS_HEAD
     command.upgrade(config, "head")
     for table in ("account_authorities", "account_operations", "account_deletion_objects"):
         columns = {column["name"]: column for column in inspect(engine).get_columns(table)}

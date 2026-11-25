@@ -59,5 +59,5 @@ type: reference
 - Resource policies (bucket, key and queue policies) are the one route the IAM fence does not cover; `cfn-exec-role` is scoped and every created role carries `FanwireRoleBoundary` (above).
 - GuardDuty member-account propagation is unverified.
 - No AWS Config Rules are defined.
-- GuardDuty findings raise no alarm and are checked by hand; the alarm is a backlog item (`TODO/02-backlog.md`, "A GuardDuty-findings alarm"). DLQ depth alarms exist since `INFRA-004` ([[0x00a-architecture-infra]] "Alarms"), once an address is subscribed to the topic (`wiki/GeneralContext/Architecture/incident-runbook.md` "Known gaps").
+- GuardDuty findings raise no alarm and are checked by hand; the alarm is not built, and its options are in `wiki/GeneralContext/Architecture/incident-runbook-inventory.md` "Known gaps". DLQ depth alarms exist since `INFRA-004` ([[0x00a-architecture-infra]] "Alarms"), once an address is subscribed to the topic (`wiki/GeneralContext/Architecture/incident-runbook.md` "Known gaps").
 - Security Hub is not enabled (optional at this budget, per [[wiki/CodeContext/Standards/security|Security]]).

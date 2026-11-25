@@ -10,6 +10,8 @@ The dev user pool and SPA client exist in `fanwire-workload` (`ca-central-1`), m
 
 This pool is **dev-only** and separate from the production pool, which `Fanwire-Auth` deploys ([inventory](incident-runbook-inventory.md)). It's created with the AWS CLI commands below rather than console clicks, so the exact configuration lives in a reviewed file. It mirrors the CDK stack's settings: email sign-in, email verification, optional TOTP MFA, and a public SPA client with no secret using SRP.
 
+**The live pool also has a pre-sign-up trigger that these commands don't create.** `ca-central-1_Jh8FE5iTM` (`fanwire-dev`) has a `PRE_SIGN_UP` trigger, the Lambda `Fanwire-Users007-PreSignUp` (python3.12), made by hand outside CDK around `USERS-007`. Its two-line handler lives only in that function, not in this repo: it sets `autoConfirmUser = True` and `autoVerifyEmail = False`. So the dev pool auto-confirms sign-ups, like production's CDK `PreSignUpTrigger` (`infra/lib/auth-stack.ts`, which sets `autoConfirmUser = True` only). A pool rebuilt from the commands below would not auto-confirm.
+
 ## Prerequisites
 AWS CLI v2, logged in via IAM Identity Center to `fanwire-workload` (`294321867941`) with the `AdministratorAccess` permission set. Once, configure the profile: start URL `https://d-9d6748d7e4.awsapps.com/start`, region `ca-central-1`, and name the profile `fanwire-dev`:
 
@@ -68,17 +70,17 @@ Create both files; the backend and the frontend read them on start.
 
 ## Contract notes (for the frontend auth unit)
 - The SPA sends the Cognito **ID token** as `Authorization: Bearer <token>`. The backend's `CognitoTokenVerifier` checks `aud` = app client id and `iss` = `https://cognito-idp.<region>.amazonaws.com/<pool>`, and only ID tokens carry `aud`.
-- After sign-up + email confirmation, the SPA calls `GET /users/me`. A 404 means there's no profile yet, so it routes to profile creation (`POST /users`).
+- After sign-up (auto-confirmed by the pre-sign-up trigger, so no emailed code), the SPA calls `GET /users/me`. A 404 means there's no profile yet, so it routes to profile creation (`POST /users`).
 - Automated tests never touch this pool. `msw` mocks the API, and `amazon-cognito-identity-js` sits behind an injected auth interface. Only manual browser verification uses it.
 
 ## Test accounts
 The rules are [ADR 0020](../Decisions/0020-real-aws-services-for-local-development.md):
 - Sign up test users as `+alias`es of the human's own address: `<owner-email>+fw<n>`. Gmail delivers them all to one inbox, and Cognito treats each as a separate identity.
-- **The human clicks the real confirmation link.** No agent is given `cognito-idp:AdminConfirmSignUp`, because an agent holding it could mint confirmed identities in the very pool that is kept real so its auth path can be trusted.
+- **No agent confirms a sign-up itself.** The pre-sign-up trigger auto-confirms new sign-ups, so there is no link or code to enter. No agent is given `cognito-idp:AdminConfirmSignUp`, because an agent holding it could mint confirmed identities in the very pool that is kept real so its auth path can be trusted.
 - Browser verification is reported as **NOT DONE** unless a browser tool really drove the app ([ADR 0022](../Decisions/0022-browser-verification-on-hand-run-sessions.md)).
 
 ### The two that exist
-- `<owner-email>+fw1` (username `fwtest1`) and `<owner-email>+fw2` (username `fwtest2`), confirmed in the dev pool. The confirmation is a **code** emailed by Cognito and entered on `/confirm`, not a link.
+- `<owner-email>+fw1` (username `fwtest1`) and `<owner-email>+fw2` (username `fwtest2`), confirmed in the dev pool. They were confirmed with a **code** emailed by Cognito and entered on `/confirm`, before the pre-sign-up trigger existed.
 - **Credentials:** `frontend/.env.test-accounts.local`, which is untracked (`.gitignore`: `.env.*.local`) and outside Docker build contexts (`.dockerignore`: `**/.env.*`). The keys are `FANWIRE_TEST_<n>_EMAIL`, `_PASSWORD` and `_USERNAME` for n = 1 and 2. The human has declared these values non-sensitive (empty accounts on an empty dev pool) and allowed every agent to read the file; the permission lives in their user-level Claude Code settings. Read it only for a signed-in browser check, never print a password into a PR or the wiki, and never use these accounts on the live site: they don't exist in the production pool, and the Playwright browser profile persists between sessions.
 - **The Cognito identities persist. The fanwire profiles don't.** Postgres in `docker-compose.yml` has no volume, so `docker compose down` deletes every `users` row. After a fresh stack, signing in lands on the feed (it is public), not `/create-profile`: go to `/create-profile` and recreate the profile with the `_USERNAME` from the file (create `fwtest2` first if a check needs `fwtest1` viewing someone else). That is also a free check of profile creation.
 - **Feed and notifications on a fresh stack:** a newly created profile's signed-in feed is empty until it follows someone, and a follow, reply or repost by a second account creates its notification in process (`ENVIRONMENT=development`, `NOTIFICATIONS-001`). `FrontendUI/verification-browser.md` §3a says how to get rows for a check.

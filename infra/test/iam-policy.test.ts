@@ -163,7 +163,9 @@ const ALLOW_LIST: AllowListEntry[] = [
       '(https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html#configuration-vpc-permissions). ' +
       'ec2:Describe* has no resource-level permissions at all, and Lambda validates the role against the rest with ' +
       'Resource "*" at CreateFunction time, so they are written exactly as AWS\'s own managed policy writes them -- ' +
-      'inline, so no managed policy is attached.',
+      'inline, so no managed policy is attached. The same page recommends a Deny on those actions conditioned on ' +
+      'lambda:SourceFunctionArn, which only the function\'s own code carries: that Deny is also Resource "*", and is ' +
+      'matched here only with that condition.',
     matches: (f) =>
       f.kind === 'resource' &&
       f.value === '"*"' &&
@@ -174,7 +176,9 @@ const ALLOW_LIST: AllowListEntry[] = [
         'ec2:DeleteNetworkInterface',
         'ec2:AssignPrivateIpAddresses',
         'ec2:UnassignPrivateIpAddresses',
-      ]),
+      ]) &&
+      (f.statement?.Effect === 'Allow' ||
+        (f.statement?.Effect === 'Deny' && hasCondition(f.statement, 'lambda:SourceFunctionArn'))),
   },
   {
     id: 'nat-instance-session-manager',
@@ -415,6 +419,36 @@ describe('allow-list hygiene', () => {
     const findings = findingsFor('Fake', 'P', fake);
     expect(findings.map((f) => f.kind).sort()).toEqual(['action', 'resource']);
     expect(findings.filter((f) => ALLOW_LIST.some((e) => e.matches(f)))).toEqual([]);
+  });
+
+  test('lambda-vpc-eni matches the Allow, and a Deny only when it carries lambda:SourceFunctionArn', () => {
+    const actions = [
+      'ec2:AssignPrivateIpAddresses',
+      'ec2:CreateNetworkInterface',
+      'ec2:DeleteNetworkInterface',
+      'ec2:DescribeNetworkInterfaces',
+      'ec2:DescribeSubnets',
+      'ec2:UnassignPrivateIpAddresses',
+    ];
+    const findings = (statement: Record<string, unknown>) =>
+      findingsFor('Fake', 'P', { Type: 'AWS::IAM::Policy', Properties: { PolicyDocument: { Statement: [statement] } } });
+    const matching = (statement: Record<string, unknown>) =>
+      findings(statement).map((f) => ALLOW_LIST.find((e) => e.matches(f))?.id);
+    const condition = {
+      ArnLike: {
+        'lambda:SourceFunctionArn': {
+          'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, ':lambda:ca-central-1:111122223333:function:Fanwire-App-*']],
+        },
+      },
+    };
+
+    expect(matching({ Effect: 'Allow', Action: actions, Resource: '*' })).toEqual(['lambda-vpc-eni']);
+    expect(matching({ Effect: 'Deny', Action: actions, Resource: '*', Condition: condition })).toEqual(['lambda-vpc-eni']);
+    // A Deny without the condition, or with another one, is not what AWS recommends: no entry covers it.
+    expect(matching({ Effect: 'Deny', Action: actions, Resource: '*' })).toEqual([undefined]);
+    expect(
+      matching({ Effect: 'Deny', Action: actions, Resource: '*', Condition: { Bool: { 'aws:SecureTransport': 'false' } } }),
+    ).toEqual([undefined]);
   });
 
   test('pre-sign-up log-stream exception rejects wider actions and resources', () => {
