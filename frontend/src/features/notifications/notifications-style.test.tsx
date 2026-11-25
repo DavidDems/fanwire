@@ -24,6 +24,7 @@ import { HttpResponse, delay, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import type { components } from "../../api/schema";
+import fieldStyles from "../../components/FormField.module.css";
 import buttonStyles from "../../components/ui/Button.module.css";
 import cardStyles from "../../components/ui/Card.module.css";
 import emptyStyles from "../../components/ui/EmptyState.module.css";
@@ -267,10 +268,7 @@ describe("the unavailable-email caption (NOTIFICATIONS-002)", () => {
     allBlocks(parseCss(readSrcFile(file))).filter((block) => !isAtRule(block));
   const declared = (block: CssBlock, property: string): string | undefined =>
     block.declarations.find((declaration) => declaration.property === property)?.value;
-  const pageRules = (): CssBlock[] => rules("features/notifications/Notifications.module.css");
-
-  /** The rule that turns `Field` into a row, the one `components.md` records. */
-  const FIELD_ROW = /^\.preference\s*>\s*div$/;
+  const fieldRules = (): CssBlock[] => rules("components/FormField.module.css");
 
   it("sits after the checkbox, in the same Card", async () => {
     server.use(
@@ -295,17 +293,17 @@ describe("the unavailable-email caption (NOTIFICATIONS-002)", () => {
   });
 
   it("wraps to its own line under the row, rather than squeezing the label", () => {
-    const row = pageRules().find((block) => selectors(block).some((s) => FIELD_ROW.test(s)));
-    expect(row && declared(row, "flex-wrap"), "the Field row wraps").toBe("wrap");
+    const row = fieldRules().find((block) => selectors(block).some((s) => /^\.checkbox$/.test(s)));
+    expect(row && declared(row, "flex-wrap"), "Field's checkbox row wraps").toBe("wrap");
 
-    const own = pageRules().filter((block) =>
-      selectors(block).some((s) => /^\.preference\s*>\s*div\s*>\s*p$/.test(s)),
+    const own = fieldRules().filter((block) =>
+      selectors(block).some((s) => /^\.checkbox\s+(>\s*)?\.hint$/.test(s)),
     );
-    expect(own.map((block) => declared(block, "flex-basis"))).toEqual(["100%"]);
+    expect(own.map((block) => declared(block, "flex-basis"))).toContain("100%");
   });
 
   it("does not leave cursor: pointer on a disabled control or its label", () => {
-    const pointers = pageRules()
+    const pointers = fieldRules()
       .filter((block) => declared(block, "cursor") === "pointer")
       .flatMap(selectors);
 
@@ -320,5 +318,33 @@ describe("the unavailable-email caption (NOTIFICATIONS-002)", () => {
   it("uses a Field hint class that exists on disk", () => {
     const defined = rules("components/FormField.module.css").flatMap(selectors);
     expect(defined).toContain(".hint");
+  });
+});
+
+describe("the email preference uses Field's checkbox layout (FRONTEND-053)", () => {
+  it("reaches into no markup inside .preference from Notifications.module.css", () => {
+    const reaching = allBlocks(
+      parseCss(readSrcFile("features/notifications/Notifications.module.css")),
+    )
+      .flatMap(selectors)
+      .filter((selector) => /\.preference(?![\w-])\S*\s*[\s>+~]\s*\S/.test(selector));
+
+    expect(reaching, "a selector reaching inside .preference").toEqual([]);
+  });
+
+  it("renders the box in a Field root with the checkbox class, the box before its label", async () => {
+    renderNotifications([]);
+
+    const checkbox = await screen.findByRole("checkbox", { name: EMAIL_LABEL });
+    const root = checkbox.parentElement as HTMLElement;
+    const label = screen.getByText(EMAIL_LABEL, { selector: "label" });
+
+    expect(root).toHaveClass(fieldStyles.field, fieldStyles.checkbox);
+    expect(label.parentElement).toBe(root);
+    expect(checkbox.compareDocumentPosition(label)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      readSrcFile("components/FormField.module.css"),
+      "the checkbox class exists on disk",
+    ).toMatch(/\.checkbox(?![\w-])/);
   });
 });

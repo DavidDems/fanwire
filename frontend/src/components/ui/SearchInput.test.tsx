@@ -38,6 +38,7 @@ import {
   type CssBlock,
 } from "../../test/css";
 import { declared, moduleCssViolations } from "../../test/module-css";
+import fieldStyles from "../FormField.module.css";
 import { SearchInput } from "./SearchInput";
 
 describe("SearchInput", () => {
@@ -155,6 +156,63 @@ describe("SearchInput", () => {
       "Type a name.",
     );
     expect(box).toHaveAccessibleDescription("Type a name.");
+  });
+});
+
+describe("SearchInput's action (FRONTEND-053)", () => {
+  /** The `Field` root: the element holding the label. */
+  function fieldRoot(): HTMLElement {
+    const label = document.querySelector("label");
+    if (label?.parentElement == null) throw new Error("no Field root");
+    return label.parentElement;
+  }
+
+  it("without an action, keeps Field's stack layout (no row class)", () => {
+    render(<SearchInput id="team-q" label="Find a team" />);
+
+    const root = fieldRoot();
+    expect(root).toHaveClass(fieldStyles.field);
+    expect(root).not.toHaveClass(fieldStyles.row);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("with an action, uses Field's row layout", () => {
+    render(
+      <SearchInput
+        id="team-q"
+        label="Find a team"
+        action={<button type="submit">Go</button>}
+      />,
+    );
+
+    expect(fieldRoot()).toHaveClass(fieldStyles.field, fieldStyles.row);
+  });
+
+  it("puts the action after the icon's wrapper, as the root's last child before the hint and error", () => {
+    render(
+      <SearchInput
+        id="team-q"
+        label="Find a team"
+        error="Type a name."
+        action={<button type="submit">Go</button>}
+      />,
+    );
+
+    const root = fieldRoot();
+    const box = screen.getByRole("searchbox", { name: "Find a team" });
+    const wrapper = box.parentElement as HTMLElement;
+    const action = screen.getByRole("button", { name: "Go" });
+    const error = document.getElementById("team-q-error") as HTMLElement;
+
+    expect(wrapper.parentElement).toBe(root);
+    expect(action.parentElement).toBe(root);
+    expect(wrapper).not.toContainElement(action);
+    expect([...root.children]).toEqual([
+      root.querySelector("label"),
+      wrapper,
+      action,
+      error,
+    ]);
   });
 });
 

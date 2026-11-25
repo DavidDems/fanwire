@@ -14,7 +14,7 @@ import { CircleXIcon, PaperclipIcon } from "../../components/ui/icons";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import messageStyles from "../../components/ui/message.module.css";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { config } from "../../config";
+import { mediaUrl } from "../../lib/mediaUrl";
 import type { ComposeMediator } from "./ComposeMediator";
 import styles from "./MediaWidget.module.css";
 
@@ -126,15 +126,6 @@ async function fetchMedia(mediaId: number): Promise<MediaOut> {
     throw new Error(`GET /media/${mediaId} answered ${response.status}`);
   }
   return data;
-}
-
-/**
- * The served thumbnail's URL. `URL.createObjectURL` is not used, by product
- * decision: the first image anyone sees is the served one, EXIF-stripped and
- * resized by the pipeline, never the original off the user's disk.
- */
-function thumbnailUrl(key: string): string {
-  return `${config.mediaBaseUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
 }
 
 /**
@@ -324,9 +315,13 @@ export function MediaWidget({ mediator, tools }: MediaWidgetProps) {
       ) : (
         <div className={styles.row}>
           {chosen.thumbnail ? (
+            // The served thumbnail. `URL.createObjectURL` is not used, by
+            // product decision: the first image anyone sees is the served one,
+            // EXIF-stripped and resized by the pipeline, never the original
+            // off the user's disk.
             <img
               className={styles.tile}
-              src={thumbnailUrl(chosen.thumbnail)}
+              src={mediaUrl(chosen.thumbnail)}
               alt={`Preview of ${chosen.name}`}
             />
           ) : (

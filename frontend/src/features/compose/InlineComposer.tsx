@@ -9,6 +9,7 @@ import {
 
 import { Button } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import { RATE_LIMITED_MESSAGE } from "../../lib/messages";
 import { ComposeMediator } from "./ComposeMediator";
 import { ComposeTextBox } from "./ComposeTextBox";
 import { MediaWidget } from "./MediaWidget";
@@ -92,7 +93,7 @@ export function InlineComposer({
     onError: (error) => {
       setFailure(
         error instanceof PostNotCreated && error.status === 429
-          ? "You are posting too quickly. Your reply is still here — please wait a little and try again."
+          ? RATE_LIMITED_MESSAGE
           : "We could not post your reply. It is still here — please try again.",
       );
     },

@@ -35,7 +35,7 @@ import {
 } from "./api";
 import styles from "./Players.module.css";
 import { postAboutCareerHref, type CareerScope } from "./postLinks";
-import { ColumnHeader, ScrollTable } from "./ScrollTable";
+import { ColumnHeader, ScrollTable } from "../../components/ui/ScrollTable";
 
 /**
  * `/players/:playerId`: one player from `GET /events/players/{id}` — their
@@ -191,10 +191,15 @@ function Player({ player }: { player: PlayerDetailOut }) {
 
       <section className={styles.section} aria-labelledby="player-career">
         <h2 id="player-career">Career</h2>
-        <ScrollTable caption="Career averages">
+        <ScrollTable
+          scrollClassName={styles.scroll}
+          tableClassName={styles.table}
+          captionClassName={styles.caption}
+          caption="Career averages"
+        >
           <thead>
             <tr>
-              <ColumnHeader label="Games" name />
+              <ColumnHeader label="Games" className={styles.name} />
               {AVERAGE_COLUMNS.map(([label, title]) => (
                 <ColumnHeader key={label} label={label} title={title} />
               ))}
@@ -233,12 +238,17 @@ function Player({ player }: { player: PlayerDetailOut }) {
             There are no seasons on record for this player.
           </EmptyState>
         ) : (
-          <ScrollTable caption="Season by season">
+          <ScrollTable
+            scrollClassName={styles.scroll}
+            tableClassName={styles.table}
+            captionClassName={styles.caption}
+            caption="Season by season"
+          >
             <thead>
               <tr>
-                <ColumnHeader label="Season" name />
-                <ColumnHeader label="Type" name />
-                <ColumnHeader label="Teams" name />
+                <ColumnHeader label="Season" className={styles.name} />
+                <ColumnHeader label="Type" className={styles.name} />
+                <ColumnHeader label="Teams" className={styles.name} />
                 {AVERAGE_COLUMNS.map(([label, title]) => (
                   <ColumnHeader key={label} label={label} title={title} />
                 ))}
@@ -400,12 +410,17 @@ function GameLog({
         <PlayerPointsChart games={items} name={playerName} />
       ) : null}
       {items.length === 0 ? null : (
-        <ScrollTable caption="Games played, newest first">
+        <ScrollTable
+          scrollClassName={styles.scroll}
+          tableClassName={styles.table}
+          captionClassName={styles.caption}
+          caption="Games played, newest first"
+        >
           <thead>
             <tr>
-              <ColumnHeader label="Date" name />
-              <ColumnHeader label="Opponent" name />
-              <ColumnHeader label="Result" name />
+              <ColumnHeader label="Date" className={styles.name} />
+              <ColumnHeader label="Opponent" className={styles.name} />
+              <ColumnHeader label="Result" className={styles.name} />
               {LOG_COLUMNS.map(([label, title]) => (
                 <ColumnHeader key={label} label={label} title={title} />
               ))}
@@ -541,11 +556,14 @@ function PlayerPointsChart({
         </p>
       )}
       <ScrollTable
+        scrollClassName={styles.scroll}
+        tableClassName={styles.table}
+        captionClassName={styles.caption}
         caption={`Points for ${name}, last ${plotted.length} completed games`}
       >
         <thead>
           <tr>
-            <ColumnHeader label="Date" name />
+            <ColumnHeader label="Date" className={styles.name} />
             <ColumnHeader label="Points" />
           </tr>
         </thead>

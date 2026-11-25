@@ -50,7 +50,7 @@ const PREFERENCE_PATH = /\/notifications\/preference$/;
 /**
  * The page with an empty notification list, so nothing in these tests depends on
  * how an entry renders. The list, actor and clear handlers are installed anyway:
- * msw runs with `onUnhandledRequest: "error"`.
+ * msw runs with `onUnhandledFrame: "error"`.
  */
 function renderPreference(enabled: boolean, available = true): PreferenceStub {
   const preference = preferenceStub(enabled, available);

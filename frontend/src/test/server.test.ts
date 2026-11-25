@@ -1,7 +1,7 @@
 /**
  * FRONTEND-001 acceptance criterion 10 — the msw test harness.
  *
- * The point of `onUnhandledRequest: "error"` is that a request nobody wrote a
+ * The point of `onUnhandledFrame: "error"` is that a request nobody wrote a
  * handler for is a *test failure*, not a silent pass. Without it, a component
  * that quietly calls the wrong endpoint still renders its loading state, the
  * assertion about the loading state still passes, and the suite says nothing.

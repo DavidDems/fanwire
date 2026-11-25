@@ -10,7 +10,7 @@
  * closed for `FRONTEND-004`.
  *
  * That other file is edited here only to add a `GET /feed` handler to its
- * `arrange()` helper, because msw runs with `onUnhandledRequest: "error"` and
+ * `arrange()` helper, because msw runs with `onUnhandledFrame: "error"` and
  * every route case in it renders the shell. Nothing in it asserts on the feed,
  * and the heading it pins (`/^feed$/i`) is a contract this unit satisfies rather
  * than renegotiates.

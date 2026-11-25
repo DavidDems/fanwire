@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-054",
+  "objective": "Replace the three different 429 sentences (the composer, the reply box and the repost error, FRONTEND-026) with one short, calm line, \"You’re going a bit fast. Wait a moment and try again.\", exported once as RATE_LIMITED_MESSAGE from a new shared module frontend/src/lib/messages.ts, which ComposePage, InlineComposer and PostAction import, so the three surfaces show the identical string.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-054 is cut from the tip of the integration branch outstanding-track-5 after the FRONTEND-053 budget fold (bundle-budgets/FRONTEND-053.ts is gone and BASE.lazy has \"css:NotificationsPage.css\": 368). It runs in parallel with FRONTEND-055, which writes none of this unit's paths.",
+    "Test-first: commit the failing tests alone before the implementation. The red reason is that frontend/src/lib/messages.ts does not exist, so the three test files below fail to import it.",
+    "New frontend/src/lib/messages.ts exports one constant, RATE_LIMITED_MESSAGE, whose value is exactly \"You’re going a bit fast. Wait a moment and try again.\" The apostrophe is U+2019 (’), as the UI's other contractions and possessives in frontend/src are written. It names no duration, no number, no status and no server detail. A doc comment says it is what every posting path shows on a 429 and why it is shared (one line in three places, FRONTEND-054).",
+    "ComposePage.tsx: the RATE_LIMITED constant is deleted and failureMessage returns RATE_LIMITED_MESSAGE, imported from ../../lib/messages, for a PostNotCreated with status 429. InlineComposer.tsx: its 429 branch shows RATE_LIMITED_MESSAGE, imported the same way. PostAction.tsx: a RepostRateLimited error shows RATE_LIMITED_MESSAGE, imported the same way. Nothing else in the three files changes: the conditions that choose the message (status 429 on POST /posts; RepostRateLimited only for a repost's POST) are unchanged.",
+    "Every other failure message is unchanged, character for character: ComposePage's GENERIC_FAILURE and the six refusalMessage texts, InlineComposer's \"We could not post your reply. It is still here — please try again.\", and PostAction's \"We could not save that just now. Please try again.\" A like, an unlike and an undone repost answered 429 keep the generic toggle failure.",
+    "New test frontend/src/lib/messages.test.ts: (a) RATE_LIMITED_MESSAGE equals the exact string above, U+2019 included; (b) read from disk, ComposePage.tsx, InlineComposer.tsx and PostAction.tsx each import RATE_LIMITED_MESSAGE from \"../../lib/messages\"; (c) no non-test source file (.ts or .tsx, not *.test.*) under frontend/src/features/compose/ or frontend/src/features/feed/, with its comments removed, matches /too quickly|wait a little|going a bit fast|slow down/i, so the line lives only in lib/messages.ts and neither feature keeps a second 429 sentence; (d) a guard that the sweep in (c) read at least ComposePage.tsx, InlineComposer.tsx and PostAction.tsx, so it cannot pass on an empty walk. Comments are removed before (c) because features/feed/api.ts's RepostRateLimited doc comment says \"posting too quickly\" and is a comment, not UI text; it stays as it is.",
+    "Existing tests this unit changes (a behaviour change, so named here), and only these: frontend/src/features/compose/rate-limit.test.tsx deletes its COMPOSE_RATE_LIMITED and REPLY_RATE_LIMITED constants and asserts RATE_LIMITED_MESSAGE, imported from ../../lib/messages, wherever it asserted either; frontend/src/features/feed/repost-rate-limit.test.tsx deletes REPOST_RATE_LIMITED and asserts RATE_LIMITED_MESSAGE the same way. In both, the header comment's \"The wording is asserted exactly, so changing it is a deliberate edit here\" becomes that the wording is the shared RATE_LIMITED_MESSAGE, pinned exactly in src/lib/messages.test.ts (FRONTEND-054). Every other assertion and case in both files (the three 429 bodies, no detail, no digit, no duration, the kept draft and reply, the rollback, the plain-repost path, the cleared message, the generic failures, setReposted's error) is untouched. So the composer, the reply box and the repost error are each pinned to the one imported string.",
+    "Bundle: no bundle-budgets file. The Director's prototype measured, with this test's build against the folded BASE, the entry JS 147,247 B gzip (-5) and 465,660 B raw (-80), the entry CSS unchanged, and ComposePage 3,907 to 3,888 B gzip (-19); every other output within 5 B. All inside the 100 B tolerance, so nothing is declared. If the finished implementation moves any output past the tolerance, or adds or removes one, stop and report. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths; features/compose and features/feed still import no other feature (the connection rule, and compose's and feed's isolation tests stay green). src/lib/ is where both already share mediaUrl.ts.",
+    "Module docs: wiki/CodeContext/Modules/0x08c-frontend-compose.md's FRONTEND-026 bullet (\"A 429 says to slow down, on the three posting paths only\") adds that since FRONTEND-054 the three paths show one line, RATE_LIMITED_MESSAGE from src/lib/messages.ts, and quotes it; wiki/CodeContext/Modules/0x08-frontend.md's src/lib/ row adds messages.ts (the one 429 line the composer, the reply box and the repost error share, FRONTEND-054, → [[0x08c-frontend-compose]]).",
+    "Browser check (the Director's, after merge; not the unit's): with the API answering 429 (or the dev throttle), the compose dialog, a thread's reply box and a card's Repost each show the same line in their existing InlineAlert, in light and dark, at 360 and 1280 px; the draft and the reply text are still in their boxes."
+  ],
+  "allowed_paths": [
+    "frontend/src/lib/messages.ts",
+    "frontend/src/lib/messages.test.ts",
+    "frontend/src/features/compose/ComposePage.tsx",
+    "frontend/src/features/compose/InlineComposer.tsx",
+    "frontend/src/features/compose/rate-limit.test.tsx",
+    "frontend/src/features/feed/PostAction.tsx",
+    "frontend/src/features/feed/repost-rate-limit.test.tsx",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08c-frontend-compose.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/styles/**",
+    "frontend/src/test/**",
+    "frontend/src/auth/**",
+    "frontend/src/features/profile/**",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08c-frontend-compose.md",
+    "wiki/CodeContext/Modules/0x08f-frontend-feed.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

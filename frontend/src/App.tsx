@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
 
 import { AuthProvider } from "./auth/AuthContext";
-import { CognitoAuthService } from "./auth/CognitoAuthService";
+import { DeferredAuthService } from "./auth/DeferredAuthService";
 import { installTokenProvider } from "./auth/tokenProvider";
 import { routes } from "./routes/routes";
 
@@ -29,11 +29,16 @@ const queryClient = new QueryClient({
 const router = createBrowserRouter(routes);
 
 /**
- * The one place in the app that chooses an implementation of `AuthService`.
- * Everything else — every page, hook and guard — depends on the interface, and
- * nothing anywhere branches on environment to pick a different one.
+ * The one place in the app that chooses an implementation of `AuthService`:
+ * `CognitoAuthService`, loaded through `DeferredAuthService` so the Cognito SDK
+ * is a lazy chunk rather than part of the entry (`FRONTEND-051`). The load
+ * starts here, at module load, in parallel with the first render. Everything
+ * else — every page, hook and guard — depends on the interface, and nothing
+ * anywhere branches on environment to pick a different one.
  */
-const authService = new CognitoAuthService();
+const authService = new DeferredAuthService(() =>
+  import("./auth/CognitoAuthService").then((m) => new m.CognitoAuthService()),
+);
 
 // `apiClient`'s token provider reads from the same service the pages use, so a
 // sign-in or a sign-out takes effect on the very next request. Installed here,

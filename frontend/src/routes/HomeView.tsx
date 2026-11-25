@@ -2,7 +2,9 @@ import { lazy, Suspense } from "react";
 
 import { Skeleton } from "../components/ui/Skeleton";
 import { FeedPage } from "../features/feed/FeedPage";
+import { BOX_ID } from "../features/search/SearchBar";
 import { SearchRail } from "../features/search/SearchRail";
+import shellStyles from "./AppLayout.module.css";
 import styles from "./HomeView.module.css";
 import { useDetailLinkState } from "./modal-flow";
 import { useMediaQuery } from "./useMediaQuery";
@@ -26,6 +28,14 @@ const RAIL_FROM = "(min-width: 76.0625em)";
  * mounting or unmounting it never remounts `FeedPage`, which keeps its pages
  * and place when `q` changes.
  *
+ * While the rail is mounted, a "Skip to search" link comes first in `main`,
+ * before the feed (`FRONTEND-056`): at 1280 px the rail's box was about 150
+ * Tabs after the feed's top. It has the shell's skip-link look (its
+ * `skipLink` class: hidden until focused) and, like Skip to content, focuses
+ * its target on activation, since a hash link does not move focus everywhere.
+ * It sits before the `.home` container, not in it, so the feed stays
+ * `.home`'s first child; the rail itself stays after the feed.
+ *
  * Composed here rather than inside a feature: the feed, search and the
  * games are separate features, and none imports another
  * ([[0x00-architecture]] Connection rule). The feed's `h1` stays the page's
@@ -35,17 +45,28 @@ export function HomeView() {
   const withRail = useMediaQuery(RAIL_FROM);
   const postLinkState = useDetailLinkState();
   return (
-    <div className={styles.home}>
-      <FeedPage />
+    <>
       {!withRail ? null : (
-        <aside className={styles.rail}>
-          <SearchRail postLinkState={postLinkState} />
-          <Suspense fallback={<RecentGamesLoading />}>
-            <RecentGames />
-          </Suspense>
-        </aside>
+        <a
+          href={`#${BOX_ID}`}
+          className={shellStyles.skipLink}
+          onClick={() => document.getElementById(BOX_ID)?.focus()}
+        >
+          Skip to search
+        </a>
       )}
-    </div>
+      <div className={styles.home}>
+        <FeedPage />
+        {!withRail ? null : (
+          <aside className={styles.rail}>
+            <SearchRail postLinkState={postLinkState} />
+            <Suspense fallback={<RecentGamesLoading />}>
+              <RecentGames />
+            </Suspense>
+          </aside>
+        )}
+      </div>
+    </>
   );
 }
 

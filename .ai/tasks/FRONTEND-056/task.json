@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-056",
+  "objective": "Give a keyboard reader of the home page a way to the rail: from 76.0625em, while the rail is mounted, HomeView renders a \"Skip to search\" link first in main, before the feed, that moves focus to the rail's search box, with the shell's skip-link look (hidden until focused). The rail stays after the feed in DOM order.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-056 is cut from the tip of the integration branch outstanding-track-5 after this spec PR merged (BASE in bundle-budget.ts refolded at 3084e22, entryJsRaw 465_660).",
+    "Decision (the human's rule, take the option with fewer changes; the Director's count is in brief.md): a skip link, not the rail before the feed. The skip link is one source file (HomeView.tsx) and no existing test changes. Moving the rail first needs HomeView.tsx, HomeView.module.css (the .home > :first-child feed rule plus a visual order) and the four \"the rail follows the feed\" cases in home-rail.test.tsx, and it would put the rail's search, results and recent games in front of the feed for every keyboard reader, out of step with what is seen (WCAG 2.4.3).",
+    "Test-first: commit the failing tests (and the bundle file below) alone, before the implementation. The red reason is that no link named \"Skip to search\" exists on the home page at any width.",
+    "New test frontend/src/routes/home-rail-skip.test.tsx, through renderAppAt as home-rail.test.tsx does, with stubViewport per test (restored after), recentGamesAre([]) and the feed stubbed with one post (feedStub, feedPage and testPostView, as home-rail.test.tsx's arrange does; an empty feed has no control, so the Tab after the link would go straight into the rail). (a) \"at 1280 px, the first Tab stop in main is Skip to search, before the feed\": a member on /; the shell's Skip to content is focused and activated with Enter (focus is on main); one user.tab() puts focus on the link named exactly \"Skip to search\", which main contains, the complementary landmark does not contain, and which precedes the feed's h1 in document order (compareDocumentPosition); the next user.tab() lands in the feed (inside the first element child of the element carrying HomeView.module.css's home class), outside the complementary landmark. (b) \"Enter on it moves focus to the rail's search box\": with the link focused, user.keyboard(\"{Enter}\") makes document.activeElement the searchbox named \"Search accounts and posts\" within the complementary landmark, and the link's href attribute is \"#search-bar-q\" (features/search/SearchBar's BOX_ID), so it is a real in-page link. (c) \"it has the shell's skip-link look\": its class list contains AppLayout.module.css's skipLink class (imported as shellStyles, as home-rail.test.tsx does). (d) \"below the rail it is not there, and a resize across 1217 px mounts and unmounts it\": at 1216 px queryByRole(\"link\", { name: \"Skip to search\" }) is null; setWidth(1217) mounts it; setWidth(1216) removes it; the feed's h1 is the same element throughout (no remount). (e) \"the feed stays the home container's first child and the page's only h1\": at 1280 px the first element child of the element carrying HomeView.module.css's home class contains the feed's h1, and getAllByRole(\"heading\", { level: 1 }) is that h1 alone. (a), (b), (c) and the wide half of (d) are red today; (e) and the narrow half of (d) pass already and guard the implementation.",
+    "HomeView.tsx: while withRail is true it renders, before the .home container (a fragment around both, so .home's children and .home > :first-child, the feed, are unchanged), an <a> with href `#${BOX_ID}` (BOX_ID imported from ../features/search/SearchBar), className shellStyles.skipLink (imported from ./AppLayout.module.css; no CSS is added or copied), the text \"Skip to search\", and an onClick that focuses document.getElementById(BOX_ID), as the shell's own skip link focuses main (a hash link does not move focus everywhere, nor in jsdom). Below 76.0625em it renders nothing extra. FeedPage, the aside, SearchRail, RecentGames and their order are unchanged, so the rail still follows the feed and mounting it never remounts FeedPage. The doc comment adds the skip link and why (FRONTEND-056: the rail's box was about 150 Tabs after the feed's top at 1280 px).",
+    "Existing tests stay untouched and green, in particular home-rail.test.tsx's \"the rail follows the feed\" cases, sidebar-nav.test.tsx's tab order (what follows the nav is main's; main's first stop may now be this link), home-search.test.tsx and thread-route.test.tsx.",
+    "Bundle: frontend/src/test/bundle-budgets/FRONTEND-056.ts, in the test commit, declares entryJsRawGrowth 200 and nothing else, with a doc comment giving the measured numbers (FRONTEND-053's file, git show f92ae5b^:frontend/src/test/bundle-budgets/FRONTEND-053.ts, is the shape). HomeView is in the entry. The Director's prototype of this change, measured with the test's build against BASE refolded at 3084e22, put the entry JS at 465,831 B raw (+171, past the 100 B tolerance; the ceiling rounded up to the next 100) and 147,260 B gzip (+13, inside); every lazy output moved by 3 B or less. Re-measure on the finished implementation; if the raw growth passes 200, or any other output passes the tolerance, or one is added or removed, stop and report. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths.",
+    "Module docs: wiki/CodeContext/Modules/0x08h-frontend-search-games.md's \"No search bar above the feed\" bullet adds that, while the rail is mounted, HomeView renders a \"Skip to search\" link first in main, before the feed, with the shell's skipLink look, which moves focus to the rail's box; the rail stays after the feed (FRONTEND-056).",
+    "Browser check (the Director's, after merge; not the unit's): at 1280 px, as a member, count Tab presses from page load until focus is in the rail's search box, before (about 150) and after (Skip to search reached in about ten, then Enter); the link shows top-left on focus like Skip to content, and is absent at 1216 px."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/HomeView.tsx",
+    "frontend/src/routes/home-rail-skip.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-056.ts",
+    "wiki/CodeContext/Modules/0x08h-frontend-search-games.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/styles/**",
+    "frontend/src/test/bundle-budget.ts",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/HomeView.module.css",
+    "frontend/src/routes/home-rail.test.tsx",
+    "frontend/src/routes/shell-css.test.ts",
+    "frontend/src/features/**",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08h-frontend-search-games.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

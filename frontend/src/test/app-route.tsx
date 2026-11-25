@@ -50,7 +50,7 @@ export const OWN_USER_ID = testProfile().id;
  * Install the API responses that visitor implies, and return their session.
  *
  * Every read any route makes on mount is answered for every visitor (msw runs
- * with `onUnhandledRequest: "error"`): the feed, public profiles, teams, and
+ * with `onUnhandledFrame: "error"`): the feed, public profiles, teams, and
  * the notification list and preference, the search page's game filters (its
  * teams are the same `GET /events/teams`), the stats and player routes' reads
  * (`statsDefaults`, `FRONTEND-009`) and the records reads (`recordsDefaults`,

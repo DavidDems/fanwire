@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import type { components } from "../../api/schema";
+import { TEAMS_KEY, fetchTeams } from "../../api/stats";
 import { PROFILE_QUERY_KEY } from "../../auth/profile";
 import { Field, describeField } from "../../components/FormField";
 import { Button } from "../../components/ui/Button";
@@ -10,7 +11,7 @@ import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
 import { Avatar, AVATAR_OPTIONS } from "../../components/ui/Avatar";
 import { StatusLine } from "../../components/ui/StatusLine";
-import { TEAMS_QUERY_KEY, fetchTeams, updateMe } from "./api";
+import { updateMe } from "./api";
 import styles from "./Profile.module.css";
 
 /**
@@ -48,7 +49,7 @@ function teamValue(preferredTeamId: number | null): string {
 
 export function ProfileSettings({ profile }: ProfileSettingsProps) {
   const queryClient = useQueryClient();
-  const teams = useQuery({ queryKey: TEAMS_QUERY_KEY, queryFn: fetchTeams });
+  const teams = useQuery({ queryKey: TEAMS_KEY, queryFn: fetchTeams });
 
   const [description, setDescription] = useState(profile.description ?? "");
   const [preferredTeamId, setPreferredTeamId] = useState(

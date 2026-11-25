@@ -5,7 +5,6 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { SearchInput } from "../../components/ui/SearchInput";
-import styles from "./Search.module.css";
 
 /** The backend's own cap on `q` ([[0x07-search]] Routes). */
 const MAX_QUERY_LENGTH = 100;
@@ -52,7 +51,7 @@ function SearchForm({ initial }: { initial: string }) {
 
   return (
     <Card>
-      <form role="search" className={styles.bar} onSubmit={handleSubmit}>
+      <form role="search" onSubmit={handleSubmit}>
         <SearchInput
           id={BOX_ID}
           label="Search accounts and posts"
@@ -62,10 +61,12 @@ function SearchForm({ initial }: { initial: string }) {
           onChange={(event) => {
             setText(event.target.value);
           }}
+          action={
+            <Button type="submit" variant="primary" size="md">
+              Search
+            </Button>
+          }
         />
-        <Button type="submit" variant="primary" size="md">
-          Search
-        </Button>
       </form>
     </Card>
   );

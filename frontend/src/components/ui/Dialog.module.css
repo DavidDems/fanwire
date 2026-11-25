@@ -25,9 +25,13 @@
   box-shadow: var(--shadow-2);
 }
 
-/* The page underneath, dimmed: the darkest neutral, partly see-through. */
+/*
+ * The page underneath, dimmed: the scrim token, partly see-through. It holds
+ * the darkest neutral's value, so the rendered colour is what --neutral-950
+ * drew.
+ */
 .dialog::backdrop {
-  background-color: var(--neutral-950);
+  background-color: var(--color-scrim);
   opacity: 0.6;
 }
 

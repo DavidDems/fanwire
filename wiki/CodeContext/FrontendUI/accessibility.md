@@ -28,7 +28,7 @@ primary controls and nav as a design choice, and 24 px as the hard floor.
 | **A8** | With `prefers-reduced-motion: reduce`, nothing animates or transitions (durations are `0ms`), and no skeleton shimmers at all, in either setting | 2.3.3 (AAA, aimed for), 2.2.2 | S, then B |
 | **A9** | Text resizes to 200 % and the page reflows at 320 px wide with no horizontal scroll; sizes are in `rem`, not `px`, for type | 1.4.4, 1.4.10 | B; S for `rem` |
 | **A10** | Text spacing overrides (line-height 1.5, paragraph 2×, letter 0.12em, word 0.16em) don't clip content: no fixed heights on text containers | 1.4.12 | B |
-| **A11** | There is a "Skip to content" link, first in the tab order, that moves focus to `<main>` | 2.4.1 | T |
+| **A11** | There is a "Skip to content" link, first in the tab order, that moves focus to `<main>`. On `/`, while the rail is mounted, a "Skip to search" link first in `<main>` moves focus to the rail's search box (`FRONTEND-056`, `layout.md` §2) | 2.4.1 | T |
 | **A12** | Exactly one `<main>`, one `<header>` (banner) and one `<nav aria-label="Primary">` per page, at every breakpoint | 1.3.1 | T |
 | **A13** | The brand link's accessible name is exactly `fanwire`, lowercase, at every width: the header holds the wordmark alone, never hidden | 1.1.1, 2.4.4 | T |
 | **A14** | Every icon is `aria-hidden="true"` and every control keeps a visible text label equal to (or contained in) its accessible name | 1.1.1, 2.5.3 | T, S |

@@ -7,7 +7,8 @@
  * "posting" would be wrong for either. Those cases are green before the
  * implementation: they are protection, not new behaviour.
  *
- * The wording is asserted exactly, so changing it is a deliberate edit here.
+ * The wording is the shared RATE_LIMITED_MESSAGE, pinned exactly in
+ * src/lib/messages.test.ts (FRONTEND-054).
  */
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -29,12 +30,11 @@ import {
   testPostView,
   type PostView,
 } from "../../test/feed";
+import { RATE_LIMITED_MESSAGE } from "../../lib/messages";
 import { server } from "../../test/server";
 import { FeedPage } from "./FeedPage";
 import { RepostRateLimited, setReposted } from "./api";
 
-const REPOST_RATE_LIMITED =
-  "You are posting too quickly. Please wait a little and try again.";
 const GENERIC_TOGGLE_FAILURE =
   "We could not save that just now. Please try again.";
 
@@ -96,7 +96,7 @@ describe("a repost answered 429", () => {
       expect(control("Repost")).toHaveAttribute("aria-pressed", "false");
       expect(within(card()).getByText("2 reposts")).toBeInTheDocument();
 
-      expect(alert).toHaveTextContent(REPOST_RATE_LIMITED);
+      expect(alert).toHaveTextContent(RATE_LIMITED_MESSAGE);
       expect(alert.textContent).not.toMatch(/rate limit exceeded/i);
       expect(alert.textContent).not.toMatch(/\d/);
       expect(alert.textContent).not.toMatch(/\b(second|minute|hour)s?\b/i);
@@ -116,7 +116,7 @@ describe("a repost answered 429", () => {
     await user.click(control("Repost"));
 
     expect(await within(card()).findByRole("alert")).toHaveTextContent(
-      REPOST_RATE_LIMITED,
+      RATE_LIMITED_MESSAGE,
     );
     expect(posted).toEqual(["401"]);
   });

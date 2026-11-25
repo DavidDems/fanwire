@@ -65,7 +65,7 @@ those is a Director PR.
 - [`components-shared.md`](components-shared.md): §2–§3, the shared components in `src/components/ui/` (variants, states, the props as built, what is deliberately not built) and the icons.
 - [`components-sports.md`](components-sports.md): §4, the score block, game state, team identity (`TeamIcon`) and mentions in posts.
 - [`components-map-pages.md`](components-map-pages.md): §5, the map for the shell, routes, search, games, schedule, stats and players.
-- [`components-map-posts.md`](components-map-posts.md): §5, the map for `FormField`, auth, the feed and posts, threads, compose, notifications and profile.
+- [`components-map-posts.md`](components-map-posts.md): §5, the map for `FormField`, auth, the feed and posts, threads, compose, notifications, profile, account settings and history.
 
 Section numbers carry over into the parts, so a `components.md` §2–§5
 citation elsewhere is found through these headings:

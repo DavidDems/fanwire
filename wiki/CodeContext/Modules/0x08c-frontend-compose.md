@@ -65,8 +65,8 @@ each owns one piece:
   honest thing to show anyway, since it is what everyone else sees once the post
   is published, EXIF-stripped and resized by the pipeline rather than the
   original off the user's disk. The widget shows the file's **name** while the
-  upload is pending and an `<img>` at `config.mediaBaseUrl` + `s3_key_thumbnail`
-  once it is `processed`.
+  upload is pending and an `<img>` at `mediaUrl(s3_key_thumbnail)` (`src/lib/mediaUrl.ts`,
+  `FRONTEND-052`) once it is `processed`.
 - **The file input carries no `accept` attribute.** The browser's own filter
   drops a file the user chose without telling them why, and the type rule —
   jpeg, png and webp, SVG excluded by name ([[0x04-media]] Security
@@ -116,7 +116,9 @@ each owns one piece:
   body, and states no duration: either of the two windows can trip it and the API
   sends no `Retry-After`. A like, an unlike and an undone repost share
   `TogglePostAction` but keep its generic message: none of them is posting, and
-  each can see a 429 only from the edge.
+  each can see a 429 only from the edge. Since `FRONTEND-054` the three paths
+  show one line, `RATE_LIMITED_MESSAGE` from `src/lib/messages.ts`: "You’re going
+  a bit fast. Wait a moment and try again." (pinned in `src/lib/messages.test.ts`).
 - **The media widget's field error is the `InlineAlert` itself, named by id.**
   The file input's `aria-describedby` points at `compose-media-error`, which is
   `InlineAlert`'s `id` prop on the `<p role="alert">` (2026-10-07,

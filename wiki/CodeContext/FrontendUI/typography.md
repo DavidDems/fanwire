@@ -82,6 +82,13 @@ stays:
 - **Measure:** the 640 px content column holds about 70–75 characters at 16 px,
   inside the comfortable range, so no extra `max-width` on paragraphs.
 - **No italics** in the UI. There is none in the app today.
+- **Apostrophes and quotes are typographic** in UI text: ’ (U+2019) in
+  contractions and possessives ("You’re going a bit fast", "this season’s
+  champion") and “ ” around a quoted query ("No players match “q”"). Code,
+  comments and test names keep ASCII. Three strings still use a straight
+  apostrophe: `AccountSettings.tsx`'s "this account's verification status"
+  and two in `features/compose/attachmentReads.ts` ("Player's game", "The
+  player's line").
 
 ## 3. The name `fanwire` (ADR 0010)
 

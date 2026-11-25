@@ -20,7 +20,9 @@ import styles from "./Profile.module.css";
  * there, on the right of the card (under the name on phones).
  *
  * The counts are single text nodes rather than a number next to a word, so the
- * element's whole text is what a reader (and a test) sees.
+ * element's whole text is what a reader (and a test) sees. The follower count
+ * is singular at exactly one ("1 follower", FRONTEND-055); "following" has no
+ * singular form, so that count never changes.
  */
 
 export interface ProfileSummaryProps {
@@ -48,7 +50,7 @@ export function ProfileSummary({
         <div className={styles.identity}>
           <h1>{username}</h1>
           <ul className={styles.counts}>
-            <li>{`${followerCount} followers`}</li>
+            <li>{`${followerCount} ${followerCount === 1 ? "follower" : "followers"}`}</li>
             <li>{`${followingCount} following`}</li>
           </ul>
         </div>

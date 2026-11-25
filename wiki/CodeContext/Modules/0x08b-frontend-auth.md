@@ -17,11 +17,23 @@ reads the tree from disk and enforces both halves, along with "no module under
 `src/auth/` branches on environment". There is one implementation; configuration
 differs, code does not, and `App` is the single place that chooses it.
 
-- **`App` is the composition root**: it constructs `CognitoAuthService`, calls
-  `installTokenProvider` (which feeds `getIdToken` into `api/client.ts`'s seam,
-  re-read on every request so a sign-out lands on the next call), and mounts
-  `AuthProvider` *outside* `RouterProvider` — a session does not belong to a
-  route.
+- **`App` is the composition root**: it constructs the one service instance,
+  calls `installTokenProvider` with it (which feeds `getIdToken` into
+  `api/client.ts`'s seam, re-read on every request so a sign-out lands on the
+  next call), and mounts `AuthProvider` with the same instance *outside*
+  `RouterProvider` — a session does not belong to a route.
+- **The Cognito SDK loads lazily** (`FRONTEND-051`). `App` still chooses
+  `CognitoAuthService`, in one place, but hands it to `DeferredAuthService` as
+  a dynamic import. The SDK, its `buffer` polyfill and `@aws-crypto` become a
+  lazy chunk, which leaves the entry room under ADR 0041's raw cap (554.8 kB
+  raw before, 465.5 kB after). The load starts in the constructor, at module
+  load, so session restore is not delayed. Every async method awaits the
+  loaded service and delegates unchanged, and an `AuthError` reaches the caller
+  as the same object. `signOut()` stays synchronous: it runs at once when the
+  service is loaded, otherwise as soon as a load succeeds, before any call that
+  waited on it. A failed load rejects the calls waiting on it and is not
+  cached: the next call retries, so a dropped chunk does not leave the tab
+  unable to sign in until a reload.
 - **The router is `react-router-dom` 7** (`FRONTEND-016`, 2026-10-20), on
   React 18. Imports keep the `react-router-dom` name, which re-exports
   `react-router` in v7. v7's defaults are v6's `future.v7_*` flags, so none is
@@ -75,7 +87,9 @@ profile fields; account lifecycle controls live on the separate, guarded
   `OwnProfile` takes `MeOut` (which has the field); `PublicProfile` takes
   `PublicUserOut` (which does not). The one thing they share, `ProfileSummary`,
   takes a username, two counts and the safe avatar rendering keys — **not a
-  user object** — so it cannot render a field it was never handed. Since
+  user object** — so it cannot render a field it was never handed. The
+  follower count reads "1 follower" at one and "N followers" otherwise, and
+  "N following" always (`FRONTEND-055`). Since
   `USERS-004` it can render the saved preset or public picture key without
   receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control

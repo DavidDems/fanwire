@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { apiClient } from "../api/client";
 import type { components } from "../api/schema";
+import { TEAMS_KEY, fetchTeams } from "../api/stats";
 import { Field, describeField } from "../components/FormField";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -31,7 +32,6 @@ import { PROFILE_QUERY_KEY } from "./profile";
  */
 
 type CreateUserRequest = components["schemas"]["CreateUserRequest"];
-type TeamOut = components["schemas"]["TeamOut"];
 type ValidationError = components["schemas"]["ValidationError"];
 
 type ProfileField =
@@ -44,15 +44,6 @@ const CONTROL_FOR_FIELD: Readonly<Record<string, ProfileField>> = {
   description: "description",
   preferred_team_id: "preferredTeam",
 };
-
-/** `preferred_team_id` is a real FK into `events/`'s `Team`, so the choices come from the API. */
-async function fetchTeams(): Promise<TeamOut[]> {
-  const { data, response } = await apiClient.GET("/events/teams");
-  if (!response.ok || data === undefined) {
-    throw new Error(`GET /events/teams answered ${response.status}`);
-  }
-  return data;
-}
 
 interface CreateProfileResult {
   /** Field messages from a 422, keyed by control. Empty when the profile was created. */
@@ -132,7 +123,7 @@ export function ProfileSetupPage() {
   const [failure, setFailure] = useState<string | null>(null);
 
   const teams = useQuery({
-    queryKey: ["events", "teams"],
+    queryKey: TEAMS_KEY,
     queryFn: fetchTeams,
   });
 
