@@ -10,6 +10,7 @@ import { useAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
 import { Button, buttonClass } from "../../components/ui/Button";
 import { InlineAlert } from "../../components/ui/InlineAlert";
+import { RATE_LIMITED_MESSAGE } from "../../lib/messages";
 import type { ModalFlowState } from "../../routes/modal-flow";
 import styles from "./PostAction.module.css";
 import {
@@ -218,7 +219,7 @@ export function TogglePostAction({
       // reader cannot act on, and retrying is the one thing they can.
       setFailure(
         error instanceof RepostRateLimited
-          ? "You are posting too quickly. Please wait a little and try again."
+          ? RATE_LIMITED_MESSAGE
           : "We could not save that just now. Please try again.",
       );
     },
