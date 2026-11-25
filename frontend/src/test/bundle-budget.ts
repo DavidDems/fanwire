@@ -94,12 +94,12 @@ export interface UnitBudget {
 
 /**
  * The base, measured by this test's own build on the integration tip
- * b8d1299 (vite 8, React 19), folding in FRONTEND-052 (the frontend
- * tidy-ups; the shared `ScrollTable` becomes a lazy chunk), merged. The
- * entry is the entry chunk plus its static imports (`entryClosure`), eleven
- * chunks; its CSS is `index.css` plus `InlineAlert.css`. One tree, so every
- * number is its single measurement. Earlier folds: 9ff6767 (FRONTEND-051),
- * 028b493 (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19, ADR 0041, and
+ * 86bf9e6 (vite 8, React 19), folding in FRONTEND-053 (`Field`'s checkbox
+ * and row layouts), merged. The entry is the entry chunk plus its static
+ * imports (`entryClosure`), eleven chunks; its CSS is `index.css` plus
+ * `InlineAlert.css`. One tree, so every number is its single measurement.
+ * Earlier folds: b8d1299 (FRONTEND-052), 9ff6767 (FRONTEND-051), 028b493
+ * (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19, ADR 0041, and
  * FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527 (vite 7;
  * FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac (FRONTEND-031, 034,
  * 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at
@@ -110,44 +110,44 @@ export interface UnitBudget {
  * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 147_135,
-  entryJsRaw: 465_466,
-  entryCssGzip: 7_348,
+  entryJsGzip: 147_252,
+  entryJsRaw: 465_740,
+  entryCssGzip: 7_457,
   lazy: {
-    AccountSettings: 2_403,
+    AccountSettings: 2_404,
     "AuthPage.module": 139,
     AuthService: 139,
     CognitoAuthService: 26_421,
-    ComposePage: 3_906,
-    ConfirmPage: 1_163,
+    ComposePage: 3_907,
+    ConfirmPage: 1_165,
     errors: 235,
-    ForgotPasswordPage: 1_199,
-    format: 489,
-    GameCard: 637,
-    GamePage: 3_886,
-    HistoryPage: 1_115,
-    NotificationsPage: 1_849,
+    ForgotPasswordPage: 1_201,
+    format: 491,
+    GameCard: 636,
+    GamePage: 3_885,
+    HistoryPage: 1_116,
+    NotificationsPage: 1_857,
     ok: 140,
     PeriodScores: 497,
-    PlayerPage: 3_797,
-    PlayerResults: 904,
-    PlayersTab: 638,
-    ProfilePage: 2_900,
-    ProfileSetupPage: 1_538,
-    RecentGames: 784,
+    PlayerPage: 3_798,
+    PlayerResults: 905,
+    PlayersTab: 641,
+    ProfilePage: 2_903,
+    ProfileSetupPage: 1_540,
+    RecentGames: 786,
     RecordsTab: 5_945,
-    SchedulePage: 2_284,
+    SchedulePage: 2_286,
     ScrollTable: 283,
-    SeasonsTab: 1_763,
+    SeasonsTab: 1_765,
     SegmentedTabs: 726,
-    SignInPage: 1_097,
-    SignUpPage: 1_029,
+    SignInPage: 1_099,
+    SignUpPage: 1_031,
     stats: 697,
-    "Stats.module": 529,
+    "Stats.module": 531,
     "StatsNav.module": 504,
     StatsNavigator: 3_864,
     StatsPage: 429,
-    StatsPicker: 2_318,
+    StatsPicker: 2_319,
     useQueries: 1_507,
     VisuallyHidden: 155,
     "css:AccountSettings.css": 403,
@@ -156,7 +156,7 @@ export const BASE = {
     "css:GameCard.css": 499,
     "css:GamePage.css": 866,
     "css:HistoryPage.css": 174,
-    "css:NotificationsPage.css": 496,
+    "css:NotificationsPage.css": 368,
     "css:PlayerPage.css": 879,
     "css:ProfilePage.css": 734,
     "css:RecentGames.css": 243,

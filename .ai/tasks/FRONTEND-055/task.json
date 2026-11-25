@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-055",
+  "objective": "Make the profile header's follower count singular at exactly one: ProfileSummary renders \"1 follower\" and keeps \"0 followers\" and \"N followers\" otherwise, with a profile-local choice of noun; the following count (\"N following\") is invariant and unchanged.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-055 is cut from the tip of the integration branch outstanding-track-5 after the FRONTEND-053 budget fold (bundle-budgets/FRONTEND-053.ts is gone and BASE.lazy has \"css:NotificationsPage.css\": 368). It runs in parallel with FRONTEND-054, which writes none of this unit's paths.",
+    "Test-first: commit the failing test alone before the implementation. The red reason is that ProfileSummary renders \"1 followers\" for a count of one, so the exact text \"1 follower\" is not found.",
+    "New test frontend/src/features/profile/follower-count.test.tsx renders ProfileSummary directly (renderWithProviders, a username and the two counts, as profile-style.test.tsx does) and pins, by exact getByText inside the header card: followerCount 0 renders \"0 followers\"; 1 renders \"1 follower\" and no element has the text \"1 followers\"; 2 renders \"2 followers\". It also pins that followingCount 1 renders \"1 following\" (the word has no singular form, so it is unchanged), and that each count is still one text node, the whole text of its li (components.md: text tests read stays one text node).",
+    "ProfileSummary.tsx: the follower li's text is the count, a space, then \"follower\" when the count is exactly 1 and \"followers\" otherwise, still one template-literal text node. The choice is local to features/profile (a ternary in the li, or a small unexported helper in ProfileSummary.tsx); it does not import features/feed's countText (the connection rule) and adds nothing to src/lib/. The number is rendered as today, with no locale formatting added. The following li is unchanged. The component's three-scalar props, the action slot and the markup are unchanged; the doc comment's paragraph on the counts adds that the follower count is singular at one (FRONTEND-055).",
+    "Existing tests stay untouched and green, including every exact \"N followers\" and \"N following\" match in FollowButton.test.tsx, profile-cache.test.tsx, profile-loading.test.tsx and profile-style.test.tsx (none pins a count of one).",
+    "The feed half of deliverable 5 is already done and is not this unit's: features/feed/counts.ts's countText writes \"1 like\", \"1 reply\" and \"1 repost\" (UI-009), pinned in features/feed/counts.test.ts. The unit does not touch features/feed.",
+    "Bundle: no bundle-budgets file. The Director's prototype measured, with this test's build against the folded BASE, ProfilePage 2,903 to 2,912 B gzip (+9), the entry JS 147,255 B gzip (+3) and 465,740 B raw (0), the entry CSS unchanged; every other output unchanged. All inside the 100 B tolerance, so nothing is declared. If the finished implementation moves any output past the tolerance, or adds or removes one, stop and report. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths.",
+    "Module docs: wiki/CodeContext/Modules/0x08b-frontend-auth.md's \"Date of birth is private\" bullet, where it describes what ProfileSummary takes, adds that the follower count reads \"1 follower\" at one and \"N followers\" otherwise, and \"N following\" always (FRONTEND-055).",
+    "Browser check (the Director's, after merge; not the unit's): a profile with one follower reads \"1 follower\" in the header card, and following then unfollowing it moves between \"1 follower\" and \"0 followers\"/\"2 followers\" with the optimistic update, at 360 and 1280 px."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/profile/ProfileSummary.tsx",
+    "frontend/src/features/profile/follower-count.test.tsx",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/styles/**",
+    "frontend/src/test/**",
+    "frontend/src/auth/**",
+    "frontend/src/lib/**",
+    "frontend/src/features/feed/**",
+    "frontend/src/features/compose/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08c-frontend-compose.md"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
