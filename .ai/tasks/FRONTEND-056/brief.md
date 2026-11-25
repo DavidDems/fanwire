@@ -84,7 +84,7 @@ by +7 B gzip and the JS not at all.
 - **`TODO/02-backlog.md`**: delete the "home rail after the feed in DOM order"
   row.
 - **FrontendUI** (deliverable 8's PR): `layout.md` §2 "Skip link first" and
-  §3 (the home page) gain the second skip link: "Skip to search", first in
+  `layout.md` §3 (the home page) gain the second skip link: "Skip to search", first in
   `main` on `/` from 76.0625em, the shell's look, focus to the rail's box.
   `accessibility.md`: A11 stays "Skip to content, first in the tab order";
   add a line (or a note on A11) that the home rail has its own skip link
