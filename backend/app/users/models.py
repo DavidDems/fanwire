@@ -123,7 +123,15 @@ class User(Base):
         nullable=True,
     )
 
-    __table_args__ = (Index("ix_users_search_vector", "search_vector", postgresql_using="gin"),)
+    __table_args__ = (
+        Index("ix_users_search_vector", "search_vector", postgresql_using="gin"),
+        # Usernames are unique regardless of case (USERS-011, ADR 0042), beside
+        # the case-sensitive UNIQUE(username) above. Display keeps the typed
+        # case (ADR 0010); only uniqueness folds it. create_user leaves a
+        # case-only duplicate to this index's IntegrityError, the same 409 as
+        # an exact duplicate. See wiki/CodeContext/Modules/0x01a-users-schema.md.
+        Index("ux_users_username_lower", func.lower(username), unique=True),
+    )
 
 
 class Follow(Base):

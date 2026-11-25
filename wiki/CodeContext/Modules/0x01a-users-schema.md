@@ -13,7 +13,7 @@ type: reference
 |---|---|---|
 | `id` | PK | local identity, referenced by FK from `posts/`, `notifications/`, etc. |
 | `cognito_sub` | string, unique, not null | links this row to the Cognito identity; **no password column** exists here |
-| `username` | string, unique, not null | display handle |
+| `username` | string, unique, not null | display handle, stored and shown as typed (ADR 0010); unique regardless of case too, through `ux_users_username_lower` on `lower(username)` (`USERS-011`, ADR 0042) |
 | `description` | text, nullable | |
 | `date_of_birth` | date | PII, see [[0x01b-users-auth]] "Security" and [[0x01-users]] "Security" |
 | `preferred_team_id` | FK → `Team.id` | owned by `events/`, not redefined here — see [[0x02-events]] |
