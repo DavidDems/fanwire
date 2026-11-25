@@ -48,15 +48,15 @@ Basic Latin, Latin-1 and Latin Extended-A plus general punctuation.
 
 ### The known cost: look-alike usernames
 
-Usernames are shown exactly as typed ([ADR 0010](../../GeneralContext/Decisions/0010-lowercase-brand-name.md)), and the backend puts no
-character rule on them (`app/users/schemas.py`: `username: str`). In Segoe UI
+Usernames are shown exactly as typed ([ADR 0010](../../GeneralContext/Decisions/0010-lowercase-brand-name.md)). In Segoe UI
 and SF, `@Illini_1` and `@lllini_l` are almost indistinguishable at 16 px. That
 is an impersonation vector the typeface can't fix.
 
-**The fix belongs to the backend, and it is decided:** usernames follow
-Instagram's rule (1–30 ASCII letters, digits, `_` and `.`; no `..`; no trailing
-`.`), [ADR 0035](../../GeneralContext/Decisions/0035-outstanding-work-answers.md). It leaves `I` and `l` in
-play, so until it ships:
+**The backend now limits new usernames** to Instagram's rule (1–30 ASCII letters,
+digits, `_` and `.`; no `..`; no trailing `.`; `USERS-010`, [ADR 0035](../../GeneralContext/Decisions/0035-outstanding-work-answers.md)),
+which removes non-ASCII look-alikes. Names that existed before it are grandfathered
+([0x01c](../Modules/0x01c-users-routes.md)), and the rule leaves `I` and `l` in play, so the rest
+stays:
 
 - a username is always a link to the profile, so the profile, not the glyphs,
   is the identity check;

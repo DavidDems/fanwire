@@ -18,6 +18,7 @@ type: reference
 ### `users/`'s public read interface (for `feed/`, `search/`, etc.)
 Per the Connection rule, other modules never query the `User`/`Follow` tables directly — they call these typed functions in `app.users.service` instead:
 - `followed_user_ids(session, user_id) -> list[int]` — the ids `user_id` follows. Reused by `GET /users/me/following`.
+- `active_followed_user_ids(session, user_id) -> list[int]` — the ids of the active (non-soft-deleted) users `user_id` follows, one query (`Follow` joined to `User`). Read by `feed/`'s ranking strategy (`FEED-003`); `followed_user_ids` keeps every follow.
 - `get_public_profiles(session, user_ids: Collection[int]) -> dict[int, PublicProfile]` — batch lookup; `PublicProfile` is a frozen dataclass (`id, username, profile_picture_media_id, profile_avatar_key, profile_picture_key`). The key is exposed only for a processed profile picture. Soft-deleted users are silently excluded from the result (never surfaced past this module).
 - `account_created_at(session, user_id) -> datetime | None` (`POSTS-003`) — the account's creation time, `None` for an unknown or soft-deleted user (the same exclusion rule). `posts/`' spam scorer reads an author's account age through it, injected as a callable by `app.posts.dependencies`.
 - `search_users(session, query, *, limit, offset) -> list[User]` — prefix full-text search over `User.search_vector`, excluding soft-deleted users, backing `GET /search/accounts`; see [[0x07-search]] for the tsquery-building/injection-safety detail.

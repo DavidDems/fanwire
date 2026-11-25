@@ -216,3 +216,92 @@ describe("ProfileSetupPage", () => {
     expect(document.body.textContent ?? "").not.toContain(DATE_OF_BIRTH);
   });
 });
+
+/**
+ * FRONTEND-050 — the username rule (USERS-010) on the form.
+ *
+ * The server owns the rule and answers a username outside it with a 422 on
+ * `username`. The form does not copy the rule (no regex, `pattern` or
+ * `maxLength`): it states it as a standing hint, and puts the server's own
+ * `msg` on the field when the server refuses one.
+ */
+const USERNAME_HINT =
+  "1 to 30 letters, numbers, underscores or dots. No two dots in a row, and no dot at the end.";
+const USERNAME_RULE_MESSAGE =
+  "Use 1 to 30 letters, numbers, underscores or dots, with no two dots in a row and no dot at the end.";
+
+/** `POST /users` → 422 on `username`, as USERS-010's validator produces it, recording the body. */
+function rejectsUsername(): void {
+  server.use(
+    http.post("*/users", async ({ request }) => {
+      submitted = (await request.json()) as CreateUserRequest;
+      return HttpResponse.json(
+        {
+          detail: [
+            {
+              loc: ["body", "username"],
+              msg: USERNAME_RULE_MESSAGE,
+              type: "username_format",
+            },
+          ],
+        },
+        { status: 422 },
+      );
+    }),
+  );
+}
+
+describe("ProfileSetupPage: the username rule (FRONTEND-050)", () => {
+  it("states the username rule as a hint in the field's description before any submit", async () => {
+    renderProfileSetup();
+
+    const username = await screen.findByLabelText(/^username$/i);
+    expect(username.getAttribute("aria-describedby") ?? "").toContain(
+      "profile-username-hint",
+    );
+    expect(username).toHaveAccessibleDescription(USERNAME_HINT);
+    expect(username).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("puts the server's username 422 on the field, beside the hint, with no banner", async () => {
+    const user = userEvent.setup();
+    rejectsUsername();
+    renderProfileSetup();
+
+    await user.type(await screen.findByLabelText(/^username$/i), "bad-name.");
+    setDateOfBirth(DATE_OF_BIRTH);
+    await user.click(screen.getByRole("button", { name: /create profile/i }));
+
+    const username = await screen.findByLabelText(/^username$/i);
+    await screen.findByText(USERNAME_RULE_MESSAGE);
+    expect(username).toHaveAttribute("aria-invalid", "true");
+    expect(username).toHaveAccessibleDescription(
+      expect.stringContaining(USERNAME_RULE_MESSAGE),
+    );
+    expect(username).toHaveAccessibleDescription(
+      expect.stringContaining(USERNAME_HINT),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: /create your profile/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("feed stub")).toBeNull();
+  });
+
+  it("sends a rule-breaking username to the server rather than checking it itself", async () => {
+    const user = userEvent.setup();
+    rejectsUsername();
+    renderProfileSetup();
+
+    const username = await screen.findByLabelText(/^username$/i);
+    expect(username).not.toHaveAttribute("pattern");
+    expect(username).not.toHaveAttribute("maxlength");
+
+    await user.type(username, "bad-name.");
+    setDateOfBirth(DATE_OF_BIRTH);
+    await user.click(screen.getByRole("button", { name: /create profile/i }));
+
+    await screen.findByText(USERNAME_RULE_MESSAGE);
+    expect(submittedBody().username).toBe("bad-name.");
+  });
+});

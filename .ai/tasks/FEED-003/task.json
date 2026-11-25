@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "task_id": "FEED-003",
+  "objective": "A signed-in viewer whose every follow is a deactivated account gets the guest selection, as FEED-001 intended for a viewer who follows nobody, instead of a feed holding only their own posts.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged into the integration branch outstanding-track-4, and agent/FEED-003 is cut from its tip (after USERS-010 and FRONTEND-050 have merged).",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because FollowsAndPreferredTeamStrategy counts a deactivated followee in author_ids, so the viewer gets the follows query instead of GuestRecentStrategy's.",
+    "The red test is the backend feed query's: a viewer who follows only deactivated users (User.deleted_at set) gets from FollowsAndPreferredTeamStrategy.select_posts, and from GET /feed, exactly the posts GuestRecentStrategy returns for the same before_id and limit, in the same order, including posts by authors the viewer does not follow. A preferred team is ignored in that case, as it is for a viewer who follows nobody.",
+    "Active means not soft-deleted (User.deleted_at IS NULL), the same rule posts/' _live_author and users/' following_count already apply. A viewer with at least one active followee (beside any number of deactivated ones) keeps the follows-and-preferred-team feed, unchanged: their followees' posts, their own and their team's games' posts, and no post by an unrelated author.",
+    "When a deactivated followee recovers (deleted_at cleared), the viewer's next feed read is the follows feed again: nothing is cached or stored.",
+    "The read stays behind users/' public interface (0x00 Connection rule): feed/ calls a function in app.users.service that returns the ids of the active users a viewer follows (for example active_followed_user_ids), one query, no N+1; feed/ queries no users table. followed_user_ids and GET /users/me/following are unchanged (the follow button still knows about a deactivated followee).",
+    "Every existing test in backend/tests/feed/ and backend/tests/users/ stays green, unedited.",
+    "Proof: CI's backend-test (the gate job) is green; ruff and mypy are clean. No Alembic revision, no OpenAPI change.",
+    "wiki/CodeContext/Modules/0x06-feed.md 'Ranking strategy' says a viewer whose follows are all deactivated gets the guest selection, and names the users/ read that decides it; wiki/CodeContext/Modules/0x01-users.md lists the new function in the public read interface."
+  ],
+  "allowed_paths": [
+    "backend/app/feed/strategies.py",
+    "backend/app/users/service.py",
+    "backend/tests/**",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Modules/0x01-users.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/alembic/**",
+    "backend/app/posts/**",
+    "backend/app/users/models.py",
+    "backend/app/users/routes.py",
+    "backend/app/users/schemas.py",
+    "backend/openapi.json",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x06-feed.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "fastapi-module", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
