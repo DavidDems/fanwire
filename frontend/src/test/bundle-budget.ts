@@ -94,56 +94,60 @@ export interface UnitBudget {
 
 /**
  * The base, measured by this test's own build on the integration tip
- * 028b493 (vite 8, React 19), folding in FRONTEND-050, merged. The entry is
- * the entry chunk plus its static imports (`entryClosure`), nine chunks; its
- * CSS is `index.css` plus `InlineAlert.css`. One tree, so every number is its
- * single measurement. Earlier folds: 66fbb9b (FRONTEND-047, React 19, ADR
- * 0041, and FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527 (vite 7;
- * FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac (FRONTEND-031, 034,
- * 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at
- * 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99,
- * USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19. The entry, its
- * stylesheets, and every lazy output → gzip bytes. Measure with the test's
- * build, not `npm run build`: under Vitest the build inlines `test.env`'s
- * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
+ * 9ff6767 (vite 8, React 19), folding in FRONTEND-051 (the Cognito SDK
+ * loads lazily), merged. The entry is the entry chunk plus its static
+ * imports (`entryClosure`), ten chunks; its CSS is `index.css` plus
+ * `InlineAlert.css`. One tree, so every number is its single measurement.
+ * Earlier folds: 028b493 (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19,
+ * ADR 0041, and FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527
+ * (vite 7; FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac
+ * (FRONTEND-031, 034, 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013),
+ * FRONTEND-030 at 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008
+ * at b1dfa99, USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19. The
+ * entry, its stylesheets, and every lazy output → gzip bytes. Measure with
+ * the test's build, not `npm run build`: under Vitest the build inlines
+ * `test.env`'s `VITE_*` values, which makes the entry about 0.2 kB larger
+ * raw.
  */
 export const BASE = {
-  entryJsGzip: 172_741,
-  entryJsRaw: 554_756,
+  entryJsGzip: 147_059,
+  entryJsRaw: 465_471,
   entryCssGzip: 7_341,
   lazy: {
-    AccountSettings: 2_389,
+    AccountSettings: 2_401,
     "AuthPage.module": 139,
-    ComposePage: 3_856,
+    AuthService: 139,
+    CognitoAuthService: 26_421,
+    ComposePage: 3_865,
     ConfirmPage: 1_163,
-    errors: 231,
+    errors: 235,
     ForgotPasswordPage: 1_199,
     format: 490,
-    GameCard: 634,
+    GameCard: 637,
     GamePage: 3_885,
-    HistoryPage: 1_112,
-    NotificationsPage: 1_852,
+    HistoryPage: 1_115,
+    NotificationsPage: 1_849,
     ok: 140,
-    PeriodScores: 496,
-    PlayerPage: 3_854,
-    PlayerResults: 903,
-    PlayersTab: 641,
+    PeriodScores: 497,
+    PlayerPage: 3_855,
+    PlayerResults: 906,
+    PlayersTab: 639,
     ProfilePage: 2_909,
-    ProfileSetupPage: 1_596,
-    RecentGames: 784,
-    RecordsTab: 5_915,
-    SchedulePage: 2_282,
-    SeasonsTab: 1_762,
+    ProfileSetupPage: 1_597,
+    RecentGames: 786,
+    RecordsTab: 5_917,
+    SchedulePage: 2_285,
+    SeasonsTab: 1_763,
     SegmentedTabs: 726,
-    SignInPage: 1_097,
-    SignUpPage: 1_028,
+    SignInPage: 1_098,
+    SignUpPage: 1_030,
     stats: 697,
     "Stats.module": 529,
     "StatsNav.module": 504,
     StatsNavigator: 3_931,
     StatsPage: 429,
-    StatsPicker: 2_260,
-    useQueries: 1_506,
+    StatsPicker: 2_258,
+    useQueries: 1_507,
     VisuallyHidden: 155,
     "css:AccountSettings.css": 403,
     "css:AuthPage.css": 273,
