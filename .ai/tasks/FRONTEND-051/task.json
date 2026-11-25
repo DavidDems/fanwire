@@ -12,7 +12,7 @@
     "A failed load is not cached: while the loader's promise rejects, every call that waited on it rejects with that error; the next method call calls the loader again, and when that load succeeds, the call delegates and resolves. A test pins reject-then-retry-succeeds.",
     "An AuthError (or any rejection) thrown by the loaded service's method reaches the caller unchanged: the same object, not wrapped. A test pins this with an AuthError from the inner service.",
     "src/App.tsx stays the one place that chooses the implementation: it builds the service as new DeferredAuthService(() => import(\"./auth/CognitoAuthService\").then((m) => new m.CognitoAuthService())), has no static import of ./auth/CognitoAuthService, and hands that one instance unchanged to installTokenProvider and AuthProvider. App.tsx still names CognitoAuthService (auth/app-wiring.test.tsx checks it). CognitoAuthService.ts is unchanged and stays the only file importing the SDK (auth/sdk-isolation.test.ts).",
-    "Bundle: the test commit adds frontend/src/test/bundle-budgets/FRONTEND-051.ts declaring added: { CognitoAuthService: N }, where N is the new lazy chunk's measured gzip size rounded up to the next 100 B (expect about 26_500), and nothing else: the entry shrinking needs no declaration. bundle-budget.test.ts stays green and no budget is loosened. If any other lazy output appears, disappears or moves past tolerance, stop and record it.",
+    "Bundle: the test commit adds frontend/src/test/bundle-budgets/FRONTEND-051.ts declaring added: { CognitoAuthService: N, AuthService: 200 }, where N is the new lazy chunk's measured gzip size rounded up to the next 100 B (expect about 26_500), and nothing else: the entry shrinking needs no declaration. AuthService is src/auth/AuthService.ts (the AuthError class), about 139 B gzip, which leaves the entry once nothing there imports it as code and becomes a chunk shared by the auth pages, AccountSettings and the Cognito chunk (Director's amendment after the unit measured it). bundle-budget.test.ts stays green and no budget is loosened. If any other lazy output appears, disappears or moves past tolerance, stop and record it.",
     "Optional: a structural check that the built entry closure holds no amazon-cognito-identity-js code. If added, it goes in the unit's own new file frontend/src/auth/cognito-lazy.test.ts in the test commit, not in bundle-budget.test.ts.",
     "Unchanged: every existing test, untouched and green; CognitoAuthService.ts, tokenProvider.ts, AuthContext.tsx, vite.config.ts and bundle-budget.ts. The define: { global: \"globalThis\" } in vite.config.ts covers the new lazy chunk (bundle-budget.test.ts's bare-global check scans every chunk and stays green).",
     "Proof: the entry's raw and gzip size after the unit, measured with the test's build, is recorded in the PR (expect about 464 kB raw, 147 kB gzip). npm run lint reports 0 problems; npm run typecheck and npm run build are green. The suite is run in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2).",
@@ -52,7 +52,10 @@
     "wiki/CodeContext/Modules/0x08b-frontend-auth.md",
     "wiki/CodeContext/Standards/design-principles.md"
   ],
-  "required_skills": ["frontend-unit", "git-workflow"],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
   "workflow_policy": {
     "max_impl_attempts": 3,
     "require_red_baseline": true,

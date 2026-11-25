@@ -82,3 +82,12 @@ deferred service unchanged. Pages, hooks and guards still see only `AuthService`
   the SDK loads, so browser-check sign-in after the change, not only the cold feed.
 - Don't touch `CognitoAuthService.ts`, `tokenProvider.ts` or `AuthContext.tsx`. If the
   deferred service can't be made to fit them unchanged, stop and report.
+
+## Amendment (Director, after the unit measured)
+
+The split also makes `src/auth/AuthService.ts` (the `AuthError` class, about 139 B gzip) a
+lazy chunk of its own: once `CognitoAuthService` is no longer static, nothing in the entry
+imports it as code, so Rolldown shares it between the auth pages, `AccountSettings` and the
+Cognito chunk. That is the split working, not a leak, so the unit declares it too:
+`added: { CognitoAuthService: N, AuthService: 200 }`. Pinning it back into the entry with
+an import that exists only for that would be the hack.
