@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-057",
+  "objective": "Size the phone shell's scroll-padding-bottom from the bottom bar it clears: calc(var(--target-min) + 1px + var(--space-2) + env(safe-area-inset-bottom)), the bar's own row and edge plus the same space-2 allowance scroll-padding-top gives the header, instead of the space-8 + space-2 sized for the two-line bar FRONTEND-035 removed; pinned by the bar's geometry so the two cannot drift apart.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-057 is cut from the tip of the integration branch outstanding-track-5 after FRONTEND-056 merged. The two units write no path in common.",
+    "The geometry, from the CSS at 3084e22 (the Director's; brief.md has the history): the bar is one row of .link cells, min-height var(--target-min) (2.75rem, 44 px; the 24 px icon plus 2 x space-2 padding is 40 px, under it), plus .nav's 1 px border-top edge, plus env(safe-area-inset-bottom): 45 px and the safe area. A focused control's ring is base.css's :focus-visible outline, 2 px wide at a 2 px offset: it reaches 4 px past the control's box. So the least that clears the bar is 49 px and the safe area. Today's value is var(--space-8) + var(--space-2), 72 px and the safe area: sized when the bar's labels could wrap to two lines (FRONTEND-027 measured a 69.8 px bar, so 72 px left a ring about 3 to 5 px short: the backlog's \"about 5 px short\"); FRONTEND-035 made the bar icons only and kept the number, so today it is 23 px more than the bar needs. The corrected value is the bar plus var(--space-2): 53 px and the safe area, leaving 4 px between the ring and the bar's top edge, as scroll-padding-top (var(--target-min) + 3 * var(--space-2)) leaves over the 60 px header.",
+    "Test-first: commit the failing tests alone before the implementation. The red reason is that :global(html)'s scroll-padding-bottom is still calc(var(--space-8) + var(--space-2) + env(safe-area-inset-bottom)), 72 px, not the bar's 45 px plus space-2.",
+    "frontend/src/routes/shell-css.test.ts, describe \"the bottom bar and the header's room\": the existing test \"sizes scroll-padding-bottom for the bar's two-line height, and 0 from 40em\" changes, because it pins the old string and the bar has had no second line since FRONTEND-035. It becomes \"sizes scroll-padding-bottom from the bar's tokens plus space-2, and 0 from 40em\" and expects, whitespace out, calc(var(--target-min)+1px+var(--space-2)+env(safe-area-inset-bottom)); its 0 from 40em half is unchanged. One test is added beside it, \"clears the bar and the focus ring, by no more than space-2\": with lengthInRem and shorthandParts (test/compose-modal, as floating-clearance.test.ts uses them; env() taken as 0) it reads the bar as the top-level .link rule's min-height plus the first part of the top-level .nav rule's border-top, the ring as the first part of styles/base.css's top-level :focus-visible outline plus its outline-offset, and scroll-padding-bottom from the top-level :global(html) rule, and asserts bar + ring <= scroll-padding-bottom <= bar + var(--space-2) (resolved). Today it reads 44 + 1 and 2 + 2 against 72 px and is red on the upper bound; after, 53 px is inside both. The test \"does not call the bar under space-8 tall in the comment at the top\" and every other test stay as they are.",
+    "AppLayout.module.css: the top-level :global(html) rule's scroll-padding-bottom is calc(var(--target-min) + 1px + var(--space-2) + env(safe-area-inset-bottom)), as Prettier formats it; scroll-padding-top and the 40em rule's scroll-padding-bottom: 0 are unchanged. The file's top comment replaces \"about 45 px, which scroll-padding-bottom (space-8 + space-2, 72 px) clears\" with the derivation: the bar is target-min plus its 1 px edge and the safe area, and scroll-padding-bottom is that plus space-2, room for the 4 px focus ring, as scroll-padding-top is the header plus space-2 (FRONTEND-057). Nothing else in the file changes: main's bottom padding, the bar, the + offsets and FloatingButton.module.css are not this unit's.",
+    "Existing tests other than the one named stay untouched and green, including floating-clearance.test.ts, sidebar-nav.test.tsx and AppLayout.test.tsx.",
+    "Bundle: no bundle-budgets file. The Director's prototype of this value (measured together with FRONTEND-056's HomeView change against BASE refolded at 3084e22) moved the entry CSS +7 B gzip and the entry JS not at all; every lazy output moved by 3 B or less. All inside the 100 B tolerance, so nothing is declared. If the finished implementation moves any output past the tolerance, or adds or removes one, stop and report. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths.",
+    "Module docs: wiki/CodeContext/Modules/0x08k-frontend-account.md's \"The shell's shape\" bullet (the shell's record; 0x08a has no scroll-padding line) replaces \"`scroll-padding-bottom` stays `--space-8` + `--space-2` on phones\" with: on phones scroll-padding-bottom is the bar (`--target-min` plus its 1 px edge and the safe area) plus `--space-2`, 53 px, which clears the 4 px focus ring (FRONTEND-057).",
+    "Browser check (the Director's, after merge; not the unit's): at 360 px wide, Tab to a control just above the bottom bar (e.g. a card's action row scrolled into view by Tab) and measure the gap between the control's focus outline and the bar's top edge: at least 0 (about 4 px expected), in light and dark, and with the floating + present, record whether the focused control sits under the + (see brief.md)."
+  ],
+  "allowed_paths": [
+    "frontend/src/routes/AppLayout.module.css",
+    "frontend/src/routes/shell-css.test.ts",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/styles/**",
+    "frontend/src/test/**",
+    "frontend/src/components/**",
+    "frontend/src/features/**",
+    "frontend/src/routes/AppLayout.tsx",
+    "frontend/src/routes/HomeView.tsx",
+    "frontend/src/routes/HomeView.module.css",
+    "frontend/src/routes/floating-clearance.test.ts",
+    "wiki/CodeContext/Modules/0x08h-frontend-search-games.md"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md",
+    "wiki/CodeContext/FrontendUI/layout.md",
+    "wiki/CodeContext/FrontendUI/accessibility.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
