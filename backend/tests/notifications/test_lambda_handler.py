@@ -48,7 +48,6 @@ def _wire_env_and_caches(monkeypatch, postgres_url):
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     monkeypatch.setenv("COGNITO_REGION", "us-east-1")
     monkeypatch.delenv("NOTIFICATION_FROM_ADDRESS", raising=False)
-    monkeypatch.delenv("AWS_ENDPOINT_URL_DYNAMODB", raising=False)
     monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
     get_settings.cache_clear()
     app_dependencies._get_session_factory.cache_clear()

@@ -4,7 +4,6 @@
 #   - a real Postgres to run integration tests against (matching RDS, not
 #     an in-memory substitute), per wiki/CodeContext/Standards/design-principles.md testing
 #     pyramid guidance
-#   - a local DynamoDB for the idempotency-key / live-score-cache tables
 #   - one-shot test runners for backend and frontend, same images CI builds
 #   - `backend-dev`: a real, clickable local backend (Phase 4) so the
 #     frontend can be exercised in an actual browser, not just against
@@ -27,12 +26,6 @@ services:
       timeout: 5s
       retries: 5
 
-  dynamodb-local:
-    image: amazon/dynamodb-local:latest
-    command: ["-jar", "DynamoDBLocal.jar", "-inMemory"]
-    ports:
-      - "${DYNAMODB_HOST_PORT:-8000}:8000"
-
   backend-test:
     # A stable tag rather than the generated `fanwire-backend-test` name.
     # Compose reuses an image with this tag instead of rebuilding, which is
@@ -47,11 +40,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      dynamodb-local:
-        condition: service_started
     environment:
       DATABASE_URL: postgresql+psycopg://fanwire:fanwire@postgres:5432/fanwire
-      AWS_ENDPOINT_URL_DYNAMODB: http://dynamodb-local:8000
       AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local

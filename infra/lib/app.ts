@@ -48,7 +48,7 @@ export function buildFanwire(app: cdk.App): FanwireConfig {
   const data = new DataStack(app, STACK_NAMES.data, {
     env,
     network,
-    description: 'fanwire: CMK, RDS Postgres, DynamoDB tables, Secrets Manager secrets',
+    description: 'fanwire: CMK, RDS Postgres, Secrets Manager secrets',
   });
 
   const auth = new AuthStack(app, STACK_NAMES.auth, {

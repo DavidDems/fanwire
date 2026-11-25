@@ -62,7 +62,7 @@ OBSERVABLE_VERBS = frozenset(
     makes make clears clear persists persist appears appear disables disabled enables
     enabled succeeds succeed validates validate navigates navigate touches touch adds add added commit commits pin pins keeps
     keep distinguishes distinguish changes change merged merges identical proves prove
-    holds hold""".split()
+    holds hold invoke invokes invoked exist exists proof""".split()
 )
 
 _ANCHOR_RES = (

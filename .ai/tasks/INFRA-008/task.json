@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-008",
+  "objective": "Every VPC-attached backend function's inline policy gains a Deny on the six ENI actions, conditioned on lambda:SourceFunctionArn, so the function's own code cannot call them while the Lambda service still can (AWS Lambda guide, \"Giving Lambda functions access to resources in an Amazon VPC\" -> required IAM permissions, which recommends this deny).",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged, and the branch is cut from a main that holds it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because no Deny statement exists on any backend function policy.",
+    "backendFunction in infra/lib/app-stack.ts adds, only when the function is in the VPC, a statement with Sid DenyVpcNetworkInterfacesFromFunctionCode, Effect Deny, exactly the same six actions as the VpcNetworkInterfaces statement (ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, ec2:DescribeSubnets, ec2:DeleteNetworkInterface, ec2:AssignPrivateIpAddresses, ec2:UnassignPrivateIpAddresses), Resource \"*\".",
+    "That Deny's Condition is ArnLike on lambda:SourceFunctionArn = arn:<partition>:lambda:<region>:<account>:function:<stackName>-*, built from the stack's own partition, region, account and stackName tokens (the stack is Fanwire-App), never a hard-coded account id or region. A test asserts the synthesized condition value.",
+    "The Api, Media, Notifications, AccountDeletion, Migration and SportsDataLoad policies each hold both the VpcNetworkInterfaces Allow and the new Deny. The SportsDataRefresh policy (outsideVpc) and the OriginVerifyAuthorizer policy hold neither.",
+    "The existing VpcNetworkInterfaces Allow statement is unchanged: same Sid, Effect, six actions and Resource \"*\".",
+    "A test asserts that no backend function in Fanwire-App sets an explicit FunctionName, so CloudFormation's generated names keep the Fanwire-App- prefix the condition relies on (live names verified 2026-11-24: Fanwire-App-ApiF70053CD-..., Fanwire-App-MediaA721A567-..., Fanwire-App-Notifications87298708-..., Fanwire-App-AccountDeletionAB9EBB6B-..., Fanwire-App-MigrationC13A4580-..., Fanwire-App-SportsDataLoad2ADE39DD-...).",
+    "infra/test/iam-policy.test.ts: the lambda-vpc-eni entry still matches the Allow, and matches a Deny with those actions only when the Deny carries the lambda:SourceFunctionArn condition (a hygiene test feeds a Deny without the condition and asserts no entry matches it). The entry's reason mentions the deny.",
+    "The IAM gate passes in every domain mode, and allow-list hygiene ('every allow-list entry is still needed', 'the walker flags a wildcard it has not been told about') still passes.",
+    "No other statement, environment variable, trigger or resource changes. infra/iam/** is unchanged: an inline policy document edit needs no new CloudFormation execution permission.",
+    "The PR body carries the expected cdk diff: Fanwire-App only, six AWS::IAM::Policy resources modified (the Api, Media, Notifications, AccountDeletion, Migration and SportsDataLoad policies; the implementer confirms the list from synth), each gaining exactly one Deny statement. No other stack changes; no resource added, removed or replaced.",
+    "The PR body's manual steps, after the deploy: a signed-in GET /api/users/me returns 200 (the Api function still gets its ENIs and egress), and no backend function's log group shows an AccessDenied on an ec2: action.",
+    "npm run build, npm run lint, npm test -- --maxWorkers=2 and npm run synth pass in infra/. Nobody runs cdk deploy.",
+    "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md's lambda-vpc-eni entry states the deny is implemented, removes 'Not implemented; it is in TODO/02-backlog.md', and counts six VPC-attached functions (Api, Media, Notifications, AccountDeletion, Migration, SportsDataLoad), naming SportsDataRefresh and the origin-verify authorizer as outside the VPC."
+  ],
+  "allowed_paths": [
+    "infra/lib/app-stack.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "backend/**",
+    "frontend/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/aws-stack.md"
+  ],
+  "required_skills": ["infra-cdk", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

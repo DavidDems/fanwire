@@ -257,4 +257,8 @@ class Report(Base):
         # One report per user per post; re-submitting is a service-layer
         # no-op, not a duplicate row.
         UniqueConstraint("post_id", "reporter_id", name="uq_reports_post_reporter"),
+        # app.posts.moderation.ReportCountRateLimiter (POSTS-010) counts one
+        # user's recent reports; the unique constraint leads with post_id,
+        # so it cannot serve that range scan.
+        Index("ix_reports_reporter_id_created_at", "reporter_id", "created_at"),
     )

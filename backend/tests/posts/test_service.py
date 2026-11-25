@@ -19,6 +19,7 @@ from sqlalchemy import select
 from app.db import Base, make_engine, make_session_factory
 from app.eventbus import InMemoryEventPublisher, PostEventBus
 from app.posts.models import Post, PostLike, Report
+from app.posts.moderation import FakeRateLimiter
 from app.posts.service import (
     POST_REPORTED,
     AlreadyLikedError,
@@ -29,6 +30,10 @@ from app.posts.service import (
     unlike_post,
 )
 from app.users.models import User
+
+# report_post takes the reporter's rate limiter (POSTS-010); these tests are
+# about everything else, so it always allows.
+_ALLOW = FakeRateLimiter(True)
 
 
 @pytest.fixture()
@@ -71,7 +76,9 @@ def test_report_post_first_report_sets_reported_and_publishes(session_factory):
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
 
-        result = report_post(session, bus, post_id=post.id, reporter_id=reporter.id)
+        result = report_post(
+            session, bus, post_id=post.id, reporter_id=reporter.id, rate_limiter=_ALLOW
+        )
 
         assert result is not None
         fetched_post = session.scalar(select(Post).where(Post.id == post.id))
@@ -91,9 +98,11 @@ def test_report_post_duplicate_is_a_no_op(session_factory):
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        report_post(session, bus, post_id=post.id, reporter_id=reporter.id)
+        report_post(session, bus, post_id=post.id, reporter_id=reporter.id, rate_limiter=_ALLOW)
 
-        result = report_post(session, bus, post_id=post.id, reporter_id=reporter.id)
+        result = report_post(
+            session, bus, post_id=post.id, reporter_id=reporter.id, rate_limiter=_ALLOW
+        )
 
         assert result is None
         event_names = [e.name for e in publisher.published]
@@ -118,9 +127,11 @@ def test_report_post_second_different_reporter_still_creates_row_and_publishes(
 
         publisher = InMemoryEventPublisher()
         bus = PostEventBus(publisher)
-        report_post(session, bus, post_id=post.id, reporter_id=reporter_one.id)
+        report_post(session, bus, post_id=post.id, reporter_id=reporter_one.id, rate_limiter=_ALLOW)
 
-        result = report_post(session, bus, post_id=post.id, reporter_id=reporter_two.id)
+        result = report_post(
+            session, bus, post_id=post.id, reporter_id=reporter_two.id, rate_limiter=_ALLOW
+        )
 
         assert result is not None
         event_names = [e.name for e in publisher.published]
@@ -140,7 +151,7 @@ def test_report_post_raises_for_nonexistent_post(session_factory):
         bus = PostEventBus(publisher)
 
         with pytest.raises(PostNotFoundError):
-            report_post(session, bus, post_id=999_999, reporter_id=reporter.id)
+            report_post(session, bus, post_id=999_999, reporter_id=reporter.id, rate_limiter=_ALLOW)
 
 
 # --- like_post / unlike_post ---

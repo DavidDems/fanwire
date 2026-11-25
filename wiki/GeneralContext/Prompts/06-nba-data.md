@@ -111,13 +111,13 @@ the first 2026-27 games). Facts every loader relies on:
 
 ## Open work
 
-1. **The API-SPORTS infra clean-up** (`TODO/02-backlog.md` "Sports data",
-   first row): delete the idempotency and live-score tables, the API-SPORTS
-   secret, the ingestion-retry queue and DLQ, and their exports. It needs a
-   spec (Director PR). Two resources are `RETAIN` (`IdempotencyTable` and
-   `ApiSportsKey`); the human decided to delete both, by hand after the deploy
+1. **The API-SPORTS infra clean-up**: delete the idempotency and live-score
+   tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their
+   exports. It is the phase-2 PR (branch `outstanding-track-3-phase-2`), merged
+   into `main` only after Outstanding-work track 3's deploy is green. Two
+   resources are `RETAIN` (`IdempotencyTable` and `ApiSportsKey`); the human
+   decided to delete both, by hand after that PR's deploy
    ([ADR 0035](../Decisions/0035-outstanding-work-answers.md), `TODO/01-for-you.md`).
-   Outstanding-work track 3.
 2. **Later, not planned:** seasons before 2003-04 (needs historical teams),
    player mentions in posts, following players or teams, and the NBA's
    standings tie-breakers (`EVENTS-007` orders by win percentage, wins,

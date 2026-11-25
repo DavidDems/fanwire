@@ -171,6 +171,8 @@ class TestObservableCriteria:
             'The page shows the heading "Reset password".',
             "backend/app/users/service.py rejects a blank display name.",
             "Unknown tokens are rejected with a 401.",
+            "CI's backend-test is the proof (local testcontainers cannot start); ruff check and mypy app are clean.",
+            "The PR body's manual steps: after the deploy, invoke the Migration Lambda once so the two indexes exist.",
         ],
     )
     def test_a_criterion_with_an_anchor_is_accepted(self, criterion):

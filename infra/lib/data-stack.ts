@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -14,21 +13,15 @@ export interface DataStackProps extends cdk.StackProps {
 
 /**
  * Stateful, rarely-changing resources: the one customer-managed KMS key,
- * RDS Postgres (system of record), the two DynamoDB tables, and the
- * secrets. Kept apart from compute so a routine app deploy never touches
- * (or risks replacing) anything holding data.
+ * RDS Postgres (system of record), and the secrets. Kept apart from compute
+ * so a routine app deploy never touches (or risks replacing) anything
+ * holding data.
  */
 export class DataStack extends cdk.Stack {
   /** The one CMK (security.md "Data protection"). */
   readonly key: kms.Key;
   readonly database: rds.DatabaseInstance;
   readonly databaseSecret: secretsmanager.ISecret;
-  /** No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
-  readonly idempotencyTable: dynamodb.Table;
-  /** No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
-  readonly liveScoreCacheTable: dynamodb.Table;
-  /** API-SPORTS key. No consumer since EVENTS-003; kept and exported until a later infra unit removes it. */
-  readonly apiSportsSecret: secretsmanager.Secret;
   /** Shared secret CloudFront sends to the API origin; see AppStack's origin-verify authorizer. */
   readonly originVerifySecret: secretsmanager.Secret;
   /** Kaggle API token for the daily dataset refresh (EVENTS-008); set by hand, read by SportsDataRefresh only. */
@@ -80,49 +73,6 @@ export class DataStack extends cdk.Stack {
       enablePerformanceInsights: false,
     });
     this.databaseSecret = this.database.secret!;
-
-    this.idempotencyTable = new dynamodb.Table(this, 'IdempotencyTable', {
-      // aws-lambda-powertools Idempotency's default schema.
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      timeToLiveAttribute: 'expiration',
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: keyRef,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
-
-    this.liveScoreCacheTable = new dynamodb.Table(this, 'LiveScoreCacheTable', {
-      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
-      timeToLiveAttribute: 'expires_at',
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: keyRef,
-      // Disposable cache (aws-stack.md "Data"): not a source of truth.
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    this.apiSportsSecret = new secretsmanager.Secret(this, 'ApiSportsKey', {
-      description:
-        'API-SPORTS (api-sports.io) API key. Created with a random placeholder; a human sets the real key with ' +
-        '`aws secretsmanager put-secret-value`. Readable by the ingestion Lambda role only.',
-      encryptionKey: keyRef,
-      generateSecretString: { passwordLength: 32, excludePunctuation: true },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
-
-    // The export trap (EVENTS-003). The deployed Fanwire-App still imports
-    // these five values; the new App no longer does, so CDK would stop
-    // generating their exports, and the deploy would update this stack first
-    // and fail deleting an export that is still in use. Exporting the same
-    // tokens explicitly keeps each Output's logical id and export name
-    // identical (e.g. `Fanwire-Data:ExportsOutputFnGetAttIdempotencyTable22A5A209Arn796E3A97`).
-    // A later infra unit removes the resources and these exports once the
-    // App stack without the imports is deployed.
-    this.exportValue(this.idempotencyTable.tableArn);
-    this.exportValue(this.liveScoreCacheTable.tableArn);
-    this.exportValue(this.apiSportsSecret.secretArn);
-    this.exportValue(this.idempotencyTable.tableName);
-    this.exportValue(this.liveScoreCacheTable.tableName);
 
     this.originVerifySecret = new secretsmanager.Secret(this, 'OriginVerify', {
       description:
