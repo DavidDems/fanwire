@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "task_id": "USERS-010",
+  "objective": "New usernames follow the human's rule (ADR 0035): 1 to 30 ASCII letters, digits, underscores and dots, starting with a letter, digit or underscore, with no two dots in a row and no trailing dot. POST /users enforces it with one clear 422 on username; existing names that break it are grandfathered (every read and every other write still accepts them, and nobody is renamed).",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged into the integration branch outstanding-track-4, and the unit's branch agent/USERS-010 is cut from its tip.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because CreateUserRequest.username is a bare str that accepts every value.",
+    "The rule is the pattern ^(?!.*\\.\\.)(?!.*\\.$)\\w[\\w.]{0,29}$ compiled once at module level with re.ASCII and applied with fullmatch (no re.MULTILINE, no search/match). It lives in app/users/schemas.py as a field_validator on CreateUserRequest.username, not as Field(pattern=...): pydantic's default Rust regex engine has no lookaround.",
+    "Accepted by POST /users (201, stored exactly as sent, no case folding, ADR 0010): a, _, 9, raptors_fan, Raptors.Fan, a.b.c, a 30-character name, 1a, _a.",
+    "Rejected by POST /users with 422 before create_user runs, detail[].loc ending in username: an empty string, a 31-character name, a leading dot (.a), a trailing dot (a.), two dots (a..b), a hyphen (a-b), a space (a b), an @ (a@b), a non-ASCII letter (élise, ıllini with a dotless i), a full-width letter, a trailing newline (abc followed by a newline), an embedded newline (abc, newline, def), a leading or trailing space. No row is written for any of them.",
+    "The 422's msg for a username that breaks the rule is exactly: Use 1 to 30 letters, numbers, underscores or dots, with no two dots in a row and no dot at the end. Raised as pydantic_core.PydanticCustomError (type username_format) so the msg carries no 'Value error, ' prefix; the frontend shows it verbatim (FRONTEND-050).",
+    "Grandfathering: PublicUserOut.username and MeOut.username stay bare str. A User row whose username breaks the rule (inserted directly, as an old row would be) is returned unchanged by GET /users/{id} and GET /users/me, appears in GET /search/accounts and in feed PostView.author.username, can still PATCH /users/me (username is not a field of UpdateMeRequest and stays that way), follow and be followed. No migration, no CHECK constraint, no backfill, no rename.",
+    "Uniqueness and case are unchanged: the existing case-sensitive UNIQUE(username) stays the only uniqueness rule, and a duplicate still answers the existing generic 409.",
+    "Proof: CI's backend-test (the gate job) is green; ruff and mypy are clean. backend/openapi.json is regenerated and committed if the schema output changed (a field_validator alone does not change it; if it is unchanged, say so in the PR).",
+    "No new dependency, no Alembic revision, no change outside the allowed paths.",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md states the rule, where it is enforced, the exact 422 msg and the grandfathering, in the POST /users bullet."
+  ],
+  "allowed_paths": [
+    "backend/app/users/schemas.py",
+    "backend/openapi.json",
+    "backend/tests/**",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/alembic/**",
+    "backend/app/users/models.py",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "fastapi-module", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
