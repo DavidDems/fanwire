@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "task_id": "INFRA-009",
+  "objective": "A GuardDuty finding of severity 4 or more (Medium, High and Critical) in fanwire-workload is emailed through the existing AlarmTopic, by one same-account EventBridge rule on the default event bus whose only target is that topic.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged into outstanding-track-3-followups, and the branch is cut from an outstanding-track-3-followups that holds it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because Fanwire-Messaging has no rule whose pattern names detail-type \"GuardDuty Finding\".",
+    "Fanwire-Messaging adds exactly one AWS::Events::Rule with logical id prefix GuardDutyFindingRule, on the default event bus (no EventBusName property), State ENABLED, whose EventPattern equals {\"source\": [\"aws.guardduty\"], \"detail-type\": [\"GuardDuty Finding\"], \"detail\": {\"severity\": [{\"numeric\": [\">=\", 4]}]}}. A test asserts that exact pattern.",
+    "The rule has exactly one target: Arn is the AlarmTopic's Ref, no RoleArn, and an InputTransformer whose InputPathsMap reads $.detail.severity, $.detail.type, $.detail.title, $.account, $.region and $.detail.id, and whose InputTemplate contains each of those six placeholders and the word GuardDuty. A test asserts the target.",
+    "The AlarmTopic's AWS::SNS::TopicPolicy gains one statement, Sid AllowEventBridgeGuardDutyFindings: Effect Allow, Principal Service events.amazonaws.com, Action sns:Publish, Resource the AlarmTopic's Ref, Condition ArnEquals aws:SourceArn = the rule's Arn (Fn::GetAtt). A test asserts it, and asserts AllowCloudWatchAlarms is unchanged.",
+    "No statement in the topic policy grants sns:Publish to events.amazonaws.com without that aws:SourceArn condition (the stock targets.SnsTopic grant has none, so it is not used). A test asserts it.",
+    "EXPECTED_ALARM_COUNT in infra/test/alarms.test.ts stays 25: a rule is not a CloudWatch alarm.",
+    "The existing MalwareScanResultRule and NotificationRule, their targets and the queue policies are unchanged.",
+    "The IAM gate (infra/test/iam-policy.test.ts) passes in every domain mode with no new ALLOW_LIST entry. infra/iam/** is unchanged: the CloudFormation execution role already holds events:* and sns:*.",
+    "The PR body carries the expected cdk diff: Fanwire-Messaging only, one AWS::Events::Rule added and the alarm topic's AWS::SNS::TopicPolicy modified. No other stack changes; no resource removed or replaced.",
+    "The PR body's manual steps, after the deploy: the human creates one sample finding of one High type in the workload detector 62d0584d4d193d4f24a7a4a5f375baa2 (aws guardduty create-sample-findings --finding-types UnauthorizedAccess:EC2/TorClient, never without --finding-types, which creates one of every type), and an email reaches the alarm topic's subscriber within 15 minutes. It names the rollback: if create-sample-findings is refused or no email arrives while the rule's TriggeredRules metric stays 0, the rule is removed in a follow-up PR and the finding recorded in the inventory.",
+    "npm run build, npm run lint, npm test -- --maxWorkers=2 and npm run synth pass in infra/. Nobody runs cdk deploy.",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md's \"Alarms\" section names the GuardDuty findings rule, its severity floor of 4, that it emails through the same topic, and that it is not counted in EXPECTED_ALARM_COUNT."
+  ],
+  "allowed_paths": [
+    "infra/lib/messaging-stack.ts",
+    "infra/test/**",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/iam/**",
+    "infra/package.json",
+    "infra/package-lock.json",
+    "infra/cdk.json",
+    "backend/**",
+    "frontend/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00a-architecture-infra.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/aws-stack.md"
+  ],
+  "required_skills": ["infra-cdk", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
