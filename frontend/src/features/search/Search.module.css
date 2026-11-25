@@ -20,22 +20,6 @@
   gap: var(--space-3);
 }
 
-/*
- * The bar: the labelled box over a full-width Search button, at every width.
- * Field owns its own layout (components-map-posts.md §5), so the box and button are not
- * put in a row: that would need a rule on Field's wrapper. Only the box's
- * width and the space above the button are set here.
- */
-.bar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.bar input {
-  width: 100%;
-}
-
 /* A list inside one card: no bullets or indent; the card's padding frames it. */
 .list {
   margin: 0;

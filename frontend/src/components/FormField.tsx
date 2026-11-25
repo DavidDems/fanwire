@@ -60,16 +60,62 @@ export interface FieldProps {
    * rather than sitting there unreferenced.
    */
   hintText?: ReactNode;
+  /**
+   * How the label and the control sit (`components-map-posts.md` §5: `Field`
+   * owns its own layout):
+   * - `stack` (the default): the label over the control, then the hint and
+   *   the error.
+   * - `checkbox`: the box before its label on one line, in DOM order too, so
+   *   reading and tab order match the screen; the hint and the error each on
+   *   a line of their own under it. The box is a direct child of the root.
+   * - `row`: the label, then the control and one trailing action side by
+   *   side, the control taking the room.
+   */
+  layout?: FieldLayout;
   children: ReactNode;
 }
 
-export function Field({ id, label, error, hintText, children }: FieldProps) {
+export type FieldLayout = "stack" | "checkbox" | "row";
+
+const LAYOUT_CLASS: Record<FieldLayout, string | undefined> = {
+  stack: undefined,
+  checkbox: styles.checkbox,
+  row: styles.row,
+};
+
+export function Field({
+  id,
+  label,
+  error,
+  hintText,
+  layout = "stack",
+  children,
+}: FieldProps) {
+  const layoutClass = LAYOUT_CLASS[layout];
+  const labelElement = (
+    <label htmlFor={id} className={styles.label}>
+      {label}
+    </label>
+  );
   return (
-    <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>
-        {label}
-      </label>
-      {children}
+    <div
+      className={
+        layoutClass === undefined
+          ? styles.field
+          : `${styles.field} ${layoutClass}`
+      }
+    >
+      {layout === "checkbox" ? (
+        <>
+          {children}
+          {labelElement}
+        </>
+      ) : (
+        <>
+          {labelElement}
+          {children}
+        </>
+      )}
       {hintText === undefined ? null : (
         <p id={`${id}-hint`} className={styles.hint}>
           {hintText}

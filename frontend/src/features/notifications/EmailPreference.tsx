@@ -139,6 +139,7 @@ export function EmailPreference() {
       <Field
         id={EMAIL_FIELD_ID}
         label="Email me about new notifications"
+        layout="checkbox"
         {...(available ? {} : { hintText: EMAIL_UNAVAILABLE })}
       >
         <input
