@@ -94,59 +94,60 @@ export interface UnitBudget {
 
 /**
  * The base, measured by this test's own build on the integration tip
- * 9ff6767 (vite 8, React 19), folding in FRONTEND-051 (the Cognito SDK
- * loads lazily), merged. The entry is the entry chunk plus its static
- * imports (`entryClosure`), ten chunks; its CSS is `index.css` plus
- * `InlineAlert.css`. One tree, so every number is its single measurement.
- * Earlier folds: 028b493 (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19,
- * ADR 0041, and FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527
- * (vite 7; FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac
- * (FRONTEND-031, 034, 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013),
- * FRONTEND-030 at 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008
- * at b1dfa99, USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19. The
- * entry, its stylesheets, and every lazy output → gzip bytes. Measure with
- * the test's build, not `npm run build`: under Vitest the build inlines
- * `test.env`'s `VITE_*` values, which makes the entry about 0.2 kB larger
- * raw.
+ * b8d1299 (vite 8, React 19), folding in FRONTEND-052 (the frontend
+ * tidy-ups; the shared `ScrollTable` becomes a lazy chunk), merged. The
+ * entry is the entry chunk plus its static imports (`entryClosure`), eleven
+ * chunks; its CSS is `index.css` plus `InlineAlert.css`. One tree, so every
+ * number is its single measurement. Earlier folds: 9ff6767 (FRONTEND-051),
+ * 028b493 (FRONTEND-050), 66fbb9b (FRONTEND-047, React 19, ADR 0041, and
+ * FRONTEND-048), a777aae (vite 8; FRONTEND-046), 85e3527 (vite 7;
+ * FRONTEND-037, 040, 043 and 044, USERS-008), 2e29dac (FRONTEND-031, 034,
+ * 035, 036, 038 and 039, USERS-006 and 007, EVENTS-013), FRONTEND-030 at
+ * 9d0012f, EVENTS-012 at 4d714ef, EVENTS-011 and POSTS-008 at b1dfa99,
+ * USERS-004 and FRONTEND-023, 024, 026 and 027 at 4795f19. The entry, its
+ * stylesheets, and every lazy output → gzip bytes. Measure with the test's
+ * build, not `npm run build`: under Vitest the build inlines `test.env`'s
+ * `VITE_*` values, which makes the entry about 0.2 kB larger raw.
  */
 export const BASE = {
-  entryJsGzip: 147_059,
-  entryJsRaw: 465_471,
-  entryCssGzip: 7_341,
+  entryJsGzip: 147_135,
+  entryJsRaw: 465_466,
+  entryCssGzip: 7_348,
   lazy: {
-    AccountSettings: 2_401,
+    AccountSettings: 2_403,
     "AuthPage.module": 139,
     AuthService: 139,
     CognitoAuthService: 26_421,
-    ComposePage: 3_865,
+    ComposePage: 3_906,
     ConfirmPage: 1_163,
     errors: 235,
     ForgotPasswordPage: 1_199,
-    format: 490,
+    format: 489,
     GameCard: 637,
-    GamePage: 3_885,
+    GamePage: 3_886,
     HistoryPage: 1_115,
     NotificationsPage: 1_849,
     ok: 140,
     PeriodScores: 497,
-    PlayerPage: 3_855,
-    PlayerResults: 906,
-    PlayersTab: 639,
-    ProfilePage: 2_909,
-    ProfileSetupPage: 1_597,
-    RecentGames: 786,
-    RecordsTab: 5_917,
-    SchedulePage: 2_285,
+    PlayerPage: 3_797,
+    PlayerResults: 904,
+    PlayersTab: 638,
+    ProfilePage: 2_900,
+    ProfileSetupPage: 1_538,
+    RecentGames: 784,
+    RecordsTab: 5_945,
+    SchedulePage: 2_284,
+    ScrollTable: 283,
     SeasonsTab: 1_763,
     SegmentedTabs: 726,
-    SignInPage: 1_098,
-    SignUpPage: 1_030,
+    SignInPage: 1_097,
+    SignUpPage: 1_029,
     stats: 697,
     "Stats.module": 529,
     "StatsNav.module": 504,
-    StatsNavigator: 3_931,
+    StatsNavigator: 3_864,
     StatsPage: 429,
-    StatsPicker: 2_258,
+    StatsPicker: 2_318,
     useQueries: 1_507,
     VisuallyHidden: 155,
     "css:AccountSettings.css": 403,
@@ -161,7 +162,7 @@ export const BASE = {
     "css:RecentGames.css": 243,
     "css:SchedulePage.css": 558,
     "css:SegmentedTabs.css": 433,
-    "css:Stats.css": 490,
+    "css:Stats.css": 492,
     "css:StatsNav.css": 1_830,
     "css:StatsPage.css": 396,
     "css:StatsPicker.css": 470,
