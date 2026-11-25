@@ -9,7 +9,7 @@ wiki/CodeContext/Modules/0x06-feed.md).
 feed/ owns no tables of its own (0x00-architecture.md Connection rule), so
 both strategies below are built entirely on the other modules' public read
 functions (app.posts.service.query_feed_posts, app.users.service.
-followed_user_ids, app.events.service.game_ids_for_team) -- never a direct
+active_followed_user_ids, app.events.service.game_ids_for_team) -- never a direct
 query against another module's tables.
 """
 
@@ -23,7 +23,7 @@ from app.events.service import game_ids_for_team
 from app.posts.models import Post
 from app.posts.service import query_feed_posts
 from app.users.models import User
-from app.users.service import followed_user_ids
+from app.users.service import active_followed_user_ids
 
 
 class FeedRankingStrategy(abc.ABC):
@@ -37,24 +37,25 @@ class FeedRankingStrategy(abc.ABC):
 
 
 class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
-    """Reverse-chronological: authors = the viewer's followed ids plus the
-    viewer themself (a viewer sees their own posts in their own feed --
+    """Reverse-chronological: authors = the viewer's active (not
+    deactivated) followed ids plus the viewer themself (a viewer sees their own posts in their own feed --
     judgment call, see wiki/CodeContext/Modules/0x06-feed.md), OR'd with
     posts relevant to one of the viewer's preferred team's games when one
     is set: a legacy mention of it, a game_final link to it or a
     player_game link to a line in it (POSTS-006).
 
-    A viewer who follows nobody gets exactly GuestRecentStrategy's
-    selection instead, preferred team ignored (FEED-001): otherwise a new
-    account's feed held only its own posts while a guest saw every public
-    post. The global selection already includes the team's posts."""
+    A viewer who follows nobody active gets exactly GuestRecentStrategy's
+    selection instead, preferred team ignored: one who follows nobody
+    (FEED-001) or whose follows are all deactivated (FEED-003). Otherwise
+    that feed held only the viewer's own posts while a guest saw every
+    public post. The global selection already includes the team's posts."""
 
     def __init__(self, viewer_id: int, preferred_team_id: int | None) -> None:
         self._viewer_id = viewer_id
         self._preferred_team_id = preferred_team_id
 
     def select_posts(self, session: Session, *, before_id: int | None, limit: int) -> list[Post]:
-        author_ids = set(followed_user_ids(session, self._viewer_id))
+        author_ids = set(active_followed_user_ids(session, self._viewer_id))
         if not author_ids:
             return GuestRecentStrategy().select_posts(session, before_id=before_id, limit=limit)
         author_ids.add(self._viewer_id)
@@ -76,7 +77,7 @@ class FollowsAndPreferredTeamStrategy(FeedRankingStrategy):
 
 class GuestRecentStrategy(FeedRankingStrategy):
     """Most-recent top-level posts globally -- the guest default, and also
-    what a signed-in viewer with no follows gets (FEED-001, via
+    what a signed-in viewer with no active follows gets (FEED-001, FEED-003, via
     FollowsAndPreferredTeamStrategy). Resolves
     wiki/CodeContext/Modules/0x06-feed.md's previously-open "guest-feed
     algorithm" decision: no Follow/PostLike/preferred_team to personalize
