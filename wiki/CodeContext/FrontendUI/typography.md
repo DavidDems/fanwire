@@ -54,7 +54,8 @@ is an impersonation vector the typeface can't fix.
 
 **The backend now limits new usernames** to Instagram's rule (1–30 ASCII letters,
 digits, `_` and `.`; no `..`; no trailing `.`; `USERS-010`, [ADR 0035](../../GeneralContext/Decisions/0035-outstanding-work-answers.md)),
-which removes non-ASCII look-alikes. Names that existed before it are grandfathered
+which removes non-ASCII look-alikes, and uniqueness ignores case (`USERS-011`, [ADR 0042](../../GeneralContext/Decisions/0042-case-insensitive-usernames.md)), so
+`Raptors` and `raptors` can't both exist. Names that existed before the rule are grandfathered
 ([0x01c](../Modules/0x01c-users-routes.md)), and the rule leaves `I` and `l` in play, so the rest
 stays:
 

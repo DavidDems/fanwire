@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "task_id": "USERS-011",
+  "objective": "Usernames are unique regardless of case (the human's decision, ADR 0042): a unique index on lower(username) means Raptors and raptors can no longer both exist. Names are still stored and shown exactly as typed (ADR 0010), and a case-only duplicate on POST /users answers the existing generic 409.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged into main, and the unit's branch agent/USERS-011 is cut from main after it.",
+    "Test-first: commit the failing tests alone before the implementation. They fail today because UNIQUE(username) is case-sensitive, so a second POST /users with raptors after Raptors answers 201.",
+    "app/users/models.py declares Index(\"ux_users_username_lower\", func.lower(username), unique=True) in User.__table_args__, so Base.metadata.create_all builds it in every test schema. The existing UNIQUE(username) constraint stays.",
+    "POST /users: after Raptors exists, raptors, RAPTORS and rAPTORS each answer 409 with the existing generic detail and write no row; the first row is unchanged and still reads back as Raptors. A name that differs by more than case (Raptors2, Rap.tors) still answers 201. A deactivated user's name stays reserved in every case, as it already is for the exact name.",
+    "Stored and returned exactly as sent: POST /users with Raptors.Fan returns and stores Raptors.Fan, no case folding (ADR 0010).",
+    "One new Alembic revision with down_revision f2b8d4a6c9e3. upgrade() first runs SELECT lower(username), array_agg(id ORDER BY id) FROM users GROUP BY lower(username) HAVING count(*) > 1; if any row comes back it raises RuntimeError naming how many groups collide and the user ids in each (ids only, never the usernames), and creates nothing. Otherwise it creates the unique index ux_users_username_lower on users (lower(username)). downgrade() drops it.",
+    "Migration tests in backend/tests/test_migrations.py against testcontainers Postgres: upgrade to head creates ux_users_username_lower; downgrade -1 drops it; with the schema at the previous revision and two rows Raptors and raptors inserted, upgrade head raises, the error names both ids and contains neither username, and the index does not exist afterwards.",
+    "The app keeps working between the deploy and the migration: no code path depends on the index existing (a case-only duplicate is just accepted, as today), so routes on users do not answer 500 before the Migration Lambda runs.",
+    "Proof: CI's backend-test (the gate job) is green; ruff and mypy are clean. backend/openapi.json is unchanged (say so in the PR).",
+    "No new dependency, no frontend change (ProfileSetupPage's 409 alert already reads 'That username is already taken, or that team no longer exists.'), no change outside the allowed paths.",
+    "wiki/CodeContext/Modules/0x01a-users-schema.md's username row and wiki/CodeContext/Modules/0x01c-users-routes.md's POST /users bullet state the case-insensitive uniqueness, the index name, and that display keeps the typed case."
+  ],
+  "allowed_paths": [
+    "backend/app/users/models.py",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "wiki/CodeContext/Modules/0x01a-users-schema.md",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/app/users/schemas.py",
+    "backend/openapi.json",
+    "backend/pyproject.toml",
+    "frontend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x01-users.md",
+    "wiki/CodeContext/Modules/0x01a-users-schema.md",
+    "wiki/CodeContext/Modules/0x01c-users-routes.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["backend-testing", "fastapi-module", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
