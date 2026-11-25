@@ -65,8 +65,8 @@ each owns one piece:
   honest thing to show anyway, since it is what everyone else sees once the post
   is published, EXIF-stripped and resized by the pipeline rather than the
   original off the user's disk. The widget shows the file's **name** while the
-  upload is pending and an `<img>` at `config.mediaBaseUrl` + `s3_key_thumbnail`
-  once it is `processed`.
+  upload is pending and an `<img>` at `mediaUrl(s3_key_thumbnail)` (`src/lib/mediaUrl.ts`,
+  `FRONTEND-052`) once it is `processed`.
 - **The file input carries no `accept` attribute.** The browser's own filter
   drops a file the user chose without telling them why, and the type rule —
   jpeg, png and webp, SVG excluded by name ([[0x04-media]] Security

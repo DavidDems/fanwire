@@ -13,7 +13,8 @@
  * **Post results are the feed's `PostNode`.** Behaviourally, that is: each
  * result is an `article` carrying PostNode's own controls. And one property a
  * look-alike renderer cannot fake: a like on a post result moves its count
- * optimistically, which `LikeButton` only does for posts cached under the
+ * optimistically, which `TogglePostAction` (`features/feed/PostAction.tsx`)
+ * only does for posts cached under the
  * feed's own key root. The key itself is not asserted — only what a reader
  * sees while the like is still in flight.
  *

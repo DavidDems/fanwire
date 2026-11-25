@@ -21,7 +21,7 @@ import { VisuallyHidden } from "../ui/VisuallyHidden";
 import { teamShortName } from "../../features/games/format";
 import { formatGameType, formatRecord } from "./labels";
 import { LevelLink } from "./LevelLink";
-import { ColumnHeader, ScrollTable } from "./ScrollTable";
+import { ColumnHeader, ScrollTable } from "../ui/ScrollTable";
 import styles from "./StatsNav.module.css";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
@@ -351,12 +351,16 @@ function RecordChart({
       </svg>
       <details className={styles.chartTable}>
         <summary>Record after each game</summary>
-        <ScrollTable caption={`Record after each game, ${teamName}, ${season}`}>
+        <ScrollTable
+          scrollClassName={styles.scroll}
+          tableClassName={styles.table}
+          caption={`Record after each game, ${teamName}, ${season}`}
+        >
           <thead>
             <tr>
               <ColumnHeader label="Game" />
-              <ColumnHeader label="Month" name />
-              <ColumnHeader label="Result" name />
+              <ColumnHeader label="Month" className={styles.name} />
+              <ColumnHeader label="Result" className={styles.name} />
               <ColumnHeader label="Record" />
             </tr>
           </thead>

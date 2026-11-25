@@ -11,10 +11,8 @@ import {
   SeasonSelect,
 } from "../../components/stats-nav/SeasonSelect";
 import { StatsNavigator } from "../../components/stats-nav/StatsNavigator";
-import {
-  ColumnHeader,
-  ScrollTable,
-} from "../../components/stats-nav/ScrollTable";
+import nav from "../../components/stats-nav/StatsNav.module.css";
+import { ColumnHeader, ScrollTable } from "../../components/ui/ScrollTable";
 import type {
   StatsLevel,
   StatsNavAdapter,
@@ -271,11 +269,15 @@ function GameChoice({ id, selection, choose }: ChoiceProps) {
       ) : (
         <p>{final}</p>
       )}
-      <ScrollTable caption="Box score">
+      <ScrollTable
+        scrollClassName={nav.scroll}
+        tableClassName={nav.table}
+        caption="Box score"
+      >
         <thead>
           <tr>
-            <ColumnHeader label="Player" name />
-            <ColumnHeader label="Team" name />
+            <ColumnHeader label="Player" className={nav.name} />
+            <ColumnHeader label="Team" className={nav.name} />
             <ColumnHeader label="MIN" title="Minutes" />
             <ColumnHeader label="PTS" title="Points" />
             <ColumnHeader label="REB" title="Rebounds" />

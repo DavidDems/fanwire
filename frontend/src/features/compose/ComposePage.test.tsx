@@ -7,7 +7,7 @@
  *
  * **The page must be silent on mount.** `src/routes/routes.test.tsx` renders
  * `/compose` for a `member` visitor and pins its heading as exactly `Compose`;
- * msw runs with `onUnhandledRequest: "error"`, so a page that fetched games or
+ * msw runs with `onUnhandledFrame: "error"`, so a page that fetched games or
  * teams when it mounted would break a test file this unit is not allowed to
  * touch. Since `FRONTEND-013` the `#`/`$` dropdown is gone, so typing fetches
  * nothing either; the `events/` reads happen when the "Attach stats" picker

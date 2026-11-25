@@ -68,7 +68,7 @@ interface Scene {
  * reach already answered.
  *
  * The preference and clear handlers are installed even where this file asserts
- * nothing about them: msw runs with `onUnhandledRequest: "error"`, and a request
+ * nothing about them: msw runs with `onUnhandledFrame: "error"`, and a request
  * nobody handled would fail somewhere unrelated to whatever the test is about.
  */
 function renderNotifications(notifications: NotificationOut[]): Scene {

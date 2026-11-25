@@ -17,7 +17,7 @@
  * it sends the visitor to sign-in carrying where they were, the same convention
  * `routes/guards.tsx` uses. It must not fire an unauthenticated write and show
  * them a 401, so the follow endpoint is given a recording handler here and
- * asserted to have seen nothing. (`onUnhandledRequest: "error"` would catch it
+ * asserted to have seen nothing. (`onUnhandledFrame: "error"` would catch it
  * too; this says so out loud rather than relying on an omission.)
  */
 import { screen, waitFor } from "@testing-library/react";

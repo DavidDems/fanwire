@@ -69,7 +69,8 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   click on the scrollbar nor a selection dragged out onto the backdrop closes
   it. jsdom has no `showModal`/`close`; `setupTests.ts` shims them on
   `HTMLDialogElement.prototype`, only when absent. The backdrop uses the
-  `--neutral-950` primitive at 0.6 opacity: there is no scrim token.
+  `--color-scrim` token (`#011d28`, light and dark, `FRONTEND-052`) at 0.6
+  opacity.
 - **Content.** The root `PostNode`, then the composer, then the direct
   replies oldest first (the API's order), each a `PostNode`. "Post not
   found" for a 404 or a non-numeric id (no request); an `InlineAlert` with
@@ -146,13 +147,11 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   alone), and calls `scrollIntoView({ block: "center" })` once. An unknown or
   malformed id marks nothing.
 
-**Known duplication, left deliberately.** The media-URL join
-(`config.mediaBaseUrl` + key) now exists in both `features/feed/api.ts` and
-`features/compose/MediaWidget.tsx`. Moving it to `components/` requires editing
-`features/compose/**`, which this unit may not touch — so extracting it here
-would have produced a "shared" module with one caller while the duplicate stayed.
-**Whoever next has both trees in scope should extract it**; it is small, and it
-is recorded so the second copy is a known state rather than a discovery.
+**One media-URL join.** `src/lib/mediaUrl.ts` (`mediaUrl(key)`: the
+configured base with trailing slashes trimmed, `/`, the key with leading slashes
+trimmed) is the one join since `FRONTEND-052`. The feed uses it (re-exported from
+`features/feed/api.ts`, where its components and tests import it), and so do
+compose's `MediaWidget` and `components/ui/Avatar`.
 
 ## Complete-card reveal and the route split (`FRONTEND-015`)
 

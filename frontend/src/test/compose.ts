@@ -333,7 +333,7 @@ export interface RequestRecorder {
 /**
  * Record every request the app makes.
  *
- * `onUnhandledRequest: "error"` is not enough on its own to pin "this component
+ * `onUnhandledFrame: "error"` is not enough on its own to pin "this component
  * asks for nothing": msw rejects the request, react-query swallows it into an
  * error state with `retry: false`, and the assertion about the quiet component
  * still passes. Counting from the life-cycle events is the deterministic form.

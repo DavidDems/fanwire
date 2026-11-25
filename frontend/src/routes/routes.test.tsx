@@ -116,7 +116,7 @@ function arrange(as: Visitor): AuthService {
   // every visitor rather than only the signed-in ones. `/` is the feed, and a
   // guest request and a signed-in request are the same `GET /feed`
   // ([[0x06-feed]]), so an empty page is installed for every visitor too — msw
-  // runs with `onUnhandledRequest: "error"` and several cases here render `/`.
+  // runs with `onUnhandledFrame: "error"` and several cases here render `/`.
   // Nothing in this file asserts on the feed.
   server.use(publicProfilesById(), teamsAre(), emptyFeed());
   server.use(historyStub().handler);
