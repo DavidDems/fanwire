@@ -1,5 +1,5 @@
 """FastAPI dependency wiring for posts/'s write path — the pre-publish
-moderation chain and PublishPostFacade.
+moderation chain, PublishPostFacade and the report rate limiter.
 
 Per AGENTS.md's connection rule, this module imports from app.posts.*,
 app.eventbus and app.dependencies, plus
@@ -17,6 +17,11 @@ post_rate_limit_per_hour). FakeSpamScorer and FakeRateLimiter are test
 doubles only. ProfanityFilter is config-driven via Settings; the spam
 scorer's account age, RateLimitCheck and DuplicateContentCheck are
 DB-backed.
+
+get_report_rate_limiter (POSTS-010) wires POST /posts/{post_id}/report's
+limit, the real ReportCountRateLimiter, its limits from Settings
+(report_rate_limit_per_minute / report_rate_limit_per_hour). Route tests
+override it with FakeRateLimiter.
 """
 
 from __future__ import annotations
@@ -36,6 +41,8 @@ from app.posts.moderation import (
     PostCountRateLimiter,
     ProfanityFilter,
     RateLimitCheck,
+    RateLimiter,
+    ReportCountRateLimiter,
     SpamScoreCheck,
 )
 from app.settings import Settings
@@ -83,3 +90,14 @@ def get_publish_post_facade(
     event_bus: PostEventBus = Depends(get_event_bus),
 ) -> PublishPostFacade:
     return PublishPostFacade(session, moderation_chain, event_bus)
+
+
+def get_report_rate_limiter(
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RateLimiter:
+    return ReportCountRateLimiter(
+        session,
+        per_minute=settings.report_rate_limit_per_minute,
+        per_hour=settings.report_rate_limit_per_hour,
+    )

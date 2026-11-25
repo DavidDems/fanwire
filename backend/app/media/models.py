@@ -20,7 +20,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Identity, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Identity, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -89,4 +89,10 @@ class Media(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        # app.media.rate_limit.MediaCountRateLimiter (POSTS-010) counts one
+        # user's recent uploads: an index range scan, not a table scan.
+        Index("ix_media_uploader_id_created_at", "uploader_id", "created_at"),
     )

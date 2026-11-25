@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "task_id": "POSTS-010",
+  "objective": "Per-user rate limits on reports and media uploads, app-level in the PostCountRateLimiter pattern: counted in Postgres over sliding windows, refused with 429, limits in Settings. Reports 5 per minute and 10 per hour per user; media uploads 5 per minute and 20 per hour per user.",
+  "acceptance_criteria": [
+    "Start gate: this spec's Director PR has merged, and the branch is cut from a main that holds it.",
+    "Test-first: commit the failing tests alone (test role), then the implementation (code role), then the module docs (context maintainer). The tests fail today because no limiter, setting, index or 429 exists for either route.",
+    "Settings gains report_rate_limit_per_minute: PositiveInt = 5, report_rate_limit_per_hour: PositiveInt = 10, media_upload_rate_limit_per_minute: PositiveInt = 5 and media_upload_rate_limit_per_hour: PositiveInt = 20, each overridable from the environment like post_rate_limit_*. Zero or a negative value for any of them fails when Settings is built.",
+    "POST /api/posts/{post_id}/report: when the reporter already has at least report_rate_limit_per_minute reports created in the last minute, or at least report_rate_limit_per_hour in the last hour, a new report answers 429, creates no Report row, leaves Post.reported unchanged and publishes no PostReported.",
+    "POST /api/posts/{post_id}/report: a repeat of a report the user already made answers 204 and creates nothing, even when the user is at the limit. An unknown or deleted post answers 404, even when the user is at the limit. Below the limit, behaviour is unchanged (204, one Report row, Post.reported true, one PostReported).",
+    "POST /api/media/uploads: when the uploader already has at least media_upload_rate_limit_per_minute Media rows created in the last minute, or at least media_upload_rate_limit_per_hour in the last hour, it answers 429, creates no Media row and does not call generate_presigned_post.",
+    "POST /api/media/uploads: a mime type outside the allow-list answers 400, checked before the rate limit (400 even at the limit). Below the limit, behaviour is unchanged (201, one Media row at Uploaded, presigned POST returned).",
+    "Each limiter counts with one SQL statement over sliding windows measured against the database's now(), strict > (a row exactly one minute or one hour old no longer counts), as PostCountRateLimiter does. Every Report row counts, by reports.reporter_id. Every Media row counts whatever its status, by media.uploader_id. Count-then-insert is not atomic; this is documented in the limiter's docstring and no lock is taken.",
+    "Module boundary (0x00-architecture.md Connection rule): the report limiter lives in app/posts; the upload limiter lives in app/media; nothing in app/media imports from app.posts. Each sits behind a narrow injected interface with a fake for route tests, wired through its module's dependencies from Settings.",
+    "Testcontainers tests prove, for both limiters and both windows: one under the limit is allowed, at the limit is refused, and a row older than the window is not counted.",
+    "One Alembic migration adds ix_reports_reporter_id_created_at (reporter_id, created_at) and ix_media_uploader_id_created_at (uploader_id, created_at), both declared in their model's __table_args__. If an equivalent index already exists the migration skips it and the PR says so. A migration test in the pattern of tests/test_migrations_post_rate_limit_index.py (parent revision named explicitly) proves upgrade creates both with those columns in order and downgrade drops both.",
+    "Both routes declare 429 in their OpenAPI responses. backend/openapi.json is regenerated with scripts/export_openapi.py and frontend/src/api/schema.d.ts with npm run gen:api-types; CI's openapi-drift check passes. No other frontend file changes.",
+    "CI's backend-test is the proof (local testcontainers cannot start on the Director's machine); ruff check and mypy app are clean.",
+    "The PR body's manual steps: after the deploy, invoke the Migration Lambda once so the two indexes exist.",
+    "Docs: 0x00b-architecture-iam-gaps.md 'Known gaps' no longer says reporting and uploads have no limit (it states the limits, or the gap line is dropped). 0x03d-posts-reports.md and 0x04-media.md state the limits, the 429 and the index, replacing their 'no per-user limit' / 'required, not met' lines."
+  ],
+  "allowed_paths": [
+    "backend/app/posts/**",
+    "backend/app/media/**",
+    "backend/app/settings.py",
+    "backend/alembic/versions/**",
+    "backend/tests/**",
+    "backend/openapi.json",
+    "frontend/src/api/schema.d.ts",
+    "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x03d-posts-reports.md",
+    "wiki/CodeContext/Modules/0x04-media.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "infra/**",
+    "backend/pyproject.toml",
+    "backend/alembic/env.py",
+    "frontend/src/features/**",
+    "frontend/src/components/**",
+    "frontend/src/routes/**",
+    "frontend/src/auth/**",
+    "frontend/src/lib/**",
+    "frontend/src/styles/**",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "docker/**",
+    "docker-compose.yml"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x00-architecture.md",
+    "wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md",
+    "wiki/CodeContext/Modules/0x03-posts.md",
+    "wiki/CodeContext/Modules/0x03d-posts-reports.md",
+    "wiki/CodeContext/Modules/0x04-media.md",
+    "wiki/CodeContext/Standards/security.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": ["fastapi-module", "backend-testing", "git-workflow"],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

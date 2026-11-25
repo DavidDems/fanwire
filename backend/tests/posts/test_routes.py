@@ -25,7 +25,12 @@ from app.events.models import Game, Team
 from app.media.models import Media, MediaStatus
 from app.posts.dependencies import get_moderation_chain
 from app.posts.models import EventMention, Post, Report
-from app.posts.moderation import ModerationCheck, ModerationContext, PostRejected
+from app.posts.moderation import (
+    FakeRateLimiter,
+    ModerationCheck,
+    ModerationContext,
+    PostRejected,
+)
 from app.posts.routes import router
 from app.posts.service import like_post, report_post
 from app.users.dependencies import get_current_user
@@ -494,6 +499,7 @@ def test_report_post_duplicate_returns_204_and_creates_no_second_row(app, client
             PostEventBus(InMemoryEventPublisher()),
             post_id=post.id,
             reporter_id=reporter.id,
+            rate_limiter=FakeRateLimiter(True),
         )
         post_id = post.id
     _as_user(app, reporter)

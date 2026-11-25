@@ -6486,6 +6486,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Upload rate limit exceeded"
           }
         },
         "summary": "Create Upload",
@@ -6929,6 +6932,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Report rate limit exceeded"
           }
         },
         "summary": "Report",

@@ -54,6 +54,7 @@ from app.eventbus import PostEventBus
 from app.media.service import processed_media_for_posts
 from app.posts.facade import CreatePostRequest, PostNotFoundError, PublishPostFacade
 from app.posts.models import EventMention, Post, PostLike, Report
+from app.posts.moderation import RateLimiter
 from app.users.lifecycle import fence_users
 from app.users.models import User
 
@@ -116,6 +117,12 @@ class PlainRepostDeleteError(ValueError):
     soft-deleted."""
 
 
+class ReportRateLimitExceeded(Exception):
+    """Raised by report_post when the reporter's rate limiter refuses a new
+    report (POSTS-010); the route answers 429. Never raised for a repeat or
+    an unknown post."""
+
+
 class AlreadyLikedError(ValueError):
     """Raised by like_post when the (user_id, post_id) pair already
     exists."""
@@ -133,7 +140,12 @@ class RepostInUseError(ValueError):
 
 
 def report_post(
-    session: Session, event_bus: PostEventBus, *, post_id: int, reporter_id: int
+    session: Session,
+    event_bus: PostEventBus,
+    *,
+    post_id: int,
+    reporter_id: int,
+    rate_limiter: RateLimiter,
 ) -> Report | None:
     """Idempotent per wiki/CodeContext/Modules/0x03d-posts-reports.md: a repeat
     (post_id, reporter_id) is a no-op returning None, not an error. On a
@@ -143,7 +155,13 @@ def report_post(
     only the very first one for a post, since each new report is itself
     meaningful information even though the Post.reported flag only flips
     once. Raises PostNotFoundError if post_id doesn't resolve to an
-    existing, undeleted Post."""
+    existing, undeleted Post.
+
+    The reporter's rate limit (POSTS-010, `rate_limiter`, the real one being
+    app.posts.moderation.ReportCountRateLimiter) is checked after the 404
+    and the repeat check and before the insert: a repeat stays a no-op and
+    an unknown post stays PostNotFoundError even at the limit, and a refusal
+    raises ReportRateLimitExceeded having written and published nothing."""
     fence_users(session, [reporter_id])
     post = _undeleted_post(session, post_id)
 
@@ -152,6 +170,9 @@ def report_post(
     )
     if existing is not None:
         return None
+
+    if not rate_limiter.is_allowed(reporter_id):
+        raise ReportRateLimitExceeded("report rate limit exceeded")
 
     report = Report(post_id=post_id, reporter_id=reporter_id)
     session.add(report)
