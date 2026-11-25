@@ -208,3 +208,26 @@ describe("the search bar's box (UI-010: the shared SearchInput)", () => {
     );
   });
 });
+
+describe("the search bar's row (FRONTEND-053: SearchInput's action)", () => {
+  it("puts the Search button in the box's Field root, after the box, inside the search form", () => {
+    renderBar();
+
+    const form = screen.getByRole("search");
+    const box = within(form).getByRole("searchbox", { name: BOX_NAME });
+    const button = within(form).getByRole("button", { name: "Search" });
+    const label = screen.getByText(BOX_NAME, { selector: "label" });
+    const root = label.parentElement as HTMLElement;
+
+    expect(root).toContainElement(box);
+    expect(button.parentElement, "the button shares the box's Field root").toBe(
+      root,
+    );
+    expect(
+      box.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "the button follows the box",
+    ).toBeTruthy();
+    expect(form).toContainElement(root);
+    expect(button).toHaveAttribute("type", "submit");
+  });
+});
