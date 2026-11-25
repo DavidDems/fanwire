@@ -27,12 +27,25 @@ absent from the public response.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic_core import PydanticCustomError
 
 MINIMUM_AGE_YEARS = 16
+
+# The username rule for new accounts (ADR 0035; wiki/CodeContext/Modules/
+# 0x01c-users-routes.md). A field_validator, not Field(pattern=...): pydantic's
+# default Rust regex engine has no lookaround. re.ASCII keeps \w from matching
+# é, dotless ı or full-width letters; fullmatch (never search/match, no
+# re.MULTILINE) keeps $ from accepting a trailing newline.
+USERNAME_PATTERN = re.compile(r"^(?!.*\.\.)(?!.*\.$)\w[\w.]{0,29}$", re.ASCII)
+USERNAME_RULE_MSG = (
+    "Use 1 to 30 letters, numbers, underscores or dots, "
+    "with no two dots in a row and no dot at the end."
+)
 
 
 class CreateUserRequest(BaseModel):
@@ -40,6 +53,18 @@ class CreateUserRequest(BaseModel):
     date_of_birth: date
     description: str | None = None
     preferred_team_id: int | None = None
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, value: str) -> str:
+        """Enforce the username rule on the only write that sets a username.
+        Existing names that break it are grandfathered: PublicUserOut/MeOut
+        keep `username: str`, and UpdateMeRequest has no username field.
+        PydanticCustomError keeps the msg free of a 'Value error, ' prefix,
+        so the frontend can show it verbatim."""
+        if USERNAME_PATTERN.fullmatch(value) is None:
+            raise PydanticCustomError("username_format", USERNAME_RULE_MSG)
+        return value
 
     @field_validator("date_of_birth")
     @classmethod
