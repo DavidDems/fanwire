@@ -10,7 +10,7 @@ The dev user pool and SPA client exist in `fanwire-workload` (`ca-central-1`), m
 
 This pool is **dev-only** and separate from the production pool, which `Fanwire-Auth` deploys ([inventory](incident-runbook-inventory.md)). It's created with the AWS CLI commands below rather than console clicks, so the exact configuration lives in a reviewed file. It mirrors the CDK stack's settings: email sign-in, email verification, optional TOTP MFA, and a public SPA client with no secret using SRP.
 
-**The live pool also has a pre-sign-up trigger that these commands don't create.** `ca-central-1_Jh8FE5iTM` (`fanwire-dev`) has a `PRE_SIGN_UP` trigger, the Lambda `Fanwire-Users007-PreSignUp` (python3.12), made by hand outside CDK around `USERS-007`. Its two-line handler lives only in that function, not in this repo: it sets `autoConfirmUser = True` and `autoVerifyEmail = False`. So the dev pool auto-confirms sign-ups, like production's CDK `PreSignUpTrigger` (`infra/lib/auth-stack.ts`, which sets `autoConfirmUser = True` only). A pool rebuilt from the commands below would not auto-confirm.
+**The pool auto-confirms sign-ups**, like production's CDK `PreSignUpTrigger` (`infra/lib/auth-stack.ts`): its `PRE_SIGN_UP` trigger is the Lambda `Fanwire-Users007-PreSignUp`, whose handler, role trust policy and logging policy are in `infra/dev-pool/`. The handler sets `autoConfirmUser = True` and `autoVerifyEmail = False`. The commands below create it with the pool. The live function was made by hand around `USERS-007` and runs `python3.12`; a rebuild uses `python3.15`, production's runtime.
 
 ## Prerequisites
 AWS CLI v2, logged in via IAM Identity Center to `fanwire-workload` (`294321867941`) with the `AdministratorAccess` permission set. Once, configure the profile: start URL `https://d-9d6748d7e4.awsapps.com/start`, region `ca-central-1`, and name the profile `fanwire-dev`:
@@ -34,8 +34,32 @@ $env:AWS_PROFILE = "fanwire-dev"
 ```powershell
 $env:AWS_REGION = "ca-central-1"
 ```
+
+Run these from the repository root. The next six create the trigger's role and function; `Start-Sleep` gives the new role time to reach Lambda.
+
 ```powershell
-$POOL_ID = aws cognito-idp create-user-pool --pool-name fanwire-dev --username-attributes email --auto-verified-attributes email --policies 'PasswordPolicy={MinimumLength=12,RequireUppercase=true,RequireLowercase=true,RequireNumbers=true,RequireSymbols=false}' --account-recovery-setting 'RecoveryMechanisms=[{Priority=1,Name=verified_email}]' --deletion-protection ACTIVE --query 'UserPool.Id' --output text
+$ACCOUNT = aws sts get-caller-identity --query Account --output text
+```
+```powershell
+$ROLE_ARN = aws iam create-role --role-name Fanwire-Users007-PreSignUpRole --assume-role-policy-document file://infra/dev-pool/trust-policy.json --permissions-boundary "arn:aws:iam::${ACCOUNT}:policy/FanwireRoleBoundary" --query Role.Arn --output text
+```
+```powershell
+aws iam put-role-policy --role-name Fanwire-Users007-PreSignUpRole --policy-name FanwireUsers007PreSignUpLogging --policy-document file://infra/dev-pool/logging-policy.json
+```
+```powershell
+Compress-Archive -Path infra/dev-pool/index.py -DestinationPath "$env:TEMP\pre-sign-up.zip" -Force
+```
+```powershell
+Start-Sleep -Seconds 15
+```
+```powershell
+$FN_ARN = aws lambda create-function --function-name Fanwire-Users007-PreSignUp --runtime python3.15 --handler index.lambda_handler --role $ROLE_ARN --zip-file "fileb://$env:TEMP\pre-sign-up.zip" --timeout 5 --memory-size 128 --query FunctionArn --output text
+```
+```powershell
+$POOL_ID = aws cognito-idp create-user-pool --pool-name fanwire-dev --username-attributes email --auto-verified-attributes email --policies 'PasswordPolicy={MinimumLength=12,RequireUppercase=true,RequireLowercase=true,RequireNumbers=true,RequireSymbols=false}' --account-recovery-setting 'RecoveryMechanisms=[{Priority=1,Name=verified_email}]' --deletion-protection ACTIVE --lambda-config "PreSignUp=$FN_ARN" --query 'UserPool.Id' --output text
+```
+```powershell
+aws lambda add-permission --function-name Fanwire-Users007-PreSignUp --statement-id AllowFanwireDevPoolPreSignUp --action lambda:InvokeFunction --principal cognito-idp.amazonaws.com --source-arn "arn:aws:cognito-idp:ca-central-1:${ACCOUNT}:userpool/$POOL_ID"
 ```
 ```powershell
 aws cognito-idp set-user-pool-mfa-config --user-pool-id $POOL_ID --software-token-mfa-configuration Enabled=true --mfa-configuration OPTIONAL
@@ -47,7 +71,11 @@ $CLIENT_ID = aws cognito-idp create-user-pool-client --user-pool-id $POOL_ID --c
 "POOL_ID=$POOL_ID CLIENT_ID=$CLIENT_ID"
 ```
 
-The last line prints both ids; a success shows a `ca-central-1_…` pool id and a client id.
+The last line prints both ids; a success shows a `ca-central-1_…` pool id and a client id. Then check the trigger is attached; it prints the function's ARN:
+
+```powershell
+aws cognito-idp describe-user-pool --user-pool-id $POOL_ID --query 'UserPool.LambdaConfig.PreSignUp' --output text
+```
 
 ## Wire it into local dev
 Neither value is a secret: the pool id and public client id ship in the browser bundle anyway. Keep them in untracked local env files so each developer can point at their own pool.
@@ -98,4 +126,16 @@ aws cognito-idp update-user-pool --user-pool-id $poolId --deletion-protection IN
 ```
 ```powershell
 aws cognito-idp delete-user-pool --user-pool-id $poolId
+```
+
+Then delete the trigger's function and role, in that order:
+
+```powershell
+aws lambda delete-function --function-name Fanwire-Users007-PreSignUp
+```
+```powershell
+aws iam delete-role-policy --role-name Fanwire-Users007-PreSignUpRole --policy-name FanwireUsers007PreSignUpLogging
+```
+```powershell
+aws iam delete-role --role-name Fanwire-Users007-PreSignUpRole
 ```
