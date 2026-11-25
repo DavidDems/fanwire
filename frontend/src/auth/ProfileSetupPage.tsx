@@ -20,12 +20,14 @@ import { PROFILE_QUERY_KEY } from "./profile";
  * field is PII, returned only on the owner's own paths and never rendered on a
  * public profile).
  *
- * The age gate lives on the server — a Pydantic validator that answers 422 with
- * `date_of_birth` in `detail[].loc`. It is not re-implemented here: validating
- * in two places is how the two rules drift apart, and the server is the
- * boundary. What this page owes is putting that 422 on the field it is about,
- * with the server's own wording, instead of a banner about a rule the form
- * never mentioned.
+ * Two rules live on the server, each a Pydantic validator that answers 422
+ * naming its field in `detail[].loc`: the age gate (`date_of_birth`) and the
+ * username rule (`username`, [[0x01c-users-routes]]). Neither is re-implemented
+ * here: validating in two places is how the two copies drift apart, and the
+ * server is the boundary. What this page owes is surfacing them: the username
+ * rule as a standing hint, and each 422 on the field it is about, with the
+ * server's own wording, instead of a banner about a rule the form never
+ * mentioned.
  */
 
 type CreateUserRequest = components["schemas"]["CreateUserRequest"];
@@ -182,9 +184,17 @@ export function ProfileSetupPage() {
         {failure === null ? null : <InlineAlert>{failure}</InlineAlert>}
 
         <form onSubmit={handleSubmit} noValidate>
-          <Field id="profile-username" label="Username" error={errors.username}>
+          <Field
+            id="profile-username"
+            label="Username"
+            error={errors.username}
+            hintText="1 to 30 letters, numbers, underscores or dots. No two dots in a row, and no dot at the end."
+          >
             <input
-              {...describeField("profile-username", { error: errors.username })}
+              {...describeField("profile-username", {
+                error: errors.username,
+                hint: true,
+              })}
               type="text"
               name="username"
               autoComplete="username"

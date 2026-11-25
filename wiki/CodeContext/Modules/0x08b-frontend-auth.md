@@ -58,6 +58,11 @@ differs, code does not, and `App` is the single place that chooses it.
   server (a Pydantic 422 naming `date_of_birth`), surfaced on that field in the
   server's own words rather than re-implemented here, because validating in two
   places is how the two rules drift apart.
+- **The username rule is the same arrangement** (`FRONTEND-050`). The username
+  field's standing hint states USERS-010's rule. The server's 422 on `username`
+  goes on that field in its own `msg`, next to the hint, with no banner. The
+  page has no client-side copy of the rule (no regex, `pattern` or
+  `maxLength`), so a rule-breaking name still goes to the server.
 
 ## Profile and follow (`FRONTEND-003`)
 
