@@ -112,6 +112,49 @@ export class MessagingStack extends cdk.Stack {
       },
     });
     this.routeRuleToQueue(scanRule, this.mediaScanResultQueue);
+
+    // --- GuardDuty findings, Medium and above -> the alarm topic's email (INFRA-009).
+    // Same account, default bus; no cross-account forwarding. Severity: Medium
+    // 4.0-6.9, High 7.0-8.9, Critical 9.0-10.0. A distinct detail-type from the
+    // scan results above, so the two rules never match the same event.
+    const findingRule = new events.Rule(this, 'GuardDutyFindingRule', {
+      description: 'GuardDuty findings of severity 4 or more (Medium, High, Critical) to the alarm topic',
+      eventPattern: {
+        source: ['aws.guardduty'],
+        detailType: ['GuardDuty Finding'],
+        detail: { severity: events.Match.greaterThanOrEqual(4) },
+      },
+    });
+    this.routeRuleToTopic(
+      findingRule,
+      this.alarmTopic,
+      'AllowEventBridgeGuardDutyFindings',
+      events.RuleTargetInput.fromMultilineText(
+        [
+          `fanwire GuardDuty finding, severity ${events.EventField.fromPath('$.detail.severity')}: ${events.EventField.fromPath('$.detail.type')}`,
+          `${events.EventField.fromPath('$.detail.title')}`,
+          `Account ${events.EventField.fromPath('$.account')}, region ${events.EventField.fromPath('$.region')}, finding id ${events.EventField.fromPath('$.detail.id')}`,
+        ].join('\n'),
+      ),
+    );
+  }
+
+  /**
+   * Rule -> topic, the routeRuleToQueue pattern: one sns:Publish statement
+   * scoped to this rule's ARN. (The stock targets.SnsTopic grant has no
+   * source condition: a confused-deputy gap.)
+   */
+  private routeRuleToTopic(rule: events.Rule, topic: sns.Topic, sid: string, input: events.RuleTargetInput): void {
+    rule.addTarget({ bind: () => ({ arn: topic.topicArn, input }) });
+    topic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid,
+        principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [topic.topicArn],
+        conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleArn } },
+      }),
+    );
   }
 
   private queueWithDlq(id: string, purpose: string, consumerTimeout: cdk.Duration, maxReceiveCount: number) {
