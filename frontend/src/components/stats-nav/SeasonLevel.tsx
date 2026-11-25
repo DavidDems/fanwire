@@ -15,7 +15,7 @@ import { StatusLine } from "../ui/StatusLine";
 import { TeamIcon } from "../ui/TeamIcon";
 import { formatPercentage } from "../../features/games/format";
 import { LevelLink } from "./LevelLink";
-import { ColumnHeader, ScrollTable } from "./ScrollTable";
+import { ColumnHeader, ScrollTable } from "../ui/ScrollTable";
 import styles from "./StatsNav.module.css";
 import type { Conference, StatsLevel, StatsNavAdapter } from "./types";
 
@@ -154,19 +154,21 @@ function StandingsTables({
           .sort((a, b) => conferenceOrder(a.row, b.row));
         return (
           <ScrollTable
+            scrollClassName={styles.scroll}
+            tableClassName={styles.table}
             key={conference.conference}
             caption={`${conference.conference} Conference`}
           >
             <thead>
               <tr>
-                <ColumnHeader label="Team" name />
+                <ColumnHeader label="Team" className={styles.name} />
                 <ColumnHeader label="W" title="Wins" />
                 <ColumnHeader label="L" title="Losses" />
                 <ColumnHeader label="PCT" title="Win percentage" />
                 <ColumnHeader label="GB" title="Games behind" />
                 <ColumnHeader label="Home" />
                 <ColumnHeader label="Away" />
-                <ColumnHeader label="Division" name />
+                <ColumnHeader label="Division" className={styles.name} />
               </tr>
             </thead>
             <tbody>

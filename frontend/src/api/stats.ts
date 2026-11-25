@@ -49,7 +49,10 @@ export function nextOffset<T>(
   return page.length < size ? undefined : offset + size;
 }
 
-/** `GET /events/teams`: the key `features/profile` and search spell too. */
+/**
+ * `GET /events/teams`: the one teams read and its key, used by the stats
+ * navigator, `features/profile` and `auth/ProfileSetupPage`.
+ */
 export const TEAMS_KEY = ["events", "teams"] as const;
 export const SEASONS_KEY = ["events", "seasons"] as const;
 

@@ -7,10 +7,7 @@ import {
   type BoardStat,
   type LeaderBoardOut,
 } from "../../api/stats";
-import {
-  ColumnHeader,
-  ScrollTable,
-} from "../../components/stats-nav/ScrollTable";
+import { ColumnHeader, ScrollTable } from "../../components/ui/ScrollTable";
 import { CardEntry, StatCard } from "../../components/stats-nav/StatCard";
 import nav from "../../components/stats-nav/StatsNav.module.css";
 import { Dialog } from "../../components/ui/Dialog";
@@ -229,12 +226,16 @@ function LeaderTable({ meta, data }: { meta: Board; data: LeaderBoardOut }) {
   return (
     <div className={styles.section}>
       <p className={styles.muted}>Qualifying: {data.rule}</p>
-      <ScrollTable caption={`${meta.title}, top ${data.leaders.length}`}>
+      <ScrollTable
+        scrollClassName={nav.scroll}
+        tableClassName={nav.table}
+        caption={`${meta.title}, top ${data.leaders.length}`}
+      >
         <thead>
           <tr>
             <ColumnHeader label="#" title="Rank" />
-            <ColumnHeader label="Player" name />
-            <ColumnHeader label="Team" name />
+            <ColumnHeader label="Player" className={nav.name} />
+            <ColumnHeader label="Team" className={nav.name} />
             <ColumnHeader label="GP" title="Games played" />
             {meta.percentage ? (
               <>

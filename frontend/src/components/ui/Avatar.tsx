@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { config } from "../../config";
+import { mediaUrl } from "../../lib/mediaUrl";
 import styles from "./Avatar.module.css";
 
 export interface AvatarProps {
@@ -39,7 +39,7 @@ export function Avatar({
       data-avatar-key={exposeKey ? selectedKey ?? undefined : undefined}
     >
       {pictureKey !== null ? (
-        <img className={styles.picture} src={config.mediaBaseUrl + "/" + pictureKey} alt="" />
+        <img className={styles.picture} src={mediaUrl(pictureKey)} alt="" />
       ) : selectedKey === null ? initial : <AvatarGeometry avatarKey={selectedKey} />}
     </span>
   );

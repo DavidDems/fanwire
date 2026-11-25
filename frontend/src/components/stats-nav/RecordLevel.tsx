@@ -15,7 +15,7 @@ import { StatusLine } from "../ui/StatusLine";
 import { TeamIcon } from "../ui/TeamIcon";
 import { playerName } from "./recordLabels";
 import { RecordValue } from "./RecordValue";
-import { ColumnHeader, ScrollTable } from "./ScrollTable";
+import { ColumnHeader, ScrollTable } from "../ui/ScrollTable";
 import styles from "./StatsNav.module.css";
 import type { StatsLevel, StatsNavAdapter } from "./types";
 
@@ -96,16 +96,33 @@ function RecordList({
       {entries.length === 0 ? (
         <EmptyState>Nothing qualifies for this record yet.</EmptyState>
       ) : (
-        <ScrollTable caption={`${data.title}, top ${data.total}`}>
+        <ScrollTable
+          scrollClassName={styles.scroll}
+          tableClassName={styles.table}
+          caption={`${data.title}, top ${data.total}`}
+        >
           <thead>
             <tr>
               <ColumnHeader label="#" title="Rank" />
-              <ColumnHeader label={isPlayer ? "Player" : "Team"} name />
-              {hasTeam ? <ColumnHeader label="Team" name /> : null}
-              {hasSeason ? <ColumnHeader label="Season" name /> : null}
-              {hasGame ? <ColumnHeader label="Date" name /> : null}
+              <ColumnHeader
+                label={isPlayer ? "Player" : "Team"}
+                className={styles.name}
+              />
+              {hasTeam ? (
+                <ColumnHeader label="Team" className={styles.name} />
+              ) : null}
+              {hasSeason ? (
+                <ColumnHeader label="Season" className={styles.name} />
+              ) : null}
               {hasGame ? (
-                <ColumnHeader label="Opp" title="Opponent" name />
+                <ColumnHeader label="Date" className={styles.name} />
+              ) : null}
+              {hasGame ? (
+                <ColumnHeader
+                  label="Opp"
+                  title="Opponent"
+                  className={styles.name}
+                />
               ) : null}
               <ColumnHeader
                 label={unit.charAt(0).toUpperCase() + unit.slice(1)}

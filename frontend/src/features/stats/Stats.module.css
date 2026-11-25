@@ -1,9 +1,10 @@
 /*
  * The Stats page's tabs (/stats/seasons, /stats/records, /stats/players): the
  * tab's controls, the stats navigator and the leaders, stacked in one column.
- * Every table, the leaders' included, is drawn by the navigator's ScrollTable
- * with the navigator's own stylesheet (components/stats-nav/), so no table
- * rule lives here (R24). Values come from tokens.css by name only.
+ * Every table, the leaders' included, is drawn by the shared ScrollTable
+ * (components/ui/) with the navigator's stylesheet
+ * (components/stats-nav/StatsNav.module.css), so no table rule lives here
+ * (R24). Values come from tokens.css by name only.
  */
 
 .tab {

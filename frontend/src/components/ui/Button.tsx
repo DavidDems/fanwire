@@ -20,8 +20,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 /**
  * A native `<button>`; every other prop is passed through. `data-active`
- * (Unlike, Unfollow) is for CSS only — the label carries the state, so there
- * is no `aria-pressed` (`components-shared.md` §2).
+ * (Unfollow) is for CSS only, on a control whose label carries its state
+ * (`components-shared.md` §2). A toggle whose name stays fixed (the post
+ * card's Like and Repost, `features/feed/PostAction.tsx`, UI-009) passes
+ * `aria-pressed` through instead.
  */
 export function Button({ variant, size, className, ...rest }: ButtonProps) {
   const classes = buttonClass(variant, size);

@@ -2,7 +2,6 @@ import type { InfiniteData } from "@tanstack/react-query";
 
 import { apiClient } from "../../api/client";
 import type { components } from "../../api/schema";
-import { config } from "../../config";
 
 /**
  * The endpoints this feature reads and writes, the cache keys their answers
@@ -351,13 +350,7 @@ export function isPlainRepost(post: PostView): boolean {
 }
 
 /**
- * A public-media key joined to the configured base — the site origin in
- * production, not `/media`: keys already start with `media/`, and CloudFront
- * serves `/media/*` from the public-media bucket unchanged ([[0x04-media]]).
- *
- * The trims are what keep a trailing slash on the base, or a leading one on the
- * key, from producing a doubled separator that CloudFront answers 404 for.
+ * The public-media join lives in `lib/mediaUrl.ts`, shared with compose and
+ * `Avatar`; the feed's components and tests read it from here.
  */
-export function mediaUrl(key: string): string {
-  return `${config.mediaBaseUrl.replace(/\/+$/, "")}/${key.replace(/^\/+/, "")}`;
-}
+export { mediaUrl } from "../../lib/mediaUrl";

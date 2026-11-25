@@ -51,6 +51,8 @@
   /* UI-010: the soft-filled form controls' fill at rest and on focus. */
   --color-field: #e6eef2;
   --color-field-focus: #ffffff;
+  /* The modal backdrop, drawn at 0.6 opacity. */
+  --color-scrim: #011d28;
 
   /* §8 Type. --font-sans is typography.md's system stack. */
   --font-sans:
@@ -154,6 +156,8 @@
      */
     --color-field: #173543;
     --color-field-focus: #1b3c4b;
+    /* The modal backdrop, drawn at 0.6 opacity: the same in dark. */
+    --color-scrim: #011d28;
 
     /* §8 Shadows, dark: borders carry the edge instead. */
     --shadow-1: none;

@@ -16,7 +16,6 @@ import type { components } from "../../api/schema";
 
 type MeOut = components["schemas"]["MeOut"];
 type PublicUserOut = components["schemas"]["PublicUserOut"];
-type TeamOut = components["schemas"]["TeamOut"];
 type UpdateMeRequest = components["schemas"]["UpdateMeRequest"];
 
 /**
@@ -34,9 +33,6 @@ export function viewedUserKey(userId: number): readonly ["users", number] {
 /** The caller's follow set. One key, separate from `PROFILE_QUERY_KEY`. */
 export const FOLLOWING_QUERY_KEY = ["users", "me", "following"] as const;
 
-/** `preferred_team_id` is an FK into `events/`, so the choices come from the API. */
-export const TEAMS_QUERY_KEY = ["events", "teams"] as const;
-
 export async function fetchPublicProfile(userId: number): Promise<PublicUserOut> {
   const { data, response } = await apiClient.GET("/users/{user_id}", {
     params: { path: { user_id: userId } },
@@ -52,14 +48,6 @@ export async function fetchFollowing(): Promise<number[]> {
   const { data, response } = await apiClient.GET("/users/me/following");
   if (!response.ok || data === undefined) {
     throw new Error(`GET /users/me/following answered ${response.status}`);
-  }
-  return data;
-}
-
-export async function fetchTeams(): Promise<TeamOut[]> {
-  const { data, response } = await apiClient.GET("/events/teams");
-  if (!response.ok || data === undefined) {
-    throw new Error(`GET /events/teams answered ${response.status}`);
   }
   return data;
 }
