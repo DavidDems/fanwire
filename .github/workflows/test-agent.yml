@@ -265,6 +265,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # the version check diffs against the PR base
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.15"
@@ -274,6 +276,17 @@ jobs:
         run: python -m pytest -q
       - name: Selfcheck - state machine, guard, policy and every task spec
         run: python .ai/bin/agentctl.py selfcheck
+      - name: Pipeline version - a pipeline change bumps VERSION and the changelog
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "$EVENT is not a pull request - nothing to compare"
+            exit 0
+          fi
+          python .ai/bin/agentctl.py version check --base "$BASE_SHA"
 
   pip-audit:
     needs: changes
@@ -484,6 +497,27 @@ jobs:
           case "$base" in *[!0]*) ;; *) base=HEAD ;; esac
           python .ai/bin/agentctl.py docs lint --base "$base"
 
+  # Backlog 19: stacked PRs merged top-down never reached main. A PR's base
+  # must be `main` or an `outstanding-track-*` integration branch. Runs on
+  # pull_request only; on push/dispatch it is skipped, which `gate` accepts.
+  # The base ref is attacker-influenced text, so it comes in through env and
+  # is never interpolated into the script.
+  pr-base:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an allowed base branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          case "$BASE_REF" in
+            main|outstanding-track-*) echo "base '$BASE_REF' is allowed" ;;
+            *)
+              echo "::error::PR base '$BASE_REF' is not allowed; target main or an outstanding-track-* branch"
+              exit 1
+              ;;
+          esac
+
   # One check that always reports, whatever the filter decided.
   #
   # Required status checks name a JOB, and a job the filter skipped never
@@ -511,6 +545,7 @@ jobs:
       - openapi-drift
       - npm-audit
       - infra-synth
+      - pr-base
     runs-on: ubuntu-latest
     steps:
       - name: Report the gate

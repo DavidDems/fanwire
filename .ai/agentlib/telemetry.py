@@ -49,6 +49,7 @@ REQUIRED_FIELDS = (
 
 # Fields that are allowed to be absent or null — they simply are not always known.
 NULLABLE = (
+    "pipeline_version",
     "session_id",
     "commit_sha",
     "ci_run_id",

@@ -101,6 +101,14 @@ Edit `.ai/tasks/AUTH-017/task.json` and `brief.md`, then validate:
 python .ai/bin/agentctl.py task validate AUTH-017
 ```
 
+Validation rejects an acceptance criterion with no observable predicate (it
+names the criterion's index and quotes it). Each criterion needs at least one
+anchor a test can check: a backtick span, a double-quoted string, a digit or
+`=`, a path or identifier (`a/b`, `mod.func`, `snake_case`, `CamelCase`), or an
+observable verb such as returns, raises, rejects, shows, exits or contains.
+"Works correctly" or "is clean" alone fails. The full list is
+`OBSERVABLE_VERBS` in `.ai/agentlib/spec.py`.
+
 Commit the spec through an ordinary reviewed PR to `main`. Once it has merged,
 create the branch from `main` and kick it off:
 
@@ -206,6 +214,13 @@ python .ai/bin/agentctl.py selfcheck
 rejection, and the retry-to-exhaustion path, and asserts the guard still
 refuses a worker reaching for `.ai/` or `.github/`. It runs in CI on every PR
 as part of `test-agent`'s `agent-infra-test` job.
+
+Locally, add `--workspaces` to also require `node_modules` in each npm
+workspace (every top-level directory with a `package.json`: `frontend/`,
+`infra/`). A missing install fails with the exact fix, `npm ci` in that
+directory. It is opt-in because CI runs `selfcheck` with no `npm install`; it is
+also skipped whenever `CI=true`. `agentctl preflight ports` and the
+Claude Code hook that refuses `git stash` are in `.ai/hooks/README.md`.
 
 ## Cost
 

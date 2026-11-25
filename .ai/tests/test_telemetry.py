@@ -321,3 +321,12 @@ class TestAggregateReportsTheRealSpend:
         totals = tm.aggregate(tmp_path)["totals"]
         assert totals["cache_read_input_tokens"] == 16654
         assert totals["cache_creation_input_tokens"] == 8596
+
+
+class TestPipelineVersion:
+    def test_defaults_to_null_and_keeps_a_given_value(self, tmp_path):
+        data = json.loads(tm.record(tmp_path, record()).read_text(encoding="utf-8"))
+        assert data["pipeline_version"] is None
+        given = record(workflow_run_id="2", pipeline_version="1.2.3")
+        data = json.loads(tm.record(tmp_path, given).read_text(encoding="utf-8"))
+        assert data["pipeline_version"] == "1.2.3"

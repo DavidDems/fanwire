@@ -6,6 +6,22 @@ third-party parser that would have to be installed into every orchestrator
 step. Prose belongs in the sibling `brief.md`, which nothing parses.
 
 A spec lives at `.ai/tasks/<TASK-ID>/task.json`.
+
+Acceptance criteria must state an observable predicate. Each criterion needs
+at least one ANCHOR, a thing a test can check; wording alone ("works
+correctly", "is clean", "as expected") is rejected with the index and the quoted
+text. An anchor is any of:
+
+- a backtick span (an identifier, command or code),
+- a double-quoted string (curly quotes count),
+- a digit or `=` (a count, status code, limit or `attr=value`),
+- a path or dotted identifier (`a/b`, `mod.func`, `file.py`, `snake_case`, `CamelCase`),
+- an observable verb from `OBSERVABLE_VERBS` (returns, raises, rejects, shows,
+  exits, contains, equals, ...), matched as a whole word, case-insensitive.
+
+The rule is a floor, not a proof: it catches the criterion that no test can pin
+(the cause of `red_baseline_not_red` escalations) and prefers a false negative
+to rejecting a real spec.
 """
 
 from __future__ import annotations
@@ -36,6 +52,26 @@ REQUIRED_FIELDS = (
 # than relied on being caught later by the guard.
 UNGRANTABLE_PREFIXES = (".ai/", ".github/", "wiki/GeneralContext/")
 UNGRANTABLE_EXACT = ("**", "*", "/", ".", "./**")
+
+OBSERVABLE_VERBS = frozenset(
+    """returns return raises raise emits emit renders render exits exit rejects reject
+    contains contain equals equal fails fail passes pass logs log shows show displays
+    display receives receive creates create deletes delete writes write reads read
+    responds respond redirects redirect sends send stores store records record lists
+    list includes include excludes exclude refuses refuse blocks block calls call
+    makes make clears clear persists persist appears appear disables disabled enables
+    enabled succeeds succeed validates validate navigates navigate touches touch adds add added commit commits pin pins keeps
+    keep distinguishes distinguish changes change merged merges identical proves prove
+    holds hold invoke invokes invoked exist exists proof""".split()
+)
+
+_ANCHOR_RES = (
+    re.compile(r"`[^`]+`"),
+    re.compile(r"\"[^\"]+\"|“[^”]+”"),
+    re.compile(r"[0-9=]"),
+    re.compile(r"[\w-]+[/.][\w-]+|\w+_\w+|[A-Z][a-z]+[A-Z]\w*|[a-z]+[A-Z]\w*"),
+)
+_WORD_RE = re.compile(r"[A-Za-z]+")
 
 MAX_IMPL_ATTEMPTS_CEILING = 8
 
@@ -74,6 +110,13 @@ def load(task_dir: str | Path) -> dict[str, Any]:
     return spec
 
 
+def is_observable(criterion: str) -> bool:
+    """True if the criterion has at least one anchor (see the module docstring)."""
+    if any(rx.search(criterion) for rx in _ANCHOR_RES):
+        return True
+    return any(w.lower() in OBSERVABLE_VERBS for w in _WORD_RE.findall(criterion))
+
+
 def workflow_policy(spec: dict) -> dict[str, Any]:
     return {**WORKFLOW_POLICY_DEFAULTS, **spec.get("workflow_policy", {})}
 
@@ -99,6 +142,15 @@ def validate(spec: dict, known_skills: Iterable[str]) -> list[str]:
 
     if "acceptance_criteria" in spec and not _nonempty_str_list(spec["acceptance_criteria"]):
         errors.append("acceptance_criteria must be a non-empty list of strings")
+    else:
+        for i, criterion in enumerate(spec.get("acceptance_criteria", [])):
+            if not is_observable(criterion):
+                errors.append(
+                    f"acceptance_criteria[{i}] {criterion!r} states no observable predicate: "
+                    "name a checkable outcome (a `code` identifier, a path, a number or status, "
+                    'a "quoted" string, or a verb such as returns/raises/rejects/shows/exits) '
+                    "so a test can pin it"
+                )
 
     allowed = spec.get("allowed_paths")
     if allowed is not None:

@@ -19,7 +19,7 @@ state. Nothing is duplicated between them: a task spec names the
 | **How the whole thing fits together** | [docs/architecture.md](docs/architecture.md) |
 | **What each agent may touch** | [docs/permissions.md](docs/permissions.md) |
 | **Every state and transition** | [docs/state-machine.md](docs/state-machine.md) |
-| **Collecting a merged unit's measurements** | [docs/metrics.md](docs/metrics.md) — schema, attribution, unknowns and artifact commands |
+| **Collecting or reading unit measurements** | [docs/metrics.md](docs/metrics.md) — schema, attribution, unknowns, artifact commands, `agentctl metrics report` |
 | **What happens if an agent is manipulated** | [docs/threat-model.md](docs/threat-model.md) |
 
 ## In one paragraph
@@ -50,7 +50,8 @@ Nothing depends on an agent session staying alive.
 │   ├── decision.py          the typed-decision contract (jev's answers)
 │   ├── doclint.py           the documentation linter (docs/doclint.md)
 │   ├── telemetry.py         append-only invocation records
-│   └── metrics.py           deterministic measurements of merged units
+│   ├── metrics.py           deterministic measurements of merged units
+│   ├── metricsreport.py     the by-week/mode/version report over those records
 ├── bin/
 │   ├── agentctl.py          the only supported way to touch workflow state
 │   ├── invoke_agent.sh      provider seam: run an agent, get prose
@@ -88,7 +89,10 @@ Nothing depends on an agent session staying alive.
 ```bash
 python .ai/bin/agentctl.py status              # board of every task
 python .ai/bin/agentctl.py selfcheck           # prove the machinery works, free
+python .ai/bin/agentctl.py selfcheck --workspaces  # locally: also require npm ci in frontend/ and infra/
+python .ai/bin/agentctl.py preflight ports     # fail if a docker-compose host port is already bound
 python .ai/bin/agentctl.py state show <ID>     # why a task is where it is
+python .ai/bin/agentctl.py version check --base <ref>   # pipeline change needs VERSION + CHANGELOG
 python .ai/bin/agentctl.py prompt <ID> --role code_agent   # what an agent was told
 python .ai/bin/agentctl.py telemetry report    # what it cost
 gh api --paginate repos/DavidDems/fanwire/issues/comments > comments.json

@@ -23,7 +23,8 @@ thing, write state.
   agentctl docs dupes                   repeated and near-repeated Markdown paragraphs
   agentctl docs archive-refs            PR numbers and hashes to fanwire-archive (dry run)
   agentctl addresses                    fail on a personal email address in a tracked file
-  agentctl selfcheck                    prove the machinery works, no tokens spent
+  agentctl selfcheck [--workspaces]     prove the machinery works, no tokens spent
+  agentctl preflight ports              fail if a docker-compose host port is already bound
 
 Exit codes: 0 success, 1 the thing being checked failed, 2 usage/IO error.
 """
@@ -69,10 +70,13 @@ from agentlib import (
     doclint,
     guard,
     handusage,
+    localguards,
     metrics,
+    metricsreport,
     orchestrator,
     promptbuild,
     shadow,
+    version,
 )
 from agentlib import (
     spec as spec_mod,
@@ -542,6 +546,7 @@ def cmd_telemetry_from_run(args) -> int:
         started_at=args.started,
         outcome=args.result,
     )
+    rec.setdefault("pipeline_version", _pipeline_version())
     try:
         path = tm.record(
             REPO_ROOT / cfg["telemetry"]["root"], rec, prices=cfg["telemetry"].get("prices", {})
@@ -731,14 +736,53 @@ def cmd_metrics_collect(args) -> int:
     return OK
 
 
+def cmd_metrics_report(args) -> int:
+    try:
+        if bool(args.records) == bool(args.ref):
+            die("give exactly one of --records DIR or --ref GITREF")
+        units = (
+            metricsreport.load_directory(args.records)
+            if args.records
+            else metricsreport.load_ref(args.ref, REPO_ROOT)
+        )
+        print(metricsreport.render(units))
+    except metricsreport.ReportError as exc:
+        die(str(exc))
+    return OK
+
+
 # --------------------------------------------------------------------------- telemetry
+
+
+def cmd_version_check(args) -> int:
+    try:
+        problems = version.check(REPO_ROOT, args.base)
+    except version.VersionError as exc:
+        die(str(exc), FAILED)
+    for problem in problems:
+        print(f"version check: {problem}", file=sys.stderr)
+    if problems:
+        die("pipeline changed without a version bump and changelog entry", FAILED)
+    print("version check: ok")
+    return OK
+
+
+def _pipeline_version() -> str | None:
+    """The working tree's `.ai/VERSION`, or None if absent or not semver."""
+    try:
+        text = (AI_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text if version.parse(text) is not None else None
 
 
 def cmd_telemetry_record(args) -> int:
     cfg = config()
     root = REPO_ROOT / cfg["telemetry"]["root"]
     try:
-        path = tm.record(root, _json(Path(args.file)), prices=cfg["telemetry"].get("prices", {}))
+        rec = _json(Path(args.file))
+        rec.setdefault("pipeline_version", _pipeline_version())
+        path = tm.record(root, rec, prices=cfg["telemetry"].get("prices", {}))
     except tm.TelemetryError as exc:
         die(str(exc), FAILED)
     print(path.relative_to(REPO_ROOT))
@@ -949,6 +993,9 @@ def cmd_selfcheck(args) -> int:
     if breach.ok:
         problems.append("guard did NOT stop a worker writing agent infrastructure")
 
+    if getattr(args, "workspaces", False):
+        problems += localguards.workspace_problems(REPO_ROOT)
+
     if problems:
         print(f"selfcheck: {len(problems)} problem(s)", file=sys.stderr)
         for p in problems:
@@ -1118,6 +1165,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--diagnostic-json", action="store_true", help="emit bounded failure evidence on stderr"
     )
     met_collect.set_defaults(func=cmd_metrics_collect)
+    met_report = met.add_parser(
+        "report", help="by week and mode: units, cost, human interventions, red CI"
+    )
+    met_report.add_argument("--records", help="directory of records/<TASK-ID>.json files")
+    met_report.add_argument("--ref", help="git ref holding records/, e.g. origin/metrics")
+    met_report.set_defaults(func=cmd_metrics_report)
+
+    ver = sub.add_parser("version", help="pipeline version").add_subparsers(
+        dest="sub", required=True
+    )
+    ver_check = ver.add_parser(
+        "check", help="pipeline changes need a VERSION bump and changelog entry"
+    )
+    ver_check.add_argument("--base", required=True, help="git ref to diff against")
+    ver_check.set_defaults(func=cmd_version_check)
 
     tel = sub.add_parser("telemetry").add_subparsers(dest="sub", required=True)
     tel_rec = tel.add_parser("record")
@@ -1168,10 +1230,38 @@ def build_parser() -> argparse.ArgumentParser:
     addr.set_defaults(func=cmd_addresses)
 
     sub.add_parser("status", help="board of every task").set_defaults(func=cmd_status)
-    sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent").set_defaults(
-        func=cmd_selfcheck
+    sc = sub.add_parser("selfcheck", help="prove the machinery works, no tokens spent")
+    sc.add_argument(
+        "--workspaces",
+        action="store_true",
+        help="also require node_modules in each npm workspace (local only; skipped when CI=true)",
     )
+    sc.set_defaults(func=cmd_selfcheck)
+
+    pf = sub.add_parser("preflight", help="local checks before a command runs")
+    pfs = pf.add_subparsers(dest="preflight_cmd", required=True)
+    pp = pfs.add_parser("ports", help="fail if a host port docker-compose publishes is already bound")
+    pp.add_argument("--compose-file", default="docker-compose.yml")
+    pp.add_argument("--service", action="append", help="check only this service and its dependencies")
+    pp.set_defaults(func=cmd_preflight_ports)
     return p
+
+
+def cmd_preflight_ports(args) -> int:
+    path = Path(args.compose_file)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    try:
+        found = localguards.port_collisions(path, services=args.service)
+    except OSError as exc:
+        print(f"preflight ports: {exc}", file=sys.stderr)
+        return USAGE
+    if found:
+        for c in found:
+            print(f"preflight ports: {c.message()}", file=sys.stderr)
+        return FAILED
+    print("preflight ports: every published host port is free")
+    return OK
 
 
 def cmd_docs_lint(args) -> int:
