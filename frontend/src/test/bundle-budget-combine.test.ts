@@ -29,7 +29,13 @@ describe("combine", () => {
   it("adds each unit's entry growth, and caps the raw entry at ENTRY_JS_RAW_HARD_MAX", () => {
     const budget = combine([
       { unit: "A", entryJsGzipGrowth: 1_000, entryJsRawGrowth: 5_000 },
-      { unit: "B", entryJsGzipGrowth: 100, entryJsRawGrowth: 50_000 },
+      // Past the cap whatever the base is: the fold after FRONTEND-051 left
+      // the entry about 95 kB under it, which a fixed 55 kB no longer reached.
+      {
+        unit: "B",
+        entryJsGzipGrowth: 100,
+        entryJsRawGrowth: ENTRY_JS_RAW_HARD_MAX,
+      },
     ]);
 
     expect(budget.entryJsGzipMax).toBe(BASE.entryJsGzip + TOLERANCE + 1_100);
