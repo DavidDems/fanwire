@@ -36,7 +36,11 @@ under `src/` imports `GameFilter` and that `features/search/api.ts` asks no
   `FeedPage`. `AppLayout.module.css` widens `main` from 76.0625em by
   `.main:has(aside)` to `--content-max` + `--space-5` + `--rail-width`, so no
   other route changes width; the rail is sticky at the sidebar's `top` and
-  scrolls on its own.
+  scrolls on its own. While the rail is mounted, HomeView renders a "Skip to
+  search" link first in `main`, before the feed (and outside `.home`, so the
+  feed stays its first child), with the shell's `skipLink` look; it moves
+  focus to the rail's box (`#search-bar-q`, focused on click as Skip to
+  content focuses `main`). The rail stays after the feed (`FRONTEND-056`).
 - **The rail is a preview.** "Results for <q>" (h2) with Clear search (a new
   entry without `q`, focus back to the box), then Accounts and Posts (h3), at
   most five each from the first page of the same infinite queries
