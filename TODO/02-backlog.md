@@ -89,7 +89,6 @@ in this order. One row per track; its brief lists the units.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **A friendlier 429 message**: the frontend shows a generic failure when `POST /posts` or a repost is rate-limited | `hand` | — | `POSTS-002` (fanwire-archive#183), "Not in this task" | `createPost` treats every non-2xx alike. A "slow down" line where the composer shows errors |
 
 ## Launch adjustments (Track D sequence)
 
@@ -103,8 +102,7 @@ Completed launch units/research are removed; historical records remain.
 | 2 | `director` | pending | `USERS-009` is merged but dormant (`ACCOUNT_LIFECYCLE_ENABLED=false` in `infra/lib/app-stack.ts`). Review legacy adoption and the cutover/activation procedure, then activate with the human's approval at each gate. Track 6 |
 | 3 | `hand` | `AUTH-001` | Re-scoped to Cognito's native forgot-password flow with its verified-email code and a static verify reminder; the lost/late-reset revocation machinery is dropped ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)). A Director rewrites the spec first. Track 6 |
 
-Outstanding Director UI documentation follow-ups remain under Frontend. Completed
-IAM/scope prerequisites are not AWS writes to repeat. Foundation authorization
+Completed IAM/scope prerequisites are not AWS writes to repeat. Foundation authorization
 does not authorize deployment or production user-data operations. Reset retains
 Cognito's default sender and verified-email codes: no SES, custom reset tokens,
 separate post-reset mail, password history or paid-plan requirement.
@@ -117,14 +115,11 @@ separate post-reset mail, password history or paid-plan requirement.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Track D components/layout documentation follow-up** | `director` | — | Users task briefs | Verify what current main already documents, then complete the remaining promised components/layout updates under `wiki/CodeContext/FrontendUI/` in a Director PR. |
-| **The home rail after the feed in DOM order**: a keyboard reader reaches the rail's search box after about 150 Tabs | `hand` | — | `FRONTEND-036` (UI track) | A skip link to the rail, or the rail before the feed in DOM order. Writes `src/routes/**`. Browser check |
-| **UI-track browser rows left NOT DONE**: axe and forced colors on the shell, rail, Recent Games, result cards, team tabs and chart; a full 82-game season chart (label density); the picker at 320/768 | `hand` | — | fanwire-archive#346, fanwire-archive#347, fanwire-archive#351, `FRONTEND-037` PR | Browser-only, on real data after the human's game-data refresh |
-| **The entry is near its raw limit** (554.7 kB of 560.3 kB raw on React 19, the cap reset to the measured entry plus 1% by [ADR 0041](../wiki/GeneralContext/Decisions/0041-react-19-entry-budget.md)) | `hand` | — | `FRONTEND-044` PR (fanwire-archive#373); ADR 0041 | Any unit that adds to the entry (a nav item, a shell change) has under 1% headroom. Trim the entry (sign-in/Cognito, `date-fns`, the `buffer` polyfill) in the frontend track, browser-tested |
-| **Frontend tidy-ups left by `FRONTEND-008`/`009`/`UI-009`**: move `features/games/format.ts` to `src/lib/`; one shared `ScrollTable` in `components/ui/` instead of the copies in `stats` and `players`; one teams fetch in `api/` instead of four; delete or reuse the caller-less `GameScore`, `ChevronDownIcon` and `UserIcon`; a scrim token for `Dialog`'s backdrop (it uses the `--neutral-950` primitive); stale `LikeButton`/"no `aria-pressed`" comments in `Button.tsx`, `search-isolation.test.ts` and `SearchPage.test.tsx` | `hand` | — | the "for the Director" lists of `FRONTEND-008`/`009`/`010` and `UI-009` | One spec, behaviour unchanged; writes `components/ui/`, `src/lib/` and several features |
-| **"1 followers", "1 likes"**: singular and plural | `hand` | — | `UI-005`, `UI-008` browser passes | The counts are pinned exactly by tests, so each is a behaviour change with its own red test (`features/profile/`, `features/feed/`). Was `auto` by the human's 2026-10-12 choice; now `hand`, since API spend is out (ADR 0035). Track 5. **The feed half ("1 likes") is now `UI-009`'s**; this item is the profile's "1 followers" only |
-| **The shell's `scroll-padding-bottom` is about 5 px short**: a focused control near the bottom bar is overlapped (never hidden) | `hand` | — | `FRONTEND-007` browser pass | Shell, `AppLayout.module.css`. Browser check |
-| **`Field` layouts**: a checkbox layout (then delete `EmailPreference`'s `.preference > div` exception) and a row layout (so search's box and button, and its three selects, can sit in a row) | `hand` | — | `components-map-posts.md` §5, `FRONTEND-007` | `src/components/` |
-| **`fetchTeams` exists in four places** (profile, `ProfileSetupPage`, compose's `attachmentReads.ts` since FRONTEND-013, stats), sharing one cache key | `hand` | — | `FRONTEND-007` | Move into `api/`; needs all four features in scope |
-| **The media-URL join exists twice** (`features/feed/api.ts`, `features/compose/MediaWidget.tsx`) | `hand` | — | `FRONTEND-005` | Move into `api/` or `components/`; needs both in scope |
+| **UI-track browser rows left NOT DONE**: axe on the shell, rail, Recent Games, result cards, team tabs and chart (the human, with the axe extension); forced colours on Recent Games with data, the result cards, team tabs and chart; a full 82-game season chart (label density); the picker at 320/768; the notifications preference checkbox layout, signed in | `hand` | — | fanwire-archive#346, fanwire-archive#347, fanwire-archive#351, `FRONTEND-037` PR, track 5 | Browser-only, on real data. Track 5 could not start `backend-dev` (no `backend/.env` for dev Cognito on its machine); the shell and rail in forced colours are done |
+| **Track 5 tidy-ups that change tests**: move `features/games/format.ts` to `src/lib/`; delete the caller-less `GameScore` and `UserIcon` (`ChevronDownIcon` has a caller, `Dialog`); rename the stale test "TEAMS_KEY is the one features/profile and search spell" in `api/stats.test.ts` | `hand` | — | track 5 | Each needs a test changed (tests pin `GameScore` and `UserIcon`), which track 5's no-test-changes rule ruled out. Needs the human's OK to change those tests |
+| **Three UI strings with a straight apostrophe** (`typography.md` §2): `AccountSettings.tsx` "this account's verification status"; `features/compose/attachmentReads.ts` "Player's game" and "The player's line" | `hand` | — | track 5 | Typographic apostrophe (’) instead; check the tests that pin each string |
+| **Italic `.unavailable` lines against "No italics in the UI"** (`typography.md` §2): `PostNode.module.css`, `previews/Previews.module.css` | `director` | — | track 5 | The human decides: a documented exception, or drop the italic |
+| **Profile counts are bare, the feed's are localised**: the profile prints "1200 followers", the feed "1,200 likes" | `hand` | — | track 5 | Format the profile's counts by locale, like the feed |
+| **The floating + can cover a control Tab scrolls to**: it covers 80–136 px from the bottom on phones, so a control at the right of a card can sit partly under it (never fully hidden) | `hand` | — | track 5 | Clearing it fully would take about 140 px of scroll padding. Decide whether to act. Browser check |
+| **`FrontendUI/tokens.md` is at its word budget** (2,499 of 2,500) | `director` | — | track 5 | Split it by responsibility before the next addition |
 
