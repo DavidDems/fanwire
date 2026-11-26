@@ -1,11 +1,16 @@
 /** USERS-006: the account settings page's sections and account verification. */
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { renderSettingsApp } from "../../test/account";
-import { FakeAuthService, testSession } from "../../test/auth";
+import { ForgotPasswordPage } from "../../auth/ForgotPasswordPage";
+import buttonStyles from "../../components/ui/Button.module.css";
+import { AppLayout } from "../../routes/AppLayout";
+import { accountServer, renderSettingsApp } from "../../test/account";
+import { FakeAuthService, renderWithAuth, testSession } from "../../test/auth";
 import { server } from "../../test/server";
+import { AccountSettings } from "./AccountSettings";
 
 function before(first: HTMLElement, second: HTMLElement): boolean {
   return Boolean(
@@ -183,5 +188,72 @@ describe("Account settings", () => {
         "We could not check this account’s verification status.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Account settings — Account details (AUTH-001)", () => {
+  it("begins with an Account details section, before Verify this account", async () => {
+    renderSettingsApp("active", new FakeAuthService({ session: testSession() }));
+    await screen.findByRole("button", { name: "Account menu" });
+
+    const main = screen.getByRole("main");
+    await within(main).findByRole("heading", { name: "Verify this account" });
+    const headings = within(main).getAllByRole("heading", { level: 2 }).map(
+      (heading) => heading.textContent,
+    );
+    expect(headings[0]).toBe("Account details");
+    expect(headings.indexOf("Account details")).toBeLessThan(
+      headings.indexOf("Verify this account"),
+    );
+    const section = screen.getByRole("region", { name: "Account details" });
+    expect(section.tagName).toBe("SECTION");
+  });
+
+  it("shows the signed-in session's email on an Email row", async () => {
+    const email = "someone.else@example.test";
+    renderSettingsApp("active", new FakeAuthService({ session: testSession({ email }) }));
+    await screen.findByRole("button", { name: "Account menu" });
+
+    const section = await screen.findByRole("region", { name: "Account details" });
+    expect(within(section).getByText("Email")).toBeInTheDocument();
+    expect(within(section).getByText(email)).toBeInTheDocument();
+  });
+
+  it("has a Password row with a Reset password control to /forgot-password and no password value", async () => {
+    renderSettingsApp("active", new FakeAuthService({ session: testSession() }));
+    await screen.findByRole("button", { name: "Account menu" });
+
+    const section = await screen.findByRole("region", { name: "Account details" });
+    expect(within(section).getByText("Password")).toBeInTheDocument();
+    const reset = within(section).getByRole("link", { name: "Reset password" });
+    expect(reset).toHaveAttribute("href", "/forgot-password");
+    // The control is a 44 px Button-styled link, never a bare text link.
+    expect(reset).toHaveClass(buttonStyles.button);
+    expect(reset).toHaveClass(buttonStyles.md);
+    // No password, masked or otherwise, and no password input.
+    expect(section.textContent ?? "").not.toMatch(/[•*●]{3,}/);
+    expect(section.querySelector("input")).toBeNull();
+  });
+
+  it("sends Reset password to the reset page, which signs the user out", async () => {
+    const user = userEvent.setup();
+    const auth = new FakeAuthService({ session: testSession() });
+    server.use(...accountServer("active").handlers);
+    renderWithAuth(
+      <Routes>
+        <Route path="/" element={<AppLayout />}>
+          <Route path="settings" element={<AccountSettings />} />
+        </Route>
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      </Routes>,
+      { authService: auth, route: "/settings" },
+    );
+    await screen.findByRole("button", { name: "Account menu" });
+
+    await user.click(await screen.findByRole("link", { name: "Reset password" }));
+
+    expect(await screen.findByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(auth.callsTo("signOut")).toHaveLength(1);
+    expect(auth.session).toBeNull();
   });
 });

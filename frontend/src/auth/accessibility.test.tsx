@@ -50,6 +50,7 @@ const CASES: PageCase[] = [
     controls: () => [
       screen.getByLabelText(/^email$/i),
       screen.getByLabelText(/^password$/i),
+      screen.getByLabelText(/^confirm password$/i),
       ...screen.getAllByRole("button"),
     ],
   },

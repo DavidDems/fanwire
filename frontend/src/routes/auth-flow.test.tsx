@@ -179,3 +179,25 @@ describe("a confirmed account with no profile yet", () => {
     ).toBeNull();
   });
 });
+
+describe("a member resetting their password from Account settings (AUTH-001)", () => {
+  it("goes to the reset page, which signs them out before it offers the form", async () => {
+    const user = userEvent.setup();
+    server.use(profileFound());
+    const service = new FakeAuthService({ session: testSession() });
+    renderApp("/settings", service);
+
+    const reset = await screen.findByRole("link", { name: /^reset password$/i });
+    expect(reset).toHaveAttribute("href", "/forgot-password");
+    await user.click(reset);
+
+    expect(
+      await screen.findByRole("heading", { name: /^forgot\s*-?\s*password$/i }),
+    ).toBeInTheDocument();
+    expect(await screen.findByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(service.callsTo("signOut")).toHaveLength(1);
+    expect(service.session).toBeNull();
+    expect(screen.queryByRole("button", { name: "Account menu" })).toBeNull();
+    expect(service.callsTo("forgotPassword")).toEqual([]);
+  });
+});
