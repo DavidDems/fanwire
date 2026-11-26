@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-059",
+  "objective": "Typography and counts (track 5b): drop the italic from the two .unavailable lines so no UI stylesheet sets italic (typography.md §2, the human's decision), use the typographic apostrophe in the three UI strings that still have a straight one, and format the profile's follower and following counts by locale (\"1,200 followers\") the way the feed's counts are, each with its own red test.",
+  "acceptance_criteria": [
+    "Start gate: agent/FRONTEND-059 is cut from the tip of the integration branch outstanding-track-5b after the spec PR that adds this file merges. It runs in parallel with FRONTEND-058: neither unit writes a path the other writes, and each forbids the other's paths.",
+    "Test-first: one test_agent commit holds the four test changes below, alone, before the implementation. Each is red for its own reason, and the PR quotes the failures: the italic sweep lists features/feed/PostNode.module.css and features/feed/previews/Previews.module.css; the account test finds no element with the typographic text; the compose test gets \"Player's game, line 80001\" and the straight-apostrophe note; the profile test finds \"1200 followers\", not \"1,200 followers\". Tests are frozen after this commit (allow_test_edits_during_impl is false).",
+    "No italics, test: a new frontend/src/styles/no-italics.test.ts walks every .css file under src (skipping node_modules, dist, coverage and .vite, as base.test.ts's src-wide sweeps do), strips comments with test/css's stripComments, and expects no file to set italic or oblique, through font-style or the font shorthand (for example /font-style\\s*:\\s*(italic|oblique)/i and /\\bfont\\s*:[^;}]*\\b(italic|oblique)\\b/i). It is guarded against passing vacuously: inline fixtures show the scan flags 'font-style: italic', 'font-style: oblique 10deg' and 'font: italic 600 1rem sans-serif' and passes 'font-style: normal' and a comment that says italic; and the walk is shown to include styles/base.css, styles/tokens.css, features/feed/PostNode.module.css and features/feed/previews/Previews.module.css. The header comment names typography.md §2 ('No italics in the UI') and FRONTEND-059.",
+    "No italics, implementation: delete the font-style: italic line from .unavailable in frontend/src/features/feed/PostNode.module.css and in frontend/src/features/feed/previews/Previews.module.css (the only two in src at spec time). Each rule keeps its other declarations (muted colour; Previews' small size), so the line still reads as a note. The comment above each rule is unchanged unless it mentions italic (neither does). No other stylesheet changes.",
+    "Apostrophes, tests: neither string is pinned by an existing test (checked at spec time: no test matches 'verification status', 'Player's game, line' or 'not in that game'; attachments-context.test.tsx compares against describeBareLink's own output, and AttachmentPicker.test.tsx's 'Player's game' is a button-absence check, not this string), so the unit adds the pins. (1) frontend/src/features/account/AccountSettings.test.tsx gains one test: with a FakeAuthService whose emailVerified rejects (vi.spyOn(auth, 'emailVerified').mockRejectedValue(...), since FakeAuthService.failWith does not reach emailVerified), renderSettingsApp shows exactly 'We could not check this account’s verification status.' (findByText, exact). (2) a new frontend/src/features/compose/typographic-apostrophes.test.ts pins describeBareLink({ type: 'player_game', ref_id: 80001 }) as exactly 'Player’s game, line 80001', and, with server.use(...attachServer().handlers) from test/attach, that checkAddressLink({ type: 'player_game', ref_id: 79999 }, 501) resolves to { ok: false, note: 'The player’s line in this link is not in that game, so nothing is attached. You can still attach stats yourself.' }. The expected strings are written with the literal ’ character (test names stay ASCII, as typography.md §2 says).",
+    "Apostrophes, implementation: frontend/src/features/account/AccountSettings.tsx's 'We could not check this account's verification status.' and frontend/src/features/compose/attachmentReads.ts's `Player's game, line ${link.ref_id}` (describeBareLink) and 'The player's line in this link is not in that game' (checkAddressLink) use U+2019 for the apostrophe. Comments and identifiers keep ASCII. No other string changes.",
+    "Counts, test: frontend/src/features/profile/follower-count.test.tsx gains, in the same style (renderCounts, exact getByText inside the header card, expectOneTextNodeLi): followerCount 1200 reads '1,200 followers' and followingCount 1200 reads '1,200 following', each still one text node, the whole text of its li. The existing 0/1/2 follower and 1 following cases stay unchanged and green. The literal comma is what the test environment's locale writes, as features/feed/counts.test.ts already relies on ('1,000 likes').",
+    "Counts, implementation: frontend/src/features/profile/ProfileSummary.tsx formats both numbers with Intl.NumberFormat in the viewer's default locale (new Intl.NumberFormat() with no locale argument, as features/feed/counts.ts's countText does), for example one module-level formatter. The follower li keeps the FRONTEND-055 noun rule ('follower' at exactly 1, else 'followers'), the following li stays 'following'; each li is still one template-literal text node. The choice is local to features/profile: it does not import features/feed (the connection rule) and adds nothing to src/lib (no shared count helper exists there; see the brief). The component's props, action slot and markup are unchanged. The doc comment's paragraph on the counts adds that both numbers are formatted by locale, like the feed's (FRONTEND-059).",
+    "Existing tests stay untouched and green apart from the two named additions, including every exact 'N followers' / 'N following' match in FollowButton.test.tsx, profile-cache.test.tsx, profile-loading.test.tsx and profile-style.test.tsx (all under 1,000, so formatting leaves them as they are), and features/feed/counts.test.ts.",
+    "Commit order: (1) the test_agent commit above; (2) the code_agent commit; (3) the context_maintainer commit with the module doc. Guard-check each commit with its role.",
+    "Bundle: no bundle-budgets file. The Director's prototype of the implementation measured, against the tip (entry JS 147,270 B gzip / 465,831 B raw, entry CSS 7,457 B): entry JS 147,276 (+6) / 465,821 (-10), entry CSS 7,443 (-14), ProfilePage 2,910 to 2,936 (+26), ComposePage 3,886 to 3,891 (+5), AccountSettings 2,401 to 2,404 (+3), every other output within 3 B, none added or removed. All inside the 100 B tolerance. If the finished implementation moves any output past the tolerance, or adds or removes one, stop and report. bundle-budget.ts is not touched and no budget is loosened.",
+    "Proof: npm run lint reports 0 problems; npm run typecheck and npm run build are green; the suite runs in the foreground, alone, sharded (npx vitest run --shard=N/3 --maxWorkers=2), and the PR records the shard counts, the red failures of the test commit and the measured bundle numbers.",
+    "No new dependency; no change outside the allowed paths.",
+    "Module docs: wiki/CodeContext/Modules/0x08b-frontend-auth.md's 'Date of birth is private' bullet, where it says how ProfileSummary's counts read, adds that both numbers are formatted by locale ('1,200 followers', '1,200 following'), like the feed's countText, without importing it (FRONTEND-059). No other module doc describes the italic or the three strings. docs lint reports 0 errors.",
+    "Browser check (the Director's, after merge; not the unit's): a post whose original is gone and a link with no preview show their 'unavailable' line upright and muted; a profile with 1,000 or more followers reads '1,000 followers'; the failed verification check and the two compose notes show the typographic apostrophe."
+  ],
+  "allowed_paths": [
+    "frontend/src/styles/no-italics.test.ts",
+    "frontend/src/features/feed/PostNode.module.css",
+    "frontend/src/features/feed/previews/Previews.module.css",
+    "frontend/src/features/account/AccountSettings.test.tsx",
+    "frontend/src/features/account/AccountSettings.tsx",
+    "frontend/src/features/compose/typographic-apostrophes.test.ts",
+    "frontend/src/features/compose/attachmentReads.ts",
+    "frontend/src/features/profile/follower-count.test.tsx",
+    "frontend/src/features/profile/ProfileSummary.tsx",
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "backend/**",
+    "infra/**",
+    "docker/**",
+    "docker-compose.yml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "frontend/eslint.config.js",
+    "frontend/vite.config.ts",
+    "frontend/src/test/**",
+    "frontend/src/lib/**",
+    "frontend/src/api/**",
+    "frontend/src/styles/base.css",
+    "frontend/src/styles/tokens.css",
+    "frontend/src/styles/base.test.ts",
+    "frontend/src/features/feed/counts.ts",
+    "frontend/src/features/feed/counts.test.ts",
+    "frontend/src/features/feed/feed-css.test.ts",
+    "frontend/src/features/games/**",
+    "frontend/src/features/stats/**",
+    "frontend/src/features/players/**",
+    "frontend/src/components/**",
+    "wiki/CodeContext/Modules/0x08-frontend.md",
+    "wiki/CodeContext/Modules/0x08f-frontend-feed.md",
+    "wiki/CodeContext/Modules/0x08h-frontend-search-games.md",
+    "wiki/CodeContext/Modules/0x08i-frontend-stats.md"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08b-frontend-auth.md",
+    "wiki/CodeContext/FrontendUI/typography.md",
+    "wiki/CodeContext/FrontendUI/components.md",
+    "wiki/CodeContext/Standards/design-principles.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}
