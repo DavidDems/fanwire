@@ -18,7 +18,8 @@ type: reference
 | `date_of_birth` | date | PII, see [[0x01b-users-auth]] "Security" and [[0x01-users]] "Security" |
 | `preferred_team_id` | FK → `Team.id` | owned by `events/`, not redefined here — see [[0x02-events]] |
 | `profile_picture_media_id` | FK → `Media.id`, nullable | owned by `media/`, not redefined here — see [[0x04-media]] |
-| `profile_avatar_key` | text, nullable | one of eight stable original presets; `null` selects username initials |
+| `avatar_inner_color` | text, nullable | `USERS-005`: an inner key of the team palette (`AvatarInnerColor` in `app.users.schemas`); `null` is no fill |
+| `avatar_outer_color` | text, nullable | `USERS-005`: an outer key of the team palette (`AvatarOuterColor`); `null` is no ring. Both `null` is the default initials |
 | `created_at` | timestamp, not null | |
 | `updated_at` | timestamp, not null | |
 | `deleted_at` | timestamp, nullable | soft-delete marker; `null` = active row |

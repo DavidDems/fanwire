@@ -104,7 +104,11 @@ that here as usual.
   (5) as ordered `{key, name}` lists, `TEAM_COLORS` (one pair per team) and
   `teamColors()` (the pair, or null). Keys name the `--team-inner-*` /
   `--team-outer-*` tokens in `tokens.css`, fixed across themes. `USERS-005`'s
-  avatar picker reads the two lists, so they stay exported and in order.
+  avatar picker reads the two lists, so they stay exported and in order; it
+  also exports their key types (`InnerColorKey`, `OuterColorKey`, read off the
+  lists), `Palette<K>` (a list whose element type names its keys while a key
+  read off it stays a string) and `paletteEntries()` (the entries, keys
+  typed). The shell's account button shows the member's avatar colours.
 - **Where:** standings (`SeasonLevel`), `TeamLevel` and the team level's
   heading in `StatsNavigator`, `TeamSearch`, the `GamePage` header,
   `BoxScore` headings, team records only in `RecordLevel`/`RecordsLevel`,

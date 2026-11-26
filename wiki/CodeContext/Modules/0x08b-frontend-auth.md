@@ -92,7 +92,8 @@ profile fields; account lifecycle controls live on the separate, guarded
   "N following" always (`FRONTEND-055`). Both numbers are formatted by
   locale ("1,200 followers", "1,200 following"), like the feed's `countText`,
   without importing it (`FRONTEND-059`). Since
-  `USERS-004` it can render the saved preset or public picture key without
+  `USERS-004` it can render the public picture key, and since `USERS-005` the
+  saved avatar colours, without
   receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control
   sits in the header card: a slot for a control, never user data, so the
@@ -137,13 +138,23 @@ profile fields; account lifecycle controls live on the separate, guarded
   Emptying the description is the one case `null` is correct for — that is the
   user asking for it to be cleared. `username` and `date_of_birth` are not on
   `UpdateMeRequest` and are not editable here.
-- **Profile avatars are one persisted choice across surfaces.** The settings
-  form offers the eight `users/` preset keys and an explicit initials choice
-  in a labelled radio grid; the preview follows the pending choice and a failed
-  save restores the persisted one. Own/public profile summaries, feed authors
-  and account search render the same key. A processed uploaded picture takes
-  priority until the member saves a preset or chooses initials; avatar geometry
-  is code-drawn SVG and uses semantic text colours.
+- **Profile avatars are two persisted colours, one rule on every surface**
+  (`USERS-005`, which retired the eight presets). `Avatar` draws the username's
+  first character, as typed (`Array.from`). No colours: the default, with no
+  inline style. An inner colour: `--team-inner-<key>` as the fill and
+  `--team-outer-black` as the text (4.5:1 or more on every inner colour). An
+  outer colour: a ring (`.ring`, 2 px, 3 px at `lg`) in `--team-outer-<key>`;
+  with no inner the text keeps its default. A processed picture renders as
+  before and the colours do not show on it. Own and public profile summaries,
+  feed authors, account search and the shell's account button all pass the two
+  fields. The settings form's `Profile avatar` fieldset keeps its Preview and
+  Save and has two `role="radiogroup"` groups, Inner colour and Outer colour,
+  each None then `lib/teamColors.ts`' list: native radios (arrow keys), each a
+  44 px label with a swatch and the colour's name, wrapping at any width. The
+  preview follows the pending choice; Save sends only the colour that changed
+  (`null` for None); a failed save restores the saved pair. The two key types
+  come from the palette, and `features/profile/avatar-palette-schema.test.ts`
+  fails `npm run typecheck` if the generated schema's unions drift from them.
 - **This unit ships without a profile-picture control.** The upload widget
   belongs to `FRONTEND-004` (`MediaWidget`); a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would
