@@ -126,3 +126,5 @@ This procedure prepares future work; it authorizes no AWS writes or deployment.
    deployed role/trigger config, alarms, reconciliation and public health before
    declaring readiness. No production/user-data operation is authorized by this
    document. No manual action is needed during the research PR.
+
+Where activation stands, gate by gate: [account-lifecycle-activation](account-lifecycle-activation.md).

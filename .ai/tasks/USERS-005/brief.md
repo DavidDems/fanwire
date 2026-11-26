@@ -44,7 +44,7 @@ human is ready to run the migration straight away.
   because the shell's account button (`AppLayout`) must show the same avatar.
   Other route files stay outside `allowed_paths`.
 - **Red tests.** The unfinished failing tests from the old local worktree are
-  [`parked/users005-red-tests.patch`](parked/users005-red-tests.patch), 11 test
+  `parked/users005-red-tests.patch` (applied in track 6, #117, then deleted), 11 test
   and fixture files, no implementation. It applies cleanly to `main` at
   `fanwire-archive@05bce80`. Re-check it against the acceptance criteria, then apply it as the
   test commit. The local hand-start `state.json` was not carried over, so this
