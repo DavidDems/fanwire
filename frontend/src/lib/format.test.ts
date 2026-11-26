@@ -3,7 +3,9 @@
  * figure it shows (brief, "Number formats": nba.com style, one module with its
  * own unit tests, used everywhere on the page).
  *
- * The interface this file pins, in `features/games/format.ts`:
+ * The module is `src/lib/format.ts`, shared by games, stats, players and the
+ * stats navigator (FRONTEND-058 moved it out of `features/games/`; it is no
+ * longer a cross-feature exception). The interface this file pins:
  *
  * - `formatMinutes(secondsPlayed: number): string` — `m:ss` from
  *   `seconds_played`: minutes unpadded and uncapped, seconds always two

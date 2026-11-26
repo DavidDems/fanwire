@@ -3,8 +3,7 @@
  * disk, because jsdom applies no styles (`verification.md` §1,
  * `verification.md` §2a).
  *
- * - Every `*.module.css` under `src/features/games/`, and `GameScore`'s
- *   stylesheet (the one shared stylesheet this unit may change): no hex,
+ * - Every `*.module.css` under `src/features/games/`: no hex,
  *   `rgb()`, `hsl()` or named colour, no px font size, and no `outline: none`
  *   / `outline: 0` without a `:focus-visible` rule in the same file. The
  *   scanner is the shared one in `src/test/module-css.ts`.
@@ -15,7 +14,7 @@
  * Not vacuous: the page's layout and the scroll container are this unit's
  * own, so at least one module file must be there to check.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -24,7 +23,6 @@ import { SRC_DIR, allBlocks, parseCss, readSrcFile } from "../../test/css";
 import { moduleCssFiles, moduleCssViolations } from "../../test/module-css";
 
 const GAMES_DIR = join(SRC_DIR, "features", "games");
-const GAME_SCORE_CSS = "components/ui/GameScore.module.css";
 
 describe("every *.module.css under src/features/games", () => {
   const files = moduleCssFiles(GAMES_DIR);
@@ -63,9 +61,14 @@ describe("every *.module.css under src/features/games", () => {
   });
 });
 
-describe(GAME_SCORE_CSS, () => {
-  it("uses only var(--color-…), no px font sizes, and a visible focus", () => {
-    expect(moduleCssViolations(readSrcFile(GAME_SCORE_CSS))).toEqual([]);
+describe("GameScore is deleted (FRONTEND-058)", () => {
+  it("has no components/ui/GameScore.tsx or GameScore.module.css", () => {
+    expect(existsSync(join(SRC_DIR, "components", "ui", "GameScore.tsx"))).toBe(
+      false,
+    );
+    expect(
+      existsSync(join(SRC_DIR, "components", "ui", "GameScore.module.css")),
+    ).toBe(false);
   });
 });
 

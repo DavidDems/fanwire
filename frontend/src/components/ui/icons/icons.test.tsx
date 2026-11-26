@@ -24,6 +24,10 @@
  * FRONTEND-035 adds lucide `log-out` for Sign out, the nav's last item:
  * `LogOutIcon`, copied the same way from the same commit and under the same
  * licence, its three paths pinned below as Lucide draws them.
+ *
+ * FRONTEND-058 deletes lucide `user` (`UserIcon`), which nothing rendered:
+ * twelve of the thirteen of `components-shared.md` §3 remain, nineteen Lucide
+ * icons in all, plus the two pressed variants.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -52,18 +56,16 @@ import {
   Repeat2Icon,
   SearchIcon,
   SquarePenIcon,
-  UserIcon,
   XIcon,
 } from "./index";
 import type { IconProps } from "./index";
 
-/** Lucide name → component: the thirteen of components-shared.md §3, plus chart-column (FRONTEND-009). */
+/** Lucide name → component: twelve of components-shared.md §3 (user deleted, FRONTEND-058), plus chart-column (FRONTEND-009) and the later additions. */
 const ICONS: [string, ComponentType][] = [
   ["house", HouseIcon],
   ["search", SearchIcon],
   ["square-pen", SquarePenIcon],
   ["bell", BellIcon],
-  ["user", UserIcon],
   ["heart", HeartIcon],
   ["message-circle", MessageCircleIcon],
   ["repeat-2", Repeat2Icon],
@@ -115,14 +117,16 @@ describe.each(ICONS)("icon %s", (_name, Icon) => {
   });
 });
 
-describe("the retired sharing icon", () => {
-  it("is absent and the icon count in the index header is current", () => {
+describe("the retired sharing and user icons", () => {
+  it("are absent and the icon count in the index header is current", () => {
     const index = readFileSync(join(findSrcDirForIcons(), "index.tsx"), "utf8");
     const removedExport = ["Link", "Icon"].join("");
 
     expect(index).not.toContain(removedExport);
-    // FRONTEND-044 adds calendar: twenty.
-    expect(index).toContain("twenty Lucide icons in all");
+    // FRONTEND-058 deletes user: nineteen.
+    expect(index).not.toContain(["User", "Icon"].join(""));
+    expect(index).not.toContain(["lucide:", "user"].join(" "));
+    expect(index).toContain("nineteen Lucide icons in all");
   });
 });
 

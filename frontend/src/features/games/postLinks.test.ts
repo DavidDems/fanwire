@@ -5,9 +5,9 @@
  * **Why the helper lives here, not in `features/stats/links.ts`.** The
  * criterion allows either one helper per feature or one shared helper there,
  * but the isolation tests already on `main` settle it: `features/games`
- * imports no other feature (`games-isolation.test.ts`), and `features/players`
- * imports nothing from another feature but `games/format`
- * (`stats-isolation.test.ts`). So each feature has its own:
+ * imports no other feature (`games-isolation.test.ts`), and neither does
+ * `features/players` (`stats-isolation.test.ts`; its shared formatter is
+ * `lib/format`). So each feature has its own:
  *
  * - **`features/games/postLinks.ts`** exports
  *   - `postAboutGameHref(gameId: number): string` →

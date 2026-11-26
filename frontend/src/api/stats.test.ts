@@ -11,7 +11,9 @@
  *   `fetchPlayersPage`), the page sizes
  *   (`GAMES_PAGE_SIZE` 50, `PLAYERS_PAGE_SIZE` 20), `nextOffset`, and the
  *   query keys, spelled exactly as before. `TEAMS_KEY` stays
- *   `["events", "teams"]`: `features/profile` and search spell it themselves,
+ *   `["events", "teams"]`, the one key every teams read shares: `SeasonsTab`,
+ *   the navigator's `TeamLevel`, `ProfileSettings` and
+ *   `auth/ProfileSetupPage` import it (FRONTEND-052), search reads no teams,
  *   and a different key would split the cache. The type aliases are the
  *   typecheck's to pin.
  * - **The season reads carry their own `staleTime`.** `SEASON_STALE_TIME` is
@@ -117,7 +119,7 @@ describe("the moved reads keep today's exports", () => {
 });
 
 describe("the query keys are spelled as before", () => {
-  it("TEAMS_KEY is the one features/profile and search spell", () => {
+  it('TEAMS_KEY is ["events", "teams"], the one teams key every reader shares', () => {
     expect(TEAMS_KEY).toEqual(["events", "teams"]);
   });
 

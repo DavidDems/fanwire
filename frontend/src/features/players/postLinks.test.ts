@@ -3,8 +3,8 @@
  * this" addresses are built by one helper, not written out per link.
  *
  * Per feature rather than shared in `features/stats/links.ts`, because
- * `features/players` may import nothing from another feature but
- * `games/format` (`features/stats/stats-isolation.test.ts`); see
+ * `features/players` may import nothing from another feature (its shared
+ * formatter is `lib/format`; `features/stats/stats-isolation.test.ts`); see
  * `features/games/postLinks.test.ts` for the games half.
  *
  * - **`features/players/postLinks.ts`** exports

@@ -11,8 +11,8 @@
  *   vacuously: it must reach well past the entry, and the modules it must not
  *   reach must exist.
  * - **Router-agnostic.** No file under `components/stats-nav/` imports
- *   `react-router-dom`, or anything under `features/` but
- *   `features/games/format` (the one shared formatter), so the compose picker
+ *   `react-router-dom`, or anything under `features/` (the shared formatter
+ *   is `src/lib/format` since FRONTEND-058), so the compose picker
  *   (FRONTEND-021) can drive the navigator from state.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -221,15 +221,9 @@ describe("the navigator is router-agnostic", () => {
     ).toEqual([]);
   });
 
-  it("imports nothing under features/ but features/games/format", () => {
+  it("imports nothing under features/", () => {
     expect(
-      offenders((specifier, file) => {
-        const target = featurePath(specifier, file);
-        return (
-          target !== null &&
-          target.replace(/\.[cm]?[jt]sx?$/, "") !== "features/games/format"
-        );
-      }),
+      offenders((specifier, file) => featurePath(specifier, file) !== null),
     ).toEqual([]);
   });
 

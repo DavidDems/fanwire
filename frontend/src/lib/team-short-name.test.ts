@@ -3,7 +3,9 @@
  * result uses (the Stats team cards, the picker's cards, Recent Games and the
  * game page's team tabs).
  *
- * The interface this file pins, in `features/games/format.ts`:
+ * The module is `src/lib/format.ts`, shared by games, stats, players and the
+ * stats navigator (FRONTEND-058 moved it out of `features/games/`; it is no
+ * longer a cross-feature exception). The interface this file pins:
  *
  * - `teamShortName(name: string): string` — the team's name without its city:
  *   "Boston Celtics" → "Celtics", "Portland Trail Blazers" → "Trail Blazers"
