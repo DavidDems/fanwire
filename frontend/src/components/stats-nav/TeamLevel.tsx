@@ -18,7 +18,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
 import { TeamIcon } from "../ui/TeamIcon";
 import { VisuallyHidden } from "../ui/VisuallyHidden";
-import { teamShortName } from "../../features/games/format";
+import { teamShortName } from "../../lib/format";
 import { formatGameType, formatRecord } from "./labels";
 import { LevelLink } from "./LevelLink";
 import { ColumnHeader, ScrollTable } from "../ui/ScrollTable";

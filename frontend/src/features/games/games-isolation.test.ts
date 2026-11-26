@@ -3,18 +3,14 @@
  * test cannot fully see (brief, "Things to get right").
  *
  * - **A new feature folder.** `features/games/` holds the page
- *   (`GamePage.tsx`) and the one formatting module (`format.ts`), and the
- *   page's sources use that module.
+ *   (`GamePage.tsx`). The one formatting module is `src/lib/format.ts`
+ *   (FRONTEND-058 moved it out of this folder), and the page's sources use it.
  * - **Reached by address, never by import** ([[0x00-architecture]] Connection
  *   rule, `0x08h-frontend-search-games.md`): no other feature folder
  *   imports anything from `features/games/`, and `features/games/` imports
  *   no other feature. The route table (`routes/`) is the one place that
  *   names the page, the way it names every other feature's page.
- * - **One exception, `FRONTEND-009`**: `features/stats/` and
- *   `features/players/` may import `features/games/format` (the brief: "Number
- *   formats reuse the game page's formatting module"), and nothing else from
- *   this folder. No other feature may import even that.
- * - **A second exception, `FRONTEND-044`**: `features/schedule/` may import
+ * - **One exception, `FRONTEND-044`**: `features/schedule/` may import
  *   `features/games/GameCard`, the compact card shared with Recent Games (the
  *   spec: "extracted into one shared component that both render"), and
  *   nothing else from this folder.
@@ -40,7 +36,7 @@ const FEATURES_DIR = join(SRC_DIR, "features");
 const GAMES_DIR = join(FEATURES_DIR, "games");
 const FEED_DIR = join(FEATURES_DIR, "feed");
 
-const MODULES = ["GamePage.tsx", "format.ts"] as const;
+const MODULES = ["GamePage.tsx"] as const;
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"];
 
@@ -117,20 +113,6 @@ function reachesGames(file: string, specifier: string): boolean {
   return insideGames(file, specifier) !== null;
 }
 
-/** The feature folders allowed to import `features/games/format` (FRONTEND-009). */
-const FORMAT_IMPORTERS = ["stats", "players"].map((name) =>
-  join(FEATURES_DIR, name),
-);
-
-function mayImportFormat(file: string, specifier: string): boolean {
-  const target = insideGames(file, specifier);
-  return (
-    target !== null &&
-    /^format(\.[jt]s)?$/.test(target) &&
-    FORMAT_IMPORTERS.some((dir) => !relative(dir, file).startsWith(".."))
-  );
-}
-
 /** The feature folder allowed to import `features/games/GameCard` (FRONTEND-044). */
 const CARD_IMPORTER = join(FEATURES_DIR, "schedule");
 
@@ -163,32 +145,40 @@ describe("the games feature's modules exist where the brief names them", () => {
     }
   });
 
-  it("formats its figures through ./format", () => {
+  it("keeps the formatting module in src/lib, not features/games (FRONTEND-058)", () => {
+    expect(
+      existsSync(join(SRC_DIR, "lib", "format.ts")),
+      "src/lib/format.ts must exist",
+    ).toBe(true);
+    expect(
+      existsSync(join(GAMES_DIR, "format.ts")),
+      "features/games/format.ts must be gone",
+    ).toBe(false);
+  });
+
+  it("formats its figures through lib/format", () => {
     const users = shipped(GAMES_DIR).filter((file) =>
       importSpecifiers(read(file)).some((specifier) =>
-        /^\.\/format(\.[jt]s)?$/.test(specifier),
+        /^\.\.\/\.\.\/lib\/format(\.[jt]s)?$/.test(specifier),
       ),
     );
 
-    expect(users.map(posix), "no games source imports ./format").not.toEqual(
-      [],
-    );
+    expect(
+      users.map(posix),
+      "no games source imports ../../lib/format",
+    ).not.toEqual([]);
   });
 });
 
 describe("other features reach the game page by address only", () => {
-  it("no other feature folder imports from features/games (stats and players: format only; schedule: GameCard only)", () => {
+  it("no other feature folder imports from features/games (schedule: GameCard only)", () => {
     const others = sourceFiles(FEATURES_DIR)
       .filter((file) => !isTest(file))
       .filter((file) => relative(GAMES_DIR, file).startsWith(".."));
     const offenders: string[] = [];
     for (const file of others) {
       for (const specifier of importSpecifiers(read(file))) {
-        if (
-          reachesGames(file, specifier) &&
-          !mayImportFormat(file, specifier) &&
-          !mayImportCard(file, specifier)
-        )
+        if (reachesGames(file, specifier) && !mayImportCard(file, specifier))
           offenders.push(`${posix(file)} imports ${specifier}`);
       }
     }
@@ -219,18 +209,6 @@ describe("other features reach the game page by address only", () => {
     expect(reachesGames(fromFeed, "../../features/games/format")).toBe(true);
     expect(reachesGames(fromFeed, "./api")).toBe(false);
     expect(reachesGames(fromFeed, "../search/api")).toBe(false);
-  });
-
-  it("allows format, and only format, to stats and players", () => {
-    const fromStats = join(FEATURES_DIR, "stats", "SeasonsTab.tsx");
-    const fromPlayers = join(FEATURES_DIR, "players", "PlayerPage.tsx");
-    const fromFeed = join(FEED_DIR, "PostNode.tsx");
-
-    expect(mayImportFormat(fromStats, "../games/format")).toBe(true);
-    expect(mayImportFormat(fromPlayers, "../games/format")).toBe(true);
-    expect(mayImportFormat(fromStats, "../games/api")).toBe(false);
-    expect(mayImportFormat(fromStats, "../games/BoxScore")).toBe(false);
-    expect(mayImportFormat(fromFeed, "../games/format")).toBe(false);
   });
 
   it("allows GameCard, and only GameCard, to schedule (FRONTEND-044)", () => {

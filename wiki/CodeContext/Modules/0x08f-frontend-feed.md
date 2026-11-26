@@ -95,8 +95,8 @@ by decision ([[0x06-feed]] Security), and a guard on `/` is a regression.
 - **No live-score ticker since `EVENTS-003` (2026-10-13).** `PostView` lost
   `live_scores` when the API-SPORTS path was retired ([[0x06-feed]]), so
   `LiveScoreTickerDecorator` and its styles are gone and `PostNode` renders its
-  view directly. `GameScore`'s `compact` variant, which only the ticker used, is
-  left in `components/ui/` (outside that unit's paths) with no caller.
+  view directly. `GameScore`, whose `compact` variant only the ticker used, was
+  left with no caller and deleted (`FRONTEND-058`).
 
 ### The post card (`UI-009`)
 

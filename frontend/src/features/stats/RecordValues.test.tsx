@@ -32,7 +32,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { teamShortName } from "../games/format";
+import { teamShortName } from "../../lib/format";
 import {
   BOBCATS,
   WARRIORS,

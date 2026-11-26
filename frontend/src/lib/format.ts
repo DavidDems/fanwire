@@ -4,6 +4,10 @@ import { format, parseISO } from "date-fns";
  * Every figure the game page shows goes through here, in nba.com's formats:
  * `27:04`, `.462`, `+12`, `8-13`. One module, so the box score, its totals and
  * the line score cannot drift into three spellings of the same number.
+ *
+ * It lives in `src/lib/` (FRONTEND-058 moved it out of `features/games/`):
+ * games, stats, players and the stats navigator share it, so it belongs to no
+ * one feature.
  */
 
 const EN_DASH = "–";

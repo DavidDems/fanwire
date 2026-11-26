@@ -1,5 +1,5 @@
 import type { TeamRefOut } from "./api";
-import { periodHeaders } from "./format";
+import { periodHeaders } from "../../lib/format";
 import styles from "./Games.module.css";
 
 export interface LineScoreProps {

@@ -13,7 +13,7 @@ import { SegmentedTabs } from "../ui/SegmentedTabs";
 import { Skeleton } from "../ui/Skeleton";
 import { StatusLine } from "../ui/StatusLine";
 import { TeamIcon } from "../ui/TeamIcon";
-import { formatPercentage } from "../../features/games/format";
+import { formatPercentage } from "../../lib/format";
 import { LevelLink } from "./LevelLink";
 import { ColumnHeader, ScrollTable } from "../ui/ScrollTable";
 import styles from "./StatsNav.module.css";

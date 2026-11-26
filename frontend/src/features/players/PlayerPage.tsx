@@ -22,7 +22,7 @@ import {
   formatMinutes,
   formatPercentage,
   formatPlusMinus,
-} from "../games/format";
+} from "../../lib/format";
 import {
   GAME_LOG_PAGE_SIZE,
   fetchPlayer,

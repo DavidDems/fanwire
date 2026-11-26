@@ -93,8 +93,7 @@ and an optional `time`.
 - **A null team** reads "TBD", with the neutral `TeamIcon`.
 
 `games-isolation.test.ts` lets `features/schedule/` import `GameCard`, and
-nothing else from `features/games/`, beside `FRONTEND-009`'s `format`
-exception.
+nothing else from `features/games/`.
 
 ## Schedule (`FRONTEND-044`)
 
@@ -137,17 +136,15 @@ path ([[0x02-events]]). One read, `GET /events/games/{id}`, through
 `TeamBoxScoreOut` and `BoxScorePlayerOut` with no renamed client model.
 
 - **Reached by address only.** Post text (`PostText`) and the Stats page's
-  game rows link to `/games/<id>`. One exception to "nothing imports
-  `features/games/`": `features/stats` and `features/players` import
-  `features/games/format` (the brief: one number format), and nothing else
-  from the folder. `features/games` imports no other feature
-  (`games-isolation.test.ts` pins both). Moving `format.ts` to a shared
-  `src/lib/` is the cleaner home, for a unit with that path in scope.
+  game rows link to `/games/<id>`. Only `features/schedule` imports from
+  `features/games/` (`GameCard`), and `features/games` imports no other
+  feature (`games-isolation.test.ts` pins both).
 - **A 404 is not-found, not an error.** `fetchGame` returns `null` on 404 and
   the page says "Game not found" with a link back to the feed; any other
   failure throws and shows `InlineAlert`. A non-numeric id is not-found
   without a request.
-- **Every figure goes through `format.ts`**: `27:04` minutes from
+- **Every figure goes through `src/lib/format.ts`** (shared with stats,
+  players and the navigator): `27:04` minutes from
   `seconds_played`, `.462` percentages (null is an en dash), `+12`/`−3`/`0`
   plus-minus, `8-13` made-attempted, and the line-score headers Q1–Q4, OT,
   2OT, `3OT+` (the seventh stored figure is "third overtime and later",

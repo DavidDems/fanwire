@@ -1,4 +1,4 @@
-/** Small text forms the Stats page uses beside `games/format`'s figures. */
+/** Small text forms the Stats page uses beside `lib/format`'s figures. */
 
 /** A team's record as `64-18`. */
 export function formatRecord(wins: number, losses: number): string {

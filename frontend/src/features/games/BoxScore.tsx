@@ -21,7 +21,7 @@ import {
   formatMinutes,
   formatPercentage,
   formatPlusMinus,
-} from "./format";
+} from "../../lib/format";
 import styles from "./Games.module.css";
 import { postAboutLineHref } from "./postLinks";
 
