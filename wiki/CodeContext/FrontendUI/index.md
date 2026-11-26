@@ -24,15 +24,16 @@ change says so in its PR and asks.
 
 | File | What it holds |
 |---|---|
-| Decisions: ADR 0010–0018 | The human's decisions, dated; one ADR each (list below this table). They outrank every page here. |
+| Decisions: ADR 0010–0018 and 0043 | The human's decisions, dated; one ADR each (list below this table). They outrank every page here. |
 | [`direction.md`](direction.md) | The personality ("scoreboard-crisp, calm, dense"), what it borrows from, what fanwire is not, the fan moments to design for, principles in priority order. |
-| [`tokens.md`](tokens.md) | Every token with its value, light and dark; the measured contrast of every pair used; banned pairs; distance from team colours; type, space, radius, elevation, motion, breakpoints, z-index. |
-| [`tokens-check.md`](tokens-check.md) | How to re-run the scripts behind `tokens.md`'s numbers (`brand/tools/`), and the constraints a new value must meet. Only for someone proposing a colour change. |
+| [`tokens.md`](tokens.md) | Every token with its value, light and dark: brand primitives, neutral ramp, semantic colours, type, space, radius, elevation, motion, breakpoints, z-index, team colours. |
+| [`tokens-contrast.md`](tokens-contrast.md) | The measured contrast of every pair used, the banned pairs, and each chromatic token's distance from team colours (`tokens.md` §5 to `tokens.md` §7). |
+| [`tokens-check.md`](tokens-check.md) | How to re-run the scripts behind the numbers in `tokens.md` and `tokens-contrast.md` (`brand/tools/`), and the constraints a new value must meet. Only for someone proposing a colour change. |
 | [`typography.md`](typography.md) | The system font stack and why, the scale, weights, tabular figures, the look-alike-username cost, and how `fanwire` is written. |
 | [`layout.md`](layout.md) | The shell (header, bottom tab bar, skip link, brand link), the content column, breakpoints, one template per route, the thread's reply list. |
 | [`components.md`](components.md) | Where styles live, what needs a Director PR, and the index of the four component parts. |
 | [`components-shared.md`](components-shared.md) | The shared components with variants, states and props as built, what is deliberately not built, and the icons. |
-| [`components-sports.md`](components-sports.md) | The score block, game state, team identity and `TeamIcon`, mentions in posts. |
+| [`components-sports.md`](components-sports.md) | Game state, team identity and `TeamIcon`, mentions in posts. |
 | [`components-map-pages.md`](components-map-pages.md) | The map from the shell, routes, search, games, schedule, stats and player views to what they use. |
 | [`components-map-posts.md`](components-map-posts.md) | The map from `FormField`, auth, feed, posts, threads, compose, notifications, profile, account settings and history to what they use. |
 | [`accessibility.md`](accessibility.md) | WCAG 2.2 AA as numbered, testable statements (A1–A20), each tagged with how it's checked. |
@@ -54,6 +55,7 @@ Decisions:
   - [ADR 0016](../../GeneralContext/Decisions/0016-team-icons-and-avatar-colours.md): team icons, and avatar colours (planned).
   - [ADR 0017](../../GeneralContext/Decisions/0017-navigation-and-home-rail.md): the sidebar, the two Search links, the home rail, reply context, no Invite.
   - [ADR 0018](../../GeneralContext/Decisions/0018-ui-adjustments-2026-11-07.md): the adjustments after the track: game view, Recent Games, records, Schedule.
+  - [ADR 0043](../../GeneralContext/Decisions/0043-track-5b-answers.md): track 5b: no italics with no exception, the floating + overlap accepted, tidy-ups may change tests.
 
 ## What to hand which unit
 
@@ -61,5 +63,5 @@ Never the whole folder (`AGENTS.md` "Context loading"):
 
 | Unit | Hand it |
 |---|---|
-| Anyone proposing a palette or token change | [ADR 0011](../../GeneralContext/Decisions/0011-brand-palette.md), `tokens.md`, `tokens-check.md` |
+| Anyone proposing a palette or token change | [ADR 0011](../../GeneralContext/Decisions/0011-brand-palette.md), `tokens.md`, `tokens-contrast.md`, `tokens-check.md` |
 | A later frontend unit (`TODO/02-backlog.md`) | its `layout.md` §3 row, `components-shared.md` §2 "As built", the components map part for its area (`components-map-pages.md` or `components-map-posts.md`), `verification.md`, and `verification-browser.md` for a hand-run browser pass |

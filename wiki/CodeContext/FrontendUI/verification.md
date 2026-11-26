@@ -48,9 +48,9 @@ the strongest checks available, because they test the CSS itself.
   `src/styles/tokens.css` (custom properties on `:root`, and again inside the
   `prefers-color-scheme: dark` block; a small regex parser, no dependency).
   Resolve `var()` references. Compute WCAG 2.1 contrast in TypeScript, the same
-  formula as `tokens-check.md`. Assert every pair in `tokens.md` §5 meets its
-  minimum, **unrounded**, in both themes (A1). Assert no banned pair from `tokens.md`
-  §6 (A4). Assert every semantic token has a dark value (A18). Mutation check: set
+  formula as `tokens-check.md`. Assert every pair in `tokens-contrast.md` §5 meets its
+  minimum, **unrounded**, in both themes (A1). Assert no banned pair from
+  `tokens-contrast.md` §6 (A4). Assert every semantic token has a dark value (A18). Mutation check: set
   `--color-link` dark to `#1f7a8c`, and the test must fail.
 - **Tree scans see test files too.** `src/styles/base.test.ts` (no
   `@keyframes` anywhere), `test/env-usage.test.ts` and
@@ -124,7 +124,7 @@ Each criterion is written so its test is red before the implementation:
 - static tests are red because the file or rule doesn't exist yet;
 - semantic tests are red because the attribute or element isn't rendered yet
   (`aria-current`, the skip link, the Live word, "No replies yet.");
-- a test of a **new** component (`Button`, `GameScore`) is red because the
+- a test of a **new** component (`Button`, `TeamIcon`) is red because the
   import doesn't resolve. That's this repo's usual red for an entity that
   doesn't exist yet, and it's the right reason;
 - a test that **restyles an existing** component is red because the class or

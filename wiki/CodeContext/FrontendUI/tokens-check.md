@@ -6,8 +6,9 @@ type: runbook
 
 **Agent-facing, for whoever changes a colour.** A styling unit doesn't need this page: its own contrast test (`verification.md`) re-checks `tokens.css` in TypeScript.
 
-The steps that reproduce the numbers behind `tokens.md` §3 through `tokens.md`
-§7, for a proposed palette or token change. The scripts are in `brand/tools/`;
+The steps that reproduce the numbers behind `tokens.md` §3 and §4 and
+`tokens-contrast.md` §5 through
+`tokens-contrast.md` §7, for a proposed palette or token change. The scripts are in `brand/tools/`;
 they need numpy only, use the WCAG 2.1 luminance and CIEDE2000 maths of
 `palette_check.py`, and print unrounded ratios. Run every step from the
 repository root.

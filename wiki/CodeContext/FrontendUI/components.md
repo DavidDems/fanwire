@@ -36,7 +36,7 @@ in dark mode put Pale Sky on `#6b6b6b` (`src/styles/native-buttons.test.ts`).
 `select` and `textarea`: no border at rest, a `--color-field` fill,
 `--radius-lg`, `--space-4` either side, 48 px (`3rem`) tall for the
 single-line ones, the label above (`Field`). The fill alone is under 3:1
-(`tokens.md` §5), so a 1 px `--color-border-strong` bottom rule, drawn as an
+(`tokens-contrast.md` §5), so a 1 px `--color-border-strong` bottom rule, drawn as an
 inset box-shadow, stays in every state. Focus: the fill becomes
 `--color-field-focus` and the `:focus-visible` ring appears; nothing moves (no
 border, padding or size changes on focus). Invalid: a 2 px `--color-danger`
@@ -63,7 +63,7 @@ those is a Director PR.
 ## Parts
 
 - [`components-shared.md`](components-shared.md): §2–§3, the shared components in `src/components/ui/` (variants, states, the props as built, what is deliberately not built) and the icons.
-- [`components-sports.md`](components-sports.md): §4, the score block, game state, team identity (`TeamIcon`) and mentions in posts.
+- [`components-sports.md`](components-sports.md): §4, game state, team identity (`TeamIcon`) and mentions in posts.
 - [`components-map-pages.md`](components-map-pages.md): §5, the map for the shell, routes, search, games, schedule, stats and players.
 - [`components-map-posts.md`](components-map-posts.md): §5, the map for `FormField`, auth, the feed and posts, threads, compose, notifications, profile, account settings and history.
 
