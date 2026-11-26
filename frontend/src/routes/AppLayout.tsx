@@ -225,7 +225,8 @@ export function AppLayout() {
                 <Avatar
                   username={account.profile.username}
                   size="sm"
-                  avatarKey={account.profile.profile_avatar_key}
+                  avatarInnerColor={account.profile.avatar_inner_color}
+                  avatarOuterColor={account.profile.avatar_outer_color}
                   pictureKey={account.profile.profile_picture_key}
                 />
               }

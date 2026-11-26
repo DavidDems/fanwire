@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { Avatar } from "../../components/ui/Avatar";
 import { Card } from "../../components/ui/Card";
+import type { InnerColorKey, OuterColorKey } from "../../lib/teamColors";
 import styles from "./Profile.module.css";
 
 /** The viewer's own locale, as the feed's counts use ("1,200"). */
@@ -32,7 +33,8 @@ const COUNT_FORMAT = new Intl.NumberFormat();
 
 export interface ProfileSummaryProps {
   username: string;
-  avatarKey?: string | null;
+  avatarInnerColor?: InnerColorKey | null;
+  avatarOuterColor?: OuterColorKey | null;
   pictureKey?: string | null;
   followerCount: number;
   followingCount: number;
@@ -42,7 +44,8 @@ export interface ProfileSummaryProps {
 
 export function ProfileSummary({
   username,
-  avatarKey = null,
+  avatarInnerColor = null,
+  avatarOuterColor = null,
   pictureKey = null,
   followerCount,
   followingCount,
@@ -51,7 +54,13 @@ export function ProfileSummary({
   return (
     <Card>
       <header className={styles.header}>
-        <Avatar username={username} size="lg" avatarKey={avatarKey} pictureKey={pictureKey} />
+        <Avatar
+          username={username}
+          size="lg"
+          avatarInnerColor={avatarInnerColor}
+          avatarOuterColor={avatarOuterColor}
+          pictureKey={pictureKey}
+        />
         <div className={styles.identity}>
           <h1>{username}</h1>
           <ul className={styles.counts}>

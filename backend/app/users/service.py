@@ -11,6 +11,7 @@ import re
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import cast
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -30,20 +31,9 @@ from app.media.models import Media, MediaStatus
 from app.users.lifecycle import fence_users, prepare_profile
 from app.users.lifecycle import transition as transition_account
 from app.users.models import Follow, User
+from app.users.schemas import AvatarInnerColor, AvatarOuterColor
 
 USER_FOLLOWED = "UserFollowed"
-PROFILE_AVATAR_KEYS = frozenset(
-    {
-        "court-lines",
-        "ball-seams",
-        "shot-clock",
-        "scoreboard",
-        "arc",
-        "net-grid",
-        "baseline",
-        "play-pattern",
-    }
-)
 
 
 class UserNotFoundError(ValueError):
@@ -87,10 +77,6 @@ class InvalidProfilePictureError(ValueError):
     MediaStatus.PROCESSED."""
 
 
-class InvalidProfileAvatarError(ValueError):
-    """Raised when a profile avatar key is outside the stable preset set."""
-
-
 def create_user(
     session: Session,
     *,
@@ -99,15 +85,14 @@ def create_user(
     date_of_birth: date,
     description: str | None = None,
     preferred_team_id: int | None = None,
-    profile_avatar_key: str | None = None,
+    avatar_inner_color: AvatarInnerColor | None = None,
+    avatar_outer_color: AvatarOuterColor | None = None,
 ) -> User:
     """Persist and return a new User row. A duplicate cognito_sub/username
     is left to surface as IntegrityError — the DB unique constraint is the
     source of truth, and a pre-check-then-insert here would just be a TOCTOU
     race (wiki/CodeContext/Standards/design-principles.md "Single source of
     truth")."""
-    if profile_avatar_key is not None and profile_avatar_key not in PROFILE_AVATAR_KEYS:
-        raise InvalidProfileAvatarError(f"Unknown profile avatar key: {profile_avatar_key!r}")
     prepare_profile(session, cognito_sub)
     user = User(
         cognito_sub=cognito_sub,
@@ -115,7 +100,8 @@ def create_user(
         date_of_birth=date_of_birth,
         description=description,
         preferred_team_id=preferred_team_id,
-        profile_avatar_key=profile_avatar_key,
+        avatar_inner_color=avatar_inner_color,
+        avatar_outer_color=avatar_outer_color,
     )
     session.add(user)
     session.commit()
@@ -222,7 +208,8 @@ def update_profile(
     description: str | None = None,
     preferred_team_id: int | None = None,
     profile_picture_media_id: int | None = None,
-    profile_avatar_key: str | None = None,
+    avatar_inner_color: AvatarInnerColor | None = None,
+    avatar_outer_color: AvatarOuterColor | None = None,
 ) -> User:
     """Apply only the fields present in `fields_set` (pass
     `UpdateMeRequest.model_fields_set`) to the User with `user_id` --
@@ -267,24 +254,19 @@ def update_profile(
                 "owned by this user"
             )
 
-    if (
-        "profile_avatar_key" in fields_set
-        and profile_avatar_key is not None
-        and profile_avatar_key not in PROFILE_AVATAR_KEYS
-    ):
-        raise InvalidProfileAvatarError(f"Unknown profile avatar key: {profile_avatar_key!r}")
-
     if "description" in fields_set:
         user.description = description
     if "preferred_team_id" in fields_set:
         user.preferred_team_id = preferred_team_id
     if "profile_picture_media_id" in fields_set:
         user.profile_picture_media_id = profile_picture_media_id
-        if profile_picture_media_id is not None:
-            user.profile_avatar_key = None
-    if "profile_avatar_key" in fields_set:
-        user.profile_avatar_key = profile_avatar_key
-        user.profile_picture_media_id = None
+    # The colours are independent of each other and of the picture: setting
+    # one clears nothing. Their allowlists are UpdateMeRequest's Literal
+    # types, checked at the request boundary.
+    if "avatar_inner_color" in fields_set:
+        user.avatar_inner_color = avatar_inner_color
+    if "avatar_outer_color" in fields_set:
+        user.avatar_outer_color = avatar_outer_color
 
     session.commit()
     return user
@@ -326,7 +308,8 @@ class PublicProfile:
     id: int
     username: str
     profile_picture_media_id: int | None
-    profile_avatar_key: str | None = None
+    avatar_inner_color: AvatarInnerColor | None = None
+    avatar_outer_color: AvatarOuterColor | None = None
     profile_picture_key: str | None = None
 
 
@@ -351,11 +334,25 @@ def get_public_profiles(session: Session, user_ids: Collection[int]) -> dict[int
             id=user.id,
             username=user.username,
             profile_picture_media_id=user.profile_picture_media_id,
-            profile_avatar_key=user.profile_avatar_key,
+            avatar_inner_color=inner_color(user),
+            avatar_outer_color=outer_color(user),
             profile_picture_key=picture_key,
         )
         for user, picture_key in rows
     }
+
+
+def inner_color(user: User) -> AvatarInnerColor | None:
+    """The user's stored inner colour, as its allowlist's type. The column is
+    Text; every value in it came through UpdateMeRequest's Literal (or is
+    null), so this narrows the type and checks nothing at run time."""
+    return cast("AvatarInnerColor | None", user.avatar_inner_color)
+
+
+def outer_color(user: User) -> AvatarOuterColor | None:
+    """The user's stored outer colour, as its allowlist's type (see
+    inner_color)."""
+    return cast("AvatarOuterColor | None", user.avatar_outer_color)
 
 
 def public_profile_picture_key(session: Session, user: User) -> str | None:

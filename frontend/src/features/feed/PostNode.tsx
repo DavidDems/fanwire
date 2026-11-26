@@ -296,7 +296,8 @@ function PostContent({ post }: { post: PostView }) {
         <Avatar
           username={post.author.username}
           size="sm"
-          avatarKey={post.author.profile_avatar_key}
+          avatarInnerColor={post.author.avatar_inner_color}
+          avatarOuterColor={post.author.avatar_outer_color}
           pictureKey={post.author.profile_picture_key}
         />
         <Link className={styles.author} to={`/profile/${post.author.id}`}>
@@ -375,7 +376,8 @@ function QuotedOriginal({
           <Avatar
             username={post.author.username}
             size="sm"
-            avatarKey={post.author.profile_avatar_key}
+            avatarInnerColor={post.author.avatar_inner_color}
+            avatarOuterColor={post.author.avatar_outer_color}
             pictureKey={post.author.profile_picture_key}
           />
         ) : null}

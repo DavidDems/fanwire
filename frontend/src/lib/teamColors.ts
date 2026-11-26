@@ -11,7 +11,7 @@ export interface PaletteColor {
   name: string;
 }
 
-export const INNER_COLORS: readonly PaletteColor[] = [
+const INNER = [
   { key: "gold", name: "Gold" },
   { key: "orange", name: "Orange" },
   { key: "red", name: "Red" },
@@ -20,15 +20,44 @@ export const INNER_COLORS: readonly PaletteColor[] = [
   { key: "lavender", name: "Lavender" },
   { key: "silver", name: "Silver" },
   { key: "teal", name: "Teal" },
-];
+] as const satisfies readonly PaletteColor[];
 
-export const OUTER_COLORS: readonly PaletteColor[] = [
+const OUTER = [
   { key: "blue", name: "Blue" },
   { key: "crimson", name: "Crimson" },
   { key: "black", name: "Black" },
   { key: "purple", name: "Purple" },
   { key: "forest", name: "Forest Green" },
-];
+] as const satisfies readonly PaletteColor[];
+
+/**
+ * An inner or outer key, as a type, taken from the lists above. USERS-005's
+ * avatar stores one of each; the backend's allowlists generate the same
+ * unions into `api/schema.d.ts` (`features/profile/avatar-palette-schema.test.ts`
+ * pins them equal).
+ */
+export type InnerColorKey = (typeof INNER)[number]["key"];
+export type OuterColorKey = (typeof OUTER)[number]["key"];
+
+/**
+ * A list of colours whose element type still names its keys
+ * (`(typeof INNER_COLORS)[number]["key"]` is `InnerColorKey`), while a key
+ * read off an element is a plain string, so a caller may look up any string
+ * in a set of them.
+ */
+export type Palette<K extends string> = readonly PaletteColor[] & {
+  readonly [index: number]: PaletteColor & { readonly key: K };
+};
+
+export const INNER_COLORS: Palette<InnerColorKey> = INNER;
+export const OUTER_COLORS: Palette<OuterColorKey> = OUTER;
+
+/** A palette's entries, each with its key typed `K` (see `Palette`). */
+export function paletteEntries<K extends string>(
+  palette: Palette<K>,
+): (PaletteColor & { readonly key: K })[] {
+  return palette.map((_, index) => palette[index]);
+}
 
 /** A team's inner and outer keys, from the two lists above. */
 export interface TeamColors {

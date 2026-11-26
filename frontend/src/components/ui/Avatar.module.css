@@ -23,9 +23,19 @@
   font-size: var(--font-size-xl);
 }
 
-.geometry {
-  width: 72%;
-  height: 72%;
+/*
+ * USERS-005: an outer colour is a ring. Its colour is the inline
+ * --team-outer-<key> the component sets; the width is here. border-box keeps
+ * the avatar its size, so the ring sits inside the circle. In forced-colors
+ * mode the border stays a solid line, in the system colour.
+ */
+.ring {
+  box-sizing: border-box;
+  border: 2px solid;
+}
+
+.lg.ring {
+  border-width: 3px;
 }
 
 .picture {

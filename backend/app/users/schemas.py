@@ -29,12 +29,21 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 MINIMUM_AGE_YEARS = 16
+
+# USERS-005: the avatar's two colour allowlists, the team palette's own keys
+# in its order (FRONTEND-031, frontend/src/lib/teamColors.ts INNER_COLORS and
+# OUTER_COLORS). Literal types, so the OpenAPI schema carries each as its own
+# enum and the frontend's generated types are these lists; a type-level test
+# there fails `npm run typecheck` if the two drift. Neither list crosses: an
+# outer key is not an inner one, nor the other way round.
+AvatarInnerColor = Literal["gold", "orange", "red", "green", "sky", "lavender", "silver", "teal"]
+AvatarOuterColor = Literal["blue", "crimson", "black", "purple", "forest"]
 
 # The username rule for new accounts (ADR 0035; wiki/CodeContext/Modules/
 # 0x01c-users-routes.md). A field_validator, not Field(pattern=...): pydantic's
@@ -103,7 +112,8 @@ class PublicUserOut(BaseModel):
     description: str | None
     preferred_team_id: int | None
     profile_picture_media_id: int | None
-    profile_avatar_key: str | None = None
+    avatar_inner_color: AvatarInnerColor | None = None
+    avatar_outer_color: AvatarOuterColor | None = None
     profile_picture_key: str | None = None
     created_at: datetime
     follower_count: int
@@ -125,12 +135,29 @@ class UpdateMeRequest(BaseModel):
     absent from the request body is left untouched; a field present with an
     explicit `null` clears it. `username`/`date_of_birth` are deliberately
     not fields on this model -- neither is editable via this endpoint.
+
+    Unknown keys are ignored (so a `username` sent here changes nothing), with
+    one exception: the retired `profile_avatar_key` (USERS-005) is a 422, so a
+    client still sending a preset learns it is gone instead of being told it
+    saved.
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_retired_avatar_preset(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "profile_avatar_key" in data:
+            raise PydanticCustomError(
+                "avatar_preset_retired",
+                "profile_avatar_key is no longer accepted; "
+                "set avatar_inner_color and avatar_outer_color instead.",
+            )
+        return data
 
     description: str | None = Field(default=None, max_length=500)
     preferred_team_id: int | None = None
     profile_picture_media_id: int | None = None
-    profile_avatar_key: str | None = None
+    avatar_inner_color: AvatarInnerColor | None = None
+    avatar_outer_color: AvatarOuterColor | None = None
 
 
 class AccountDataOperationOut(BaseModel):

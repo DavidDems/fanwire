@@ -94,7 +94,8 @@ export function AccountResults({
               <Avatar
                 username={account.username}
                 size="sm"
-                avatarKey={account.profile_avatar_key}
+                avatarInnerColor={account.avatar_inner_color}
+                avatarOuterColor={account.avatar_outer_color}
                 pictureKey={account.profile_picture_key}
               />
               <div className={styles.body}>
