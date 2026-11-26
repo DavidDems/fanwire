@@ -7,7 +7,7 @@ import {
   type RecordListOut,
   type RecordsCatalogOut,
 } from "../../api/records";
-import { formatGameDate } from "../../features/games/format";
+import { formatGameDate } from "../../lib/format";
 import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { Skeleton } from "../ui/Skeleton";

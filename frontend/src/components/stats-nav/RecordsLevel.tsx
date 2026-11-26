@@ -10,7 +10,7 @@ import {
   type RecordHolderOut,
   type RecordValueKind,
 } from "../../api/records";
-import { formatGameDate, teamShortName } from "../../features/games/format";
+import { formatGameDate, teamShortName } from "../../lib/format";
 import { CourtScoreboard } from "../visuals/CourtScoreboard";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";

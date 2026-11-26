@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { TeamIcon } from "../../components/ui/TeamIcon";
 import { useDetailLinkState } from "../../routes/modal-flow";
 import type { components } from "../../api/schema";
-import { teamShortName } from "./format";
+import { teamShortName } from "../../lib/format";
 import styles from "./GameCard.module.css";
 
 type TeamRefOut = components["schemas"]["TeamRefOut"];
