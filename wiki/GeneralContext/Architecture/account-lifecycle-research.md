@@ -26,9 +26,8 @@ to Cognito. Deleting the profile removes the lock target; stale ID JWTs remain a
 profile-recreation risk. The proposed contract must close this, not claim USERS-008
 already does.
 
-The AUTH-001 experiment, kept as
-[`parked/auth001-experiment.patch`](../../../.ai/tasks/AUTH-001/parked/auth001-experiment.patch),
-is unapproved. Its finite cutoff and passing tests are
+The AUTH-001 experiment (a parked patch, deleted in track 6 once the
+native-only AUTH-001 merged) was unapproved. Its finite cutoff and passing tests are
 not evidence of a remote completion bound. USERS-005 remains unrelated unfinished
 work. Neither parked tree is an implementation base authorized by this proposal.
 

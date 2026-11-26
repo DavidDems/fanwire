@@ -120,8 +120,7 @@ are dropped.
 USERS-006/007/008 and the other launch units stay complete; do not repeat
 their migrations or manual steps. IAM fanwire-archive#370 (exact-pool
 AdminGetUser and AdminUserGlobalSignOut, boundary v3) is deployed; that is not
-permission for any AWS write. The AUTH-001 experiment is
-[`parked/auth001-experiment.patch`](../../../.ai/tasks/AUTH-001/parked/auth001-experiment.patch),
-not shipped; USERS-005's red tests were
+permission for any AWS write. The AUTH-001 experiment's patch was deleted
+unshipped (#119); USERS-005's red tests were
 [`parked/users005-red-tests.patch`](../../../.ai/tasks/USERS-005/parked/users005-red-tests.patch),
 applied in track 6. Limits for this work are Prompts/29's and 35's.
