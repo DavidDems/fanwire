@@ -20,6 +20,28 @@ the human) on the Track D foundation. Self-contained: read this file, then
 what it names. The merged foundation's migration, legacy-adoption and
 activation gates remain.
 
+## Live state (track 6 deliverable 1, 2026-11-25)
+
+**Not read: the AWS SSO token had expired before the session started.**
+`aws sts get-caller-identity --profile fanwire-workload --region ca-central-1`
+answered `Error when retrieving token from sso: Token has expired and refresh
+failed`. The human's rule was not to sign in again, so every live answer below
+is UNKNOWN and is a read-only manual step in the track PR. What the repository
+says, read from `origin/main` at `7c335bf`:
+
+| Question | Live answer | Repository evidence |
+|---|---|---|
+| API `ACCOUNT_LIFECYCLE_ENABLED` | UNKNOWN | `'false'` in `common`, `infra/lib/app-stack.ts:149`; no `ACCOUNT_LIFECYCLE_CUTOVER_AT` anywhere in infra |
+| Newest applied Alembic revision | UNKNOWN | `main`'s single head is `fd9d2851baf5` (USERS-011) over `f2b8d4a6c9e3` over `9c009a110001`. The Migration function's log group keeps one month (`backendFunction`, `RetentionDays.ONE_MONTH`), so an older run has no record; `app.migrate` logs `migrations applied` with `revision` |
+| `AccountDeletionSchedule` rule, target, invocations | UNKNOWN | `rate(5 minutes)` to the `AccountDeletion` function, `retryAttempts: 0` (`app-stack.ts:304`) |
+| Media bucket versioning | UNKNOWN | `QuarantineBucket` and `PublicMediaBucket` `versioned: false` (`storage-stack.ts`) |
+| Consumer queue and DLQ depth | UNKNOWN | each `queueWithDlq` DLQ alarms on its first message (`messaging-stack.ts`) |
+| Alarms | UNKNOWN | every function in `Fanwire-App` gets `<id>ErrorsAlarm` and `<id>ThrottlesAlarm`, derived from the construct tree, so `AccountDeletionErrorsAlarm` exists in the template |
+| Signed-in `/api/users/me` | not attempted | needs the human's token |
+
+The read-only commands that answer each row are the "Live-state reads" in the
+track 6 PR body, then the activation PR.
+
 ## Read first
 
 1. Read `AGENTS.md`, `Architecture/work-modes.md` (canonical routing),
