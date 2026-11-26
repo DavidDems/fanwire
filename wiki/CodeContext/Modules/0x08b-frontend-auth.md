@@ -62,9 +62,44 @@ differs, code does not, and `App` is the single place that chooses it.
   The trade-off is real and is recorded rather than hidden: anything that
   achieves script execution in the page can read the ID token. A cookie backend
   is a separate, larger decision and was deliberately not invented here.
+- **Password reset is native Cognito** (`AUTH-001`, ADR 0035). The
+  browser calls `forgotPassword` and `confirmForgotPassword` through
+  `AuthService`; the code goes only to the account's verified address. There
+  is no backend route ([[0x01b-users-auth]]). `ForgotPasswordPage` is one
+  route, two steps:
+  - **Signed out first.** It renders nothing until `status` is `anonymous`;
+    an authenticated arrival (Account details' Reset password, or a typed
+    address) is signed out with `AuthContext`'s `signOut`, the profile query
+    removed and the rest reset, so no code is asked for while a session
+    exists.
+  - **The request step** shows a static reminder in plain text, not an alert:
+    a code goes only to a verified address, so an account that never verified
+    its email cannot reset this way. A syntactically invalid address is a
+    field error and calls nothing.
+  - **One answer for every valid address.** Success, `UserNotFoundException`
+    and `InvalidParameterException` (an unverified account) all reach the
+    code step with "If an account with the verified email address … exists, a
+    code has been sent to it." `LimitExceededException` and
+    `TooManyRequestsException` show one too-many-attempts alert; anything
+    else is "Something went wrong." The page never renders the provider's own
+    message, so nothing says whether an account exists, is verified or was
+    emailed.
+  - **The code step** has Confirmation code, New password and Confirm
+    password. A mismatch is a field error on Confirm password and calls
+    nothing; `CodeMismatch`, `ExpiredCode` and `InvalidPassword` keep their
+    field errors, and `UserNotFound` or `InvalidParameter` there read as a
+    wrong code. Success goes to `/sign-in` with the address.
+  - **Known limit.** Locally verified ID tokens cannot see a provider-side
+    revocation, so a token issued before a reset stays valid until it
+    expires; nothing here claims a reset ends other sessions. USERS-009's
+    fencing covers deletion.
+- **Sign-up has Confirm password too**, with the same rule (`errors.ts`'s
+  `PASSWORDS_DIFFER`); optional email verification is unchanged.
 - **Nothing logs or renders a token, the pool id or the client id.** The pool and
   client ids are not secrets — they ship in the bundle — but a token is, and
-  `src/auth/no-secret-leak.test.tsx` sweeps all five pages for all three.
+  `src/auth/no-secret-leak.test.tsx` sweeps all five pages for all three, and
+  holds the Confirm password values and the reset code to component state:
+  no console, storage, location or rendered text.
 - **`date_of_birth` is sent by exactly one page** and is never carried off it.
   The field states in its own hint that it is private; the age gate stays on the
   server (a Pydantic 422 naming `date_of_birth`), surfaced on that field in the

@@ -70,3 +70,29 @@
 .deactivate:active:not(:disabled) {
   background-color: var(--color-danger-subtle);
 }
+
+/* Account details (AUTH-001): label and value on one line, wrapping when narrow. */
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+}
+
+.detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.detail dt {
+  font-weight: var(--font-weight-semibold);
+}
+
+.detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
