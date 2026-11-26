@@ -140,7 +140,7 @@ picker (`FRONTEND-021`).
   `TeamLevel` shows the record, the splits and the games. `PlayerResults` is
   the Players search's result list.
 - **Router-agnostic, by test.** No file in `stats-nav/` imports
-  `react-router-dom` or `features/`, except `features/games/format`.
+  `react-router-dom` or anything under `features/`.
   - The caller owns the stack, through `open`, `replace` (the conference
     tab) and `pop(toDepth)`.
   - An adapter says how a game or a player is linked. With `levelHref`, the
