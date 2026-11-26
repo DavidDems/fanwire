@@ -390,6 +390,10 @@ export function AccountSettings() {
         <p>
           Replies other people wrote stay, under an anonymous Post deleted card.
         </p>
+        <p>
+          Images already cached by our content network can still load for up to
+          24 hours.
+        </p>
         <p>Backup copies expire within 7 days.</p>
         <Field id="account-deletion-password" label="Current password">
           <input
