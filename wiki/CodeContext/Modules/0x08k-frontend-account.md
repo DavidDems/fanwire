@@ -45,7 +45,13 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   `DELETE /users/me`; wrong passwords send nothing. Its 204 resets caches and
   focuses the deactivated banner while retaining the session for recovery.
 - **Delete my data** opens destructive "Delete all your data?": removed data,
-  irreversibility, others' retained replies and seven-day backup expiry.
+  irreversibility, others' retained replies, then two retention sentences in
+  order: "Images already cached by our content network can still load for up
+  to 24 hours." (`FRONTEND-060`: `/media/*` in `infra/lib/cdn-stack.ts` uses
+  `CachePolicy.CACHING_OPTIMIZED`, default TTL 24 h, and no media object sets
+  `Cache-Control`) and "Backup copies expire within 7 days." (RDS
+  `backupRetention: 7 days` in `infra/lib/data-stack.ts`). A change to either
+  setting changes its sentence.
   A nonempty password enables confirmation; reauthentication precedes
   `DELETE /users/me/data`. Failure remains retryable. After 204, cancel queries
   and synchronously retire the protected `Outlet` through
