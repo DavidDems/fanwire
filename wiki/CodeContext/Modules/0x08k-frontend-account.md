@@ -35,7 +35,11 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   button opens `Menu` with Profile (`/profile/<own id>`), History (`/history`)
   and Account settings (`/settings`).
 - **Account settings** (`features/account/AccountSettings.tsx`) requires auth and
-  orders Verify this account, Notifications, Deactivate account, Delete my data.
+  orders Account details, Verify this account, Notifications, Deactivate
+  account, Delete my data. **Account details** (`AUTH-001`) is a `dl`: Email
+  (the session's address) and Password, whose only content is a secondary
+  `md` Button-styled Reset password link to `/forgot-password` (no password
+  value), which signs the user out before its form ([[0x08b-frontend-auth]]).
   Confirmation refreshes verification state; Verified is disabled. Notifications
   stays checked and disabled without requests. Deactivation reauthenticates before
   `DELETE /users/me`; wrong passwords send nothing. Its 204 resets caches and
