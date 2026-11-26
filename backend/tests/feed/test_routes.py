@@ -186,6 +186,21 @@ def test_get_feed_guest_returns_recent_posts_newest_first(client, session_factor
     assert body["next_before_id"] is None
 
 
+def test_feed_author_carries_both_avatar_colours(client, session_factory):
+    with session_factory() as session:
+        author = _make_user(session, username="colour_feed_author",
+                            avatar_inner_color="orange", avatar_outer_color="purple")
+        _make_post(session, author, text="coloured author")
+
+    response = client.get("/feed")
+
+    assert response.status_code == 200
+    author_body = response.json()["items"][0]["author"]
+    assert author_body["avatar_inner_color"] == "orange"
+    assert author_body["avatar_outer_color"] == "purple"
+    assert "profile_avatar_key" not in author_body
+
+
 def test_get_feed_authenticated_returns_personalized_feed(app, client, session_factory):
     with session_factory() as session:
         viewer = _make_user(session, username="auth_feed_viewer")

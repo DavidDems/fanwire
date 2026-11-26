@@ -48,6 +48,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { AccountsPageBody } from "../features/search/api";
 import { accountsKey, postsKey } from "../features/search/api";
+import { INNER_COLORS, OUTER_COLORS, paletteEntries } from "../lib/teamColors";
 import { renderAppAt, type AppRender } from "../test/app-route";
 import {
   allBlocks,
@@ -77,6 +78,7 @@ import {
   type PostsPageBody,
   type ViewportStub,
 } from "../test/search";
+import { expectAvatarColours } from "../test/profile";
 import { backgroundOf, openDialog, threadServer } from "../test/thread";
 import {
   gameDetailStub,
@@ -98,22 +100,17 @@ const OLDER_FEED_TEXT = "Second-half run from the corner";
 const FEED_POST = testPostView({ id: 901, text: FEED_TEXT });
 const OLDER_FEED_POST = testPostView({ id: 900, text: OLDER_FEED_TEXT });
 
-const AVATAR_KEYS = [
-  "court-lines",
-  "ball-seams",
-  "shot-clock",
-  "scoreboard",
-  "arc",
-  "net-grid",
-  "baseline",
-] as const;
+// Each account its own avatar colours, so a row can only match its own.
+const INNER_KEYS = paletteEntries(INNER_COLORS).map(({ key }) => key);
+const OUTER_KEYS = paletteEntries(OUTER_COLORS).map(({ key }) => key);
 
 function accounts(count: number): AccountResult[] {
   return Array.from({ length: count }, (_, index) =>
     testAccount({
       id: 40 + index,
       username: `fan${40 + index}`,
-      profile_avatar_key: AVATAR_KEYS[index % AVATAR_KEYS.length],
+      avatar_inner_color: INNER_KEYS[index % INNER_KEYS.length],
+      avatar_outer_color: OUTER_KEYS[index % OUTER_KEYS.length],
     }),
   );
 }
@@ -769,10 +766,11 @@ describe("the rail's results", () => {
       expect(
         within(row).getByRole("link", { name: account.username }),
       ).toHaveAttribute("href", `/profile/${account.id}`);
-      expect(
-        row.querySelector(`[data-avatar-key="${account.profile_avatar_key}"]`),
-        `${account.username}'s Avatar`,
-      ).not.toBeNull();
+      expectAvatarColours(
+        account.avatar_inner_color ?? null,
+        account.avatar_outer_color ?? null,
+        row,
+      );
       expect(within(row).queryAllByRole("button")).toEqual([]);
     });
   });
