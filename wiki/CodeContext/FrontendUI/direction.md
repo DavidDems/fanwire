@@ -70,7 +70,7 @@ today. These get the care; everything else is plain.
 ## Principles, in priority order
 
 1. **Legible before branded.** Body text in the system stack at 16 px, with
-   AA contrast measured, not judged (`tokens.md`).
+   AA contrast measured, not judged (`tokens-contrast.md`).
 2. **Colour never carries meaning alone.** Live has the word, errors have the
    message, the selected tab has a bar as well as a colour (`accessibility.md`).
 3. **The structure in the code is the structure on screen.** `FormField` owns the label,

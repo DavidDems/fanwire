@@ -21,7 +21,6 @@ Part of [components.md](components.md). Token names are from [tokens.md](tokens.
 | `Avatar` | in a `--radius-full` circle, `--color-surface-muted` fill, `--color-text`: the account's picture when it has one (`pictureKey`), else one of eight code-drawn presets (`avatarKey`, `AVATAR_OPTIONS`: `court-lines` … `play-pattern`), else the first character of the username **as typed** | `sm` 32 px, `lg` 64 px | `aria-hidden="true"`: the username is always beside it. No hashed per-user colours, which would land near team colours |
 | `Badge` | an inline label, `--font-size-xs`, 600 | `neutral` (`--color-surface-muted` / `--color-text`), `live` (`--color-live` / `--color-on-live`, with a dot), `outline` (team abbreviations: transparent, 1 px `--color-border-strong`) | — |
 | `Icon` | one inline SVG, `aria-hidden="true"`, `currentColor`, 20 px (16 in `sm` buttons) | see §3 | — |
-| `GameScore` | the score block (`components-sports.md` §4) | `compact` (one line, for the feed ticker), `row` (for search results) | **No caller since `FRONTEND-009`**: the ticker went with `EVENTS-003` and the search game filter with `FRONTEND-009`; Recent Games used it from `EVENTS-013` until `FRONTEND-037` replaced it with its own card. Kept until a unit with `components/ui/` in scope deletes it or reuses it |
 | `Tabs` (`FRONTEND-009`) | a `<nav aria-label>` of `NavLink`s styled as tabs, the current one `aria-current="page"` | — | default, `:hover`, `:focus-visible`, current (a bar and weight). **Deliberately not an ARIA `tablist`**: each tab is its own route, so the address decides the tab and Back moves between them |
 | `VisuallyHidden` | text for screen readers only (the `.visually-hidden` class from `base.css`) | — | — |
 | `Dialog` (`FRONTEND-010`) | a native `<dialog>` opened with `showModal()` (top layer, page inert, focus kept inside): a sticky header with the title as an `h2` (also the accessible name, `aria-labelledby`) and a Close button (`x` icon, 44 px), then the body. `--color-bg`, 1 px `--color-border`, `--radius-md`, `--shadow-2`, at most `--content-max` wide with a `--space-4` gutter. The backdrop is `--color-scrim` at 0.6 opacity (`FRONTEND-052`) | — | open, closed (renders nothing). Escape is the prevented `cancel` event. The Back icon is `ChevronDownIcon` rotated 90° (no left chevron in `ui/icons/` yet). **A backdrop click is a click whose target, and whose mousedown's target, is the `<dialog>` itself**: the dialog has no padding and does not scroll (its content does), so a scrollbar click or a selection dragged out of the content never closes it. Since `FRONTEND-021`, focus starts on Close after `showModal()`; a child effect may move it (compose to its text box, confirms to Cancel). Focus returns to the opener. A `close` event arriving while the element is open again is ignored (StrictMode's re-run). **Since `FRONTEND-012`:** `role="alertdialog"` for confirms (no Close button), and a `<dialog>` inside another acts only on its own `cancel`/`close` events, so a confirm's Escape never closes the thread modal around it |
@@ -47,7 +46,6 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `Skeleton` | `variant: "post" \| "line"`; `media?: boolean` on `post` (reserves the 4:3 frame, `FRONTEND-015`) |
 | `Avatar` | `username: string` and `size: "sm" \| "lg"`, plus optional `avatarKey?` (a preset's key), `pictureKey?` (a picture, which wins over the preset) and `exposeKey?` (default true: the preset's key as `data-avatar-key`) |
 | `Badge` | `variant: "neutral" \| "live" \| "outline"` and `children` |
-| `GameScore` | `variant: "compact" \| "row"`, `homeScore`, `awayScore` and `status` (`LiveScoreView` in camelCase) |
 | `VisuallyHidden` | `children` |
 | `Tabs` | `label: string` (the `nav`'s name) and `items: TabItem[]` (each a route and its text) |
 | `Dialog` | `open: boolean`, `onClose: () => void` (called once per way out; the dialog never closes itself, the caller turns `open` false or unmounts it), `title: string`, `children`, optional `onBack: () => void` (`FRONTEND-011`: a 44 px ghost icon button named "Back" leads the header while it is given; if it disappears while focused, focus moves to Close), optional `role?: "dialog" \| "alertdialog"` and `describedBy?: string` (`FRONTEND-012`) |
@@ -57,7 +55,7 @@ The props the tests pin. Each is a named export from `src/components/ui/<Name>.t
 | `SegmentedTabs` | `label: string` (the tablist's name), `tabs: { id: string; label: string }[]`, `value: string` (the selected id), `onChange: (id: string) => void`, `children` (the panel, or a function handed the bar to place), `end?` (set at the bar's row end; the row wraps). `SegmentedRow` (`start?`, `end`) is that row alone. Controlled: the caller holds `value` |
 | `FloatingButton` | `aria-label: string` (required, a type error without it), `children` (the icon), and either `to: string` or `onClick: () => void` |
 | `Menu` | `label: string` (the button's and the menu's name), `items: MenuItem[]` (`{ label, onSelect, disabled? }`), `icon?: ReactNode` (shown in place of the label, which stays the name) |
-| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `UserIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon`, `CircleCheckIcon`, `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), `LogOutIcon` (`FRONTEND-035`) and `CalendarIcon` (`FRONTEND-044`), each taking `size?: number` (default 20) and `className?` |
+| `icons/index.tsx` | `HouseIcon`, `SearchIcon`, `SquarePenIcon`, `BellIcon`, `ChartColumnIcon`, `HeartIcon`, `HeartFilledIcon`, `MessageCircleIcon`, `Repeat2Icon`, `Repeat2FilledIcon`, `ChevronDownIcon`, `XIcon`, `ImageIcon`, `CircleAlertIcon`, `CircleCheckIcon`, `EllipsisIcon` (`FRONTEND-012`), and `CirclePlusIcon`, `PaperclipIcon` and `CircleXIcon` (`UI-010`), `LogOutIcon` (`FRONTEND-035`) and `CalendarIcon` (`FRONTEND-044`), each taking `size?: number` (default 20) and `className?` |
 
 A feature unit that needs something not listed here (for example a
 `className` on `InlineAlert`, or an `id` on `StatusLine`) can't edit
@@ -79,7 +77,7 @@ unit. Don't work around a missing prop with a wrapper element: that is how
 
 ## 3. Icons
 
-**Copied, not installed.** Twenty Lucide icons plus two pressed variants (ISC licence, `branding-rights.md` §5)
+**Copied, not installed.** Nineteen Lucide icons plus two pressed variants (ISC licence, `branding-rights.md` §5)
 are copied as inline SVG React components into `src/components/ui/icons/`,
 with Lucide's licence text in `src/components/ui/icons/LICENSE`. There is no
 `lucide-react` dependency (so no `package.json` Director PR), no third-party
@@ -91,7 +89,6 @@ request, and only the glyphs in use.
 | Search | `search` | nav (the sidebar from 640 px) and the header's Search link on phones (`FRONTEND-035`) |
 | Compose | `square-pen` | "Post about this" links in `GamePage`, `BoxScore` and `PlayerPage` (`FRONTEND-017`); no longer in the nav |
 | Notifications | `bell` | nav |
-| (unused) | `user` | no caller since "Your profile" left the nav for the Account menu; kept until a tidy-up deletes it |
 | Stats | `chart-column` | nav (`FRONTEND-009`) |
 | Schedule | `calendar` | nav (`FRONTEND-044`) |
 | Like | `heart`; pressed: `HeartFilledIcon`, the same path filled with `currentColor` | `PostAction` (`UI-009`) |

@@ -8,34 +8,12 @@ Part of [components.md](components.md). Token names are from [tokens.md](tokens.
 
 ## 4. Sports-specific
 
-### Score block (`GameScore`, inside `LiveScoreTickerDecorator`)
-
-Nothing renders `GameScore` today (`components-shared.md` §2); this section
-is the design to reuse if a score block returns.
-
-```
-┌ status region "Live score" ───────────────────────────────┐
-│ (●Live) Q3 · Game 789                                     │
-│ Home  95  –  99  Away                                     │
-└───────────────────────────────────────────────────────────┘
-```
-
-- **The decorator adds a block below the post view and never restyles it.**
-  It renders its children untouched and then the ticker, as now. The ticker is a
-  `--color-surface-muted` band at the foot of the post's content, with
-  `--radius-sm`.
-- **Figures:** `--font-size-2xl`, 700, `tabular-nums`, home first, an en dash
-  between. **Home and Away are words, not team names**, because
-  `LiveScoreView` carries only `game_id`, the two scores and `status`. Naming
-  teams needs the backend to add home and away abbreviations to `LiveScoreView`.
-  That's a follow-up for `feed/`, not a styling unit; it is listed in the PR.
-- One `GameScore` per game, in the existing `<ul>` (a post can mention
-  several). The `role="status"` and `aria-label="Live score"` stay exactly as
-  they are.
-
 ### Game state
 
-`LiveScoreView.status` is the vendor's short code, passed through as text. The
+Nothing renders a game state badge today: `LiveScoreView` went with the
+ticker (`EVENTS-003`), and the score block that used this mapping was deleted
+(`FRONTEND-058`). The table is the design to reuse if one returns.
+`LiveScoreView.status` was the vendor's short code, passed through as text. The
 vendor shape is **unverified** (`0x02-events.md`: the adapter's API-SPORTS
 parsing is illustrative), and `Game` has no status column. So the mapping is a
 small table with a safe default, and it never claims "Live" for a code it
