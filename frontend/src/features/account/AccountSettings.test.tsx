@@ -1,7 +1,7 @@
 /** USERS-006: the account settings page's sections and account verification. */
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { renderSettingsApp } from "../../test/account";
 import { FakeAuthService, testSession } from "../../test/auth";
@@ -169,5 +169,19 @@ describe("Account settings", () => {
       server.events.removeListener("request:start", listener);
     }
     expect(requests).toEqual([]);
+  });
+
+  it("words a failed verification check with the typographic apostrophe", async () => {
+    const auth = new FakeAuthService({ session: testSession() });
+    vi.spyOn(auth, "emailVerified").mockRejectedValue(
+      new Error("verification check failed"),
+    );
+    renderSettingsApp("active", auth);
+
+    expect(
+      await screen.findByText(
+        "We could not check this account’s verification status.",
+      ),
+    ).toBeInTheDocument();
   });
 });

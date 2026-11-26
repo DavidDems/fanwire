@@ -64,6 +64,15 @@ describe("ProfileSummary follower count", () => {
 
     expectOneTextNodeLi(within(header).getByText("2 followers"), "2 followers");
   });
+
+  it('reads "1,200 followers" at 1200, formatted by locale', () => {
+    const header = renderCounts(1200, 0);
+
+    expectOneTextNodeLi(
+      within(header).getByText("1,200 followers"),
+      "1,200 followers",
+    );
+  });
 });
 
 describe("ProfileSummary following count", () => {
@@ -71,5 +80,14 @@ describe("ProfileSummary following count", () => {
     const header = renderCounts(0, 1);
 
     expectOneTextNodeLi(within(header).getByText("1 following"), "1 following");
+  });
+
+  it('reads "1,200 following" at 1200, formatted by locale', () => {
+    const header = renderCounts(0, 1200);
+
+    expectOneTextNodeLi(
+      within(header).getByText("1,200 following"),
+      "1,200 following",
+    );
   });
 });

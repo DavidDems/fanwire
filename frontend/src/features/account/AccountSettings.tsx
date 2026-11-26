@@ -88,7 +88,7 @@ export function AccountSettings() {
         if (current) {
           setVerified(false);
           setVerificationFailure(
-            "We could not check this account's verification status.",
+            "We could not check this account’s verification status.",
           );
         }
       },
