@@ -49,6 +49,12 @@ type User = ReturnType<typeof userEvent.setup>;
 
 /** A Cognito code none of the five pages maps to a field: a request failure. */
 const UNMAPPED_CODE = "LimitExceededException";
+/**
+ * The reset page (AUTH-001) owns its words: throttling has a generic alert of
+ * its own, and any other failure is this one sentence.
+ */
+const RESET_UNMAPPED_CODE = "InternalErrorException";
+const RESET_FAILURE_TEXT = "Something went wrong. Please try again.";
 const CODE = "123456";
 
 function renderSignIn(authService = new FakeAuthService()) {
@@ -156,6 +162,7 @@ async function signInWith(user: User): Promise<void> {
 async function signUpWith(user: User): Promise<void> {
   await user.type(await screen.findByLabelText(/^email$/i), TEST_EMAIL);
   await user.type(screen.getByLabelText(/^password$/i), TEST_PASSWORD);
+  await user.type(screen.getByLabelText(/^confirm password$/i), TEST_PASSWORD);
   await user.click(screen.getByRole("button", { name: /^sign up$/i }));
 }
 
@@ -168,6 +175,10 @@ async function submitNewPassword(user: User): Promise<void> {
   await user.type(await screen.findByLabelText(/confirmation code/i), CODE);
   await user.type(
     screen.getByLabelText(/new password/i),
+    `${TEST_PASSWORD}-new`,
+  );
+  await user.type(
+    screen.getByLabelText(/^confirm password$/i),
     `${TEST_PASSWORD}-new`,
   );
   await user.click(screen.getByRole("button", { name: /^reset password$/i }));
@@ -309,11 +320,17 @@ describe("ForgotPasswordPage in the narrow form card", () => {
     );
   });
 
+  // AUTH-001: the reset page renders none of the provider's own words, so a
+  // request failure is the page's one generic sentence, not `text`.
   it("renders a failed code request through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "Password reset is unavailable right now.";
+    const text = RESET_FAILURE_TEXT;
     renderForgotPassword(
-      new FakeAuthService().failWith("forgotPassword", UNMAPPED_CODE, text),
+      new FakeAuthService().failWith(
+        "forgotPassword",
+        RESET_UNMAPPED_CODE,
+        "Password reset is unavailable right now.",
+      ),
     );
 
     await requestCode(user);
@@ -323,12 +340,12 @@ describe("ForgotPasswordPage in the narrow form card", () => {
 
   it("renders a failed reset through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "Too many reset attempts. Try again later.";
+    const text = RESET_FAILURE_TEXT;
     renderForgotPassword(
       new FakeAuthService().failWith(
         "confirmForgotPassword",
-        UNMAPPED_CODE,
-        text,
+        RESET_UNMAPPED_CODE,
+        "Too many reset attempts. Try again later.",
       ),
     );
 

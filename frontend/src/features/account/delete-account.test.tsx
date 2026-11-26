@@ -41,6 +41,35 @@ describe("Delete my data", () => {
     );
   });
 
+  it("states the content network's cache limit just before backup expiry, keeping every paragraph", async () => {
+    renderSettingsApp("active", new FakeAuthService({ session: testSession() }));
+
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: "Delete my data" }));
+
+    const dialog = screen.getByRole("alertdialog", { name: "Delete all your data?" });
+    const elements = Array.from(dialog.querySelectorAll("p"));
+    const paragraphs = elements.map((p) =>
+      (p.textContent ?? "").replace(/\s+/g, " ").trim(),
+    );
+    const cache =
+      "Images already cached by our content network can still load for up to 24 hours.";
+    const backups = "Backup copies expire within 7 days.";
+    for (const existing of [
+      "This cannot be undone and recovery is not possible.",
+      "Your account, profile, posts, replies, likes, reposts, follows, notifications and images will be deleted.",
+      "Replies other people wrote stay, under an anonymous Post deleted card.",
+      backups,
+    ]) {
+      expect(paragraphs.filter((text) => text === existing)).toHaveLength(1);
+    }
+    expect(paragraphs.filter((text) => text === cache)).toHaveLength(1);
+    const cacheParagraph = elements[paragraphs.indexOf(cache)];
+    const backupParagraph = elements[paragraphs.indexOf(backups)];
+    expect(cacheParagraph?.nextElementSibling).toBe(backupParagraph);
+  });
+
   it("keeps the dialog open after a wrong password and makes no deletion request", async () => {
     const user = userEvent.setup();
     const auth = new FakeAuthService({ session: testSession() }).failWith(

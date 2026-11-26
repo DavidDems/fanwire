@@ -39,9 +39,13 @@ function renderSignUp(authService: FakeAuthService) {
   );
 }
 
-async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+async function fillAndSubmit(
+  user: ReturnType<typeof userEvent.setup>,
+  confirmation = TEST_PASSWORD,
+) {
   await user.type(screen.getByLabelText(/^email$/i), TEST_EMAIL);
   await user.type(screen.getByLabelText(/^password$/i), TEST_PASSWORD);
+  await user.type(screen.getByLabelText(/^confirm password$/i), confirmation);
   await user.click(screen.getByRole("button", { name: /sign up/i }));
 }
 
@@ -62,11 +66,43 @@ describe("SignUpPage", () => {
     expect(screen.getByRole("heading", { name: /sign\s*-?\s*up/i })).toBeInTheDocument();
   });
 
-  it("labels both of its inputs", () => {
+  it("labels its inputs: Email, Password and Confirm password", () => {
     renderSignUp(new FakeAuthService());
 
     expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText(/^confirm password$/i)).toHaveAttribute("type", "password");
+  });
+
+  it("puts a mismatched confirmation on Confirm password and makes no signUp call", async () => {
+    const user = userEvent.setup();
+    const service = new FakeAuthService();
+    renderSignUp(service);
+
+    await fillAndSubmit(user, `${TEST_PASSWORD}-typo`);
+
+    expectFieldError(await screen.findByLabelText(/^confirm password$/i));
+    expectNoFieldError(screen.getByLabelText(/^password$/i));
+    expect(service.callsTo("signUp")).toEqual([]);
+    expect(screen.queryByText(/confirm stub/)).toBeNull();
+  });
+
+  it("makes exactly one signUp call once the two passwords match", async () => {
+    const user = userEvent.setup();
+    const service = new FakeAuthService();
+    renderSignUp(service);
+
+    await fillAndSubmit(user, `${TEST_PASSWORD}-typo`);
+    expectFieldError(await screen.findByLabelText(/^confirm password$/i));
+    expect(service.callsTo("signUp")).toEqual([]);
+
+    const confirm = screen.getByLabelText(/^confirm password$/i);
+    await user.clear(confirm);
+    await user.type(confirm, TEST_PASSWORD);
+    await user.click(screen.getByRole("button", { name: /sign up/i }));
+
+    expect(await screen.findByText(`confirm stub for ${TEST_EMAIL}`)).toBeInTheDocument();
+    expect(service.callsTo("signUp")).toEqual([{ email: TEST_EMAIL, password: TEST_PASSWORD }]);
   });
 
   it("explains that sign-in is immediate and email verification can happen later", () => {

@@ -16,7 +16,7 @@
  * ([[0x00-architecture]] Connection rule). `profile_picture_media_id` is
  * therefore asserted *absent* from every body this form sends.
  */
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { Route, Routes } from "react-router-dom";
@@ -38,6 +38,16 @@ import {
   publicProfilesById,
   type PatchMeStub,
 } from "../../test/users";
+import avatarStyles from "../../components/ui/Avatar.module.css";
+import buttonStyles from "../../components/ui/Button.module.css";
+import {
+  isAtRule,
+  parseCss,
+  readSrcFile,
+  selectors,
+  type CssBlock,
+} from "../../test/css";
+import profileStyles from "./Profile.module.css";
 import { ProfilePage } from "./ProfilePage";
 
 type MeOut = components["schemas"]["MeOut"];
@@ -82,6 +92,60 @@ function preferredTeam(): HTMLElement {
 
 function save(): HTMLElement {
   return screen.getByRole("button", { name: /save/i });
+}
+
+/** The avatar section: the fieldset its "Profile avatar" legend names. */
+function avatarSection(): HTMLElement {
+  return screen.getByRole("group", { name: "Profile avatar" });
+}
+
+function innerGroup(): Promise<HTMLElement> {
+  return screen.findByRole("radiogroup", { name: "Inner colour" });
+}
+
+function outerGroup(): HTMLElement {
+  return screen.getByRole("radiogroup", { name: "Outer colour" });
+}
+
+/** The Preview: the one Avatar inside the avatar section. */
+function preview(): HTMLElement {
+  const avatars = avatarSection().querySelectorAll<HTMLElement>(`.${avatarStyles.avatar}`);
+  expect(avatars, "exactly one Avatar, the Preview, in the avatar section").toHaveLength(1);
+  return avatars[0];
+}
+
+function labelText(radio: HTMLElement): string {
+  return (radio as HTMLInputElement).labels?.[0]?.textContent?.trim() ?? "";
+}
+
+/**
+ * The declarations Profile.module.css gives `element` through its module
+ * classes: every top-level rule one of whose selectors is exactly one of them.
+ */
+function declarationsOf(css: CssBlock[], element: HTMLElement): Map<string, string> {
+  // The module object is a proxy under Vitest, so map each rule's class to
+  // the name the component used, not the other way round.
+  const applies = (selector: string): boolean => {
+    const match = /^\.([\w-]+)$/.exec(selector);
+    return match !== null && element.classList.contains(profileStyles[match[1]]);
+  };
+  const declared = new Map<string, string>();
+  for (const block of css.filter((one) => !isAtRule(one))) {
+    if (!selectors(block).some(applies)) continue;
+    for (const { property, value } of block.declarations) declared.set(property, value.trim());
+  }
+  return declared;
+}
+
+/** A length in rem: `1.5rem`, `24px` (at 16 px), or the target token. */
+function remOf(declared: Map<string, string>, property: string): number {
+  const value = declared.get(property) ?? "";
+  if (/^var\(--target-min\)$/.test(value)) return 2.75;
+  const rem = /^([\d.]+)rem$/.exec(value);
+  if (rem !== null) return Number(rem[1]);
+  const px = /^([\d.]+)px$/.exec(value);
+  if (px !== null) return Number(px[1]) / 16;
+  return 0;
 }
 
 beforeEach(() => {
@@ -186,41 +250,130 @@ describe("the settings form", () => {
     });
   });
 
-  it("offers a keyboard-operable single-choice avatar grid", async () => {
+  it("keeps the avatar fieldset, its legend, Preview and Save", async () => {
+    renderSettings();
+    await description();
+
+    const avatar = avatarSection();
+    expect(within(avatar).getByText("Preview")).toBeInTheDocument();
+    expect(preview()).toBeDefined();
+    // Button md is --target-min (2.75rem, 44 px) high (Button.module.css).
+    expect(save()).toHaveClass(buttonStyles.button, buttonStyles.md);
+  });
+
+  it("offers separate labelled keyboard-operable inner and outer radio groups", async () => {
     const user = userEvent.setup();
     renderSettings();
 
-    const choices = await screen.findAllByRole("radio");
-    expect(choices).toHaveLength(9);
-    await user.click(choices[0]);
+    const inner = await innerGroup();
+    const outer = outerGroup();
+    expect(avatarSection()).toContainElement(inner);
+    expect(avatarSection()).toContainElement(outer);
+    const innerChoices = within(inner).getAllByRole("radio");
+    const outerChoices = within(outer).getAllByRole("radio");
+    // Each choice's visible label is its colour's name, so the selection
+    // never relies on colour alone.
+    expect(innerChoices.map(labelText)).toEqual([
+      "None", "Gold", "Orange", "Red", "Green", "Sky Blue", "Lavender", "Silver", "Teal",
+    ]);
+    expect(outerChoices.map(labelText)).toEqual([
+      "None", "Blue", "Crimson", "Black", "Purple", "Forest Green",
+    ]);
+    expect(innerChoices[0]).toBeChecked();
+    expect(outerChoices[0]).toBeChecked();
+
+    await user.click(innerChoices[0]);
     await user.keyboard("{ArrowDown}");
-    expect(choices[1]).toBeChecked();
-    expect(choices[1]).toHaveFocus();
+    expect(innerChoices[1]).toBeChecked();
+    expect(innerChoices[1]).toHaveFocus();
+    expect(outerChoices[0]).toBeChecked();
+
+    await user.click(outerChoices[0]);
+    await user.keyboard("{ArrowDown}");
+    expect(outerChoices[1]).toBeChecked();
+    expect(innerChoices[1]).toBeChecked();
   });
 
-  it("saves a selected preset", async () => {
+  it("gives every choice a target of at least 24 by 24 CSS px", async () => {
+    renderSettings();
+    const radios = [
+      ...within(await innerGroup()).getAllByRole("radio"),
+      ...within(outerGroup()).getAllByRole("radio"),
+    ];
+    const css = parseCss(readSrcFile("features/profile/Profile.module.css"));
+
+    for (const radio of radios) {
+      const label = (radio as HTMLInputElement).labels?.[0];
+      expect(label, `${labelText(radio)} has a label`).toBeDefined();
+      const declared = declarationsOf(css, label as HTMLElement);
+      expect(remOf(declared, "min-height"), `${labelText(radio)} min-height`).toBeGreaterThanOrEqual(1.5);
+      expect(remOf(declared, "min-width"), `${labelText(radio)} min-width`).toBeGreaterThanOrEqual(1.5);
+    }
+  });
+
+  it("lets the groups wrap, so they reflow at 320 px without page overflow", async () => {
+    renderSettings();
+    const css = parseCss(readSrcFile("features/profile/Profile.module.css"));
+
+    for (const group of [await innerGroup(), outerGroup()]) {
+      const list = within(group).getAllByRole("radio")[0].closest("label")?.parentElement;
+      expect(list, "the choices' container").toBeDefined();
+      const declared = declarationsOf(css, list as HTMLElement);
+      const wraps =
+        declared.get("flex-wrap") === "wrap" ||
+        /repeat\(\s*auto-(fill|fit)/.test(declared.get("grid-template-columns") ?? "");
+      expect(wraps, "the choices wrap onto further rows").toBe(true);
+    }
+  });
+
+  it("updates the preview as the choice changes, and saves only the changed inner colour", async () => {
     const user = userEvent.setup();
     const patch = renderSettings();
-    const courtLines = await screen.findByRole("radio", { name: /court lines/i });
-    await user.click(courtLines);
+    await innerGroup();
+    expect(preview().getAttribute("style")).toBeNull();
+
+    await user.click(within(await innerGroup()).getByRole("radio", { name: "Gold" }));
+    expect(preview().style.backgroundColor).toBe("var(--team-inner-gold)");
+    expect(preview().style.color).toBe("var(--team-outer-black)");
+    expect(preview().style.borderColor).toBe("");
+
+    await user.click(within(outerGroup()).getByRole("radio", { name: "Forest Green" }));
+    expect(preview().style.borderColor).toBe("var(--team-outer-forest)");
+    await user.click(within(outerGroup()).getByRole("radio", { name: "None" }));
+    expect(preview().style.borderColor).toBe("");
+
     await user.click(save());
 
     await waitFor(() => expect(patch.bodies).toHaveLength(1));
-    expect(patch.onlyBody().profile_avatar_key).toBe("court-lines");
+    expect(patch.onlyBody()).toEqual({ avatar_inner_color: "gold" });
   });
 
-  it("uses null for the explicit initials reset", async () => {
+  it("sends only the outer colour when only the outer colour changed", async () => {
     const user = userEvent.setup();
-    const resetPatch = renderSettings(testProfile({ profile_avatar_key: "net-grid" }));
-    await user.click(await screen.findByRole("radio", { name: /use initials/i }));
+    const patch = renderSettings(testProfile({ avatar_inner_color: "sky", avatar_outer_color: null }));
+    await innerGroup();
+    await user.click(within(outerGroup()).getByRole("radio", { name: "Crimson" }));
+    await user.click(save());
+
+    await waitFor(() => expect(patch.bodies).toHaveLength(1));
+    expect(patch.onlyBody()).toEqual({ avatar_outer_color: "crimson" });
+  });
+
+  it("sends null only for an explicitly cleared colour", async () => {
+    const user = userEvent.setup();
+    const resetPatch = renderSettings(testProfile({ avatar_inner_color: "sky", avatar_outer_color: "blue" }));
+    const inner = await innerGroup();
+    expect(within(inner).getByRole("radio", { name: "Sky Blue" })).toBeChecked();
+    expect(within(outerGroup()).getByRole("radio", { name: "Blue" })).toBeChecked();
+    await user.click(within(inner).getByRole("radio", { name: "None" }));
     await user.click(save());
     await waitFor(() => expect(resetPatch.bodies).toHaveLength(1));
-    expect(resetPatch.onlyBody()).toHaveProperty("profile_avatar_key", null);
+    expect(resetPatch.onlyBody()).toEqual({ avatar_inner_color: null });
   });
 
-  it("keeps the previous avatar visible and reports a failed save", async () => {
+  it("restores saved colours and reports a failed save", async () => {
     const user = userEvent.setup();
-    const profile = testProfile({ profile_avatar_key: "net-grid" });
+    const profile = testProfile({ avatar_inner_color: "sky", avatar_outer_color: "blue" });
     server.use(
       meStub(profile).handler,
       http.patch("*/users/me", () => HttpResponse.json({}, { status: 500 })),
@@ -230,19 +383,38 @@ describe("the settings form", () => {
       <Routes><Route path="/profile/:userId" element={<ProfilePage />} /></Routes>,
       { authService: new FakeAuthService({ session: testSession() }), route: `/profile/${profile.id}` },
     );
-    expect(await screen.findByRole("radio", { name: /net grid/i })).toBeChecked();
-    await user.click(await screen.findByRole("radio", { name: /court lines/i }));
+    const inner = await innerGroup();
+    expect(within(inner).getByRole("radio", { name: "Sky Blue" })).toBeChecked();
+    await user.click(within(inner).getByRole("radio", { name: "Gold" }));
+    await user.click(within(outerGroup()).getByRole("radio", { name: "Purple" }));
+    expect(preview().style.backgroundColor).toBe("var(--team-inner-gold)");
     await user.click(save());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not save/i);
-    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
-    expect(document.querySelector("[data-avatar-key='court-lines']")).toBeNull();
+    expect(within(inner).getByRole("radio", { name: "Sky Blue" })).toBeChecked();
+    expect(within(inner).getByRole("radio", { name: "Gold" })).not.toBeChecked();
+    expect(within(outerGroup()).getByRole("radio", { name: "Blue" })).toBeChecked();
+    expect(preview().style.backgroundColor).toBe("var(--team-inner-sky)");
+    expect(preview().style.borderColor).toBe("var(--team-outer-blue)");
   });
 
-  it("keeps the initials default available when no preset is selected", async () => {
+  it("shows None as each group's default choice", async () => {
     renderSettings();
-    await description();
 
-    expect(screen.getByRole("radio", { name: /use initials/i })).toBeInTheDocument();
+    expect(within(await innerGroup()).getByRole("radio", { name: "None" })).toBeChecked();
+    expect(within(outerGroup()).getByRole("radio", { name: "None" })).toBeChecked();
+    expect(screen.getAllByRole("radio", { name: "None" })).toHaveLength(2);
+  });
+
+  it("offers none of the old presets, and never sends the picture", async () => {
+    const user = userEvent.setup();
+    const patch = renderSettings();
+    await innerGroup();
+
+    expect(screen.queryByRole("radio", { name: /use initials|court lines|net grid/i })).toBeNull();
+    await user.click(within(outerGroup()).getByRole("radio", { name: "Black" }));
+    await user.click(save());
+    await waitFor(() => expect(patch.bodies).toHaveLength(1));
+    expect(patch.onlyBody()).toEqual({ avatar_outer_color: "black" });
   });
 });

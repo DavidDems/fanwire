@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useDeactivateAccount, useDeleteAccount } from "../../auth/account";
 import { useAuth } from "../../auth/AuthContext";
 import { AuthError } from "../../auth/AuthService";
 import { Field, describeField } from "../../components/FormField";
-import { Button } from "../../components/ui/Button";
+import { Button, buttonClass } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ConfirmDialog } from "../../components/ui/Dialog";
 import { InlineAlert } from "../../components/ui/InlineAlert";
@@ -47,7 +48,7 @@ function verificationMessage(cause: unknown): string | null {
 }
 
 export function AccountSettings() {
-  const { authService } = useAuth();
+  const { authService, session } = useAuth();
   const deactivate = useDeactivateAccount();
   const deleteAccount = useDeleteAccount();
   const mounted = useRef(false);
@@ -197,6 +198,36 @@ export function AccountSettings() {
     <div className={styles.page}>
       <h1>Account settings</h1>
       <div className={styles.sections}>
+        <Card
+          as="section"
+          className={styles.section}
+          aria-labelledby="account-details-heading"
+        >
+          <h2 id="account-details-heading">Account details</h2>
+          <dl className={styles.details}>
+            <div className={styles.detail}>
+              <dt>Email</dt>
+              <dd>{session?.email}</dd>
+            </div>
+            <div className={styles.detail}>
+              <dt>Password</dt>
+              <dd>
+                {/* The reset page signs the session out before its form. */}
+                <Link
+                  to="/forgot-password"
+                  className={buttonClass("secondary", "md")}
+                >
+                  Reset password
+                </Link>
+              </dd>
+            </div>
+          </dl>
+          <p className={styles.hint}>
+            Reset password signs you out first. A reset code goes only to a
+            verified email address.
+          </p>
+        </Card>
+
         <Card
           as="section"
           className={styles.section}
@@ -358,6 +389,10 @@ export function AccountSettings() {
         </p>
         <p>
           Replies other people wrote stay, under an anonymous Post deleted card.
+        </p>
+        <p>
+          Images already cached by our content network can still load for up to
+          24 hours.
         </p>
         <p>Backup copies expire within 7 days.</p>
         <Field id="account-deletion-password" label="Current password">

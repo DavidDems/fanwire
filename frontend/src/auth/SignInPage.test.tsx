@@ -79,6 +79,17 @@ describe("SignInPage", () => {
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
   });
 
+  it("keeps a forgot-password link, named with 'Forgot', below the password field (AUTH-001)", () => {
+    renderSignIn(new FakeAuthService());
+
+    const link = screen.getByRole("link", { name: /forgot/i });
+    expect(link).toHaveAttribute("href", "/forgot-password");
+    const password = screen.getByLabelText(/^password$/i);
+    expect(
+      password.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("signs in through the injected service", async () => {
     const user = userEvent.setup();
     const service = new FakeAuthService();

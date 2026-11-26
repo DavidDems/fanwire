@@ -179,6 +179,20 @@ def test_search_accounts_returns_matching_users(client, session_factory):
     assert "date_of_birth" not in body["items"][0]
 
 
+def test_search_accounts_carries_both_avatar_colours(client, session_factory):
+    with session_factory() as session:
+        _make_user(session, cognito_sub="sub-colour-search", username="coloursearch",
+                   avatar_inner_color="lavender", avatar_outer_color="forest")
+
+    response = client.get("/search/accounts", params={"q": "coloursearch"})
+
+    assert response.status_code == 200
+    account = response.json()["items"][0]
+    assert account["avatar_inner_color"] == "lavender"
+    assert account["avatar_outer_color"] == "forest"
+    assert "profile_avatar_key" not in account
+
+
 def test_search_accounts_paginates_independently_of_offset(client, session_factory):
     with session_factory() as session:
         users = [

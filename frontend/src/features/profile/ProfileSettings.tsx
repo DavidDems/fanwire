@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useId, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 
 import type { components } from "../../api/schema";
 import { TEAMS_KEY, fetchTeams } from "../../api/stats";
@@ -9,8 +9,16 @@ import { Field, describeField } from "../../components/FormField";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { InlineAlert } from "../../components/ui/InlineAlert";
-import { Avatar, AVATAR_OPTIONS } from "../../components/ui/Avatar";
+import { Avatar } from "../../components/ui/Avatar";
 import { StatusLine } from "../../components/ui/StatusLine";
+import {
+  INNER_COLORS,
+  OUTER_COLORS,
+  paletteEntries,
+  type InnerColorKey,
+  type OuterColorKey,
+  type Palette,
+} from "../../lib/teamColors";
 import { updateMe } from "./api";
 import styles from "./Profile.module.css";
 
@@ -31,6 +39,12 @@ import styles from "./Profile.module.css";
  * ([[0x00-architecture]] Connection rule) and would need deleting rather than
  * merging. `profile_picture_media_id` is therefore never sent.
  *
+ * **The avatar is two colours** (USERS-005): an inner and an outer palette
+ * key, each its own single-choice group with None first. The Preview shows the
+ * choice as it changes; a save sends only the colours that changed (`null`
+ * for one set back to None), and a failed save puts the saved ones back.
+ * Neither touches the profile picture.
+ *
  * Account lifecycle controls live on the separate Account settings page.
  */
 
@@ -47,6 +61,74 @@ function teamValue(preferredTeamId: number | null): string {
   return preferredTeamId === null ? "" : String(preferredTeamId);
 }
 
+interface ColourGroupProps<K extends string> {
+  label: string;
+  name: string;
+  palette: Palette<K>;
+  value: K | null;
+  onChange: (key: K | null) => void;
+  /** How one key's swatch shows its colour: a fill or a ring, by token. */
+  swatch: (key: K) => CSSProperties;
+}
+
+/**
+ * One labelled radio group: None, then the palette in its order. Native
+ * radios sharing a name, so the arrow keys move the choice; each choice's
+ * label is its colour's name beside a swatch, so the selection never rests
+ * on colour alone.
+ */
+function ColourGroup<K extends string>({
+  label,
+  name,
+  palette,
+  value,
+  onChange,
+  swatch,
+}: ColourGroupProps<K>) {
+  const labelId = useId();
+  const choices: { key: K | null; name: string }[] = [
+    { key: null, name: "None" },
+    ...paletteEntries(palette),
+  ];
+  return (
+    <div role="radiogroup" aria-labelledby={labelId} className={styles.colourGroup}>
+      <span id={labelId} className={styles.colourGroupLabel}>
+        {label}
+      </span>
+      <div className={styles.colourChoices}>
+        {choices.map((choice) => (
+          <label className={styles.colourChoice} key={choice.key ?? ""}>
+            <input
+              type="radio"
+              name={name}
+              value={choice.key ?? ""}
+              checked={value === choice.key}
+              onChange={() => {
+                onChange(choice.key);
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className={styles.swatch}
+              style={choice.key === null ? undefined : swatch(choice.key)}
+            />
+            {choice.name}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const innerSwatch = (key: InnerColorKey): CSSProperties => ({
+  backgroundColor: `var(--team-inner-${key})`,
+});
+
+const outerSwatch = (key: OuterColorKey): CSSProperties => ({
+  borderColor: `var(--team-outer-${key})`,
+  borderWidth: "0.25rem",
+});
+
 export function ProfileSettings({ profile }: ProfileSettingsProps) {
   const queryClient = useQueryClient();
   const teams = useQuery({ queryKey: TEAMS_KEY, queryFn: fetchTeams });
@@ -55,8 +137,12 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
   const [preferredTeamId, setPreferredTeamId] = useState(
     teamValue(profile.preferred_team_id),
   );
-  const [avatarKey, setAvatarKey] = useState<string | null>(profile.profile_avatar_key ?? null);
-  const [avatarTouched, setAvatarTouched] = useState(false);
+  const [innerColor, setInnerColor] = useState<InnerColorKey | null>(
+    profile.avatar_inner_color ?? null,
+  );
+  const [outerColor, setOuterColor] = useState<OuterColorKey | null>(
+    profile.avatar_outer_color ?? null,
+  );
   const [failure, setFailure] = useState<string | null>(null);
   /** What the status line says, and whether it is the saved confirmation or a neutral aside. */
   const [note, setNote] = useState<{
@@ -74,12 +160,11 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
         queryKey: PROFILE_QUERY_KEY,
         exact: true,
       });
-      setAvatarTouched(false);
       setNote({ text: "Your profile has been saved.", variant: "success" });
     },
     onError: () => {
-      setAvatarKey(profile.profile_avatar_key ?? null);
-      setAvatarTouched(false);
+      setInnerColor(profile.avatar_inner_color ?? null);
+      setOuterColor(profile.avatar_outer_color ?? null);
       setFailure("We could not save your profile. Please try again.");
     },
   });
@@ -101,8 +186,11 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
       body.preferred_team_id =
         preferredTeamId === "" ? null : Number(preferredTeamId);
     }
-    if (avatarTouched || avatarKey !== (profile.profile_avatar_key ?? null)) {
-      body.profile_avatar_key = avatarKey;
+    if (innerColor !== (profile.avatar_inner_color ?? null)) {
+      body.avatar_inner_color = innerColor;
+    }
+    if (outerColor !== (profile.avatar_outer_color ?? null)) {
+      body.avatar_outer_color = outerColor;
     }
 
     if (Object.keys(body).length === 0) {
@@ -161,38 +249,32 @@ export function ProfileSettings({ profile }: ProfileSettingsProps) {
 
         <fieldset className={styles.avatarChoices}>
           <legend>Profile avatar</legend>
-          <p>Preview</p>
-          <Avatar
-            username={profile.username}
-            size="lg"
-            avatarKey={avatarKey}
-            pictureKey={avatarTouched ? null : profile.profile_picture_key}
-          />
-          <span>{avatarKey === null ? "Using initials" : "Preset selected"}</span>
-          <label className={styles.avatarChoice}>
-            <input
-              type="radio"
-              name="profile-avatar"
-              value=""
-              checked={avatarKey === null && (avatarTouched || profile.profile_picture_key === null)}
-              onChange={() => { setAvatarKey(null); setAvatarTouched(true); }}
+          <div className={styles.avatarPreview}>
+            <p>Preview</p>
+            <Avatar
+              username={profile.username}
+              size="lg"
+              avatarInnerColor={innerColor}
+              avatarOuterColor={outerColor}
+              pictureKey={profile.profile_picture_key}
             />
-            <Avatar username={profile.username} size="sm" avatarKey={null} exposeKey={false} />
-            Use initials
-          </label>
-          {AVATAR_OPTIONS.map(([key, label]) => (
-            <label className={styles.avatarChoice} key={key}>
-              <input
-                type="radio"
-                name="profile-avatar"
-                value={key}
-                checked={avatarKey === key}
-                onChange={() => { setAvatarKey(key); setAvatarTouched(true); }}
-              />
-              <Avatar username={profile.username} size="sm" avatarKey={key} exposeKey={false} />
-              {label}
-            </label>
-          ))}
+          </div>
+          <ColourGroup
+            label="Inner colour"
+            name="avatar-inner-color"
+            palette={INNER_COLORS}
+            value={innerColor}
+            onChange={setInnerColor}
+            swatch={innerSwatch}
+          />
+          <ColourGroup
+            label="Outer colour"
+            name="avatar-outer-color"
+            palette={OUTER_COLORS}
+            value={outerColor}
+            onChange={setOuterColor}
+            swatch={outerSwatch}
+          />
         </fieldset>
 
         <Button

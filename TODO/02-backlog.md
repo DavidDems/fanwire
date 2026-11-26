@@ -90,23 +90,6 @@ in this order. One row per track; its brief lists the units.
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
 
-## Launch adjustments (Track D sequence)
-
-The approved foundation follows merged ADR 0009/#378. The current scope and
-preserved local work are in `wiki/GeneralContext/Prompts/22-launch-adjustments.md`.
-Completed launch units/research are removed; historical records remain.
-
-| Order | Mode | Task | What |
-|---|---|---|---|
-| 1 | `hand` | `USERS-005` | Avatar colours replace presets. Scope amended to cover `AppLayout`; resume from the red tests in [`parked/`](../.ai/tasks/USERS-005/parked/users005-red-tests.patch). Track 6 |
-| 2 | `director` | pending | `USERS-009` is merged but dormant (`ACCOUNT_LIFECYCLE_ENABLED=false` in `infra/lib/app-stack.ts`). Review legacy adoption and the cutover/activation procedure, then activate with the human's approval at each gate. Track 6 |
-| 3 | `hand` | `AUTH-001` | Re-scoped to Cognito's native forgot-password flow with its verified-email code and a static verify reminder; the lost/late-reset revocation machinery is dropped ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)). A Director rewrites the spec first. Track 6 |
-
-Completed IAM/scope prerequisites are not AWS writes to repeat. Foundation authorization
-does not authorize deployment or production user-data operations. Reset retains
-Cognito's default sender and verified-email codes: no SES, custom reset tokens,
-separate post-reset mail, password history or paid-plan requirement.
-
 ## Dropped: new-device security
 
 `AUTH-002` and `AUTH-003` are dropped ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)): a challenge that withholds tokens needs an email path (SES, email MFA, a paid plan) the project rules out. Their task directories stay until a task branch removes them.

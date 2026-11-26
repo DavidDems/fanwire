@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.events.schemas import GameOut
 from app.feed.views import PostView
+from app.users.schemas import AvatarInnerColor, AvatarOuterColor
 
 
 class AccountResult(BaseModel):
@@ -25,7 +26,8 @@ class AccountResult(BaseModel):
     username: str
     description: str | None
     profile_picture_media_id: int | None
-    profile_avatar_key: str | None = None
+    avatar_inner_color: AvatarInnerColor | None = None
+    avatar_outer_color: AvatarOuterColor | None = None
     profile_picture_key: str | None = None
 
 

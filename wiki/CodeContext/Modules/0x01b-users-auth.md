@@ -11,7 +11,7 @@ Email verification must not gate sign-in or core account use, including posting 
 
 New self-signups are auto-confirmed by Cognito's pre-sign-up trigger without setting `autoVerifyEmail`; signup-code delivery and the resulting `email_verified` value still require dev-pool proof. The local `User` row does not store Cognito verification state. The backend notification sender skips an address unless Cognito reports `email_verified` as `true`.
 
-Forgot password uses native Cognito recovery to a verified destination. Optional email verification still permits ordinary use; no custom unverified-address recovery or reset-trigger implementation is selected. [ADR 0009](../../GeneralContext/Decisions/0009-account-lifecycle-evidence.md) owns the evidence and revocation requirements; the lifecycle foundation does not change reset or make locally verified ID JWTs detect provider revocation.
+Forgot password uses native Cognito recovery to a verified destination: the browser calls Cognito's `ForgotPassword` and `ConfirmForgotPassword` directly, and there is no backend route, migration or custom sender for it ([[0x08b-frontend-auth]], `AUTH-001`). Optional email verification still permits ordinary use; no custom unverified-address recovery or reset-trigger implementation is selected. [ADR 0009](../../GeneralContext/Decisions/0009-account-lifecycle-evidence.md) owns the evidence and revocation requirements; the lifecycle foundation does not change reset or make locally verified ID JWTs detect provider revocation.
 
 ## Security
 DOB privacy on public profiles and the public read path: [[0x01-users]] "Security".

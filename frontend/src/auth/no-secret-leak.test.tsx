@@ -19,7 +19,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { config } from "../config";
@@ -97,6 +97,7 @@ describe("the auth pages print neither the pool ids nor a token", () => {
 
     await user.type(screen.getByLabelText(/^email$/i), TEST_EMAIL);
     await user.type(screen.getByLabelText(/^password$/i), TEST_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password$/i), TEST_PASSWORD);
     await user.click(screen.getByRole("button", { name: /sign up/i }));
     await screen.findByLabelText(/^email$/i);
 
@@ -151,9 +152,10 @@ describe("the auth pages print neither the pool ids nor a token", () => {
       new FakeAuthService().failWith("forgotPassword", "UserNotFoundException"),
     );
 
-    await user.type(screen.getByLabelText(/^email$/i), TEST_EMAIL);
+    await user.type(await screen.findByLabelText(/^email$/i), TEST_EMAIL);
     await user.click(screen.getByRole("button", { name: /send code/i }));
-    await screen.findByLabelText(/^email$/i);
+    // AUTH-001: an unknown address gets the same next step as a known one.
+    await screen.findByLabelText(/confirmation code/i);
 
     expectNothingLeaked();
   });
@@ -191,5 +193,134 @@ describe("the auth pages print neither the pool ids nor a token", () => {
     await within(dialog).findByRole("alert");
 
     expectNothingLeaked();
+  });
+});
+
+/**
+ * AUTH-001: the new Confirm password inputs, and the reset code, never leave
+ * component state. Not to the console, not to `localStorage` or
+ * `sessionStorage`, and not into a URL or navigation state, whether the two
+ * passwords match or not.
+ */
+describe("the confirm-password values stay in component state", () => {
+  const SIGN_UP_CONFIRM = "Sign-Up-Confirm-Secret-41";
+  const RESET_CODE = "918273";
+  const RESET_PASSWORD = "Reset-New-Secret-73";
+  const RESET_CONFIRM = "Reset-Confirm-Secret-29";
+
+  let locations: string[] = [];
+
+  beforeEach(() => {
+    locations = [];
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  /** Every location the router held, with its state, as text. */
+  function LocationSpy() {
+    const location = useLocation();
+    locations.push(
+      `${location.pathname}${location.search}${location.hash} ${JSON.stringify(location.state ?? null)}`,
+    );
+    return null;
+  }
+
+  function storageText(): string {
+    const entries: string[] = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index) ?? "";
+        entries.push(`${key}=${storage.getItem(key) ?? ""}`);
+      }
+    }
+    return entries.join("\n");
+  }
+
+  function expectKept(values: readonly string[]): void {
+    const logged = printed.join("\n");
+    const stored = storageText();
+    const located = `${locations.join("\n")}\n${window.location.href}`;
+    for (const value of values) {
+      expect(logged, `${value} was logged`).not.toContain(value);
+      expect(stored, `${value} was stored`).not.toContain(value);
+      expect(located, `${value} reached a location`).not.toContain(value);
+      expect(document.body.textContent ?? "", `${value} was rendered`).not.toContain(value);
+    }
+  }
+
+  function renderSpied(element: ReactElement, authService: FakeAuthService) {
+    return renderWithAuth(
+      <>
+        <LocationSpy />
+        <Routes>
+          <Route path="/page" element={element} />
+          <Route path="/sign-in" element={<p>sign-in stub</p>} />
+          <Route path="/confirm" element={<p>confirm stub</p>} />
+        </Routes>
+      </>,
+      { authService, route: "/page" },
+    );
+  }
+
+  it("keeps a mismatched sign-up confirmation out of logs, storage and the location", async () => {
+    const user = userEvent.setup();
+    renderSpied(<SignUpPage />, new FakeAuthService());
+
+    await user.type(screen.getByLabelText(/^email$/i), TEST_EMAIL);
+    await user.type(screen.getByLabelText(/^password$/i), TEST_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password$/i), SIGN_UP_CONFIRM);
+    await user.click(screen.getByRole("button", { name: /sign up/i }));
+    await screen.findByText(/do not match/i);
+
+    expectKept([TEST_PASSWORD, SIGN_UP_CONFIRM]);
+  });
+
+  it("keeps a matching sign-up confirmation out of logs, storage and the location", async () => {
+    const user = userEvent.setup();
+    renderSpied(<SignUpPage />, new FakeAuthService());
+
+    await user.type(screen.getByLabelText(/^email$/i), TEST_EMAIL);
+    await user.type(screen.getByLabelText(/^password$/i), SIGN_UP_CONFIRM);
+    await user.type(screen.getByLabelText(/^confirm password$/i), SIGN_UP_CONFIRM);
+    await user.click(screen.getByRole("button", { name: /sign up/i }));
+    await screen.findByText("confirm stub");
+
+    expectKept([SIGN_UP_CONFIRM]);
+  });
+
+  async function resetWith(confirmation: string, authService: FakeAuthService) {
+    const user = userEvent.setup();
+    renderSpied(<ForgotPasswordPage />, authService);
+
+    await user.type(await screen.findByLabelText(/^email$/i), TEST_EMAIL);
+    await user.click(screen.getByRole("button", { name: /send code/i }));
+    await user.type(await screen.findByLabelText(/confirmation code/i), RESET_CODE);
+    await user.type(screen.getByLabelText(/^new password$/i), RESET_PASSWORD);
+    await user.type(screen.getByLabelText(/^confirm password$/i), confirmation);
+    await user.click(screen.getByRole("button", { name: /reset password/i }));
+  }
+
+  it("keeps a mismatched reset confirmation and the code out of logs, storage and the location", async () => {
+    await resetWith(RESET_CONFIRM, new FakeAuthService());
+    await screen.findByText(/do not match/i);
+
+    expectKept([RESET_CODE, RESET_PASSWORD, RESET_CONFIRM]);
+  });
+
+  it("keeps a failed reset's code and passwords out of logs, storage and the location", async () => {
+    await resetWith(
+      RESET_PASSWORD,
+      new FakeAuthService().failWith("confirmForgotPassword", "CodeMismatchException"),
+    );
+    await screen.findByText(/not the one we sent/i);
+
+    expectKept([RESET_CODE, RESET_PASSWORD]);
+  });
+
+  it("keeps a successful reset's code and passwords out of logs, storage and the location", async () => {
+    await resetWith(RESET_PASSWORD, new FakeAuthService());
+    await screen.findByText("sign-in stub");
+
+    expectKept([RESET_CODE, RESET_PASSWORD]);
   });
 });

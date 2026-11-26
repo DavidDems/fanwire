@@ -35,13 +35,23 @@ On `POSTS-004` (`DELETE /posts/{id}`, the "Post deleted" placeholders) and
   button opens `Menu` with Profile (`/profile/<own id>`), History (`/history`)
   and Account settings (`/settings`).
 - **Account settings** (`features/account/AccountSettings.tsx`) requires auth and
-  orders Verify this account, Notifications, Deactivate account, Delete my data.
+  orders Account details, Verify this account, Notifications, Deactivate
+  account, Delete my data. **Account details** (`AUTH-001`) is a `dl`: Email
+  (the session's address) and Password, whose only content is a secondary
+  `md` Button-styled Reset password link to `/forgot-password` (no password
+  value), which signs the user out before its form ([[0x08b-frontend-auth]]).
   Confirmation refreshes verification state; Verified is disabled. Notifications
   stays checked and disabled without requests. Deactivation reauthenticates before
   `DELETE /users/me`; wrong passwords send nothing. Its 204 resets caches and
   focuses the deactivated banner while retaining the session for recovery.
 - **Delete my data** opens destructive "Delete all your data?": removed data,
-  irreversibility, others' retained replies and seven-day backup expiry.
+  irreversibility, others' retained replies, then two retention sentences in
+  order: "Images already cached by our content network can still load for up
+  to 24 hours." (`FRONTEND-060`: `/media/*` in `infra/lib/cdn-stack.ts` uses
+  `CachePolicy.CACHING_OPTIMIZED`, default TTL 24 h, and no media object sets
+  `Cache-Control`) and "Backup copies expire within 7 days." (RDS
+  `backupRetention: 7 days` in `infra/lib/data-stack.ts`). A change to either
+  setting changes its sentence.
   A nonempty password enables confirmation; reauthentication precedes
   `DELETE /users/me/data`. Failure remains retryable. After 204, cancel queries
   and synchronously retire the protected `Outlet` through

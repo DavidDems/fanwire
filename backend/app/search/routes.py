@@ -66,7 +66,8 @@ def search_accounts(
             username=user.username,
             description=user.description,
             profile_picture_media_id=user.profile_picture_media_id,
-            profile_avatar_key=user.profile_avatar_key,
+            avatar_inner_color=profiles[user.id].avatar_inner_color,
+            avatar_outer_color=profiles[user.id].avatar_outer_color,
             profile_picture_key=profiles[user.id].profile_picture_key,
         )
         for user in users

@@ -8,7 +8,12 @@ import { Card } from "../components/ui/Card";
 import { InlineAlert } from "../components/ui/InlineAlert";
 import { useAuth } from "./AuthContext";
 import styles from "./AuthPage.module.css";
-import { asAuthError, splitFailure, type FieldFailures } from "./errors";
+import {
+  PASSWORDS_DIFFER,
+  asAuthError,
+  splitFailure,
+  type FieldFailures,
+} from "./errors";
 
 /**
  * Creating the Cognito identity.
@@ -19,7 +24,7 @@ import { asAuthError, splitFailure, type FieldFailures } from "./errors";
  * step Cognito says comes next.
  */
 
-type SignUpField = "email" | "password";
+type SignUpField = "email" | "password" | "confirmPassword";
 
 /**
  * Which control each Cognito failure is about. A code that is not here is about
@@ -46,6 +51,7 @@ export function SignUpPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Partial<Record<SignUpField, string>>>(
     {},
   );
@@ -58,6 +64,14 @@ export function SignUpPage() {
     event.preventDefault();
     setErrors({});
     setFailure(null);
+
+    // Checked here, before any call: a typo in a password nobody can see is
+    // caught now or never.
+    if (password !== confirmPassword) {
+      setErrors({ confirmPassword: PASSWORDS_DIFFER });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -114,6 +128,25 @@ export function SignUpPage() {
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value);
+              }}
+            />
+          </Field>
+
+          <Field
+            id="sign-up-confirm-password"
+            label="Confirm password"
+            error={errors.confirmPassword}
+          >
+            <input
+              {...describeField("sign-up-confirm-password", {
+                error: errors.confirmPassword,
+              })}
+              type="password"
+              name="confirm-password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value);
               }}
             />
           </Field>

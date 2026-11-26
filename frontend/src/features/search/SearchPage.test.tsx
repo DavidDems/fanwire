@@ -55,6 +55,7 @@ import {
   type AccountsPageBody,
   type PostsPageBody,
 } from "../../test/search";
+import { expectAvatarColours } from "../../test/profile";
 import { server } from "../../test/server";
 import { SearchPage } from "./SearchPage";
 
@@ -168,14 +169,18 @@ describe("the search view", () => {
 });
 
 describe("free-text results (criterion 1)", () => {
-  it("renders a saved preset on an account search result", async () => {
-    const account = { ...ALICE, profile_avatar_key: "ball-seams" };
+  it("renders saved avatar colours on an account search result", async () => {
+    const account = {
+      ...ALICE,
+      avatar_inner_color: "teal" as const,
+      avatar_outer_color: "purple" as const,
+    };
     renderSearch("/search?q=raptors", {
       accounts: { 0: accountsPage([account], null) },
     });
 
     expect(await screen.findByRole("link", { name: ALICE.username })).toBeInTheDocument();
-    expect(document.querySelector("[data-avatar-key='ball-seams']")).toBeInTheDocument();
+    expectAvatarColours("teal", "purple");
   });
 
   it("calls GET /search/accounts and GET /search/posts once each, with the same q, from offset 0", async () => {

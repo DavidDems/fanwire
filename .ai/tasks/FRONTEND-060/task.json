@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "task_id": "FRONTEND-060",
+  "objective": "The delete-account dialog states the content network's cache limit for images: a deleted image can still load from a cached copy for up to 24 hours.",
+  "acceptance_criteria": [
+    "Test-first: the failing test is committed alone; the implementation commit edits no test.",
+    "The delete-account dialog keeps every existing paragraph and adds, immediately before 'Backup copies expire within 7 days.', exactly: 'Images already cached by our content network can still load for up to 24 hours.' The number comes from infra/lib/cdn-stack.ts: /media/* uses CachePolicy.CACHING_OPTIMIZED, whose default TTL is 24 hours, and no media object sets Cache-Control.",
+    "No other copy, behaviour, style or route changes. The deletion request, its errors and the dialog's focus behaviour are unchanged.",
+    "If the change moves any budgeted output past bundle-budget.test.ts's tolerance, frontend/src/test/bundle-budgets/FRONTEND-060.ts declares it in the test commit; otherwise no budget file.",
+    "No new dependency: `frontend/package.json` is unchanged.",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md records both retention sentences and where each number comes from."
+  ],
+  "allowed_paths": [
+    "frontend/src/features/account/AccountSettings.tsx",
+    "frontend/src/features/account/delete-account.test.tsx",
+    "frontend/src/test/bundle-budgets/FRONTEND-060.ts",
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md"
+  ],
+  "forbidden_paths": [
+    ".ai/**",
+    ".github/**",
+    "wiki/GeneralContext/**",
+    "wiki/CodeContext/Standards/**",
+    "wiki/CodeContext/FrontendUI/**",
+    "TODO/**",
+    "AGENTS.md",
+    "backend/**",
+    "infra/**",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "required_context": [
+    "wiki/CodeContext/Modules/0x08k-frontend-account.md",
+    "wiki/CodeContext/FrontendUI/verification.md"
+  ],
+  "required_skills": [
+    "frontend-unit",
+    "git-workflow"
+  ],
+  "workflow_policy": {
+    "max_impl_attempts": 3,
+    "require_red_baseline": true,
+    "allow_test_edits_during_impl": false,
+    "run_context_maintainer": true
+  }
+}

@@ -62,9 +62,44 @@ differs, code does not, and `App` is the single place that chooses it.
   The trade-off is real and is recorded rather than hidden: anything that
   achieves script execution in the page can read the ID token. A cookie backend
   is a separate, larger decision and was deliberately not invented here.
+- **Password reset is native Cognito** (`AUTH-001`, ADR 0035). The
+  browser calls `forgotPassword` and `confirmForgotPassword` through
+  `AuthService`; the code goes only to the account's verified address. There
+  is no backend route ([[0x01b-users-auth]]). `ForgotPasswordPage` is one
+  route, two steps:
+  - **Signed out first.** It renders nothing until `status` is `anonymous`;
+    an authenticated arrival (Account details' Reset password, or a typed
+    address) is signed out with `AuthContext`'s `signOut`, the profile query
+    removed and the rest reset, so no code is asked for while a session
+    exists.
+  - **The request step** shows a static reminder in plain text, not an alert:
+    a code goes only to a verified address, so an account that never verified
+    its email cannot reset this way. A syntactically invalid address is a
+    field error and calls nothing.
+  - **One answer for every valid address.** Success, `UserNotFoundException`
+    and `InvalidParameterException` (an unverified account) all reach the
+    code step with "If an account with the verified email address … exists, a
+    code has been sent to it." `LimitExceededException` and
+    `TooManyRequestsException` show one too-many-attempts alert; anything
+    else is "Something went wrong." The page never renders the provider's own
+    message, so nothing says whether an account exists, is verified or was
+    emailed.
+  - **The code step** has Confirmation code, New password and Confirm
+    password. A mismatch is a field error on Confirm password and calls
+    nothing; `CodeMismatch`, `ExpiredCode` and `InvalidPassword` keep their
+    field errors, and `UserNotFound` or `InvalidParameter` there read as a
+    wrong code. Success goes to `/sign-in` with the address.
+  - **Known limit.** Locally verified ID tokens cannot see a provider-side
+    revocation, so a token issued before a reset stays valid until it
+    expires; nothing here claims a reset ends other sessions. USERS-009's
+    fencing covers deletion.
+- **Sign-up has Confirm password too**, with the same rule (`errors.ts`'s
+  `PASSWORDS_DIFFER`); optional email verification is unchanged.
 - **Nothing logs or renders a token, the pool id or the client id.** The pool and
   client ids are not secrets — they ship in the bundle — but a token is, and
-  `src/auth/no-secret-leak.test.tsx` sweeps all five pages for all three.
+  `src/auth/no-secret-leak.test.tsx` sweeps all five pages for all three, and
+  holds the Confirm password values and the reset code to component state:
+  no console, storage, location or rendered text.
 - **`date_of_birth` is sent by exactly one page** and is never carried off it.
   The field states in its own hint that it is private; the age gate stays on the
   server (a Pydantic 422 naming `date_of_birth`), surfaced on that field in the
@@ -92,7 +127,8 @@ profile fields; account lifecycle controls live on the separate, guarded
   "N following" always (`FRONTEND-055`). Both numbers are formatted by
   locale ("1,200 followers", "1,200 following"), like the feed's `countText`,
   without importing it (`FRONTEND-059`). Since
-  `USERS-004` it can render the saved preset or public picture key without
+  `USERS-004` it can render the public picture key, and since `USERS-005` the
+  saved avatar colours, without
   receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control
   sits in the header card: a slot for a control, never user data, so the
@@ -137,13 +173,23 @@ profile fields; account lifecycle controls live on the separate, guarded
   Emptying the description is the one case `null` is correct for — that is the
   user asking for it to be cleared. `username` and `date_of_birth` are not on
   `UpdateMeRequest` and are not editable here.
-- **Profile avatars are one persisted choice across surfaces.** The settings
-  form offers the eight `users/` preset keys and an explicit initials choice
-  in a labelled radio grid; the preview follows the pending choice and a failed
-  save restores the persisted one. Own/public profile summaries, feed authors
-  and account search render the same key. A processed uploaded picture takes
-  priority until the member saves a preset or chooses initials; avatar geometry
-  is code-drawn SVG and uses semantic text colours.
+- **Profile avatars are two persisted colours, one rule on every surface**
+  (`USERS-005`, which retired the eight presets). `Avatar` draws the username's
+  first character, as typed (`Array.from`). No colours: the default, with no
+  inline style. An inner colour: `--team-inner-<key>` as the fill and
+  `--team-outer-black` as the text (4.5:1 or more on every inner colour). An
+  outer colour: a ring (`.ring`, 2 px, 3 px at `lg`) in `--team-outer-<key>`;
+  with no inner the text keeps its default. A processed picture renders as
+  before and the colours do not show on it. Own and public profile summaries,
+  feed authors, account search and the shell's account button all pass the two
+  fields. The settings form's `Profile avatar` fieldset keeps its Preview and
+  Save and has two `role="radiogroup"` groups, Inner colour and Outer colour,
+  each None then `lib/teamColors.ts`' list: native radios (arrow keys), each a
+  44 px label with a swatch and the colour's name, wrapping at any width. The
+  preview follows the pending choice; Save sends only the colour that changed
+  (`null` for None); a failed save restores the saved pair. The two key types
+  come from the palette, and `features/profile/avatar-palette-schema.test.ts`
+  fails `npm run typecheck` if the generated schema's unions drift from them.
 - **This unit ships without a profile-picture control.** The upload widget
   belongs to `FRONTEND-004` (`MediaWidget`); a second uploader here would
   be a duplicate media path ([[0x00-architecture]] Connection rule) and would

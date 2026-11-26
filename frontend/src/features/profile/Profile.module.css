@@ -106,10 +106,16 @@
   width: 100%;
 }
 
+/*
+ * The avatar section (USERS-005): the Preview, then the Inner colour and
+ * Outer colour groups, stacked. min-width: 0 undoes a fieldset's min-content
+ * floor, so at 320 px the choices wrap instead of widening the page.
+ */
 .avatarChoices {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5.25rem, 1fr));
-  gap: var(--space-2);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-4);
   margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
@@ -121,37 +127,75 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.avatarChoice {
+.avatarPreview {
   display: flex;
-  min-height: 2.75rem;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border: 2px solid var(--color-border);
+  gap: var(--space-3);
+}
+
+.avatarPreview p {
+  margin: 0;
+}
+
+.colourGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.colourGroupLabel {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The choices wrap onto as many rows as the width needs. */
+.colourChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * One choice: the radio, its swatch and its colour's name, a 44 px target.
+ * Selected: the radio's own dot and a heavier outline, never colour alone.
+ */
+.colourChoice {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  text-align: center;
   font-size: var(--font-size-sm);
 }
 
-.avatarChoice:has(input:checked) {
+.colourChoice input {
+  margin: 0;
+}
+
+.colourChoice:has(input:checked) {
   border-color: var(--color-text);
   outline: 2px solid var(--color-text);
+  outline-offset: 1px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.colourChoice:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
-.avatarChoice input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.avatarChoice:has(input:focus-visible) {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 3px;
+/* The colour itself: a fill (inner) or a ring (outer), set inline by token. */
+.swatch {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
 }
 
 .save {

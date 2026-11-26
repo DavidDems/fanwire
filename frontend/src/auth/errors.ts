@@ -55,3 +55,11 @@ export function splitFailure<Field extends string>(
   fields[onField.field] = onField.message;
   return { fields, alert: null };
 }
+
+/**
+ * What Confirm password says when it differs from the password beside it
+ * (sign-up and reset, AUTH-001). The check is the page's own, before any
+ * provider call: a typo in a password nobody can see is caught here or not at
+ * all.
+ */
+export const PASSWORDS_DIFFER = "The two passwords do not match.";

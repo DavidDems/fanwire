@@ -984,12 +984,14 @@ export interface components {
         };
         /** AccountResult */
         AccountResult: {
+            /** Avatar Inner Color */
+            avatar_inner_color?: ("gold" | "orange" | "red" | "green" | "sky" | "lavender" | "silver" | "teal") | null;
+            /** Avatar Outer Color */
+            avatar_outer_color?: ("blue" | "crimson" | "black" | "purple" | "forest") | null;
             /** Description */
             description: string | null;
             /** Id */
             id: number;
-            /** Profile Avatar Key */
-            profile_avatar_key?: string | null;
             /** Profile Picture Key */
             profile_picture_key?: string | null;
             /** Profile Picture Media Id */
@@ -1006,10 +1008,12 @@ export interface components {
         };
         /** AuthorView */
         AuthorView: {
+            /** Avatar Inner Color */
+            avatar_inner_color?: ("gold" | "orange" | "red" | "green" | "sky" | "lavender" | "silver" | "teal") | null;
+            /** Avatar Outer Color */
+            avatar_outer_color?: ("blue" | "crimson" | "black" | "purple" | "forest") | null;
             /** Id */
             id: number;
-            /** Profile Avatar Key */
-            profile_avatar_key?: string | null;
             /** Profile Picture Key */
             profile_picture_key?: string | null;
             /** Profile Picture Media Id */
@@ -1456,6 +1460,10 @@ export interface components {
          *     another user can reach.
          */
         MeOut: {
+            /** Avatar Inner Color */
+            avatar_inner_color?: ("gold" | "orange" | "red" | "green" | "sky" | "lavender" | "silver" | "teal") | null;
+            /** Avatar Outer Color */
+            avatar_outer_color?: ("blue" | "crimson" | "black" | "purple" | "forest") | null;
             /**
              * Created At
              * Format: date-time
@@ -1476,8 +1484,6 @@ export interface components {
             id: number;
             /** Preferred Team Id */
             preferred_team_id: number | null;
-            /** Profile Avatar Key */
-            profile_avatar_key?: string | null;
             /** Profile Picture Key */
             profile_picture_key?: string | null;
             /** Profile Picture Media Id */
@@ -1960,6 +1966,10 @@ export interface components {
          *     0x01-users.md Security section. No `date_of_birth` here -- see MeOut.
          */
         PublicUserOut: {
+            /** Avatar Inner Color */
+            avatar_inner_color?: ("gold" | "orange" | "red" | "green" | "sky" | "lavender" | "silver" | "teal") | null;
+            /** Avatar Outer Color */
+            avatar_outer_color?: ("blue" | "crimson" | "black" | "purple" | "forest") | null;
             /**
              * Created At
              * Format: date-time
@@ -1975,8 +1985,6 @@ export interface components {
             id: number;
             /** Preferred Team Id */
             preferred_team_id: number | null;
-            /** Profile Avatar Key */
-            profile_avatar_key?: string | null;
             /** Profile Picture Key */
             profile_picture_key?: string | null;
             /** Profile Picture Media Id */
@@ -2622,14 +2630,21 @@ export interface components {
          *     absent from the request body is left untouched; a field present with an
          *     explicit `null` clears it. `username`/`date_of_birth` are deliberately
          *     not fields on this model -- neither is editable via this endpoint.
+         *
+         *     Unknown keys are ignored (so a `username` sent here changes nothing), with
+         *     one exception: the retired `profile_avatar_key` (USERS-005) is a 422, so a
+         *     client still sending a preset learns it is gone instead of being told it
+         *     saved.
          */
         UpdateMeRequest: {
+            /** Avatar Inner Color */
+            avatar_inner_color?: ("gold" | "orange" | "red" | "green" | "sky" | "lavender" | "silver" | "teal") | null;
+            /** Avatar Outer Color */
+            avatar_outer_color?: ("blue" | "crimson" | "black" | "purple" | "forest") | null;
             /** Description */
             description?: string | null;
             /** Preferred Team Id */
             preferred_team_id?: number | null;
-            /** Profile Avatar Key */
-            profile_avatar_key?: string | null;
             /** Profile Picture Media Id */
             profile_picture_media_id?: number | null;
         };
