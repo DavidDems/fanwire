@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderWithAuth } from "../../test/auth";
 import { recordRequests, type RequestRecorder } from "../../test/compose";
 import { testPostView, type PostView } from "../../test/feed";
+import { expectAvatarColours } from "../../test/profile";
 import { PostNode } from "./PostNode";
 
 const ROOT_TEXT = "Game thread, tip-off in ten";
@@ -47,12 +48,16 @@ function renderNode(post: PostView) {
 }
 
 describe("one PostNode renders a standalone post", () => {
-  it("renders the author's saved preset avatar", async () => {
-    const author = { ...ROOT.author, profile_avatar_key: "baseline" };
+  it("renders the author's saved inner and outer avatar colours", async () => {
+    const author = {
+      ...ROOT.author,
+      avatar_inner_color: "gold" as const,
+      avatar_outer_color: "forest" as const,
+    };
     renderNode(testPostView({ id: 404, text: ROOT_TEXT, author }));
 
     expect(await screen.findByText(ROOT_TEXT)).toBeInTheDocument();
-    expect(document.querySelector("[data-avatar-key='baseline']")).toBeInTheDocument();
+    expectAvatarColours("gold", "forest");
   });
 
   it("renders the post without asking for anything at all", async () => {

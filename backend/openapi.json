@@ -27,6 +27,45 @@
       },
       "AccountResult": {
         "properties": {
+          "avatar_inner_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gold",
+                  "orange",
+                  "red",
+                  "green",
+                  "sky",
+                  "lavender",
+                  "silver",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Inner Color"
+          },
+          "avatar_outer_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blue",
+                  "crimson",
+                  "black",
+                  "purple",
+                  "forest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Outer Color"
+          },
           "description": {
             "anyOf": [
               {
@@ -41,17 +80,6 @@
           "id": {
             "title": "Id",
             "type": "integer"
-          },
-          "profile_avatar_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile Avatar Key"
           },
           "profile_picture_key": {
             "anyOf": [
@@ -119,20 +147,48 @@
       },
       "AuthorView": {
         "properties": {
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "profile_avatar_key": {
+          "avatar_inner_color": {
             "anyOf": [
               {
+                "enum": [
+                  "gold",
+                  "orange",
+                  "red",
+                  "green",
+                  "sky",
+                  "lavender",
+                  "silver",
+                  "teal"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Profile Avatar Key"
+            "title": "Avatar Inner Color"
+          },
+          "avatar_outer_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blue",
+                  "crimson",
+                  "black",
+                  "purple",
+                  "forest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Outer Color"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
           },
           "profile_picture_key": {
             "anyOf": [
@@ -1477,6 +1533,45 @@
       "MeOut": {
         "description": "Everything in PublicUserOut plus `date_of_birth` (PII) -- only ever\nreturned on a path that proves the caller is that profile's own owner\n(`POST /users`, `GET /users/me`, `PATCH /users/me`), never on a path\nanother user can reach.",
         "properties": {
+          "avatar_inner_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gold",
+                  "orange",
+                  "red",
+                  "green",
+                  "sky",
+                  "lavender",
+                  "silver",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Inner Color"
+          },
+          "avatar_outer_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blue",
+                  "crimson",
+                  "black",
+                  "purple",
+                  "forest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Outer Color"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1520,17 +1615,6 @@
               }
             ],
             "title": "Preferred Team Id"
-          },
-          "profile_avatar_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile Avatar Key"
           },
           "profile_picture_key": {
             "anyOf": [
@@ -3061,6 +3145,45 @@
       "PublicUserOut": {
         "description": "Everything safe to return on the public, unauthenticated\n`GET /users/{id}` profile-page read path -- \"viewing other users'\naccount pages\" is a public read path per wiki/CodeContext/Modules/\n0x01-users.md Security section. No `date_of_birth` here -- see MeOut.",
         "properties": {
+          "avatar_inner_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gold",
+                  "orange",
+                  "red",
+                  "green",
+                  "sky",
+                  "lavender",
+                  "silver",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Inner Color"
+          },
+          "avatar_outer_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blue",
+                  "crimson",
+                  "black",
+                  "purple",
+                  "forest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Outer Color"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3099,17 +3222,6 @@
               }
             ],
             "title": "Preferred Team Id"
-          },
-          "profile_avatar_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile Avatar Key"
           },
           "profile_picture_key": {
             "anyOf": [
@@ -5018,8 +5130,47 @@
         "type": "object"
       },
       "UpdateMeRequest": {
-        "description": "`PATCH /users/me` body. Uses `model_fields_set` semantics (see\n`app.users.service.update_profile`'s `fields_set` parameter): a field\nabsent from the request body is left untouched; a field present with an\nexplicit `null` clears it. `username`/`date_of_birth` are deliberately\nnot fields on this model -- neither is editable via this endpoint.",
+        "description": "`PATCH /users/me` body. Uses `model_fields_set` semantics (see\n`app.users.service.update_profile`'s `fields_set` parameter): a field\nabsent from the request body is left untouched; a field present with an\nexplicit `null` clears it. `username`/`date_of_birth` are deliberately\nnot fields on this model -- neither is editable via this endpoint.\n\nUnknown keys are ignored (so a `username` sent here changes nothing), with\none exception: the retired `profile_avatar_key` (USERS-005) is a 422, so a\nclient still sending a preset learns it is gone instead of being told it\nsaved.",
         "properties": {
+          "avatar_inner_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gold",
+                  "orange",
+                  "red",
+                  "green",
+                  "sky",
+                  "lavender",
+                  "silver",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Inner Color"
+          },
+          "avatar_outer_color": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blue",
+                  "crimson",
+                  "black",
+                  "purple",
+                  "forest"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Outer Color"
+          },
           "description": {
             "anyOf": [
               {
@@ -5042,17 +5193,6 @@
               }
             ],
             "title": "Preferred Team Id"
-          },
-          "profile_avatar_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile Avatar Key"
           },
           "profile_picture_media_id": {
             "anyOf": [

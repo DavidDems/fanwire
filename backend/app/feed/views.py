@@ -67,6 +67,7 @@ from app.posts.service import (
     repost_counts,
     reposted_post_ids,
 )
+from app.users.schemas import AvatarInnerColor, AvatarOuterColor
 from app.users.service import get_public_profiles
 
 
@@ -74,7 +75,8 @@ class AuthorView(BaseModel):
     id: int
     username: str
     profile_picture_media_id: int | None
-    profile_avatar_key: str | None = None
+    avatar_inner_color: AvatarInnerColor | None = None
+    avatar_outer_color: AvatarOuterColor | None = None
     profile_picture_key: str | None = None
 
 
@@ -348,7 +350,8 @@ def assemble_post_views(
                 id=author.id,
                 username=author.username,
                 profile_picture_media_id=author.profile_picture_media_id,
-                profile_avatar_key=author.profile_avatar_key,
+                avatar_inner_color=author.avatar_inner_color,
+                avatar_outer_color=author.avatar_outer_color,
                 profile_picture_key=author.profile_picture_key,
             ),
             like_count=likes.get(post.id, 0),

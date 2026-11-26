@@ -231,6 +231,8 @@ export function testProfile(overrides: Partial<MeOut> = {}): MeOut {
     description: null,
     preferred_team_id: 1,
     profile_picture_media_id: null,
+    avatar_inner_color: null,
+    avatar_outer_color: null,
     created_at: "2026-09-01T00:00:00Z",
     follower_count: 0,
     following_count: 0,

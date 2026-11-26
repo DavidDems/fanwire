@@ -1,4 +1,4 @@
-"""USERS-004 profile avatar contract, persistence and exclusivity tests."""
+"""USERS-005 avatar colour contract, persistence and public mapping tests."""
 
 from datetime import UTC, date, datetime
 
@@ -17,17 +17,8 @@ from app.users.routes import router
 from app.users.service import create_user, get_public_profiles
 
 RECENT_AUTH_TIME = int(datetime.now(UTC).timestamp())
-
-AVATAR_KEYS = (
-    "court-lines",
-    "ball-seams",
-    "shot-clock",
-    "scoreboard",
-    "arc",
-    "net-grid",
-    "baseline",
-    "play-pattern",
-)
+INNER = ("gold", "orange", "red", "green", "sky", "lavender", "silver", "teal")
+OUTER = ("blue", "crimson", "black", "purple", "forest")
 
 
 @pytest.fixture()
@@ -56,133 +47,138 @@ def client(session_factory):
 
 
 def _create(session, username: str, **overrides) -> User:
-    return create_user(
-        session,
-        cognito_sub=f"sub-{username}",
-        username=username,
-        date_of_birth=date(1990, 1, 1),
-        **overrides,
-    )
+    return create_user(session, cognito_sub=f"sub-{username}", username=username,
+                       date_of_birth=date(1990, 1, 1), **overrides)
 
 
-@pytest.mark.parametrize("avatar_key", AVATAR_KEYS)
-def test_patch_accepts_each_stable_avatar_key(client, session_factory, avatar_key):
+@pytest.mark.parametrize("inner", INNER)
+@pytest.mark.parametrize("outer", OUTER)
+def test_patch_persists_independent_palette_colours(client, session_factory, inner, outer):
     http, app = client
     with session_factory() as session:
-        user = _create(session, f"avatar-{avatar_key}")
+        user = _create(session, f"colour-{inner}-{outer}")
         user_id = user.id
     app.dependency_overrides[get_current_user] = lambda: user
 
-    response = http.patch("/users/me", json={"profile_avatar_key": avatar_key})
+    response = http.patch("/users/me", json={"avatar_inner_color": inner,
+                                               "avatar_outer_color": outer})
 
     assert response.status_code == 200
-    assert response.json()["profile_avatar_key"] == avatar_key
+    assert response.json()["avatar_inner_color"] == inner
+    assert response.json()["avatar_outer_color"] == outer
     with session_factory() as session:
-        assert (
-            session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == avatar_key
-        )
+        saved = session.scalar(select(User).where(User.id == user_id))
+        assert saved.avatar_inner_color == inner
+        assert saved.avatar_outer_color == outer
 
 
-def test_invalid_avatar_key_is_rejected_without_changing_profile(client, session_factory):
+@pytest.mark.parametrize("field,value", [
+    ("avatar_inner_color", "blue"), ("avatar_outer_color", "gold"),
+    ("avatar_inner_color", "not-a-team-colour"),
+    ("avatar_outer_color", "not-a-team-colour"),
+])
+def test_patch_rejects_wrong_palette_or_unknown_key_without_mutation(
+    client, session_factory, field, value
+):
     http, app = client
     with session_factory() as session:
-        user = _create(session, "bad-avatar", profile_avatar_key="arc")
+        user = _create(session, f"invalid-{field}-{value}",
+                       avatar_inner_color="red", avatar_outer_color="black")
         user_id = user.id
     app.dependency_overrides[get_current_user] = lambda: user
 
-    response = http.patch("/users/me", json={"profile_avatar_key": "team-logo"})
+    response = http.patch("/users/me", json={field: value})
 
     assert response.status_code == 422
     with session_factory() as session:
-        assert session.scalar(select(User).where(User.id == user_id)).profile_avatar_key == "arc"
+        saved = session.get(User, user_id)
+        assert (saved.avatar_inner_color, saved.avatar_outer_color) == ("red", "black")
 
 
-def test_avatar_key_default_and_public_and_me_serialization(client, session_factory):
+def test_patch_omission_preserves_and_null_clears_each_colour(client, session_factory):
     http, app = client
     with session_factory() as session:
-        user = _create(session, "default-avatar")
+        user = _create(session, "colour-patch", avatar_inner_color="sky",
+                       avatar_outer_color="purple")
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    unchanged = http.patch("/users/me", json={"avatar_outer_color": "blue"})
+    cleared = http.patch("/users/me", json={"avatar_inner_color": None})
+
+    assert (unchanged.json()["avatar_inner_color"], unchanged.json()["avatar_outer_color"]) == ("sky", "blue")
+    assert (cleared.json()["avatar_inner_color"], cleared.json()["avatar_outer_color"]) == (None, "blue")
+
+
+def test_colours_default_null_and_are_returned_by_me_and_public(client, session_factory):
+    http, app = client
+    with session_factory() as session:
+        user = _create(session, "default-colours")
         user_id = user.id
     app.dependency_overrides[get_current_identity] = lambda: VerifiedIdentity(
-        sub="sub-default-avatar", auth_time=RECENT_AUTH_TIME
-    )
+        sub="sub-default-colours", auth_time=RECENT_AUTH_TIME)
     app.dependency_overrides[get_current_user] = lambda: user
 
-    own = http.get("/users/me")
-    public = http.get(f"/users/{user_id}")
+    own = http.get("/users/me").json()
+    public = http.get(f"/users/{user_id}").json()
 
-    assert own.json()["profile_avatar_key"] is None
-    assert public.json()["profile_avatar_key"] is None
+    assert own["avatar_inner_color"] is None and own["avatar_outer_color"] is None
+    assert public["avatar_inner_color"] is None and public["avatar_outer_color"] is None
+    assert "profile_avatar_key" not in own and "profile_avatar_key" not in public
 
 
-def test_avatar_patch_null_resets_and_omission_preserves_choice(client, session_factory):
+def test_legacy_preset_is_neither_accepted_nor_returned(client, session_factory):
     http, app = client
     with session_factory() as session:
-        user = _create(session, "reset-avatar", profile_avatar_key="net-grid")
+        user = _create(session, "legacy-preset")
     app.dependency_overrides[get_current_user] = lambda: user
 
-    unchanged = http.patch("/users/me", json={})
-    reset = http.patch("/users/me", json={"profile_avatar_key": None})
+    response = http.patch("/users/me", json={"profile_avatar_key": "court-lines"})
 
-    assert unchanged.json()["profile_avatar_key"] == "net-grid"
-    assert reset.json()["profile_avatar_key"] is None
+    assert response.status_code == 422
+    assert "profile_avatar_key" not in http.get("/users/me").json()
 
 
-def test_preset_clears_picture_reference_but_preserves_media_row(client, session_factory):
+def test_setting_colour_does_not_clear_picture_or_delete_media(client, session_factory):
     http, app = client
     with session_factory() as session:
-        user = _create(session, "picture-avatar")
-        media = Media(
-            uploader_id=user.id,
-            s3_key_thumbnail="thumbs/preserved.webp",
-            s3_key_public="public/preserved.webp",
-            status=MediaStatus.PROCESSED,
-        )
+        user = _create(session, "colour-picture")
+        media = Media(uploader_id=user.id, s3_key_thumbnail="thumbs/kept.webp",
+                      s3_key_public="public/kept.webp", status=MediaStatus.PROCESSED)
         session.add(media)
         session.commit()
         user.profile_picture_media_id = media.id
         session.commit()
-        user_id = user.id
-        media_id = media.id
+        user_id, media_id = user.id, media.id
     app.dependency_overrides[get_current_user] = lambda: user
 
-    response = http.patch("/users/me", json={"profile_avatar_key": "shot-clock"})
+    response = http.patch("/users/me", json={"avatar_inner_color": "teal"})
 
     assert response.status_code == 200
     with session_factory() as session:
-        user = session.get(User, user_id)
+        saved = session.get(User, user_id)
         media = session.get(Media, media_id)
-        assert user.profile_avatar_key == "shot-clock"
-        assert user.profile_picture_media_id is None
-        assert media is not None
-        assert media.s3_key_public == "public/preserved.webp"
+        assert saved.profile_picture_media_id == media_id
+        assert media is not None and media.s3_key_public == "public/kept.webp"
 
 
-def test_attaching_processed_picture_clears_preset(client, session_factory):
-    http, app = client
+def test_public_profile_interface_exposes_both_colours(session_factory):
     with session_factory() as session:
-        user = _create(session, "picture-wins", profile_avatar_key="arc")
-        media = Media(uploader_id=user.id, status=MediaStatus.PROCESSED)
-        session.add(media)
-        session.commit()
-        user_id = user.id
-        media_id = media.id
-
-    def get_current_user_override():
-        with session_factory() as session:
-            yield session.get(User, user_id)
-
-    app.dependency_overrides[get_current_user] = get_current_user_override
-
-    response = http.patch("/users/me", json={"profile_picture_media_id": media_id})
-
-    assert response.status_code == 200
-    assert response.json()["profile_avatar_key"] is None
-
-
-def test_public_profile_interface_exposes_avatar_key(session_factory):
-    with session_factory() as session:
-        user = _create(session, "public-avatar", profile_avatar_key="play-pattern")
-
+        user = _create(session, "mapped-colours", avatar_inner_color="gold",
+                       avatar_outer_color="forest")
         profile = get_public_profiles(session, [user.id])[user.id]
+        assert (profile.avatar_inner_color, profile.avatar_outer_color) == ("gold", "forest")
 
-        assert profile.profile_avatar_key == "play-pattern"
+
+def test_allowlists_are_the_palette_literals_in_schemas():
+    """The two allowlists are Literal types in app.users.schemas, in the
+    palette's own order, so the OpenAPI schema (and the frontend's generated
+    types) carry each list as its own enum."""
+    from typing import get_args
+
+    from app.users import schemas
+
+    assert get_args(schemas.AvatarInnerColor) == INNER
+    assert get_args(schemas.AvatarOuterColor) == OUTER
+    fields = schemas.UpdateMeRequest.model_fields
+    assert "profile_avatar_key" not in fields
+    assert "profile_avatar_key" not in schemas.PublicUserOut.model_fields

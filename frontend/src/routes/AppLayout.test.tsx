@@ -59,7 +59,8 @@ import {
 import { notificationsStub } from "../test/notifications";
 import { anyScheduleStub } from "../test/schedule";
 import { testPlayerDetail } from "../test/stats";
-import { usernameForId } from "../test/users";
+import { expectAvatarColours } from "../test/profile";
+import { meStub, usernameForId } from "../test/users";
 
 interface Visit {
   path: string;
@@ -1056,5 +1057,31 @@ describe("the floating compose control", () => {
     } finally {
       showModal.mockRestore();
     }
+  });
+});
+
+/**
+ * USERS-005: the shell's account button shows the signed-in member's avatar
+ * by the same rule as every other surface (`components/ui/Avatar.test.tsx`):
+ * the default, an inner fill with black text, an outer ring, or both.
+ */
+describe("the account button's avatar (USERS-005)", () => {
+  it.each([
+    ["the default", null, null],
+    ["an inner colour only", "orange", null],
+    ["an outer colour only", null, "crimson"],
+    ["both colours", "lavender", "forest"],
+  ] as const)("shows %s", async (_label, inner, outer) => {
+    renderAppAt("/", "member", [
+      meStub(
+        testProfile({ avatar_inner_color: inner, avatar_outer_color: outer }),
+      ).handler,
+    ]);
+
+    const button = await within(pageBanner()).findByRole("button", {
+      name: "Account menu",
+    });
+    const avatar = expectAvatarColours(inner, outer, button);
+    expect(avatar).toHaveTextContent(Array.from(testProfile().username)[0]);
   });
 });

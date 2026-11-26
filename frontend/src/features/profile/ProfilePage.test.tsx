@@ -38,6 +38,7 @@ import {
   publicProfilesById,
   type MeStub,
 } from "../../test/users";
+import { expectAvatarColours } from "../../test/profile";
 import { ProfilePage } from "./ProfilePage";
 
 /** The signed-in user: id 7, `date_of_birth` 1994-04-05. */
@@ -87,17 +88,17 @@ beforeEach(() => {
 });
 
 describe("the public profile variant", () => {
-  it("renders the saved preset on a public profile", async () => {
+  it("renders saved colours on a public profile", async () => {
     const me = meStub();
-    const viewed = publicProfileStub(publicProfile({ profile_avatar_key: "net-grid" }));
+    const viewed = publicProfileStub(publicProfile({ avatar_inner_color: "silver", avatar_outer_color: "black" }));
     server.use(me.handler, viewed.handler, followingStub().handler);
 
     renderProfile(VIEWED_USER_ID, signedIn());
 
-    await screen.findByRole("heading", {
+    const heading = await screen.findByRole("heading", {
       name: new RegExp(`^${VIEWED_USERNAME}$`, "i"),
     });
-    expect(document.querySelector("[data-avatar-key='net-grid']")).toBeInTheDocument();
+    expectAvatarColours("silver", "black", heading.closest("header") ?? undefined);
   });
 
   it("is headed by the viewed user's username", async () => {
@@ -173,14 +174,14 @@ describe("the public profile variant", () => {
 });
 
 describe("the own profile variant", () => {
-  it("renders the saved preset on the owner's profile", async () => {
-    const own = meStub({ ...testProfile(), profile_avatar_key: "arc" });
+  it("renders saved colours on the owner's profile", async () => {
+    const own = meStub({ ...testProfile(), avatar_inner_color: "red", avatar_outer_color: "crimson" });
     server.use(own.handler);
 
     renderProfile(OWN_USER_ID, signedIn());
 
-    await screen.findByRole("heading", { name: /^raptorsfan$/i });
-    expect(document.querySelector("[data-avatar-key='arc']")).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { name: /^raptorsfan$/i });
+    expectAvatarColours("red", "crimson", heading.closest("header") ?? undefined);
   });
 
   it("renders the caller's own date of birth", async () => {
