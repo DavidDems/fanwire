@@ -49,3 +49,24 @@ human is ready to run the migration straight away.
   `fanwire-archive@05bce80`. Re-check it against the acceptance criteria, then apply it as the
   test commit. The local hand-start `state.json` was not carried over, so this
   task reads as DRAFT.
+
+## Resumed in track 6 (2026-11-25)
+
+- **The parked patch still applies** to `outstanding-track-6` at `7c335bf`
+  (`git apply --check`, one hunk offset by a line). Apply it as the start of
+  the test commit, then add what it lacks:
+  - `test_migrations_users_avatar.py` still pins `_PARENT_REVISION =
+    "b5e9c3a7d2f1"` and inserts `profile_avatar_key` there, before
+    `c7a4e2f9b6d1` adds that column. Point it at the current head
+    (`fd9d2851baf5`, USERS-011).
+  - an `AppLayout.test.tsx` case: the shell's account button renders the
+    same avatar for each colour combination;
+  - the type-level test that the generated unions equal the palette keys;
+  - `routes/home-rail.test.tsx` builds accounts with `profile_avatar_key` and
+    queries `data-avatar-key`, so removing the presets breaks it. It is now in
+    `allowed_paths`; repoint it at the new avatar (test_agent), with no change to
+    what it proves.
+- **Re-measure the bundle budget**: the patch's numbers predate the BASE
+  refolds of tracks 2 to 5, and its `changed` entries name today's lazy
+  outputs only if they still exist. Never declare more than the criteria's
+  2 KiB raw and 1 KiB gzip entry growth.
