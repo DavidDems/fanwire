@@ -10,8 +10,8 @@ frontend's direct Cognito `ForgotPassword` and `ConfirmForgotPassword`, with the
 code Cognito emails to the verified address, plus a static verify reminder. The
 old spec's stop gate, provider-evidence proof, operation records, revocation
 and trigger work are all dropped, not deferred. `AUTH-002` and `AUTH-003` are
-dropped. The parked experiment (`parked/auth001-experiment.patch`) is not
-shipped and is deleted once this unit merges.
+dropped. The parked experiment was not shipped; it was deleted after this unit
+merged (#119).
 
 ## What exists today
 
