@@ -3,7 +3,7 @@ import type {
   RecordEntryOut,
   RecordValueKind,
 } from "../../api/records";
-import { formatAverage, formatPercentage } from "../../features/games/format";
+import { formatAverage, formatPercentage } from "../../lib/format";
 import type { RecordsBar } from "./types";
 
 /** Text forms the records levels share (FRONTEND-019, EVENTS-011). */

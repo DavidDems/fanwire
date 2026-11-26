@@ -175,5 +175,12 @@ then its **direct replies only**, oldest first, each its own
   bottom bar. Both are set by the shell in `AppLayout.module.css` through
   `:global(html)`, because they are sized from the header and bar, which the
   shell owns. That is the one global rule outside `base.css`; don't add more.
+- **Known limitation, accepted: the floating + on phones** (the human,
+  2026-11-25, [ADR 0043](../../GeneralContext/Decisions/0043-track-5b-answers.md)).
+  It covers 80–136 px from the viewport's bottom (`FloatingButton`, above the
+  bar), and `scroll-padding-bottom` clears only the bar (72 px), so a control
+  Tab scrolls to at the right of a card can sit partly under it. It is never
+  fully hidden. Clearing it would take about 140 px of scroll padding, which
+  is not done.
 - No horizontal scroll at 320 px wide. Long words and URLs wrap
   (`typography.md` §2), and media is `max-width: 100%`.

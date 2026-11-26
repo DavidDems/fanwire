@@ -123,6 +123,5 @@
 .unavailable {
   margin: 0;
   font-size: var(--font-size-sm);
-  font-style: italic;
   color: var(--color-text-muted);
 }

@@ -47,7 +47,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import iconStyles from "../../components/ui/TeamIcon.module.css";
 import skeletonStyles from "../../components/ui/Skeleton.module.css";
-import { formatGameDate, teamShortName } from "../games/format";
+import { formatGameDate, teamShortName } from "../../lib/format";
 import {
   ADEBAYO,
   ADEBAYO_GAME,

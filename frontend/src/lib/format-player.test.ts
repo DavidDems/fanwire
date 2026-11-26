@@ -3,9 +3,9 @@
  * page's formatting module (brief, "Number formats reuse the game page's
  * formatting module from FRONTEND-008").
  *
- * The module stays `features/games/format.ts`; `features/stats/` and
- * `features/players/` import it (`games-isolation.test.ts` allows exactly that
- * one module across the feature boundary). The additions this file pins:
+ * The module is `src/lib/format.ts`, shared by games, stats, players and the
+ * stats navigator (FRONTEND-058 moved it out of `features/games/`; it is no
+ * longer a cross-feature exception). The additions this file pins:
  *
  * - `formatHeight(inches: number): string` — feet and inches with an ASCII
  *   apostrophe and quote: 81 → `6'9"`, 72 → `6'0"`, 84 → `7'0"`,

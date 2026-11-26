@@ -8,9 +8,9 @@
  *   `PlayersTab.tsx`; `features/players/` holds `PlayerPage.tsx`. The route
  *   table names all four.
  * - **Reached by address, never by import.** Neither folder imports another
- *   feature (not even each other), with one exception: the game page's
- *   formatting module, `features/games/format`, which both use, so a figure
- *   reads the same on every page.
+ *   feature (not even each other). Both format their figures through the
+ *   shared `src/lib/format` (FRONTEND-058 moved it out of `features/games/`),
+ *   so a figure reads the same on every page.
  * - **The shared layers.** The tab list is the shared `Tabs` from
  *   `components/ui/`; HTTP goes through `api/`; a failure is the shared
  *   `InlineAlert`.
@@ -20,9 +20,9 @@
  *   `components/stats-nav/`, which `features/stats/` uses: `SeasonsTab`
  *   renders `StatsNavigator` and `PlayersTab` renders `PlayerResults`. The
  *   stats feature is `features/stats/` and `components/stats-nav/` together
- *   for the "formats through games/format" and "shows a failure with
+ *   for the "formats through lib/format" and "shows a failure with
  *   InlineAlert" sweeps, since the views moved into the navigator. Nothing
- *   under `components/` imports `features/`, except `features/games/format`.
+ *   under `components/` imports `features/`.
  *
  * Every sweep is guarded against passing vacuously. Comments are stripped
  * first: stripping can only hide a match, never invent one.
@@ -167,16 +167,14 @@ describe("the modules exist where the brief names them", () => {
 
 describe("reached by address, never by import", () => {
   it.each(FOLDERS)(
-    "features/%s imports no other feature but games/format",
+    "features/%s imports no other feature",
     (name, directory) => {
       const offenders: string[] = [];
       for (const file of shipped(directory)) {
         for (const specifier of importSpecifiers(read(file))) {
           const feature = featureOf(file, specifier);
           if (feature === null || feature === name) continue;
-          const allowed =
-            feature === "games" && moduleName(specifier) === "format";
-          if (!allowed) offenders.push(`${posix(file)} imports ${specifier}`);
+          offenders.push(`${posix(file)} imports ${specifier}`);
         }
       }
 
@@ -185,13 +183,11 @@ describe("reached by address, never by import", () => {
   );
 
   it.each(FOLDERS)(
-    "features/%s formats its figures through games/format",
+    "features/%s formats its figures through lib/format",
     (_name, directory) => {
       const users = featureFiles(directory).filter((file) =>
-        importSpecifiers(read(file)).some(
-          (specifier) =>
-            featureOf(file, specifier) === "games" &&
-            moduleName(specifier) === "format",
+        importSpecifiers(read(file)).some((specifier) =>
+          /(^|\/)lib\/format$/.test(specifier),
         ),
       );
 
@@ -309,7 +305,7 @@ describe("the navigator's place (FRONTEND-018)", () => {
     ).toContain("features/stats/PlayersTab.tsx");
   });
 
-  it("nothing under components/ imports features/, but features/games/format", () => {
+  it("nothing under components/ imports features/", () => {
     const sources = shipped(COMPONENTS_DIR);
     expect(sources.length).toBeGreaterThan(0);
 
@@ -321,10 +317,7 @@ describe("the navigator's place (FRONTEND-018)", () => {
               .split(sep)
               .join("/")
           : specifier;
-        const match = /(^|\/)features\/(.+)$/.exec(resolved);
-        if (match === null) continue;
-        const target = match[2].replace(/\.[cm]?[jt]sx?$/, "");
-        if (target !== "games/format")
+        if (/(^|\/)features\/(.+)$/.test(resolved))
           offenders.push(`${posix(file)} imports ${specifier}`);
       }
     }

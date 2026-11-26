@@ -1,5 +1,5 @@
 import type { RecordEntryOut, RecordValueKind } from "../../api/records";
-import { formatPercentage } from "../../features/games/format";
+import { formatPercentage } from "../../lib/format";
 import { VisuallyHidden } from "../ui/VisuallyHidden";
 import { formatRecordValue, formatShootingShare } from "./recordLabels";
 import styles from "./StatsNav.module.css";

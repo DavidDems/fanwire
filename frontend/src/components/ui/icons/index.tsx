@@ -1,6 +1,7 @@
 /**
- * Fourteen Lucide icons (`components-shared.md` §3, plus `chart-column` for the Stats
- * nav item from `FRONTEND-009`), copied rather than installed — and, since
+ * Thirteen Lucide icons (`components-shared.md` §3 but `user`, which
+ * `FRONTEND-058` deleted for want of a caller, plus `chart-column` for the
+ * Stats nav item from `FRONTEND-009`), copied rather than installed — and, since
  * `UI-009`, two pressed variants of them for the post card: a filled heart and
  * a heavier repeat-2, so a pressed like or repost is told apart by shape and
  * not by colour alone (`accessibility.md`). `FRONTEND-012` adds lucide
@@ -8,7 +9,7 @@
  * for the stats and compose redesign: `circle-plus` (the floating new-post
  * button), `paperclip` (attach) and `circle-x` (clear). `FRONTEND-035` adds
  * lucide `log-out`, Sign out as the primary nav's last item. `FRONTEND-044`
- * adds lucide: calendar, the Schedule nav item: twenty Lucide icons in all,
+ * adds lucide: calendar, the Schedule nav item: nineteen Lucide icons in all,
  * plus the two pressed variants.
  *
  * Source: https://github.com/lucide-icons/lucide, `icons/<name>.svg` at commit
@@ -56,16 +57,6 @@ export function BellIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M10.268 21a2 2 0 0 0 3.464 0" />
       <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
-    </Icon>
-  );
-}
-
-/** lucide: user */
-export function UserIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </Icon>
   );
 }

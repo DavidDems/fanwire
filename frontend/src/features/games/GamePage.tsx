@@ -12,7 +12,7 @@ import { offersMemberLinks, useAccount } from "../../auth/account";
 import { useComposeLinkState } from "../../routes/modal-flow";
 import { fetchGame, gameKey, type GameDetailOut, type TeamRefOut } from "./api";
 import { BoxScore } from "./BoxScore";
-import { formatGameDate, teamShortName } from "./format";
+import { formatGameDate, teamShortName } from "../../lib/format";
 import styles from "./Games.module.css";
 import { LineScore } from "./LineScore";
 import { postAboutGameHref } from "./postLinks";

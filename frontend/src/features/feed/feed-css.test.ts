@@ -56,7 +56,6 @@ const SHARED_CLASSES: [string, string[]][] = [
   ["components/ui/message.module.css", ["message", "neutral", "danger"]],
   ["components/ui/Skeleton.module.css", ["post"]],
   ["components/ui/EmptyState.module.css", ["empty", "message"]],
-  ["components/ui/GameScore.module.css", ["score"]],
 ];
 
 describe.each(SHARED_CLASSES)("%s", (path, classNames) => {

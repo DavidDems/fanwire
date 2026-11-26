@@ -89,7 +89,9 @@ profile fields; account lifecycle controls live on the separate, guarded
   takes a username, two counts and the safe avatar rendering keys — **not a
   user object** — so it cannot render a field it was never handed. The
   follower count reads "1 follower" at one and "N followers" otherwise, and
-  "N following" always (`FRONTEND-055`). Since
+  "N following" always (`FRONTEND-055`). Both numbers are formatted by
+  locale ("1,200 followers", "1,200 following"), like the feed's `countText`,
+  without importing it (`FRONTEND-059`). Since
   `USERS-004` it can render the saved preset or public picture key without
   receiving DOB or any other profile field. Since `UI-008` it also takes one optional
   `action` slot, which `PublicProfile` fills with `FollowButton` so the control

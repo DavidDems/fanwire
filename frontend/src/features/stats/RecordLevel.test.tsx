@@ -52,7 +52,7 @@ import userEvent from "@testing-library/user-event";
 import { delay, http } from "msw";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { formatGameDate } from "../games/format";
+import { formatGameDate } from "../../lib/format";
 import {
   ADEBAYO,
   ADEBAYO_GAME,

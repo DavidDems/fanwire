@@ -18,8 +18,8 @@ primary controls and nav as a design choice, and 24 px as the hard floor.
 
 | Id | Requirement | SC | Check |
 |---|---|---|---|
-| **A1** | Every text/background pair declared in `tokens.css` meets 4.5:1 (3:1 for the non-text pairs listed in `tokens.md` §5), computed unrounded, in both themes | 1.4.3, 1.4.11 | S |
-| **A2** | None of the banned pairs in `tokens.md` §6 is declared, and no `*.module.css` contains a hex, `rgb()` or named colour (only `var(--color-…)`) | 1.4.3, 1.4.11 | S |
+| **A1** | Every text/background pair declared in `tokens.css` meets 4.5:1 (3:1 for the non-text pairs listed in `tokens-contrast.md` §5), computed unrounded, in both themes | 1.4.3, 1.4.11 | S |
+| **A2** | None of the banned pairs in `tokens-contrast.md` §6 is declared, and no `*.module.css` contains a hex, `rgb()` or named colour (only `var(--color-…)`) | 1.4.3, 1.4.11 | S |
 | **A3** | Every focusable element shows a visible focus indicator on `:focus-visible`: a 2 px `--color-focus` outline offset 2 px. `outline: none` appears nowhere without a `:focus-visible` replacement in the same rule set | 2.4.7, 2.4.13 (AAA, aimed for) | S, then B |
 | **A4** | **No teal focus ring, icon or border on a dark surface.** In dark, `--color-focus` is Pale Sky (10.425 on ink), and teal `#1f7a8c` is never the value of any dark-theme token | 1.4.11 | S |
 | **A5** | A focused element is never fully hidden by the sticky header or the fixed bottom bar (`scroll-padding` per `layout.md` §5) | 2.4.11 | B |

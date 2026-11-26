@@ -33,7 +33,7 @@
  *     leading zero, as the standings show one; since EVENTS-011 a season
  *     record shows its wins and losses first, `73–9 (.890)`, and
  *     `RecordValues.test.tsx` pins the shapes); the season, or the game's date
- *     (`d MMM yyyy`, as `games/format` prints it);
+ *     (`d MMM yyyy`, as `lib/format` prints it);
  *   - a tie (`FRONTEND-042`): the card lists the top three, so a tie of two or
  *     three shows every holder and says nothing of "others";
  *     `RecordCardsTop.test.tsx` pins the entries, their lines and weights;
@@ -51,7 +51,7 @@ import userEvent from "@testing-library/user-event";
 import { delay, http } from "msw";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { formatGameDate, teamShortName } from "../games/format";
+import { formatGameDate, teamShortName } from "../../lib/format";
 import {
   ADEBAYO,
   ADEBAYO_GAME,

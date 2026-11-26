@@ -179,7 +179,7 @@ export function describeBareLink(link: DataLink): string {
     case "game_final":
       return `Game result, game ${link.ref_id}`;
     case "player_game":
-      return `Player's game, line ${link.ref_id}`;
+      return `Player’s game, line ${link.ref_id}`;
     case "player_career":
       return `Player career, player ${link.ref_id} · ${scopeName(link.scope)}`;
   }
@@ -236,7 +236,7 @@ export async function checkAddressLink(
         ];
         const line = all.find((row) => row.line_id === link.ref_id);
         if (line === undefined)
-          return refused("The player's line in this link is not in that game");
+          return refused("The player’s line in this link is not in that game");
         // Only played lines are offered, so a line that is there but not
         // among them is a DNP.
         const entry = playedLines(game).find(

@@ -15,7 +15,7 @@ import { InlineAlert } from "../../components/ui/InlineAlert";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { StatusLine } from "../../components/ui/StatusLine";
 import { CourtScoreboard } from "../../components/visuals/CourtScoreboard";
-import { formatAverage } from "../games/format";
+import { formatAverage } from "../../lib/format";
 import { DetailLink } from "./DetailLink";
 import { playerHref } from "./links";
 import styles from "./Stats.module.css";
