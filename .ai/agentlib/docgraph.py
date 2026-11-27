@@ -4,8 +4,9 @@
 "edges"}`; `dumps(graph)` is the exact text of `.ai/graph.json`. Both are
 pure and deterministic: sorted, deduplicated, no line numbers of the source,
 no git history, mtimes or OS path separators, and the same whatever line
-endings the sources have. The query, orphan and staleness commands read the
-committed file and reuse these two functions.
+endings the sources have. The queries (`load`, then `of`, `within` and
+`task_view`, pure functions over the loaded dict) read the committed file
+rather than build: a query answers from what was checked in.
 
 Nothing here parses Markdown or citations itself. Links, wikilinks, fenced
 code, citation patterns and path resolution are `doclint`'s; path tokens and
@@ -21,6 +22,7 @@ Edges: `link`, `wikilink`, `mention`, `cites-line`, `cites-section`,
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from pathlib import Path
@@ -173,3 +175,190 @@ def write(root: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(dumps(graph).encode("ascii"))  # bytes: no newline translation
     return graph
+
+
+# --- Queries (step 2): pure functions over a loaded graph dict. ---------------
+#
+# `agentctl docs graph --of/--within/--task` call these on the committed file
+# (`load`), never on a fresh build: a query is fast and answers from what CI
+# checked in. Formatting is agentctl's.
+
+FOLLOW = ("link", "wikilink")  # the doc->doc edges a task's context closure follows
+
+
+class GraphError(ValueError):
+    """The committed graph cannot be read or answered from."""
+
+
+class UnknownNode(GraphError):
+    """A path or task id that is not in the graph; `hints` are close matches."""
+
+    def __init__(self, message: str, hints: list[str] | None = None):
+        self.hints = hints or []
+        if self.hints:
+            message += "; did you mean: " + ", ".join(self.hints)
+        super().__init__(message)
+
+
+def load(root: Path) -> dict:
+    """The committed `.ai/graph.json` at `root`, checked for a known version."""
+    path = Path(root) / GRAPH
+    try:
+        graph = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise GraphError(f"{GRAPH} not found; run `agentctl docs graph` to build it") from None
+    except (OSError, ValueError) as exc:
+        raise GraphError(f"{GRAPH} is not readable JSON ({exc}); rebuild it") from None
+    if not isinstance(graph, dict) or graph.get("version") != VERSION:
+        found = graph.get("version") if isinstance(graph, dict) else None
+        raise GraphError(
+            f"{GRAPH} version {found!r} is not understood (expected {VERSION}); "
+            "rebuild it with `agentctl docs graph`"
+        )
+    return graph
+
+
+def normalise(path: str) -> str:
+    """A repo-relative POSIX path: backslashes turned, leading `./` dropped."""
+    path = path.strip().replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
+    return path
+
+
+def _kinds(graph: dict) -> dict[str, str]:
+    return {n["path"]: n["kind"] for n in graph["nodes"]}
+
+
+def _hints(kinds: dict[str, str], path: str, limit: int = 5) -> list[str]:
+    base = path.rsplit("/", 1)[-1].lower()
+    same = [p for p in kinds if p.rsplit("/", 1)[-1].lower() == base]
+    if same:
+        return sorted(same)[:limit]
+    return difflib.get_close_matches(path, sorted(kinds), n=limit, cutoff=0.75)
+
+
+def _node(graph: dict, path: str) -> tuple[str, str]:
+    kinds = _kinds(graph)
+    name = normalise(path)
+    if name not in kinds:
+        raise UnknownNode(f"{name!r} is not in {GRAPH}", _hints(kinds, name))
+    return name, kinds[name]
+
+
+def _detail(edge: dict) -> dict:
+    return {"detail": edge["detail"]} if edge.get("detail") else {}
+
+
+def of(graph: dict, path: str) -> dict:
+    """The node at `path` with its outbound and inbound edges, in graph order."""
+    name, kind = _node(graph, path)
+    out = [
+        {"target": e["target"], "kind": e["kind"], **_detail(e)}
+        for e in graph["edges"]
+        if e["source"] == name
+    ]
+    into = [
+        {"source": e["source"], "kind": e["kind"], **_detail(e)}
+        for e in graph["edges"]
+        if e["target"] == name
+    ]
+    return {"path": name, "kind": kind, "out": out, "in": into}
+
+
+def within(graph: dict, path: str, depth: int) -> dict:
+    """Every node within `depth` edges of `path`, either direction, nearest first.
+
+    Each reached node carries `distance` and `via` (the node it was first
+    reached from, the edge's direction from there, and its kind). Breadth
+    first, each level sorted by path, so the answer is deterministic.
+    """
+    if depth < 0:
+        raise ValueError("depth must be 0 or more")
+    name, kind = _node(graph, path)
+    kinds = _kinds(graph)
+    steps: dict[str, list[tuple[str, str, str]]] = {}
+    for e in graph["edges"]:
+        steps.setdefault(e["source"], []).append((e["target"], "out", e["kind"]))
+        steps.setdefault(e["target"], []).append((e["source"], "in", e["kind"]))
+    seen = {name: {"path": name, "kind": kind, "distance": 0}}
+    frontier = [name]
+    for distance in range(1, depth + 1):
+        found: dict[str, dict] = {}
+        for here in frontier:
+            for there, direction, edge_kind in steps.get(here, []):
+                if there not in seen and there not in found:
+                    found[there] = {
+                        "path": there,
+                        "kind": kinds.get(there, "missing"),
+                        "distance": distance,
+                        "via": {"from": here, "direction": direction, "kind": edge_kind},
+                    }
+        frontier = sorted(found)
+        seen.update((p, found[p]) for p in frontier)
+        if not frontier:
+            break
+    return {"path": name, "depth": depth, "nodes": list(seen.values())}
+
+
+def task_view(graph: dict, task_id: str, depth: int = 1) -> dict:
+    """What a worker on `task_id` needs: its context, the docs it links, its paths.
+
+    `required_context` entries as the spec lists them; `linked`, the docs
+    reached from them by outbound `link`/`wikilink` edges to `depth`, each
+    with its distance and the doc it was first reached from (missing targets
+    and mentions are not followed); `allowed_paths` as listed.
+    """
+    if depth < 0:
+        raise ValueError("depth must be 0 or more")
+    spec = f".ai/tasks/{task_id}/task.json"
+    kinds = _kinds(graph)
+    if kinds.get(spec) != "spec":
+        raise UnknownNode(f"no task {task_id!r} ({spec} is not in {GRAPH})")
+    fields: dict[str, list[str]] = {"required_context": [], "allowed_paths": []}
+    links: dict[str, list[str]] = {}
+    for e in graph["edges"]:
+        if e["source"] == spec and e["kind"] in fields:
+            fields[e["kind"]].append(e["target"])
+        elif e["kind"] in FOLLOW and kinds.get(e["target"]) == "doc":
+            links.setdefault(e["source"], []).append(e["target"])
+    context = sorted(fields["required_context"])
+    seen = set(context)
+    linked = []
+    frontier = sorted(context)
+    for distance in range(1, depth + 1):
+        found: dict[str, str] = {}
+        for here in frontier:
+            for there in links.get(here, []):
+                if there not in seen and there not in found:
+                    found[there] = here
+        frontier = sorted(found)
+        seen.update(frontier)
+        linked += [
+            {"path": p, "kind": kinds[p], "distance": distance, "via": found[p]} for p in frontier
+        ]
+        if not frontier:
+            break
+    return {
+        "task": task_id,
+        "spec": spec,
+        "depth": depth,
+        "required_context": [{"path": p, "kind": kinds.get(p, "missing")} for p in context],
+        "linked": linked,
+        "allowed_paths": sorted(fields["allowed_paths"]),
+    }
+
+
+def compact_paths(paths: list[str]) -> list[str]:
+    """Paths sharing a directory folded into one `dir/ {a, b}` row, sorted."""
+    groups: dict[str, list[str]] = {}
+    for path in paths:
+        head, _, tail = path.rpartition("/")
+        groups.setdefault(head, []).append(tail)
+    rows = []
+    for head, tails in groups.items():
+        if len(tails) == 1:
+            rows.append(f"{head}/{tails[0]}" if head else tails[0])
+        else:
+            rows.append(f"{head}/ {{{', '.join(sorted(tails))}}}")
+    return sorted(rows)

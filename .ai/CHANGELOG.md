@@ -10,3 +10,4 @@ type: changelog
 - 2026-11-24 | 1.3.0 | Added `agentctl selfcheck --workspaces` (node_modules installed, local only), `agentctl preflight ports`, and a Claude Code PreToolUse hook refusing `git stash` and `docker compose run` port collisions | [backlog](../TODO/02-backlog.md)
 - 2026-11-25 | 1.3.1 | Observable-criterion rule accepts invoke, exist and proof so merged specs such as POSTS-010 validate | [backlog](../TODO/02-backlog.md)
 - 2026-11-27 | 1.4.0 | Added `agentctl docs graph`: writes `.ai/graph.json`, a typed, deterministic graph of links, mentions, citations and spec paths between docs, task specs and code | [doclint reference](docs/doclint.md)
+- 2026-11-27 | 1.5.0 | `agentctl docs graph --of`, `--within` and `--task` query the committed graph: edges of a file, its neighbourhood, and a task's required_context closure | [doclint reference](docs/doclint.md)

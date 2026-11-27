@@ -380,3 +380,351 @@ class TestCli:
         result = run("graph", "--root", str(tmp_path))
         assert result.returncode == 2
         assert "docs graph:" in result.stderr
+
+
+# --- Step 2: queries over the committed graph (`--of`, `--within`, `--task`). ---
+
+SPEC = ".ai/tasks/T-1/task.json"
+
+
+def _node(path, kind):
+    return {"path": path, "kind": kind}
+
+
+def _edge(source, target, kind, detail=""):
+    edge = {"source": source, "target": target, "kind": kind}
+    if detail:
+        edge["detail"] = detail
+    return edge
+
+
+def small_graph():
+    """A hand-built graph: a cycle a -> b -> c -> a, a hub `a`, a spec, a broken link."""
+    return {
+        "version": docgraph.VERSION,
+        "nodes": [
+            _node(SPEC, "spec"),
+            _node("backend/**", "pattern"),
+            _node("backend/x.py", "code"),
+            _node("wiki/a.md", "doc"),
+            _node("wiki/b.md", "doc"),
+            _node("wiki/c.md", "doc"),
+            _node("wiki/d.md", "doc"),
+            _node("wiki/e.md", "doc"),
+            _node("wiki/gone.md", "missing"),
+        ],
+        "edges": [
+            _edge(SPEC, "backend/**", "allowed_paths"),
+            _edge(SPEC, "backend/x.py", "allowed_paths"),
+            _edge(SPEC, "wiki/a.md", "required_context"),
+            _edge("wiki/a.md", "backend/x.py", "cites-line", "3"),
+            _edge("wiki/a.md", "wiki/b.md", "link"),
+            _edge("wiki/a.md", "wiki/e.md", "mention"),
+            _edge("wiki/b.md", "wiki/c.md", "wikilink"),
+            _edge("wiki/b.md", "wiki/gone.md", "link"),
+            _edge("wiki/c.md", "wiki/a.md", "link"),
+            _edge("wiki/c.md", "wiki/d.md", "link"),
+            _edge("wiki/d.md", "wiki/a.md", "mention"),
+        ],
+    }
+
+
+def reached(view):
+    return [(n["path"], n["distance"]) for n in view["nodes"]]
+
+
+class TestOf:
+    def test_outbound_and_inbound_edges_with_kind_and_detail(self):
+        view = docgraph.of(small_graph(), "wiki/a.md")
+        assert view["path"] == "wiki/a.md"
+        assert view["kind"] == "doc"
+        assert view["out"] == [
+            {"target": "backend/x.py", "kind": "cites-line", "detail": "3"},
+            {"target": "wiki/b.md", "kind": "link"},
+            {"target": "wiki/e.md", "kind": "mention"},
+        ]
+        assert view["in"] == [
+            {"source": SPEC, "kind": "required_context"},
+            {"source": "wiki/c.md", "kind": "link"},
+            {"source": "wiki/d.md", "kind": "mention"},
+        ]
+
+    def test_a_node_with_no_edges_has_empty_lists(self):
+        graph = small_graph()
+        graph["nodes"].append(_node("wiki/lonely.md", "doc"))
+        assert docgraph.of(graph, "wiki/lonely.md") == {
+            "path": "wiki/lonely.md",
+            "kind": "doc",
+            "out": [],
+            "in": [],
+        }
+
+    @pytest.mark.parametrize("given", ["./wiki/a.md", "wiki\\a.md", ".\\wiki\\a.md", " wiki/a.md "])
+    def test_a_dot_slash_prefix_or_backslashes_are_normalised(self, given):
+        assert docgraph.of(small_graph(), given)["path"] == "wiki/a.md"
+
+    def test_an_unknown_path_raises_with_basename_hints(self):
+        with pytest.raises(docgraph.UnknownNode) as err:
+            docgraph.of(small_graph(), "docs/a.md")
+        assert err.value.hints == ["wiki/a.md"]
+        assert "docs/a.md" in str(err.value)
+
+    def test_an_unknown_path_with_no_close_match_has_no_hints(self):
+        with pytest.raises(docgraph.UnknownNode) as err:
+            docgraph.of(small_graph(), "zzz/qqq.txt")
+        assert err.value.hints == []
+
+
+class TestWithin:
+    def test_depth_one_reaches_both_directions_once(self):
+        view = docgraph.within(small_graph(), "wiki/a.md", 1)
+        assert view["path"] == "wiki/a.md" and view["depth"] == 1
+        assert reached(view) == [
+            ("wiki/a.md", 0),
+            (SPEC, 1),
+            ("backend/x.py", 1),
+            ("wiki/b.md", 1),
+            ("wiki/c.md", 1),
+            ("wiki/d.md", 1),
+            ("wiki/e.md", 1),
+        ]
+
+    def test_each_reached_node_says_how_it_was_reached(self):
+        found = {n["path"]: n for n in docgraph.within(small_graph(), "wiki/b.md", 2)["nodes"]}
+        assert "via" not in found["wiki/b.md"]
+        assert found["wiki/c.md"]["via"] == {"from": "wiki/b.md", "direction": "out", "kind": "wikilink"}
+        assert found["wiki/a.md"]["via"] == {"from": "wiki/b.md", "direction": "in", "kind": "link"}
+        assert found["wiki/c.md"]["kind"] == "doc"
+        assert found["wiki/gone.md"]["kind"] == "missing"
+
+    def test_depth_bounds_the_walk_and_a_cycle_is_visited_once(self):
+        graph = small_graph()
+        assert reached(docgraph.within(graph, "wiki/b.md", 0)) == [("wiki/b.md", 0)]
+        one = reached(docgraph.within(graph, "wiki/b.md", 1))
+        assert one == [("wiki/b.md", 0), ("wiki/a.md", 1), ("wiki/c.md", 1), ("wiki/gone.md", 1)]
+        two = reached(docgraph.within(graph, "wiki/b.md", 2))
+        assert two == one + [
+            (SPEC, 2),
+            ("backend/x.py", 2),
+            ("wiki/d.md", 2),
+            ("wiki/e.md", 2),
+        ]
+        assert len({p for p, _ in two}) == len(two)
+        assert reached(docgraph.within(graph, "wiki/b.md", 9))[-1] == ("backend/**", 3)
+
+    def test_a_negative_depth_is_an_error(self):
+        with pytest.raises(ValueError):
+            docgraph.within(small_graph(), "wiki/a.md", -1)
+
+    def test_an_unknown_path_raises(self):
+        with pytest.raises(docgraph.UnknownNode):
+            docgraph.within(small_graph(), "wiki/nope.md", 1)
+
+
+class TestTaskView:
+    def test_context_its_linked_docs_to_depth_and_allowed_paths(self):
+        view = docgraph.task_view(small_graph(), "T-1", 1)
+        assert view["task"] == "T-1"
+        assert view["spec"] == SPEC
+        assert view["depth"] == 1
+        assert view["required_context"] == [{"path": "wiki/a.md", "kind": "doc"}]
+        # Mentions and code citations are not followed: only doc->doc links and wikilinks.
+        assert view["linked"] == [
+            {"path": "wiki/b.md", "kind": "doc", "distance": 1, "via": "wiki/a.md"}
+        ]
+        assert view["allowed_paths"] == ["backend/**", "backend/x.py"]
+
+    def test_depth_follows_outbound_links_only_skips_missing_and_stops_at_a_cycle(self):
+        graph = small_graph()
+        assert docgraph.task_view(graph, "T-1", 0)["linked"] == []
+        deep = docgraph.task_view(graph, "T-1", 3)["linked"]
+        assert [(n["path"], n["distance"], n["via"]) for n in deep] == [
+            ("wiki/b.md", 1, "wiki/a.md"),
+            ("wiki/c.md", 2, "wiki/b.md"),
+            ("wiki/d.md", 3, "wiki/c.md"),
+        ]
+        assert docgraph.task_view(graph, "T-1", 9)["linked"] == deep
+
+    def test_a_missing_context_entry_is_listed_with_its_kind(self):
+        graph = small_graph()
+        graph["nodes"].append(_node("wiki/CodeContext/gone.md", "missing"))
+        graph["edges"].append(_edge(SPEC, "wiki/CodeContext/gone.md", "required_context"))
+        assert docgraph.task_view(graph, "T-1", 1)["required_context"] == [
+            {"path": "wiki/CodeContext/gone.md", "kind": "missing"},
+            {"path": "wiki/a.md", "kind": "doc"},
+        ]
+
+    def test_an_unknown_task_raises(self):
+        with pytest.raises(docgraph.UnknownNode) as err:
+            docgraph.task_view(small_graph(), "NOPE-1", 1)
+        assert "NOPE-1" in str(err.value)
+
+
+class TestCompactPaths:
+    def test_files_sharing_a_directory_are_one_row(self):
+        assert docgraph.compact_paths(
+            ["a/b/x.py", "a/b/y.py", "a/c.py", "a/b/**", "top.md"]
+        ) == ["a/b/ {**, x.py, y.py}", "a/c.py", "top.md"]
+
+
+class TestLoad:
+    def test_load_reads_the_committed_file(self, repo):
+        put(repo, "wiki/a.md", "[b](b.md)\n")
+        put(repo, "wiki/b.md", "x\n")
+        written = docgraph.write(repo)
+        assert docgraph.load(repo) == written
+
+    def test_a_missing_file_raises(self, repo):
+        with pytest.raises(docgraph.GraphError, match="agentctl docs graph"):
+            docgraph.load(repo)
+
+    @pytest.mark.parametrize(
+        "body", ['{"version": 99, "nodes": [], "edges": []}', "not json", "[]"]
+    )
+    def test_an_unknown_version_or_bad_file_raises(self, repo, body):
+        (repo / ".ai").mkdir()
+        (repo / GRAPH).write_text(body, encoding="utf-8")
+        with pytest.raises(docgraph.GraphError):
+            docgraph.load(repo)
+
+
+@pytest.fixture
+def built(repo):
+    put(repo, "wiki/hub.md", "Hub.\n")
+    for i in range(5):
+        put(repo, f"wiki/s{i}.md", "[hub](hub.md)\n")
+    put(repo, "wiki/CodeContext/ctx.md", "See [hub](../hub.md).\n")
+    spec(
+        repo,
+        "T-1",
+        required_context=["wiki/CodeContext/ctx.md"],
+        allowed_paths=["backend/app/a.py", "backend/app/b.py"],
+    )
+    assert run("graph", "--root", str(repo)).returncode == 0
+    return repo
+
+
+def query(repo, *args):
+    return run("graph", "--root", str(repo), *args)
+
+
+class TestQueryCli:
+    def test_of_prints_a_header_grouped_edges_and_a_summary(self, built):
+        result = query(built, "--of", "wiki/CodeContext/ctx.md")
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert lines[0] == "wiki/CodeContext/ctx.md  (doc)"
+        assert lines[1].split() == ["out", "link", "wiki/hub.md"]
+        assert lines[2].split() == ["in", "required_context", SPEC]
+        assert lines[-1] == "docs graph: 1 out, 1 in"
+
+    def test_of_does_not_rebuild_the_graph(self, built):
+        before = (built / GRAPH).read_bytes()
+        put(built, "wiki/new.md", "[hub](hub.md)\n")
+        result = query(built, "--of", "wiki/hub.md")
+        assert result.returncode == 0, result.stderr
+        assert "wiki/new.md" not in result.stdout
+        assert (built / GRAPH).read_bytes() == before
+
+    def test_limit_caps_rows_with_a_more_line(self, built):
+        result = query(built, "--of", "wiki/hub.md", "--limit", "2")
+        assert result.returncode == 0, result.stderr
+        rows = [line for line in result.stdout.splitlines() if line.startswith("  ")]
+        assert len(rows) == 3
+        assert rows[-1].strip() == "... 4 more"
+        assert result.stdout.splitlines()[-1] == "docs graph: 0 out, 6 in"
+
+    def test_of_json_shape(self, built):
+        result = query(built, "--of", "./wiki/hub.md", "--json")
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert data["path"] == "wiki/hub.md"
+        assert data["out"] == []
+        assert {"source": "wiki/s0.md", "kind": "link"} in data["in"]
+        assert data["more"] == 0
+
+    def test_json_honours_the_limit(self, built):
+        data = json.loads(query(built, "--of", "wiki/hub.md", "--json", "--limit", "2").stdout)
+        assert len(data["in"]) == 2
+        assert data["more"] == 4
+
+    def test_within_lists_reached_nodes_with_distance(self, built):
+        result = query(built, "--of", "wiki/CodeContext/ctx.md", "--within", "2")
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert lines[0].startswith("wiki/CodeContext/ctx.md  (doc)")
+        assert any(line.split()[:4] == ["1", "out", "link", "wiki/hub.md"] for line in lines)
+        assert any(
+            line.split()[:4] == ["2", "in", "link", "wiki/s3.md"] and "via wiki/hub.md" in line
+            for line in lines
+        )
+        assert lines[-1] == "docs graph: 10 nodes within 2 of wiki/CodeContext/ctx.md"
+
+    def test_within_json_shape(self, built):
+        data = json.loads(query(built, "--of", "wiki/hub.md", "--within", "1", "--json").stdout)
+        assert data["path"] == "wiki/hub.md" and data["depth"] == 1
+        assert data["nodes"][0] == {"path": "wiki/hub.md", "kind": "doc", "distance": 0}
+        assert len(data["nodes"]) == 7 and data["more"] == 0
+
+    def test_task_view(self, built):
+        result = query(built, "--task", "T-1")
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert lines[0] == f"T-1  {SPEC}"
+        assert lines[1].split() == ["context", "wiki/CodeContext/ctx.md"]
+        assert lines[2].split()[:3] == ["1", "link", "wiki/hub.md"]
+        assert "via wiki/CodeContext/ctx.md" in lines[2]
+        assert lines[3].split() == ["allowed", "backend/app/", "{a.py,", "b.py}"]
+        assert lines[-1] == "docs graph: 1 context, 1 linked within 1, 2 allowed"
+
+    def test_task_view_json(self, built):
+        data = json.loads(query(built, "--task", "T-1", "--within", "0", "--json").stdout)
+        assert data["task"] == "T-1" and data["depth"] == 0
+        assert data["required_context"] == [{"path": "wiki/CodeContext/ctx.md", "kind": "doc"}]
+        assert data["linked"] == []
+        assert data["allowed_paths"] == ["backend/app/a.py", "backend/app/b.py"]
+
+    def test_an_unknown_task_is_a_usage_error(self, built):
+        result = query(built, "--task", "NOPE-9")
+        assert result.returncode == 2
+        assert "NOPE-9" in result.stderr
+
+    def test_an_unknown_path_is_a_usage_error_with_a_hint(self, built):
+        result = query(built, "--of", "docs/hub.md")
+        assert result.returncode == 2
+        assert "docs/hub.md" in result.stderr
+        assert "wiki/hub.md" in result.stderr
+
+    def test_a_backslash_path_is_accepted(self, built):
+        result = query(built, "--of", "wiki\\hub.md")
+        assert result.returncode == 0, result.stderr
+
+    def test_a_missing_graph_file_is_a_usage_error(self, repo):
+        put(repo, "wiki/a.md", "x\n")
+        result = query(repo, "--of", "wiki/a.md")
+        assert result.returncode == 2
+        assert "not found" in result.stderr and "agentctl docs graph" in result.stderr
+        assert not (repo / GRAPH).exists()
+
+    def test_an_unknown_graph_version_is_a_usage_error(self, built):
+        (built / GRAPH).write_text('{"version": 99, "nodes": [], "edges": []}\n', encoding="utf-8")
+        result = query(built, "--of", "wiki/hub.md")
+        assert result.returncode == 2
+        assert "version" in result.stderr
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ("--of", "wiki/hub.md", "--task", "T-1"),
+            ("--within", "1"),
+            ("--json",),
+            ("--limit", "3"),
+            ("--of", "wiki/hub.md", "--limit", "0"),
+            ("--of", "wiki/hub.md", "--within", "-1"),
+        ],
+    )
+    def test_bad_flag_combinations_are_usage_errors(self, built, args):
+        before = (built / GRAPH).read_bytes()
+        result = query(built, *args)
+        assert result.returncode == 2
+        assert (built / GRAPH).read_bytes() == before
