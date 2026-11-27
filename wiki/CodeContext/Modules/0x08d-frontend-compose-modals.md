@@ -149,8 +149,13 @@ submits the draft.
   The entry grows 297 B gzip / 649 B raw; the independent skeptic's
   second pass found every Baseline line met. The final frontend container
   passes 170 files / 2,335 tests.
-- **Operational follow-up R16 remains separate:** time the image pipeline
-  on the live stack after deploy, by the human's procedure in
-  [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]].
-  Local image-preservation checks stub the ticket, bucket and poll; no live
-  pipeline timing is claimed until that report is recorded here.
+- **R16, measured on the live stack** (2026-11-27, by
+  [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]]:
+  five 4032 × 3024 JPEGs of 3.1 MB, the first a cold start, browser clock
+  corrected by +0.754 s). p50 / max per segment: A ticket and upload
+  0.77 / 0.92 s; B scan and delivery 1.52 / 3.02 s (the max is the cold
+  start's, with its 1.51 s init); C processing 1.36 / 2.19 s; D client sees
+  it 0.36 / 0.85 s, which is mostly the 1 s poll's wait. Total from the end
+  of the upload: 3.07 / 6.07 s, the cold start the max, so the 30 s bound has
+  24 s to spare. The `Media` Lambda peaks at 336 MB of 1024. The first run
+  that day found a 12 MP photo running it out of memory (fixed in #144).
