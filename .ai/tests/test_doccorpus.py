@@ -155,6 +155,12 @@ class TestInventory:
         put(repo, ".ai/graph.json", '{"nodes": ["wiki/a.md"]}', kind=None)
         assert row(doccorpus.inventory(repo), "wiki/a.md")["inbound"] == []
 
+    def test_the_graph_baseline_is_not_a_mention(self, repo):
+        """Prompts/49 step 3: its keys name orphans; they are not uses."""
+        put(repo, "wiki/a.md", "x")
+        put(repo, ".ai/graph-baseline.json", '["orphan:wiki/a.md"]', kind=None)
+        assert row(doccorpus.inventory(repo), "wiki/a.md")["inbound"] == []
+
     def test_last_commit_is_the_newest_that_touched_the_file(self, repo):
         put(repo, "wiki/a.md", "one")
         put(repo, "wiki/b.md", "one")

@@ -728,3 +728,375 @@ class TestQueryCli:
         result = query(built, *args)
         assert result.returncode == 2
         assert (built / GRAPH).read_bytes() == before
+
+
+# --- Step 3: orphans, dangling edges and the `--check` ratchet. -------------
+
+BASELINE = ".ai/graph-baseline.json"
+
+
+def debt_keys(repo):
+    return sorted(docgraph.debt_keys(docgraph.debt(repo)))
+
+
+class TestOrphans:
+    def test_a_doc_nothing_links_to_is_an_orphan(self, repo):
+        put(repo, "wiki/a.md", "[b](b.md)\n")
+        put(repo, "wiki/b.md", "x\n")
+        assert docgraph.debt(repo)["orphans"] == ["wiki/a.md"]
+
+    def test_a_self_link_does_not_save_a_doc(self, repo):
+        put(repo, "wiki/a.md", "[me](a.md)\n")
+        assert docgraph.debt(repo)["orphans"] == ["wiki/a.md"]
+
+    def test_any_inbound_edge_counts_mentions_and_code_included(self, repo):
+        put(repo, "wiki/a.md", "x\n")
+        put(repo, "wiki/b.md", "x\n")
+        put(repo, "wiki/c.md", "Read `wiki/a.md`.\n")
+        put(repo, "backend/app/main.py", '"""See wiki/b.md."""\n')
+        assert docgraph.debt(repo)["orphans"] == ["wiki/c.md"]
+
+    def test_a_spec_required_context_saves_a_doc(self, repo):
+        put(repo, "wiki/CodeContext/ctx.md", "x\n")
+        spec(repo, "T-1", required_context=["wiki/CodeContext/ctx.md"])
+        assert docgraph.debt(repo)["orphans"] == []
+
+    def test_only_docs_are_orphans(self, repo):
+        spec(repo, "T-1")
+        put(repo, "backend/app/x.py", '"""Names wiki/a.md."""\n')
+        put(repo, "wiki/a.md", "x\n")
+        assert docgraph.debt(repo)["orphans"] == []
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "index.md",
+            "wiki/index.md",
+            "wiki/GeneralContext/index.md",
+            "README.md",
+            ".ai/README.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "frontend/CLAUDE.md",
+            "wiki/GeneralContext/Prompts/49-docs-graph.md",
+            "wiki/GeneralContext/Prompts/_template.md",
+            "wiki/GeneralContext/Timeline/2026-11.md",
+            ".claude/skills/wiki-review/SKILL.md",
+            ".agents/skills/wiki-review/SKILL.md",
+            ".ai/skills/backend-testing/SKILL.md",
+            ".ai/prompts/manager.md",
+            ".ai/tasks/T-1/brief.md",
+            ".ai/tests/fixtures/x/brief.md",
+            ".ai/tests/fixtures/deep/er/notes.md",
+        ],
+    )
+    def test_roots_are_never_orphans(self, repo, path):
+        put(repo, path, "x\n")
+        assert docgraph.debt(repo)["orphans"] == []
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "wiki/GeneralContext/Prompts/sub/x.md",
+            "wiki/GeneralContext/Timeline/old/x.md",
+            ".claude/skills/ui-design/references/patterns.md",
+            ".claude/skills/SKILL.md",
+            ".ai/tasks/T-1/notes.md",
+            "wiki/indexes.md",
+            "wiki/README.md.md",
+        ],
+    )
+    def test_near_misses_of_a_root_are_still_orphans(self, repo, path):
+        put(repo, path, "x\n")
+        assert docgraph.debt(repo)["orphans"] == [path]
+
+    def test_the_graph_baseline_is_not_a_source(self, repo):
+        """Its keys name every orphan: read as mentions, it would hide them all."""
+        put(repo, "wiki/a.md", "x\n")
+        put(repo, BASELINE, '["orphan:wiki/a.md"]\n')
+        graph = docgraph.build(repo)
+        assert edges(graph) == []
+        assert docgraph.debt(repo)["orphans"] == ["wiki/a.md"]
+
+
+class TestDangling:
+    def test_an_edge_to_a_missing_file_is_dangling(self, repo):
+        put(repo, "wiki/index.md", "[gone](gone.md)\n")
+        put(repo, "wiki/b.md", "See wiki/gone.md:12 and wiki/gone.md:14.\n")
+        put(repo, "wiki/c.md", "[b](b.md)\n")
+        dangling = docgraph.debt(repo)["dangling"]
+        assert dangling == [
+            {"source": "wiki/b.md", "target": "wiki/gone.md", "kind": "cites-line", "cause": "missing"},
+            {"source": "wiki/index.md", "target": "wiki/gone.md", "kind": "link", "cause": "missing"},
+        ]
+
+    def test_a_stale_literal_allowed_path_is_dangling(self, repo):
+        spec(repo, "T-1", allowed_paths=["backend/app/gone.py", "backend/app/here.py"])
+        put(repo, "backend/app/here.py", "x = 1\n")
+        assert docgraph.debt(repo)["dangling"] == [
+            {
+                "source": ".ai/tasks/T-1/task.json",
+                "target": "backend/app/gone.py",
+                "kind": "allowed_paths",
+                "cause": "missing",
+            }
+        ]
+
+    def test_a_glob_that_matches_no_tracked_file_is_dangling(self, repo):
+        spec(
+            repo,
+            "T-1",
+            allowed_paths=["backend/app/posts/**", "backend/app/*.py", "frontend/src/gone/**"],
+            required_context=["wiki/CodeContext/*.md"],
+        )
+        put(repo, "backend/app/posts/deep/x.py", "x = 1\n")
+        put(repo, "backend/app/posts/y.py", "x = 1\n")
+        put(repo, "wiki/CodeContext/a.md", "x\n")
+        # `*` stops at `/`, as the guard matches: posts/y.py is not `backend/app/*.py`.
+        assert docgraph.debt(repo)["dangling"] == [
+            {
+                "source": ".ai/tasks/T-1/task.json",
+                "target": "backend/app/*.py",
+                "kind": "allowed_paths",
+                "cause": "pattern",
+            },
+            {
+                "source": ".ai/tasks/T-1/task.json",
+                "target": "frontend/src/gone/**",
+                "kind": "allowed_paths",
+                "cause": "pattern",
+            },
+        ]
+
+    def test_an_untracked_file_does_not_satisfy_a_glob(self, repo):
+        spec(repo, "T-1", allowed_paths=["backend/app/**"])
+        (repo / "backend/app").mkdir(parents=True)
+        (repo / "backend/app/x.py").write_text("x = 1\n", encoding="utf-8")
+        assert [d["cause"] for d in docgraph.debt(repo)["dangling"]] == ["pattern"]
+
+    def test_keys_are_stable_text(self, repo):
+        put(repo, "wiki/a.md", "[gone](gone.md)\n")
+        spec(repo, "T-1", allowed_paths=["frontend/src/gone/**"])
+        assert debt_keys(repo) == [
+            "dangling:.ai/tasks/T-1/task.json -> frontend/src/gone/** (allowed_paths)",
+            "dangling:wiki/a.md -> wiki/gone.md (link)",
+            "orphan:wiki/a.md",
+        ]
+
+
+def commit(repo, message="fixture"):
+    git(repo, "add", "-A")
+    git(
+        repo,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        message,
+    )
+    return git(repo, "rev-parse", "HEAD")
+
+
+def baseline(repo, keys):
+    put(repo, BASELINE, json.dumps(sorted(keys)) + "\n")
+
+
+def regen(repo):
+    docgraph.write(repo)
+    git(repo, "add", GRAPH)
+
+
+@pytest.fixture
+def checked(repo):
+    """A base commit with the graph, its ratchet and one baselined orphan."""
+    put(repo, ".ai/agentlib/docgraph.py", f'BASELINE = "{BASELINE}"\n')
+    put(repo, "wiki/old.md", "x\n")
+    baseline(repo, ["orphan:wiki/old.md"])
+    regen(repo)
+    return repo, commit(repo)
+
+
+class TestCheck:
+    def test_an_up_to_date_tree_passes(self, checked):
+        repo, base = checked
+        assert docgraph.check(repo, base=base) == {
+            "stale": False,
+            "errors": [],
+            "debt": ["orphan:wiki/old.md"],
+            "baseline_count": 1,
+        }
+
+    def test_a_stale_graph_file_fails(self, checked):
+        repo, base = checked
+        put(repo, "wiki/old.md", "[new](new.md)\n")
+        put(repo, "wiki/new.md", "[old](old.md)\n")
+        assert docgraph.check(repo, base=base)["stale"] is True
+        regen(repo)
+        assert docgraph.check(repo, base=base)["stale"] is False
+
+    def test_a_missing_graph_file_is_stale(self, checked):
+        repo, base = checked
+        (repo / GRAPH).unlink()
+        assert docgraph.check(repo, base=base)["stale"] is True
+
+    def test_a_new_orphan_fails_the_ratchet(self, checked):
+        repo, base = checked
+        put(repo, "wiki/new.md", "x\n")
+        regen(repo)
+        assert docgraph.check(repo, base=base)["errors"] == ["new violation: orphan:wiki/new.md"]
+
+    def test_a_new_dangling_edge_fails_the_ratchet(self, checked):
+        repo, base = checked
+        put(repo, "wiki/index.md", "[old](old.md) [gone](gone.md)\n")
+        regen(repo)
+        assert docgraph.check(repo, base=base)["errors"] == [
+            "new violation: dangling:wiki/index.md -> wiki/gone.md (link)"
+        ]
+
+    def test_fixed_debt_may_leave_an_unused_entry(self, checked):
+        repo, base = checked
+        put(repo, "wiki/index.md", "[old](old.md)\n")
+        regen(repo)
+        result = docgraph.check(repo, base=base)
+        assert result["errors"] == [] and result["debt"] == []
+
+    def test_the_baseline_may_only_shrink_against_base(self, checked):
+        repo, base = checked
+        put(repo, "wiki/new.md", "x\n")
+        baseline(repo, ["orphan:wiki/new.md", "orphan:wiki/old.md"])
+        regen(repo)
+        assert docgraph.check(repo, base=base)["errors"] == [
+            "baseline may only shrink: orphan:wiki/new.md"
+        ]
+
+    def test_pruning_the_baseline_passes(self, checked):
+        repo, base = checked
+        put(repo, "wiki/index.md", "[old](old.md)\n")
+        baseline(repo, [])
+        regen(repo)
+        assert docgraph.check(repo, base=base)["errors"] == []
+
+    def test_first_introduction_against_a_base_without_the_ratchet(self, repo):
+        put(repo, ".ai/agentlib/docgraph.py", "# a graph builder, no orphan ratchet yet\n")
+        base = commit(repo)
+        put(repo, "wiki/old.md", "x\n")
+        baseline(repo, ["orphan:wiki/old.md"])
+        regen(repo)
+        assert docgraph.check(repo, base=base)["errors"] == []
+
+    def test_a_base_with_the_ratchet_but_no_baseline_fails_closed(self, checked):
+        repo, _ = checked
+        git(repo, "rm", "-q", BASELINE)
+        base = commit(repo, "drop the baseline")
+        baseline(repo, ["orphan:wiki/old.md"])
+        with pytest.raises(ValueError, match="no graph baseline"):
+            docgraph.check(repo, base=base)
+
+    def test_a_malformed_baseline_is_unusable(self, checked):
+        repo, base = checked
+        put(repo, BASELINE, '["b", "a"]\n')
+        with pytest.raises(ValueError):
+            docgraph.check(repo, base=base)
+
+    def test_a_missing_baseline_is_unusable(self, checked):
+        repo, base = checked
+        (repo / BASELINE).unlink()
+        with pytest.raises((OSError, ValueError)):
+            docgraph.check(repo, base=base)
+
+    def test_an_unknown_base_is_unusable(self, checked):
+        repo, _ = checked
+        with pytest.raises(ValueError):
+            docgraph.check(repo, base="no-such-ref")
+
+
+class TestDebtCli:
+    def test_orphans_text(self, repo):
+        put(repo, "wiki/a.md", "[gone](gone.md)\n")
+        spec(repo, "T-1", allowed_paths=["frontend/src/gone/**"])
+        result = run("graph", "--root", str(repo), "--orphans")
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert ["orphan", "wiki/a.md"] in [line.split() for line in lines]
+        assert ["dangling", "wiki/a.md", "->", "wiki/gone.md", "(link,", "missing)"] in [
+            line.split() for line in lines
+        ]
+        assert any("frontend/src/gone/**" in line and "pattern)" in line for line in lines)
+        assert lines[-1] == "docs graph: 1 orphans, 2 dangling"
+        assert not (repo / GRAPH).exists()
+
+    def test_orphans_json(self, repo):
+        put(repo, "wiki/a.md", "x\n")
+        result = run("graph", "--root", str(repo), "--orphans", "--json")
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"orphans": ["wiki/a.md"], "dangling": []}
+
+    def test_check_passes_with_a_one_line_summary(self, checked):
+        repo, base = checked
+        result = run("graph", "--root", str(repo), "--check", "--base", base)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == [
+            "docs graph: up to date, 1 baselined orphans/dangling, 0 errors"
+        ]
+
+    def test_check_fails_on_a_stale_graph_with_the_remedy(self, checked):
+        repo, base = checked
+        put(repo, "wiki/index.md", "[old](old.md)\n")
+        result = run("graph", "--root", str(repo), "--check", "--base", base)
+        assert result.returncode == 1
+        assert "python .ai/bin/agentctl.py docs graph" in result.stdout
+        assert result.stdout.splitlines()[-1].startswith("docs graph: stale,")
+
+    def test_check_fails_on_a_new_orphan_naming_it(self, checked):
+        repo, base = checked
+        put(repo, "wiki/new.md", "x\n")
+        regen(repo)
+        result = run("graph", "--root", str(repo), "--check", "--base", base)
+        assert result.returncode == 1
+        assert "new violation: orphan:wiki/new.md" in result.stdout
+        assert result.stdout.splitlines()[-1] == (
+            "docs graph: up to date, 2 baselined orphans/dangling, 1 errors"
+        )
+
+    def test_check_with_unusable_input_is_a_usage_error(self, checked):
+        repo, _ = checked
+        result = run("graph", "--root", str(repo), "--check", "--base", "no-such-ref")
+        assert result.returncode == 2
+        assert "docs graph:" in result.stderr
+
+    def test_check_does_not_write_the_graph(self, checked):
+        repo, base = checked
+        put(repo, "wiki/index.md", "[old](old.md)\n")
+        before = (repo / GRAPH).read_bytes()
+        run("graph", "--root", str(repo), "--check", "--base", base)
+        assert (repo / GRAPH).read_bytes() == before
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ("--orphans", "--check"),
+            ("--orphans", "--of", "wiki/old.md"),
+            ("--check", "--task", "T-1"),
+            ("--base", "HEAD"),
+            ("--orphans", "--base", "HEAD"),
+            ("--orphans", "--limit", "3"),
+            ("--check", "--json"),
+        ],
+    )
+    def test_bad_combinations_are_usage_errors(self, checked, args):
+        repo, _ = checked
+        before = (repo / GRAPH).read_bytes()
+        assert run("graph", "--root", str(repo), *args).returncode == 2
+        assert (repo / GRAPH).read_bytes() == before
+
+
+def test_this_module_names_its_baseline_so_a_base_can_be_told_apart():
+    """`check` fails closed when the base's docgraph.py names the baseline file
+    but the base has none; a base whose builder predates the ratchet does not."""
+    source = Path(docgraph.__file__).read_text(encoding="utf-8")
+    assert docgraph.BASELINE == BASELINE
+    assert BASELINE in source
