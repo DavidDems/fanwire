@@ -22,7 +22,7 @@ the checks; these prompts only start them.
 
 [`wiki-review`](../../../.claude/skills/wiki-review/SKILL.md) runs the doc
 linter, budget overruns, duplicated facts, module facts against code, broken
-links and done backlog rows. It ends in one reviewable PR.
+links, orphan docs and done backlog rows. It ends in one reviewable PR.
 
 ```text
 Run the wiki-review skill (.claude/skills/wiki-review/SKILL.md) on origin/main in a worktree. Report first: findings ranked most severe first, each with the file and the proposed change, and the lint's "0 errors" line quoted. Put your questions for me last. Then make the safe fixes in one PR to main, naming every restricted-tree edit and where each removed fact went. Never rewrite a decision; merge nothing.
