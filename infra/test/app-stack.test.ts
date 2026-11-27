@@ -124,9 +124,26 @@ describe('App stack: functions', () => {
       const ref = JSON.stringify((f.Properties?.LoggingConfig as { LogGroup: unknown })?.LogGroup);
       const id = Object.keys(groups).find((g) => ref.includes(`"${g}"`));
       expect(id).toBeDefined();
-      expect(groups[id!]?.Properties?.RetentionInDays).toEqual(expect.any(Number));
+      // The Migration group never expires (ADR 0044); every other keeps 30 days.
+      if (f === fn('migration')[1]) continue;
+      expect(groups[id!]?.Properties?.RetentionInDays).toBe(30);
     }
     tpl().resourceCountIs('Custom::LogRetention', 0);
+  });
+
+  test('the Migration log group never expires and is retained; it answers "which revisions ran?" (ADR 0044)', () => {
+    const groups = resourcesOfType(raw(), 'AWS::Logs::LogGroup');
+    const [, migration] = fn('migration');
+    const ref = JSON.stringify((migration.Properties?.LoggingConfig as { LogGroup: unknown }).LogGroup);
+    const id = Object.keys(groups).find((g) => ref.includes(`"${g}"`));
+    expect(id).toBeDefined();
+    expect(groups[id!]?.Properties?.RetentionInDays).toBeUndefined();
+    expect(groups[id!]?.DeletionPolicy).toBe('Retain');
+    expect(groups[id!]?.UpdateReplacePolicy).toBe('Retain');
+  });
+
+  test('the Migration function has a fixed name, so the deploy role can be granted lambda:InvokeFunction on exactly it', () => {
+    expect(fn('migration')[1].Properties?.FunctionName).toBe('fanwire-migration');
   });
 
   test('every backend function but the refresh runs in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
