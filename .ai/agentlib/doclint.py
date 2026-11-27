@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import os
+import posixpath
 import re
 import subprocess
 import tokenize
@@ -20,8 +21,33 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 BASELINE = ".ai/docs-baseline.json"
+# Generated from the corpus by docgraph; its paths are checked at their sources.
+GRAPH = ".ai/graph.json"
 SKILL = ".claude/skills/wiki-update/SKILL.md"
 SECTION = r"\d+[a-z]?(?:\.\d+[a-z]?)*"
+# An explicit `file:line`, `file:a-b` or `file §n` citation, also in code
+# comments and docstrings; and any `§n`, which is local unless a Markdown stem
+# precedes it (`section_label`). Shared with docgraph.
+CITATION = re.compile(
+    r"(?<![\w/])([\w./-]+\.[a-zA-Z][\w]*)(?::(\d+(?:-\d+)?)|`?\s+§\s*("
+    + SECTION
+    + r")(?!\w|\.\d))"
+)
+BARE_SECTION = re.compile(r"§\s*(" + SECTION + r")(?!\w|\.\d)")
+# Paths under these, or starting with `/`, are repository-root paths.
+ROOT_PREFIXES = (
+    "wiki/",
+    ".ai/",
+    ".github/",
+    ".claude/",
+    ".agents/",
+    "backend/",
+    "frontend/",
+    "infra/",
+    "TODO/",
+    "perf/",
+    "brand/",
+)
 
 
 def has_section(content: str, section: str) -> bool:
@@ -131,31 +157,32 @@ def resolve(root: Path, source: str, target: str) -> Path | None:
     A bare filename citation may use an unambiguous repository-wide basename,
     matching existing `handoff.md §10` code comments.
     """
-    target = unquote(target)
-    if "\\" in target:
+    name = repo_name(source, target)
+    if name is None:
         return None
-    prefixes = (
-        "wiki/",
-        ".ai/",
-        ".github/",
-        ".claude/",
-        ".agents/",
-        "backend/",
-        "frontend/",
-        "infra/",
-        "TODO/",
-        "perf/",
-        "brand/",
-    )
-    candidate = (
-        root / target.lstrip("/")
-        if target.startswith(prefixes) or target.startswith("/")
-        else root / Path(source).parent / target
-    )
-    candidate = candidate.resolve()
+    candidate = (root / name).resolve()
     if not candidate.is_relative_to(root.resolve()):
         return None
     return candidate
+
+
+def repo_name(source: str, target: str) -> str | None:
+    """`resolve` without the filesystem: the repository-relative POSIX name.
+
+    Lexical, so it is the same on every OS and never depends on what happens
+    to exist on disk; None when the target leaves the repository.
+    """
+    target = unquote(target)
+    if "\\" in target:
+        return None
+    if target.startswith(ROOT_PREFIXES) or target.startswith("/"):
+        joined = target.lstrip("/")
+    else:
+        joined = posixpath.join(posixpath.dirname(source), target)
+    name = posixpath.normpath(joined) if joined else "."
+    if name == ".." or name.startswith(("../", "/")):
+        return None
+    return name
 
 
 def inline_links(text: str):
@@ -194,18 +221,42 @@ def link_targets(text: str) -> list[str]:
     (an extensionless path gains `.md`) and angle-bracketed relative paths.
     Shared with doccorpus, so inventory and lint read links the same way.
     """
+    return [target for _, target in classified_links(text)]
+
+
+def classified_links(text: str) -> list[tuple[str, str]]:
+    """`link_targets`, each as (`link` or `wikilink`, destination); docgraph's view."""
     markup = re.sub(r"(`+).*?\1", "", text, flags=re.DOTALL)
     definitions = {
         label.casefold(): dest
         for label, dest in re.findall(r"(?m)^\s{0,3}\[([^]]+)\]:\s*<?([^\s>]+)>?", markup)
     }
-    targets = [*inline_links(markup), *definitions.values()]
+    targets = [("link", t) for t in [*inline_links(markup), *definitions.values()]]
     for target in re.findall(r"\[\[([^]|]+)(?:\|[^]]*)?\]\]", markup):
         target = target.rstrip("\\")  # escaped table separator in a wikilink
         path, sep, anchor = target.partition("#")
-        targets.append(path + ("" if Path(path).suffix else ".md") + (sep + anchor if sep else ""))
-    targets += re.findall(r"<((?:\.{1,2}/)[^<>\s]+)>", markup)
+        dest = path + ("" if Path(path).suffix else ".md") + (sep + anchor if sep else "")
+        targets.append(("wikilink", dest))
+    targets += [("link", t) for t in re.findall(r"<((?:\.{1,2}/)[^<>\s]+)>", markup)]
     return targets
+
+
+def basename_matches(names, target: str) -> list[str]:
+    """Names equal to, or ending in `/` + `target`: a bare-filename citation's choices."""
+    return [p for p in names if p == target or p.endswith("/" + target)]
+
+
+def section_label(text: str, start: int) -> str | None:
+    """The word before a bare `§n` at `start`, which may name a Markdown stem."""
+    prefix = re.search(r"([\w./-]+)`?\s*$", text[:start])
+    return prefix[1] if prefix else None
+
+
+def stem_matches(names, label: str) -> list[str]:
+    """Markdown names whose path without `.md` is, or ends in `/` + `label`."""
+    return [
+        p for p in names if p.endswith(".md") and (p[:-3] == label or p[:-3].endswith("/" + label))
+    ]
 
 
 def citation_text(name: str, raw: str) -> str:
@@ -258,7 +309,7 @@ def scan(root: Path, *, base: str | None = None, rules_root: Path | None = None)
         )
 
     texts = {}
-    for name in sorted(set(tracked) - {"", BASELINE}):
+    for name in sorted(set(tracked) - {"", BASELINE, GRAPH}):
         path = root / name
         if (
             path.is_symlink()
@@ -378,18 +429,13 @@ def scan(root: Path, *, base: str | None = None, rules_root: Path | None = None)
             for target in link_targets(text):
                 check_link(name, target)
         # Explicit file:line and file §n citations, also in code comments/docstrings.
-        pattern = (
-            r"(?<![\w/])([\w./-]+\.[a-zA-Z][\w]*)(?::(\d+(?:-\d+)?)|`?\s+§\s*("
-            + SECTION
-            + r")(?!\w|\.\d))"
-        )
         covered = []
-        for match in re.finditer(pattern, text):
+        for match in CITATION.finditer(text):
             covered.append(match.span())
             target, line, section = match.groups()
             dest = resolve(root, name, target)
             if not dest or not dest.is_file():
-                choices = [root / p for p in texts if p == target or p.endswith("/" + target)]
+                choices = [root / p for p in basename_matches(texts, target)]
                 dest = choices[0] if len(choices) == 1 else None
             good = bool(available(dest) and dest.is_file())
             if good:
@@ -404,18 +450,11 @@ def scan(root: Path, *, base: str | None = None, rules_root: Path | None = None)
             if not good:
                 add(name, "citation", match[0].replace("`", ""))
 
-        for match in re.finditer(r"§\s*(" + SECTION + r")(?!\w|\.\d)", text):
+        for match in BARE_SECTION.finditer(text):
             if any(start <= match.start() < end for start, end in covered):
                 continue
-            prefix = re.search(r"([\w./-]+)`?\s*$", text[: match.start()])
-            choices = []
-            if prefix:
-                label = prefix[1]
-                choices = [
-                    p
-                    for p in texts
-                    if p.endswith(".md") and (p[:-3] == label or p[:-3].endswith("/" + label))
-                ]
+            label = section_label(text, match.start())
+            choices = stem_matches(texts, label) if label else []
             # A bare section is local; an unambiguous Markdown stem names
             # another document, matching legacy `handoff §10` citations.
             target = choices[0] if len(choices) == 1 else name

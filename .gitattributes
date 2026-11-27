@@ -24,3 +24,7 @@ frontend/src/api/schema.d.ts  text eol=lf
 # Parked work kept as patches inside a task folder (`.ai/tasks/<ID>/parked/`):
 # `git apply` needs them byte-exact, so they are never translated either.
 .ai/tasks/*/parked/*.patch    text eol=lf
+
+# The generated docs graph (`agentctl docs graph`), compared byte-for-byte
+# with a fresh build, so a checkout must never translate its line endings.
+.ai/graph.json                text eol=lf
