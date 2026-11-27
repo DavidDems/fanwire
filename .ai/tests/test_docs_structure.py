@@ -338,15 +338,6 @@ def test_the_repaired_failure_exercise_citation_exception_is_retired():
     assert retired not in baseline
 
 
-def test_the_live_prompt_routes_to_d5_and_stays_within_its_prompt_budget():
-    prompt = ROOT / "wiki/GeneralContext/Prompts/10-docs-structure.md"
-    text = prompt.read_text(encoding="utf-8")
-    fields, body, valid = doclint.frontmatter(text)
-    assert valid and fields.get("type") == "prompt"
-    assert len(body.split()) <= doclint.load_budgets(ROOT)["prompt"]
-    assert links_to_adr(prompt, text, D5_ADR)
-
-
 def test_d6_decision_has_one_typed_numbered_home_within_the_decision_budget():
     assert D6_ADR.is_file(), "D6's provider-cost choice needs its own numbered ADR"
     text = D6_ADR.read_text(encoding="utf-8")
@@ -444,11 +435,3 @@ def test_canonical_routing_discovers_the_provider_cost_choice():
     routing = text.split("## How work is handed on and planned", 1)[1].split("\n## ", 1)[0]
     assert links_to_adr(ROUTING, routing, D6_ADR)
 
-
-def test_the_budgeted_live_prompt_routes_to_the_d6_choice():
-    prompt = ROOT / "wiki/GeneralContext/Prompts/10-docs-structure.md"
-    text = prompt.read_text(encoding="utf-8")
-    fields, body, valid = doclint.frontmatter(text)
-    assert valid and fields.get("type") == "prompt"
-    assert len(body.split()) <= doclint.load_budgets(ROOT)["prompt"]
-    assert links_to_adr(prompt, text, D6_ADR)

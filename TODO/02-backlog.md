@@ -18,9 +18,10 @@ backlog item":
 then. Writing a spec is Director work. When an item is done, delete it here
 and record the result as current-state fact in the module file it changed.
 
-**Order of work:** the Outstanding-work tracks, `wiki/GeneralContext/Prompts/30-*`
-to `37-*`, run in numeric order ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
-Each row below names its track.
+**Order of work:** the Outstanding-work tracks are finished
+([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)). What is left runs in
+`wiki/GeneralContext/Prompts/29-outstanding-work.md`: the results scraper, then
+the predictions tracks. Each row below names its track.
 
 ## Agent system
 
@@ -47,7 +48,6 @@ Each brief is in `wiki/GeneralContext/Prompts/`.
 
 | Brief | Mode | Now |
 |---|---|---|
-| `10-docs-structure.md` | `director` | Deliverable 4 is replaced by the `wiki-review` skill, track 8 |
 | `12`–`15` (evals, worker shell, learning loop, context graph) | `director` | Parked: each needs metered API runs to build or score |
 
 ## Workflow ideas, not yet designed
@@ -57,7 +57,6 @@ before a brief.
 
 | Item | Mode | Notes |
 |---|---|---|
-| **A review of `wiki/` and of `.ai/`** | `director` | Decided: two skills (`wiki-review`, `ai-review`) and two copy-pastable prompts the human runs by hand about weekly. No scheduled run, no `wiki-health.yml`. Track 8, the last |
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
 
 ## Sports data
