@@ -59,14 +59,14 @@ before a brief.
 |---|---|---|
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
 
-## Final track and docs graph
+## Docs graph and the image-pipeline timing
 
-One row per brief ([ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md)).
+What is left of [ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md): the docs graph track, and R16, which only the human can run.
 
 | Item | Mode | Task | Notes |
 |---|---|---|---|
-| **Final track**: database credentials from Secrets Manager, the axe rows, the unmapped-Cognito-code message, dialog focus, image-pipeline timing (R16), a second docs revision | `hand` / `director` | — | `Prompts/48-outstanding-work-final.md`. The Frontend row below is in it. R16 waits on the human's run of `wiki/CodeContext/Standards/build-deployment-media-timing.md` |
-| **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. After 48 |
+| **Image-pipeline timing (R16)**: upload to `processed` on the live stack, p50/max per segment against the composer's 30 s bound | `hand` (the human) | — | Final track item 5. The procedure is `wiki/CodeContext/Standards/build-deployment-media-timing.md`; the human runs it and pastes the result into a Director session, which records it in `0x08d` R16 and deletes this row |
+| **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. Next |
 
 ## Sports data
 

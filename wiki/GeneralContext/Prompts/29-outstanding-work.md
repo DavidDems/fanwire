@@ -7,7 +7,7 @@ type: prompt
 **Brief for Director sessions** (a high-tier model, driven turn by turn by the
 human). Self-contained: read this file, then your track's file.
 
-**Objective:** the order of the final track (`48`), the docs graph (`49`), the results scraper (`38`) and the predictions
+**Objective:** the order of the docs graph (`49`), the results scraper (`38`) and the predictions
 tracks, and the rules every one of those sessions shares. The eight
 Outstanding-work tracks that finished everything in `TODO/02-backlog.md` are
 done and their briefs deleted ([ADR 0035](../Decisions/0035-outstanding-work-answers.md)
@@ -19,8 +19,8 @@ per track with:
 
 ## The order
 
-First the final track (`48-outstanding-work-final.md`) and the docs graph
-(`49-docs-graph.md`). Then the results scraper (`38-results-scraper.md`, part
+First the docs graph (`49-docs-graph.md`); the final track (`48`) is done
+and its brief deleted. Then the results scraper (`38-results-scraper.md`, part
 `38-results-scraper-api.md`). Then the predictions tracks, in this order
 ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md)):
 

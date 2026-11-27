@@ -54,13 +54,17 @@ A merge to `main` queues `deploy.yml`, which waits for you.
 function's logs means an action is missing from
 `infra/iam/fanwire-role-boundary-policy.json`; report it.
 
-## 3. axe on every route — not done anywhere
+## 3. Accessibility and image timing — two checks only you can run
 
-Every styling unit's browser checklist has its axe row **NOT DONE**: there is
-no axe dependency, and loading it from a CDN would put a third-party script
-into the check (`FrontendUI/verification-browser.md` §3a). Run the axe DevTools
-browser extension on each route, light and dark, and paste the serious and
-critical counts into a session; anything found becomes a backlog unit.
+- **axe is done by script** (final track item 2): `frontend/scripts/axe-check.cjs`
+  found 0 violations on the shell, rail, Recent Games, game page, team tabs,
+  chart and result cards on 2026-11-27 (`FrontendUI/verification-browser.md`
+  §3a "axe"). Left for you: a real **Windows contrast theme** on Recent Games
+  with data, the result cards, team tabs and chart (the `02-backlog.md`
+  Frontend row).
+- **R16, the image pipeline's timing on the live stack:** follow
+  `wiki/CodeContext/Standards/build-deployment-media-timing.md` and paste its
+  output into a Director session.
 
 ## 4. SES production access — refused; email is off on purpose
 
