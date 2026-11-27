@@ -18,6 +18,12 @@ Nodes: `doc` (tracked `*.md`), `spec` (`.ai/tasks/<ID>/task.json`), `code`
 tracked file) and `pattern` (an allowed_paths or required_context glob).
 Edges: `link`, `wikilink`, `mention`, `cites-line`, `cites-section`,
 `required_context` and `allowed_paths`.
+
+Debt (step 3): `debt` lists orphans (docs with no inbound edge that are not
+roots) and dangling edges (to a `missing` node, or a `pattern` no tracked
+file matches) from a fresh build. `check` is what CI runs: the committed
+graph must equal a fresh build, and that debt may only shrink against the
+base's `.ai/graph-baseline.json`, by doclint's own ratchet.
 """
 
 from __future__ import annotations
@@ -28,9 +34,10 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from agentlib import doccorpus, doclint
+from agentlib import doccorpus, doclint, guard
 
 GRAPH = doclint.GRAPH
+BASELINE = doclint.GRAPH_BASELINE
 VERSION = 1
 FIXTURES = ".ai/tests/fixtures/"
 SPEC_KEYS = ("required_context", "allowed_paths")
@@ -117,8 +124,8 @@ def build(root: Path) -> dict:
     patterns: set[str] = set()
     found: set[tuple[str, str, str, str]] = set()
     for name, raw in texts.items():
-        if name.startswith(FIXTURES) or name == doclint.BASELINE:
-            continue  # frozen data and a list of violation keys, as doclint skips them
+        if name.startswith(FIXTURES) or name in (doclint.BASELINE, BASELINE):
+            continue  # frozen data and lists of debt keys, as doclint skips them
         for target, kind, detail in _source_edges(name, raw, tracked, names, patterns):
             if target == name or target == GRAPH:
                 continue
@@ -362,3 +369,116 @@ def compact_paths(paths: list[str]) -> list[str]:
         else:
             rows.append(f"{head}/ {{{', '.join(sorted(tails))}}}")
     return sorted(rows)
+
+
+# --- Debt (step 3): orphans, dangling edges and the `--check` ratchet. --------
+#
+# Roots are docs read by a name or a convention rather than through a link:
+# entry points, session briefs, the Timeline, skills (Claude Code's, their
+# Codex mirrors and the workers' own, loaded by name), role prompts (loaded
+# as `.ai/prompts/<role>.md`), task briefs (beside their task.json) and test
+# fixtures. Globs match as the guard matches: `*` stops at `/`.
+
+ROOT_NAMES = ("index.md", "README.md", "AGENTS.md", "CLAUDE.md")
+ROOT_GLOBS = (
+    "wiki/GeneralContext/Prompts/*.md",
+    "wiki/GeneralContext/Timeline/*.md",
+    ".claude/skills/*/SKILL.md",
+    ".agents/skills/*/SKILL.md",
+    ".ai/skills/*/SKILL.md",
+    ".ai/prompts/*.md",
+    ".ai/tasks/*/brief.md",
+    FIXTURES + "**",
+)
+MODULE = ".ai/agentlib/docgraph.py"
+REMEDY = "run `python .ai/bin/agentctl.py docs graph` and commit .ai/graph.json"
+
+
+def is_root(path: str) -> bool:
+    """A doc that needs no inbound edge: read by name, not found by a link."""
+    return path.rsplit("/", 1)[-1] in ROOT_NAMES or any(
+        guard.path_matches(path, pattern) for pattern in ROOT_GLOBS
+    )
+
+
+def debt_of(graph: dict, tracked: list[str]) -> dict:
+    """Orphan docs and dangling edges of `graph`, `tracked` deciding patterns.
+
+    A dangling edge is listed once per (source, target, kind): two line
+    citations of one missing file are one finding.
+    """
+    kinds = _kinds(graph)
+    reached = {e["target"] for e in graph["edges"] if e["source"] != e["target"]}
+    orphans = sorted(
+        p for p, kind in kinds.items() if kind == "doc" and p not in reached and not is_root(p)
+    )
+    empty = {
+        p
+        for p, kind in kinds.items()
+        if kind == "pattern" and not any(guard.path_matches(f, p) for f in tracked)
+    }
+    dangling = set()
+    for e in graph["edges"]:
+        kind = kinds.get(e["target"])
+        if kind == "missing" or e["target"] in empty:
+            cause = "missing" if kind == "missing" else "pattern"
+            dangling.add((e["source"], e["target"], e["kind"], cause))
+    return {
+        "orphans": orphans,
+        "dangling": [
+            {"source": s, "target": t, "kind": k, "cause": c} for s, t, k, c in sorted(dangling)
+        ],
+    }
+
+
+def debt(root: Path) -> dict:
+    """Orphans and dangling edges of the tree at `root` as it is (a fresh build)."""
+    root = Path(root).resolve()
+    return debt_of(build(root), doccorpus._tracked(root))
+
+
+def debt_keys(found: dict) -> set[str]:
+    """The baseline keys: `orphan:<path>`, `dangling:<source> -> <target> (<kind>)`."""
+    return {f"orphan:{p}" for p in found["orphans"]} | {
+        f"dangling:{d['source']} -> {d['target']} ({d['kind']})" for d in found["dangling"]
+    }
+
+
+def _previous(root: Path, base: str, baseline: set[str]) -> set[str]:
+    """The base's baseline, doclint's rules: first introduction, then fail closed."""
+    files = doclint.git(root, "ls-tree", "-r", "--name-only", "-z", base).split("\0")
+    if BASELINE in files:
+        return doclint.read_baseline(doclint.git(root, "show", f"{base}:{BASELINE}"))
+    # A base whose builder predates the ratchet (its docgraph.py never names
+    # the baseline) introduces it; once that has merged, deleting or
+    # recreating the baseline cannot reset the ratchet.
+    if MODULE in files and BASELINE in doclint.git(root, "show", f"{base}:{MODULE}"):
+        raise ValueError(f"base has the docs graph ratchet but no graph baseline ({BASELINE})")
+    return baseline
+
+
+def check(root: Path, *, base: str) -> dict:
+    """CI's check: is `.ai/graph.json` a fresh build, and did debt only shrink?
+
+    Raises ValueError (or OSError) on unusable input: an unknown base, a
+    missing or malformed baseline, or a base that should have one and has not.
+    """
+    root = Path(root).resolve()
+    graph = build(root)
+    try:
+        committed = (root / GRAPH).read_bytes()
+    except FileNotFoundError:
+        committed = None
+    try:
+        text = (root / BASELINE).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ValueError(f"{BASELINE} not found") from None
+    baseline = doclint.read_baseline(text)
+    previous = _previous(root, base, baseline)
+    actual = debt_keys(debt_of(graph, doccorpus._tracked(root)))
+    return {
+        "stale": committed != dumps(graph).encode("ascii"),
+        "errors": doclint.ratchet(actual, baseline, previous),
+        "debt": sorted(actual),
+        "baseline_count": len(baseline),
+    }

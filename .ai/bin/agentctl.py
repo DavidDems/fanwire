@@ -25,6 +25,8 @@ thing, write state.
   agentctl docs graph                   write .ai/graph.json: how docs, specs and code link
   agentctl docs graph --of wiki/x.md [--within 2]   its edges (or neighbourhood), no rebuild
   agentctl docs graph --task AUTH-001   a task's context, the docs they link, its paths
+  agentctl docs graph --orphans         unlinked docs and dangling edges (fresh build)
+  agentctl docs graph --check [--base origin/main]  graph current, debt only shrinks
   agentctl addresses                    fail on a personal email address in a tracked file
   agentctl selfcheck [--workspaces]     prove the machinery works, no tokens spent
   agentctl preflight ports              fail if a docker-compose host port is already bound
@@ -1232,13 +1234,27 @@ def build_parser() -> argparse.ArgumentParser:
         "graph",
         help="write .ai/graph.json, or query it: how docs, specs and code link",
         description="With no query flag, build and write .ai/graph.json. With --of or "
-        "--task, answer from the committed file (no rebuild).",
+        "--task, answer from the committed file (no rebuild). --orphans and --check "
+        "build afresh and write nothing.",
     )
     graph.add_argument("--root", default=None, help="repository to read (default: this one)")
     target = graph.add_mutually_exclusive_group()
     target.add_argument("--of", metavar="PATH", help="inbound and outbound edges of one node")
     target.add_argument(
         "--task", metavar="ID", help="a task's required_context, the docs they link, its paths"
+    )
+    target.add_argument(
+        "--orphans",
+        action="store_true",
+        help="unlinked docs and edges to nothing, from a fresh build (no write)",
+    )
+    target.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if .ai/graph.json is stale or orphans/dangling edges grew past the baseline",
+    )
+    graph.add_argument(
+        "--base", default=None, help="with --check: merged base commit (default: origin/main)"
     )
     graph.add_argument(
         "--within",
@@ -1386,6 +1402,16 @@ GRAPH_LIMIT = 50
 
 
 def cmd_docs_graph(args) -> int:
+    if args.base is not None and not args.check:
+        print("docs graph: --base needs --check", file=sys.stderr)
+        return USAGE
+    if args.orphans or args.check:
+        if args.within is not None or args.limit is not None or (args.check and args.json):
+            print(
+                "docs graph: --orphans takes only --json, --check only --base", file=sys.stderr
+            )
+            return USAGE
+        return _graph_check(args) if args.check else _graph_orphans(args)
     if args.of is None and args.task is None:
         if args.within is not None or args.limit is not None or args.json:
             print("docs graph: --within, --limit and --json need --of or --task", file=sys.stderr)
@@ -1421,6 +1447,41 @@ def cmd_docs_graph(args) -> int:
     else:
         print("\n".join(lines))
     return OK
+
+
+def _graph_orphans(args) -> int:
+    try:
+        found = docgraph.debt(_corpus_root(args))
+    except (OSError, ValueError) as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(found, ensure_ascii=True, indent=2))
+        return OK
+    for path in found["orphans"]:
+        print(f"  orphan    {path}")
+    for d in found["dangling"]:
+        print(f"  dangling  {d['source']} -> {d['target']}  ({d['kind']}, {d['cause']})")
+    print(f"docs graph: {len(found['orphans'])} orphans, {len(found['dangling'])} dangling")
+    return OK
+
+
+def _graph_check(args) -> int:
+    try:
+        result = docgraph.check(_corpus_root(args), base=args.base or "origin/main")
+    except (OSError, ValueError) as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    if result["stale"]:
+        print(f"{docgraph.GRAPH} differs from a fresh build: {docgraph.REMEDY}")
+    for error in result["errors"]:
+        print(error)
+    state = "stale" if result["stale"] else "up to date"
+    errors = len(result["errors"]) + result["stale"]
+    print(
+        f"docs graph: {state}, {len(result['debt'])} baselined orphans/dangling, {errors} errors"
+    )
+    return FAILED if errors else OK
 
 
 def _more(lines: list[str], hidden: int) -> list[str]:
