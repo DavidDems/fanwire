@@ -3974,3 +3974,67 @@ class TestThePrBaseIsAllowed:
         (body,) = run_bodies(job)
         code, _ = run_step_body(body, {"BASE_REF": base}, tmp_path)
         assert code != 0
+
+
+class TestTheDocsGraphIsChecked:
+    """Prompts/49, step 3: the committed `.ai/graph.json` must match a fresh
+    build and its orphans and dangling edges may only shrink. A step of the
+    `docs-lint` job (already required by `gate`), not a new job, choosing its
+    base exactly as the lint step does."""
+
+    TITLE = "Check the docs graph is current and its orphans only shrink"
+
+    @pytest.fixture
+    def text(self) -> str:
+        return TEST_AGENT_WF.read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def steps(self, text: str) -> dict[str, str]:
+        return titled(job_block(text, "docs-lint"))
+
+    def test_the_step_is_in_docs_lint(self, steps):
+        assert self.TITLE in steps
+        assert "python .ai/bin/agentctl.py docs graph --check --base \"$base\"" in steps[self.TITLE]
+
+    def test_it_chooses_the_base_as_the_lint_step_does(self, steps):
+        lint = steps["Check documentation and shrinking baseline"]
+        graph = steps[self.TITLE]
+        for line in (
+            "PR_BASE: ${{ github.event.pull_request.base.sha }}",
+            "PUSH_BASE: ${{ github.event.before }}",
+            'base="${PR_BASE:-${PUSH_BASE:-origin/main}}"',
+            'case "$base" in *[!0]*) ;; *) base=HEAD ;; esac',
+        ):
+            assert line in lint and line in graph
+        for body in run_bodies(graph):
+            assert "${{" not in body
+
+    def test_the_job_keeps_full_history(self, text):
+        assert "fetch-depth: 0" in job_block(text, "docs-lint")
+
+    def test_the_gate_still_needs_docs_lint(self, text):
+        _, needs = _timeouts_and_needs(text)["gate"]
+        assert "docs-lint" in needs
+
+    @pytest.mark.parametrize(
+        ("env", "expected"),
+        [
+            ({"PR_BASE": "a" * 40, "PUSH_BASE": ""}, "a" * 40),
+            ({"PR_BASE": "", "PUSH_BASE": "b" * 40}, "b" * 40),
+            ({"PR_BASE": "", "PUSH_BASE": ""}, "origin/main"),
+            ({"PR_BASE": "", "PUSH_BASE": "0" * 40}, "HEAD"),
+        ],
+    )
+    def test_the_base_it_passes(self, steps, tmp_path, env, expected):
+        (body,) = run_bodies(steps[self.TITLE])
+        fake = tmp_path / "bin"
+        fake.mkdir()
+        (fake / "python").write_bytes(b'#!/bin/sh\nprintf "%s\n" "$@" > "$ARGS_OUT"\n')
+        (fake / "python").chmod(0o755)
+        out = tmp_path / "args.txt"
+        path = os.pathsep.join([str(fake), os.environ.get("PATH", "")])
+        code, _ = run_step_body(body, {**env, "ARGS_OUT": out.as_posix(), "PATH": path}, tmp_path)
+        assert code == 0
+        args = out.read_text(encoding="utf-8").split()
+        assert args[:4] == [".ai/bin/agentctl.py", "docs", "graph", "--check"]
+        assert args[args.index("--base") + 1] == expected

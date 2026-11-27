@@ -94,7 +94,7 @@ def inventory(root: Path, paths: list[str] | None = None) -> list[dict]:
     inbound: dict[str, dict[str, str]] = defaultdict(dict)
     texts = {}
     for name in tracked:
-        if name == doclint.GRAPH:
+        if name in (doclint.GRAPH, doclint.GRAPH_BASELINE):
             continue
         if name.endswith(_TEXT) and (text := _read(root, name)) is not None:
             texts[name] = text

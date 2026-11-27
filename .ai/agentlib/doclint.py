@@ -23,6 +23,8 @@ from urllib.parse import unquote, urlsplit
 BASELINE = ".ai/docs-baseline.json"
 # Generated from the corpus by docgraph; its paths are checked at their sources.
 GRAPH = ".ai/graph.json"
+# docgraph's orphan/dangling debt: keys naming paths, not prose that cites them.
+GRAPH_BASELINE = ".ai/graph-baseline.json"
 SKILL = ".claude/skills/wiki-update/SKILL.md"
 SECTION = r"\d+[a-z]?(?:\.\d+[a-z]?)*"
 # An explicit `file:line`, `file:a-b` or `file §n` citation, also in code
@@ -309,7 +311,7 @@ def scan(root: Path, *, base: str | None = None, rules_root: Path | None = None)
         )
 
     texts = {}
-    for name in sorted(set(tracked) - {"", BASELINE, GRAPH}):
+    for name in sorted(set(tracked) - {"", BASELINE, GRAPH, GRAPH_BASELINE}):
         path = root / name
         if (
             path.is_symlink()
