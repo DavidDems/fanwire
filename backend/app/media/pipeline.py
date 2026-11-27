@@ -22,7 +22,7 @@ import io
 from typing import Any, ClassVar
 
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -269,10 +269,16 @@ class ImageUploadPipeline(AbstractMediaUploadPipeline):
         # forward across a plain convert(). Preserve alpha where the source
         # actually has it (RGBA PNG/WEBP), otherwise flatten to RGB (plain
         # JPEG has no alpha channel to begin with).
+        #
+        # The EXIF Orientation tag is applied to the pixels first, so a phone's
+        # portrait photo is not posted sideways once the tag is gone. The pixels
+        # are copied with paste(), inside Pillow: a Python list of per-pixel
+        # tuples costs about 80 bytes a pixel and ran the 1024 MB Lambda out of
+        # memory on a 12 MP photo (R16, 2026-11-27).
         mode = "RGBA" if image.mode in ("RGBA", "LA") or "transparency" in image.info else "RGB"
-        normalized = image.convert(mode)
-        clean_image = Image.new(mode, image.size)
-        clean_image.putdata(list(normalized.getdata()))
+        normalized = ImageOps.exif_transpose(image).convert(mode)
+        clean_image = Image.new(mode, normalized.size)
+        clean_image.paste(normalized)
 
         self._stripped_image = clean_image
 
