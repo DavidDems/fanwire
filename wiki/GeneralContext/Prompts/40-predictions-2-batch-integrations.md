@@ -121,8 +121,8 @@ a `pick` link shows its preview in `GET /feed`.
 
 - The human's answers are ADR 0040. `AskUserQuestion`, recommendation first,
   only for a question it doesn't answer. A worktree per unit; subagents never run `git`.
-- A deploy waits for the human's approval. After the notifications migration,
-  the human runs the Migration Lambda (one PowerShell line, in the PR).
+- A deploy waits for the human's approval and runs the notifications
+  migration itself (ADR 0044); check its "Run the database migrations" step.
 
 ## Mechanics learned the hard way
 

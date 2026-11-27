@@ -95,8 +95,8 @@ frontend-only deploy — `CdnStack` needs `AppStack`'s HTTP API id, and
 `AppStack` depends on everything else. Leave `deployFrontend` unset.
 
 **Phase 2 — apply the schema.** Invoke `INFRA-003`'s migration function once,
-by hand, and confirm it returns a head revision. Re-run it after any deploy
-that adds a migration.
+by hand, and confirm it returns a head revision. After that, `deploy.yml`
+invokes it on every deploy ([ADR 0044](../Decisions/0044-deploy-runs-migrations.md)).
 
 **Phase 3 — build the bundle against the real outputs, then deploy it.** See
 `wiki/CodeContext/Standards/build-deployment-spa.md` → "Rebuilding the SPA" for the

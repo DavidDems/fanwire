@@ -59,20 +59,21 @@ before a brief.
 |---|---|---|
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
 
-## Final track and docs graph
+## Docs graph and the image-pipeline timing
 
-One row per brief ([ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md)).
+What is left of [ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md): the docs graph track, and R16, which only the human can run.
 
 | Item | Mode | Task | Notes |
 |---|---|---|---|
-| **Final track**: database credentials from Secrets Manager, the axe rows, the unmapped-Cognito-code message, dialog focus, image-pipeline timing (R16), a second docs revision | `hand` / `director` | — | `Prompts/48-outstanding-work-final.md`. The two Frontend rows below are in it |
-| **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. After 48 |
+| **Image-pipeline timing (R16)**: upload to `processed` on the live stack, p50/max per segment against the composer's 30 s bound | `hand` (the human) | — | Final track item 5. The procedure is `wiki/CodeContext/Standards/build-deployment-media-timing.md`; the human runs it and pastes the result into a Director session, which records it in `0x08d` R16 and deletes this row |
+| **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. Next |
 
 ## Sports data
 
 NBA data from the Eoin Moore Kaggle dataset, 2003-04 onward (the human's
 choice, 2026-10-13; `EVENTS-001`, fanwire-archive#139, loaded a first, thinner dataset).
-Live brief and unit order: `Prompts/06-nba-data.md`.
+Nothing is left to build here; the dataset's facts and the human's data
+decisions are `Prompts/06-nba-data.md`, and the results scraper is `Prompts/38`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
@@ -106,6 +107,5 @@ in this order. One row per track; its brief lists the units.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Sign-in and Confirm show a fixed message for codes they don't map**, never Cognito's own text. `splitFailure` (`frontend/src/auth/errors.ts`) puts an unmapped code's provider message in the page alert, so a `UserNotFoundException` would read "User does not exist." and name account existence. Unreachable today (the pool sets `preventUserExistenceErrors`, so sign-in gets `NotAuthorizedException`), but the tests and `0x08b` ("never say whether an account exists", "the page's generic alert") claim more than the code does. Do it the way `ForgotPasswordPage` already does: a fixed "Something went wrong" for unmapped codes and the provider's message never rendered; keep the throttled-resend alert and every field mapping; tests assert the provider text is absent | `hand` | — | PR #128 review | Small: two pages and their tests, or one option on `splitFailure`; check `SignUpPage` the same way |
-| **UI-track browser rows left NOT DONE**: axe on the shell, rail, Recent Games, result cards, team tabs and chart, and a real Windows contrast theme on Recent Games with data, the result cards, team tabs and chart (the human, with the axe extension and Windows' contrast themes) | `hand` | — | fanwire-archive#346, fanwire-archive#347, fanwire-archive#351, `FRONTEND-037` PR, track 5, track 5b | axe can't be loaded from a CDN (`verification-browser.md` §3a). Track 5b did the rest on localhost, on a synthetic season (`backend/scripts/generate_scale_fixture.py`) and a dev test account made through the app's sign-up: forced colours (emulated, which switches the media query but not the system palette, hence the contrast-theme check), the 82-game season chart, the picker at 320/768 and the notifications checkbox |
+| **UI-track browser row left NOT DONE**: a real Windows contrast theme on Recent Games with data, the result cards, team tabs and chart (the human, with Windows' contrast themes) | `hand` | — | fanwire-archive#346, fanwire-archive#347, fanwire-archive#351, `FRONTEND-037` PR, track 5, track 5b, final track item 2 | axe is done: `frontend/scripts/axe-check.cjs`, 0 violations on all six surfaces on 2026-11-27 (`verification-browser.md` §3a "axe"). Track 5b did the rest on localhost, on a synthetic season (`backend/scripts/generate_scale_fixture.py`) and a dev test account made through the app's sign-up: forced colours (emulated, which switches the media query but not the system palette, hence the contrast-theme check), the 82-game season chart, the picker at 320/768 and the notifications checkbox |
 

@@ -31,6 +31,9 @@ const DetailTitle = createContext<Dispatch<SetStateAction<string>> | null>(
  * `Dialog` is mounted only once per flow, the focus it gives back on the way
  * out is to what opened the flow's first detail.
  *
+ * **A step of the flow is a new detail** (`detailKey`, FINAL-4): the link
+ * that took it is gone, so `Dialog` puts focus on its heading.
+ *
  * **Each detail names itself** with `useDetailTitle`, which becomes the
  * dialog's heading and accessible name: "Thread", "Game", "Player". It is set
  * in a layout effect, before the first paint and before the dialog is shown.
@@ -40,11 +43,11 @@ const DetailTitle = createContext<Dispatch<SetStateAction<string>> | null>(
  * features do not need to know.
  */
 export function DetailModal() {
-  const { back, close } = useModalFlow();
+  const { back, close, depth } = useModalFlow();
   const [title, setTitle] = useState("");
 
   return (
-    <Dialog open onClose={close} onBack={back} title={title}>
+    <Dialog open onClose={close} onBack={back} title={title} detailKey={depth}>
       <DetailTitle.Provider value={setTitle}>
         {/*
          * A lazy detail (a game, a player: FRONTEND-015) is waited for in

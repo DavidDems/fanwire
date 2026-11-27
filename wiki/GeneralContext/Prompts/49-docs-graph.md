@@ -6,10 +6,10 @@ type: prompt
 
 **Brief for a Director session** (a high-tier model; the human is away, so it
 runs without asking). Shared rules: [29](29-outstanding-work.md); run it the
-way [48](48-outstanding-work-final.md) runs (integration branch
-`outstanding-graph`, one PR per step, one final PR to `main` that you don't
+way the final track (`48`, done) ran (integration branch
+`outstanding-track-graph`, a name CI's `pr-base` job allows, one PR per step, one final PR to `main` that you don't
 merge, decisions logged and listed). Answers: [ADR 0045](../Decisions/0045-final-track-answers.md).
-Runs after `48`. Every `.ai/`, `.claude/`, `wiki/GeneralContext/` edit is
+Runs after `48`, which is done. Every `.ai/`, `.claude/`, `wiki/GeneralContext/` edit is
 restricted-tree: name it in its PR body.
 
 **Objective:** agents stop grepping for linked files. One deterministic,

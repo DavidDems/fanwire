@@ -9,7 +9,12 @@ import { InlineAlert } from "../components/ui/InlineAlert";
 import { StatusLine } from "../components/ui/StatusLine";
 import { useAuth } from "./AuthContext";
 import styles from "./AuthPage.module.css";
-import { asAuthError, splitFailure, type FieldFailures } from "./errors";
+import {
+  asAuthError,
+  pageAlert,
+  splitFailure,
+  type FieldFailures,
+} from "./errors";
 
 /**
  * Spending the emailed confirmation code.
@@ -96,8 +101,9 @@ export function ConfirmPage() {
     } catch (cause) {
       // Nothing the user typed is wrong here — a throttled resend is the one
       // failure on this page that belongs in an alert. Saying nothing is the
-      // real defect: the button looks as though it worked.
-      setFailure(asAuthError(cause).message);
+      // real defect: the button looks as though it worked. Fixed text, never
+      // the provider's own message.
+      setFailure(pageAlert(asAuthError(cause).code));
     } finally {
       setBusy(false);
     }

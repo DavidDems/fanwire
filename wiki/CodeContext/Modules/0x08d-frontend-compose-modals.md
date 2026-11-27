@@ -130,7 +130,10 @@ submits the draft.
 - **Initial focus closes R22.** `Dialog` focuses Close after `showModal`,
   then a child's effect may move it: compose's text box takes autofocus,
   the picker starts on Close, and confirms keep Cancel. Returning from
-  compose to a detail focuses that detail's Close.
+  compose to a detail focuses that detail's Close: that mounts the detail
+  dialog afresh, so it is an open, not a detail change. A detail change
+  inside the open modal focuses the heading instead (`FINAL-4`,
+  [[0x08g-frontend-thread]]).
 - **Early record Back closes R30.** Before the list or cached summary
   arrives, the record id's `team-` or `player-` prefix determines its group.
   Back and the first breadcrumb therefore keep the right group throughout
@@ -147,5 +150,7 @@ submits the draft.
   second pass found every Baseline line met. The final frontend container
   passes 170 files / 2,335 tests.
 - **Operational follow-up R16 remains separate:** time the image pipeline
-  on the live stack after deploy. Local image-preservation checks stub
-  the ticket, bucket and poll; no live pipeline timing is claimed.
+  on the live stack after deploy, by the human's procedure in
+  [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]].
+  Local image-preservation checks stub the ticket, bucket and poll; no live
+  pipeline timing is claimed until that report is recorded here.

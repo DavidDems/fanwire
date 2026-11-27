@@ -38,10 +38,11 @@ A merge to `main` queues `deploy.yml`, which waits for you.
    gh run list --workflow deploy.yml --limit 1
    ```
 
-4. **If the deploy's PR adds a migration,** invoke the `Migration` function
-   right after (`wiki/CodeContext/Standards/build-deployment-post-deploy.md` "Run
-   migrations" has the commands). Until then the routes on the changed tables
-   answer 500. Check that this prints `200`:
+4. **The deploy runs the migrations itself** (ADR 0044): its "Run the database
+   migrations" step fails unless the `Migration` function reaches the repo's
+   Alembic head. If that step is red, run it by hand
+   (`wiki/CodeContext/Standards/build-deployment-post-deploy.md` "Run
+   migrations" has the commands). Check that this prints `200`:
 
    ```powershell
    curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams
@@ -53,13 +54,17 @@ A merge to `main` queues `deploy.yml`, which waits for you.
 function's logs means an action is missing from
 `infra/iam/fanwire-role-boundary-policy.json`; report it.
 
-## 3. axe on every route — not done anywhere
+## 3. Accessibility and image timing — two checks only you can run
 
-Every styling unit's browser checklist has its axe row **NOT DONE**: there is
-no axe dependency, and loading it from a CDN would put a third-party script
-into the check (`FrontendUI/verification-browser.md` §3a). Run the axe DevTools
-browser extension on each route, light and dark, and paste the serious and
-critical counts into a session; anything found becomes a backlog unit.
+- **axe is done by script** (final track item 2): `frontend/scripts/axe-check.cjs`
+  found 0 violations on the shell, rail, Recent Games, game page, team tabs,
+  chart and result cards on 2026-11-27 (`FrontendUI/verification-browser.md`
+  §3a "axe"). Left for you: a real **Windows contrast theme** on Recent Games
+  with data, the result cards, team tabs and chart (the `02-backlog.md`
+  Frontend row).
+- **R16, the image pipeline's timing on the live stack:** follow
+  `wiki/CodeContext/Standards/build-deployment-media-timing.md` and paste its
+  output into a Director session.
 
 ## 4. SES production access — refused; email is off on purpose
 
@@ -125,6 +130,5 @@ built):
 
 ## Deferred by the project, not waiting on you
 
-- Reading DB credentials from Secrets Manager rather than `DATABASE_URL`.
-- Automated security alerting (SNS/EventBridge). Checked by hand today
-  (`incident-runbook.md` says how).
+- Security alerting outside `fanwire-workload`: GuardDuty findings there are
+  checked by hand (`incident-runbook.md` says how).

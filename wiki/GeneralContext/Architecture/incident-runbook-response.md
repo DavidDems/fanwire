@@ -106,8 +106,9 @@ aws cognito-idp admin-disable-user --user-pool-id ca-central-1_eSfPUMRq8 --usern
   it was deployed with, so after rotating, redeploy `Fanwire-Cdn`; until then `/api/*` is unreachable.
 - `KaggleApiToken` — the Kaggle token `SportsDataRefresh` reads. If it leaks, expire it at kaggle.com → Settings → API,
   create a new one and store it in `fanwire/kaggle-api-token`.
-- The RDS master secret. **Rotating it breaks every function**: `DATABASE_URL` is assembled from it at deploy
-  time (a known gap in `wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md`), so redeploy `Fanwire-App` right after.
+- The RDS master secret. Each database function reads it once per cold start (ADR 0045,
+  `wiki/CodeContext/Modules/0x00a-architecture-infra.md` "Database credentials"), so **a warm container keeps the
+  old password and fails until it is replaced**; a new container reads the new one.
 
 **F. A compromised deploy credential** (priority 1–2). Sign out the SSO session in IAM Identity Center
 (management account → Identity Center → Users → your user → *Active sessions*). Then check CloudTrail for

@@ -134,7 +134,9 @@ def _config() -> tuple[str, str]:
     except ValidationError:
         # The validation error would quote the inputs it did get; it is not
         # chained, and only the missing name is reported.
-        raise SportsDataLoadFailed("DATABASE_URL is not set") from None
+        raise SportsDataLoadFailed(
+            "the database is not configured: set DATABASE_URL or DATABASE_SECRET_ARN"
+        ) from None
     if not settings.sports_data_bucket:
         raise SportsDataLoadFailed("SPORTS_DATA_BUCKET is not set")
     return settings.sports_data_bucket, settings.database_url
