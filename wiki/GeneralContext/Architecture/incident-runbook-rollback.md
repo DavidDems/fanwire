@@ -12,9 +12,10 @@ Part of the [Incident Runbook](incident-runbook.md).
 reaches the database) and the SPA root, through `https://fanwire.daviddems.com`, retried for about two
 minutes. A red smoke check means the stacks deployed and the site does not answer as it should.
 
-1. **Rule out the migration first.** If the commit adds an Alembic revision, the new code may be waiting for
-   its schema: the usual sign is `/api/health` passing and `/api/feed?limit=1` answering 500. The deploy role
-   cannot invoke the Migration function, so run these in order, in one PowerShell window (the same commands as
+1. **Rule out the migration first.** The deploy runs the migrations before the smoke check and fails at "Run
+   the database migrations" unless they reach the repo's head (ADR 0044), so this is the cause only when that
+   step is the red one. The usual sign is `/api/health` passing and `/api/feed?limit=1` answering 500. To run
+   it by hand, run these in order, in one PowerShell window (the same commands as
    `build-deployment-post-deploy.md` → "Run migrations"):
    1. Sign in:
       ```powershell
@@ -51,5 +52,7 @@ minutes. A red smoke check means the stacks deployed and the site does not answe
 
 **What a rollback does not undo:** a migration that already ran. Alembic revisions are not reversed by an old
 image, so the old code runs against the new schema. That is safe for an additive revision (a new table,
-column or index), which is the only kind this repo writes. GitHub keeps a run re-runnable for 30 days; past
+column or index), which is the only kind this repo writes. A re-run of an older deploy also re-runs its migration step, which expects
+that run's older head; after a bad merge that added a revision, expect that step to fail although the old code is
+deployed, and check the smoke URLs by hand. GitHub keeps a run re-runnable for 30 days; past
 that, the revert in step 3 is the only way back.

@@ -52,7 +52,7 @@ Decisions:
   - [ADR 0013](../../GeneralContext/Decisions/0013-brand-mark-and-assets.md): the wire-`f` symbol, the wordmark, the assets and the header wordmark.
   - [ADR 0014](../../GeneralContext/Decisions/0014-look-and-feel.md): direction, CSS Modules, the system font stack, raspberry Live, no logos.
   - [ADR 0015](../../GeneralContext/Decisions/0015-inline-alert-id-prop.md): `InlineAlert` takes an `id`.
-  - [ADR 0016](../../GeneralContext/Decisions/0016-team-icons-and-avatar-colours.md): team icons, and avatar colours (planned).
+  - [ADR 0016](../../GeneralContext/Decisions/0016-team-icons-and-avatar-colours.md): team icons, and avatar colours (built by `USERS-005`).
   - [ADR 0017](../../GeneralContext/Decisions/0017-navigation-and-home-rail.md): the sidebar, the two Search links, the home rail, reply context, no Invite.
   - [ADR 0018](../../GeneralContext/Decisions/0018-ui-adjustments-2026-11-07.md): the adjustments after the track: game view, Recent Games, records, Schedule.
   - [ADR 0043](../../GeneralContext/Decisions/0043-track-5b-answers.md): track 5b: no italics with no exception, the floating + overlap accepted, tidy-ups may change tests.
