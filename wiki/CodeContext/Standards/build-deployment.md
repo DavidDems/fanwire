@@ -37,7 +37,7 @@ Nothing runs as a long-lived container in production: compute is Lambda, the fro
 GitHub Actions (OIDC-federated role, no long-lived keys, per [[wiki/CodeContext/Standards/aws-stack|AWS Stack]]):
 - On a PR, `test-agent.yml` builds and runs `docker/backend.Dockerfile` target `test` and `docker/frontend.Dockerfile` target `test`. When `test-agent` fails on an `agent/*` PR, `ci-summary.yml` posts one PR comment saying what failed; raw logs are not fed into an agent's context.
 - Static checks, each its own job in the same test images: `backend-ruff` (`ruff check .`), `backend-mypy` (`mypy app`, strict; `tests/` is not type-checked), `frontend-typecheck` (`npm run typecheck`) and `frontend-lint` (`npm run lint`). All four are required by `gate`. `ruff format` is not gated.
-- `pr-base` (pull_request only, required through `gate`): a PR's base must be `main` or `outstanding-track-*`, so a stacked PR cannot merge into a branch that never reaches `main`.
+- `pr-base` (pull_request only, required through `gate`): a PR's base must be `main`, `outstanding-track-*` or `outstanding-final` (the final track's integration branch), so a stacked PR cannot merge into a branch that never reaches `main`.
 - Audits, per [[wiki/CodeContext/Standards/security|Security]]: `pip-audit` blocks merge on any unignored finding; `npm audit` blocks at `--audit-level=high` for `frontend/`'s runtime dependencies (`--omit=dev`) and at `--audit-level=critical` for its whole tree and for `infra/`. The dev-tooling exception is picomatch (GHSA-fc5q-39xc-vjpf, no fixed release); restore one `high` audit when it is fixed.
 - Dependency updates: Renovate opens weekly grouped PRs, never automerged (`.github/renovate.json`). GitHub Dependabot *alerts* are on; Dependabot security-update PRs are off.
 
@@ -98,4 +98,5 @@ Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deplo
 - [[wiki/CodeContext/Standards/build-deployment-spa|Rebuilding the SPA]] — shipping a frontend build by hand.
 - [[wiki/CodeContext/Standards/build-deployment-nat-ami|Upgrading the NAT instance's AMI]] — replacing the NAT instance on an advisory.
 - [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deploy: migrations and sports data]] — invoking `Migration` and `SportsDataLoad`.
+- [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]] — measuring upload-to-`processed` on the live stack against the composer's 30 s bound (R16).
 - [[wiki/CodeContext/Standards/build-deployment-deploy-setup|Deploy workflow setup]] — the role's trust and the `production` environment.
