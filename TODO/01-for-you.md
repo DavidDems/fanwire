@@ -54,7 +54,7 @@ A merge to `main` queues `deploy.yml`, which waits for you.
 function's logs means an action is missing from
 `infra/iam/fanwire-role-boundary-policy.json`; report it.
 
-## 3. Accessibility (done) and image timing (yours)
+## 3. Accessibility and image timing — done
 
 - **axe is done by script** (final track item 2): `frontend/scripts/axe-check.cjs`
   found 0 violations on the shell, rail, Recent Games, game page, team tabs,
@@ -62,9 +62,11 @@ function's logs means an action is missing from
   §3a "axe"). You ran the **Windows contrast themes** on 2026-11-27: all
   readable; the one finding, a kind of control in two colours, is fixed
   (`accessibility.md` A20 note).
-- **R16, the image pipeline's timing on the live stack:** follow
-  `wiki/CodeContext/Standards/build-deployment-media-timing.md` and paste its
-  output into a Director session.
+- **R16, the image pipeline's timing on the live stack**, was measured on
+  2026-11-27: 3.07 s p50 and 6.07 s cold from the end of the upload, against
+  the composer's 30 s bound (`0x08d`). Re-run
+  `wiki/CodeContext/Standards/build-deployment-media-timing.md` after a
+  change to the pipeline.
 
 ## 4. SES production access — refused; email is off on purpose
 

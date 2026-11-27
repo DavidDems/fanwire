@@ -59,13 +59,12 @@ before a brief.
 |---|---|---|
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
 
-## Docs graph and the image-pipeline timing
+## Docs graph
 
-What is left of [ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md): the docs graph track, and R16, which only the human can run.
+What is left of [ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md): the docs graph track (R16 was measured on 2026-11-27, `0x08d`).
 
 | Item | Mode | Task | Notes |
 |---|---|---|---|
-| **Image-pipeline timing (R16)**: upload to `processed` on the live stack, p50/max per segment against the composer's 30 s bound | `hand` (the human) | — | Final track item 5. The procedure is `wiki/CodeContext/Standards/build-deployment-media-timing.md`; the human runs it and pastes the result into a Director session, which records it in `0x08d` R16 and deletes this row. First run (2026-11-27): a 12 MP JPEG ran the `Media` Lambda out of memory (1024 MB) and was refused at 30 s; fixed by `director/media-strip-memory`, re-run after that deploys |
 | **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. Next |
 
 ## Sports data
