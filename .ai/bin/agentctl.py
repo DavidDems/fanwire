@@ -22,6 +22,7 @@ thing, write state.
   agentctl docs inventory --paths wiki/  words against budget, inbound links, last commit
   agentctl docs dupes                   repeated and near-repeated Markdown paragraphs
   agentctl docs archive-refs            PR numbers and hashes to fanwire-archive (dry run)
+  agentctl docs graph                   write .ai/graph.json: how docs, specs and code link
   agentctl addresses                    fail on a personal email address in a tracked file
   agentctl selfcheck [--workspaces]     prove the machinery works, no tokens spent
   agentctl preflight ports              fail if a docker-compose host port is already bound
@@ -67,6 +68,7 @@ from agentlib import (
     addresses,
     ciresult,
     doccorpus,
+    docgraph,
     doclint,
     guard,
     handusage,
@@ -1224,6 +1226,9 @@ def build_parser() -> argparse.ArgumentParser:
     arc = corpus("archive-refs", "rewrite #NNN and commit hashes in Markdown to fanwire-archive")
     arc.add_argument("--write", action="store_true", help="apply the changes (default: dry run)")
     arc.set_defaults(func=cmd_docs_archive_refs)
+    graph = docs.add_parser("graph", help="write .ai/graph.json: how docs, specs and code link")
+    graph.add_argument("--root", default=None, help="repository to read (default: this one)")
+    graph.set_defaults(func=cmd_docs_graph)
 
     addr = sub.add_parser("addresses", help="fail on a personal email address in a tracked file")
     addr.add_argument("--root", default=None, help="repository to scan (default: this one)")
@@ -1351,6 +1356,18 @@ def cmd_docs_archive_refs(args) -> int:
     files = len({c.path for c in changes})
     verb = "changed" if args.write else "would change (dry run; --write applies)"
     print(f"docs archive-refs: {len(changes)} lines in {files} files {verb}")
+    return OK
+
+
+def cmd_docs_graph(args) -> int:
+    try:
+        graph = docgraph.write(_corpus_root(args))
+    except (OSError, ValueError) as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    print(
+        f"docs graph: {len(graph['nodes'])} nodes, {len(graph['edges'])} edges -> {docgraph.GRAPH}"
+    )
     return OK
 
 

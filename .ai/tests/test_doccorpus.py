@@ -150,6 +150,11 @@ class TestInventory:
         ]
         assert row(rows, "wiki/Modules/self.md")["inbound"] == []
 
+    def test_the_generated_docs_graph_is_not_a_mention(self, repo):
+        put(repo, "wiki/a.md", "x")
+        put(repo, ".ai/graph.json", '{"nodes": ["wiki/a.md"]}', kind=None)
+        assert row(doccorpus.inventory(repo), "wiki/a.md")["inbound"] == []
+
     def test_last_commit_is_the_newest_that_touched_the_file(self, repo):
         put(repo, "wiki/a.md", "one")
         put(repo, "wiki/b.md", "one")
