@@ -34,10 +34,6 @@ const FIELD_FAILURES: FieldFailures<ConfirmField> = {
     field: "code",
     message: "That code has expired. Send yourself a new one.",
   },
-  UserNotFoundException: {
-    field: "email",
-    message: "There is no account for this email address.",
-  },
   InvalidParameterException: {
     field: "code",
     message: "That does not look like a confirmation code.",
