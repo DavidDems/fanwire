@@ -588,3 +588,90 @@ describe("?line=<line_id> marks that player's row", () => {
     expectOneDialog();
   });
 });
+
+/**
+ * FINAL-4: the link that changes the detail is gone once the next detail is
+ * shown, and the dialog stays open, so focus would fall to `body`. It moves to
+ * the dialog's heading instead (the stats navigator's heading rule), and a
+ * control in the dialog's header that is still there (Back) keeps it.
+ */
+describe("a detail change moves focus to the dialog's heading", () => {
+  /** The open dialog's own heading: the element that names it. */
+  function dialogHeading(): HTMLElement {
+    const id = dialog().getAttribute("aria-labelledby");
+    const heading = id === null ? null : document.getElementById(id);
+    if (heading === null) throw new Error("the dialog has no heading");
+    return heading;
+  }
+
+  async function expectHeadingFocused(name: string): Promise<void> {
+    await waitFor(() => expect(dialogHeading()).toHaveTextContent(name));
+    await waitFor(() => expect(dialogHeading()).toHaveFocus());
+    expect(document.activeElement).not.toBe(document.body);
+  }
+
+  /** The root's thread, open in the modal from the feed. */
+  async function threadOpen() {
+    const start = await onFeed();
+    await start.user.click(timestampLink(start.rootCard));
+    await at(start.app.router, "/posts/101");
+    await within(dialog()).findByText(REPLY_TEXT);
+    return start;
+  }
+
+  it("a reply's timestamp opens its thread with focus on the heading", async () => {
+    const { user, app } = await threadOpen();
+
+    await user.click(timestampLink(cardInDialog(REPLY_TEXT)));
+
+    await at(app.router, "/posts/111");
+    await within(dialog()).findByText("No replies yet.");
+    await expectHeadingFocused("Thread");
+  });
+
+  it("a game preview in the thread opens the game with focus on the heading", async () => {
+    const { user, app } = await threadOpen();
+
+    await user.click(linkTo(cardInDialog(ROOT_TEXT), GAME_HREF));
+
+    await at(app.router, GAME_HREF);
+    await gameInDialog();
+    await expectHeadingFocused("Game");
+  });
+
+  it("a box-score line preview opens the game with focus on the heading", async () => {
+    const { user, app } = await threadOpen();
+
+    await user.click(linkTo(cardInDialog(REPLY_TEXT), LINE_HREF));
+
+    await at(app.router, LINE_HREF);
+    await gameInDialog();
+    await expectHeadingFocused("Game");
+  });
+
+  it("a box-score player's name opens the player with focus on the heading", async () => {
+    const { user, app } = await threadOpen();
+    await user.click(linkTo(cardInDialog(ROOT_TEXT), GAME_HREF));
+    const table = await gameInDialog();
+
+    await user.click(
+      within(table).getByRole("link", { name: /^Scottie Barnes$/ }),
+    );
+
+    await at(app.router, `/players/${BARNES_ID}`);
+    await playerInDialog("Scottie Barnes");
+    await expectHeadingFocused("Player");
+  });
+
+  it("Back keeps focus on Back while there is a detail before", async () => {
+    const flow = await threadGamePlayer();
+
+    await pressBack(flow.user);
+
+    await at(flow.app.router, GAME_HREF);
+    await gameInDialog();
+    expect(
+      within(dialog()).getByRole("button", { name: "Back" }),
+    ).toHaveFocus();
+  });
+});
