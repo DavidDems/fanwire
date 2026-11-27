@@ -3905,7 +3905,8 @@ class TestThePipelineVersionIsChecked:
 class TestThePrBaseIsAllowed:
     """Backlog 19: stacked PRs merged top-down never reached main. A PR's base
     must be `main`, an `outstanding-track-*` integration branch or the final
-    track's `outstanding-final` (Prompts/48); the `pr-base` job enforces it and `gate` (the required check) needs it."""
+    track's `outstanding-final` (Prompts/48) or the docs-graph track's
+    `outstanding-graph` (Prompts/49); the `pr-base` job enforces it and `gate` (the required check) needs it."""
 
     JOB = "pr-base"
 
@@ -3944,7 +3945,8 @@ class TestThePrBaseIsAllowed:
         assert f"- {self.JOB}\n" in gate.split("runs-on:", 1)[0]
 
     @pytest.mark.parametrize(
-        "base", ["main", "outstanding-track-7", "outstanding-track-12", "outstanding-final"]
+        "base",
+        ["main", "outstanding-track-7", "outstanding-track-12", "outstanding-final", "outstanding-graph"],
     )
     def test_an_allowed_base_passes(self, job, tmp_path, base):
         (body,) = run_bodies(job)
@@ -3962,6 +3964,8 @@ class TestThePrBaseIsAllowed:
             "xoutstanding-track-7",
             "outstanding-final-2",
             "xoutstanding-final",
+            "outstanding-graph-2",
+            "xoutstanding-graph",
             "main2",
             "",
         ],
