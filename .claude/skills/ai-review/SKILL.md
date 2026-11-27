@@ -28,8 +28,8 @@ Start from a worktree at `origin/main`. Keep a list of findings.
    For each, say whether anything since has proven or disproved it, citing the
    run or PR, and whether it still matches `handoff.md` and the backlog's
    "Agent system" rows.
-3. **Metrics and telemetry.** `agentctl metrics report` (add `--ref
-   origin/metrics` when that branch exists). Flag cost spikes, units with
+3. **Metrics and telemetry.** `agentctl metrics report --ref origin/metrics`
+   (it needs `--ref` or `--records`; fetch first). Flag cost spikes, units with
    human interventions or red CI, a mode that has gone silent, and any record
    that shows API spend while the project runs by hand (ADR 0035).
 4. **Scorecard and Dependabot.** `gh api` GET only: the repository's
@@ -46,7 +46,8 @@ Start from a worktree at `origin/main`. Keep a list of findings.
 6. **Parked briefs still marked live.** Each file in
    `wiki/GeneralContext/Prompts/` against the index's "Task prompts" list and
    the backlog: a brief for finished work, a brief the index calls parked but
-   whose own text says live, a brief the index omits, or one that names a
+   whose own text says live, a brief the index omits (it lists some by number range, such as `39`-`44`;
+   match the number, not the filename), or one that names a
    deleted file.
 
 ## Report
