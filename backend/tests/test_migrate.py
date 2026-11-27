@@ -43,8 +43,8 @@ satisfy:
 * It never writes the database URL, its userinfo or its password to a log or
   a return value -- including on the failure path, where the message and the
   `__cause__`/`__context__` chain of the escaping exception are the likeliest
-  leak. `DATABASE_URL` carries the password inline (the known gap in
-  `wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md`); this function must not
+  leak. The URL carries the password inline (built from the RDS secret in
+  memory on Lambda, ADR 0045; `DATABASE_URL` locally); this function must not
   widen it into CloudWatch.
 """
 

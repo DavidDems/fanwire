@@ -30,12 +30,14 @@ The frontend and public-media bucket policies live in `Fanwire-Cdn`, not `Fanwir
 |---|---|---|---|
 | S3 gateway | 0 | presign/put/get media | kept |
 | DynamoDB gateway | 0 | nothing | kept |
-| Secrets Manager | ~7.5 | nothing in the VPC | not kept, reached through the NAT instance |
+| Secrets Manager | ~7.5 | the database functions' one read of the RDS secret per cold start | not kept, reached through the NAT instance |
 | EventBridge (`events`) | ~7.5 | api `PutEvents` | not kept, reached through the NAT instance |
 | SES (`email`) | ~7.5 | notifications | not kept, reached through the NAT instance |
 | Cognito (`cognito-idp`) | ~7.5 | `AdminGetUser` (the JWKS fetch needs the internet regardless) | not kept, reached through the NAT instance |
 
 The trade-off: the NAT instance is a single point of failure for all of these. If it's down, cached JWKS keep auth working for up to an hour, and notifications retry via SQS.
+
+**Database credentials (ADR 0045)**: no function's environment holds the RDS password or a URL with credentials. Each of the six database functions (`readsDatabase` on `AppStack.backendFunction`) gets `DATABASE_SECRET_ARN`, `DATABASE_HOST`, `DATABASE_PORT` and `DATABASE_NAME`, plus one `ReadDatabaseSecret` statement: `secretsmanager:GetSecretValue` on exactly the RDS secret's ARN. The secret is encrypted with the CMK, which the role's `DecryptEnvironmentAndData` `kms:Decrypt` already covers. `app.settings` reads the secret once per cold start and builds the URL in memory ([[0x00-architecture]]). A rotated password reaches a warm container only when it recycles. The read goes through the NAT instance, so while that is down a new container of a database function cannot start. SportsDataRefresh and the origin-verify authorizer cannot read the RDS secret (`infra/test/app-stack.test.ts`).
 
 **API origin protection**: HTTP APIs support neither resource policies nor WAF, and the execute-api endpoint can't be disabled because CloudFront needs it. So every route has a REQUEST Lambda authorizer (`OriginVerifyAuthorizer`, inline Python 3.15, outside the VPC; it and Auth's pre-sign-up trigger are the app's only zip functions, and `infra/test/lambda-runtimes.test.ts` holds both to the Python of the Lambda image, which Renovate cannot see on a zip function) with identity source `$request.header.x-origin-verify`. A request without the header gets 401 from API Gateway before any function runs. The authorizer compares the header in constant time with the `OriginVerify` secret, which it reads at cold start, and caches each result for 5 minutes. CloudFront adds the header on `/api/*` from a `{{resolve:secretsmanager:…}}` dynamic reference, so the value appears in neither git nor the synthesized template. Rotating the secret needs a redeploy of `Fanwire-Cdn`, and old authorizer containers keep the previous value until they recycle.
 
