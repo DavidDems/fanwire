@@ -38,10 +38,11 @@ A merge to `main` queues `deploy.yml`, which waits for you.
    gh run list --workflow deploy.yml --limit 1
    ```
 
-4. **If the deploy's PR adds a migration,** invoke the `Migration` function
-   right after (`wiki/CodeContext/Standards/build-deployment-post-deploy.md` "Run
-   migrations" has the commands). Until then the routes on the changed tables
-   answer 500. Check that this prints `200`:
+4. **The deploy runs the migrations itself** (ADR 0044): its "Run the database
+   migrations" step fails unless the `Migration` function reaches the repo's
+   Alembic head. If that step is red, run it by hand
+   (`wiki/CodeContext/Standards/build-deployment-post-deploy.md` "Run
+   migrations" has the commands). Check that this prints `200`:
 
    ```powershell
    curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams
@@ -125,6 +126,5 @@ built):
 
 ## Deferred by the project, not waiting on you
 
-- Reading DB credentials from Secrets Manager rather than `DATABASE_URL`.
-- Automated security alerting (SNS/EventBridge). Checked by hand today
-  (`incident-runbook.md` says how).
+- Security alerting outside `fanwire-workload`: GuardDuty findings there are
+  checked by hand (`incident-runbook.md` says how).

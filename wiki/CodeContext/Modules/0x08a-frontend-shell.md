@@ -8,11 +8,11 @@ type: reference
 
 ## Look and feel
 
-**Planned in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)** (2026-10-06).
+**Specified in [`wiki/CodeContext/FrontendUI/`](../FrontendUI/index.md)** (2026-10-06) and built.
 `src/styles/tokens.css` and `base.css` (`UI-001`) are imported once from
 `main.tsx`; `src/styles/tokens.test.ts` recomputes every contrast pair from the
-file, unrounded. The rest: CSS Modules plus one global token stylesheet, the system font
-stack, and a Director PR (`D1`, `index.html` and the brand files) followed by
+file, unrounded. The rest: CSS Modules plus one global token stylesheet and the system font
+stack, built by a Director PR (`D1`, `index.html` and the brand files) and
 eight styling units. The `0x08` files stay the
 record of what the frontend *does*; how it looks is recorded there, not here. A
 styling unit that changes behaviour (for example "No replies yet.") records
