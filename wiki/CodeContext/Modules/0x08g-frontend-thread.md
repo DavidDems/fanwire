@@ -55,15 +55,18 @@ the reader was on. Public: a thread is a read path; replying needs a session.
   browser's Back does the same and, from the first detail, returns to the
   origin. The one `Dialog` stays mounted across details, so focus returns to
   the first opener when the flow closes.
-- **Known gap:** opening a nested thread from a reply's timestamp removes the
-  focused link, and focus falls to `body` with the modal still open (Tab
-  re-enters the dialog). Moving focus to the dialog's heading on a detail
-  change is still a follow-up: `FRONTEND-014` did not take it, and a
-  preview or box-score link inside the modal has the same gap.
+- **A new detail focuses the heading** (`FINAL-4`). The link that opened it
+  (a reply's timestamp, a preview, a box-score name) is gone, so focus would
+  fall to `body` with the modal open. `DetailModal` passes the flow's
+  `depth` as `Dialog`'s `detailKey`; when it changes, focus moves to the
+  heading (`tabIndex` -1, the stats navigator's rule) unless it is on Back
+  or Close. Back pressed keeps focus on Back; a child's passive effect (the
+  reply box under `?reply=1`) may still move it further in.
 - **`components/ui/Dialog`**: a native `<dialog>` opened with `showModal()`
   (top layer, inert page, focus kept inside), the title as its heading and
   accessible name, a Close button, the prevented `cancel` event as Escape,
-  and focus returned to the opener. **A backdrop click is a click whose
+  and focus returned to the opener. An optional `detailKey` moves focus to
+  the heading when it changes while open (above). **A backdrop click is a click whose
   target, and whose mousedown's target, is the `<dialog>` itself**: the
   dialog has no padding and does not scroll (its content does), so neither a
   click on the scrollbar nor a selection dragged out onto the backdrop closes
