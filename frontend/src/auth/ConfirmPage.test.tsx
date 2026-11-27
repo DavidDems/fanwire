@@ -18,6 +18,12 @@ import { FakeAuthService, TEST_EMAIL, renderWithAuth } from "../test/auth";
 import { ConfirmPage } from "./ConfirmPage";
 
 const CODE = "123456";
+/** The fixed alert for any code the page has no field for (ForgotPasswordPage's wording). */
+const GENERIC_FAILURE = "Something went wrong. Please try again.";
+/** Distinctive provider text: it must never reach the page. */
+const PROVIDER_TEXT = "Provider says: user does not exist";
+/** Codes the page maps to no field, including one Cognito has never sent. */
+const UNMAPPED_CODES = ["UserNotFoundException", "InternalErrorException", "MadeUpProviderException"];
 
 /** Arriving from sign-up means arriving with `state.email`; a bookmark means without. */
 function renderConfirm(authService: FakeAuthService, { withEmail = true } = {}) {
@@ -118,36 +124,55 @@ describe("ConfirmPage", () => {
     expect(screen.queryByText("sign-in stub")).toBeNull();
   });
 
-  it("never says whether an account exists for the address", async () => {
-    // The pool sets `preventUserExistenceErrors`, so Cognito does not send this
-    // code here; if it ever did, naming account existence would be the leak the
-    // setting exists to stop. It gets the page's generic failure, like any
-    // code the page has no field for.
-    const user = userEvent.setup();
-    renderConfirm(new FakeAuthService().failWith("confirmSignUp", "UserNotFoundException"));
+  it.each(UNMAPPED_CODES)(
+    "shows one fixed message for %s and never the provider's own text",
+    async (code) => {
+      // The pool sets `preventUserExistenceErrors`, so Cognito does not send
+      // `UserNotFoundException` here; if it ever did, its text would name
+      // account existence, the leak the setting exists to stop. Every code the
+      // page has no field for gets the same fixed alert.
+      const user = userEvent.setup();
+      renderConfirm(new FakeAuthService().failWith("confirmSignUp", code, PROVIDER_TEXT));
 
-    await submitCode(user);
+      await submitCode(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "UserNotFoundException (from the auth double)",
-    );
-    expect(screen.queryByText(/no account for this email/i)).toBeNull();
-    expectNoFieldError(screen.getByLabelText(/^email$/i));
-    expectNoFieldError(screen.getByLabelText(/confirmation code/i));
-  });
+      expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_FAILURE);
+      expect(document.body).not.toHaveTextContent(PROVIDER_TEXT);
+      expectNoFieldError(screen.getByLabelText(/^email$/i));
+      expectNoFieldError(screen.getByLabelText(/confirmation code/i));
+    },
+  );
 
-  it("announces a throttled resend instead of silently doing nothing", async () => {
-    // `LimitExceededException` is not about a field — nothing the user typed is
-    // wrong — so it is the one failure on this page that belongs in an alert.
-    // Saying nothing is the real defect: the button appears to have worked.
-    const user = userEvent.setup();
-    renderConfirm(
-      new FakeAuthService().failWith("resendConfirmationCode", "LimitExceededException"),
-    );
+  it.each(["LimitExceededException", "TooManyRequestsException"])(
+    "announces a throttled resend (%s) instead of silently doing nothing",
+    async (code) => {
+      // Not about a field — nothing the user typed is wrong — so it belongs in
+      // an alert. Saying nothing is the real defect: the button appears to have
+      // worked. The alert is fixed text, not the provider's.
+      const user = userEvent.setup();
+      renderConfirm(
+        new FakeAuthService().failWith("resendConfirmationCode", code, PROVIDER_TEXT),
+      );
 
-    await user.click(await screen.findByRole("button", { name: /resend/i }));
+      await user.click(await screen.findByRole("button", { name: /resend/i }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent?.trim()).not.toBe("");
-  });
+      expect(await screen.findByRole("alert")).toHaveTextContent(/too many attempts/i);
+      expect(document.body).not.toHaveTextContent(PROVIDER_TEXT);
+    },
+  );
+
+  it.each(UNMAPPED_CODES)(
+    "shows one fixed message when a resend fails with %s, never the provider's text",
+    async (code) => {
+      const user = userEvent.setup();
+      renderConfirm(
+        new FakeAuthService().failWith("resendConfirmationCode", code, PROVIDER_TEXT),
+      );
+
+      await user.click(await screen.findByRole("button", { name: /resend/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_FAILURE);
+      expect(document.body).not.toHaveTextContent(PROVIDER_TEXT);
+    },
+  );
 });

@@ -55,6 +55,13 @@ function renderSignIn(authService: FakeAuthService, from?: string) {
   );
 }
 
+/** The fixed alert for any code the page has no field for (ForgotPasswordPage's wording). */
+const GENERIC_FAILURE = "Something went wrong. Please try again.";
+/** Distinctive provider text: it must never reach the page. */
+const PROVIDER_TEXT = "Provider says: user does not exist";
+/** Codes the page maps to no field, including one Cognito has never sent. */
+const UNMAPPED_CODES = ["UserNotFoundException", "InternalErrorException", "MadeUpProviderException"];
+
 async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.type(await screen.findByLabelText(/^email$/i), TEST_EMAIL);
   await user.type(screen.getByLabelText(/^password$/i), TEST_PASSWORD);
@@ -129,23 +136,24 @@ describe("SignInPage", () => {
     expectNoFieldError(screen.getByLabelText(/^email$/i));
   });
 
-  it("never says whether an account exists for the address", async () => {
-    // The pool sets `preventUserExistenceErrors`, so Cognito does not send this
-    // code here; if it ever did, naming account existence would be the leak the
-    // setting exists to stop. It gets the page's generic failure, like any
-    // code the page has no field for.
-    const user = userEvent.setup();
-    renderSignIn(new FakeAuthService().failWith("signIn", "UserNotFoundException"));
+  it.each(UNMAPPED_CODES)(
+    "shows one fixed message for %s and never the provider's own text",
+    async (code) => {
+      // The pool sets `preventUserExistenceErrors`, so Cognito does not send
+      // `UserNotFoundException` here; if it ever did, its text ("User does not
+      // exist.") would name account existence, the leak the setting exists to
+      // stop. Every code the page has no field for gets the same fixed alert.
+      const user = userEvent.setup();
+      renderSignIn(new FakeAuthService().failWith("signIn", code, PROVIDER_TEXT));
 
-    await fillAndSubmit(user);
+      await fillAndSubmit(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "UserNotFoundException (from the auth double)",
-    );
-    expect(screen.queryByText(/no account for this email/i)).toBeNull();
-    expectNoFieldError(screen.getByLabelText(/^email$/i));
-    expectNoFieldError(screen.getByLabelText(/^password$/i));
-  });
+      expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_FAILURE);
+      expect(document.body).not.toHaveTextContent(PROVIDER_TEXT);
+      expectNoFieldError(screen.getByLabelText(/^email$/i));
+      expectNoFieldError(screen.getByLabelText(/^password$/i));
+    },
+  );
 
   it("sends an unconfirmed account to the confirmation step instead of erroring", async () => {
     // `UserNotConfirmedException` is a routing state, the same way a 404 from
