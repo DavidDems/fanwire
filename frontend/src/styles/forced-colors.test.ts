@@ -116,3 +116,58 @@ describe("forced colors keeps what the shadows and fills carry (A20)", () => {
     expect(SOLID_LINE.test("none")).toBe(false);
   });
 });
+
+/**
+ * In forced colors the browser colours a control by its element, not by what
+ * it is for: an `<a>` gets LinkText, a `<button>` ButtonText, anything else
+ * CanvasText. Where one kind of thing is built from both elements, the human's
+ * contrast-theme check (2026-11-27) saw it in two colours: Sign out beside the
+ * nav links, the Reply link beside the Like and Repost buttons, and the two tab
+ * bars. So each kind names its system colour itself:
+ *
+ * - navigation (the nav list, both tab bars): LinkText;
+ * - a post's action controls: ButtonText, with a ButtonText edge;
+ * - a post's action counts: CanvasText, as the plain counts already are.
+ */
+describe("forced colors gives one kind of control one system colour", () => {
+  function colours(file: string, target: RegExp, property: RegExp): string[] {
+    return forcedRules(file)
+      .filter((rule) =>
+        selectors(rule).some((selector) => target.test(selector)),
+      )
+      .flatMap((rule) => value(rule, property));
+  }
+
+  it.each([
+    [
+      "the nav list's links and Sign out",
+      "routes/AppLayout.module.css",
+      /^\.link$/,
+    ],
+    ["the page tab bar", "components/ui/Tabs.module.css", /^\.tab$/],
+    [
+      "the segmented tab bar",
+      "components/ui/SegmentedTabs.module.css",
+      /^\.tab$/,
+    ],
+  ])("%s use LinkText", (_kind, file, target) => {
+    expect(colours(file, target, /^color$/)).toContain("linktext");
+  });
+
+  it("a post's action controls, button or link, use ButtonText with a ButtonText edge", () => {
+    const file = "features/feed/PostAction.module.css";
+    expect(colours(file, /^\.control$/, /^color$/)).toContain("buttontext");
+    expect(colours(file, /^\.control$/, /^border-color$/)).toContain(
+      "buttontext",
+    );
+  });
+
+  it.each([/^\.count$/, /^\.countLink$/])(
+    "a post's action count (%s) uses CanvasText",
+    (target) => {
+      expect(
+        colours("features/feed/PostAction.module.css", target, /^color$/),
+      ).toContain("canvastext");
+    },
+  );
+});

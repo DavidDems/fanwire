@@ -373,3 +373,13 @@
     min-width: 0;
   }
 }
+
+/*
+ * A20, one colour per kind: in forced colors the browser colours by element (LinkText for <a>, ButtonText for <button>), so Sign out, the one
+ * button in the nav list, would stand apart from the links beside it.
+ */
+@media (forced-colors: active) {
+  .link {
+    color: LinkText;
+  }
+}

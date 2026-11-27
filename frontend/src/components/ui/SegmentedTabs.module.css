@@ -44,6 +44,11 @@
 
 /* A20: forced colors replaces the fill, so the selected tab is underlined too. */
 @media (forced-colors: active) {
+  /* One colour per kind: these are buttons, but tabs are navigation, as in Tabs. */
+  .tab {
+    color: LinkText;
+  }
+
   .tab[aria-selected="true"] {
     text-decoration: underline;
     text-decoration-thickness: 2px;
