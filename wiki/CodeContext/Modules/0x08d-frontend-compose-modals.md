@@ -147,5 +147,7 @@ submits the draft.
   second pass found every Baseline line met. The final frontend container
   passes 170 files / 2,335 tests.
 - **Operational follow-up R16 remains separate:** time the image pipeline
-  on the live stack after deploy. Local image-preservation checks stub
-  the ticket, bucket and poll; no live pipeline timing is claimed.
+  on the live stack after deploy, by the human's procedure in
+  [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]].
+  Local image-preservation checks stub the ticket, bucket and poll; no live
+  pipeline timing is claimed until that report is recorded here.
