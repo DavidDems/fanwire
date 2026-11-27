@@ -87,12 +87,21 @@ COGNITO_USER_POOL_ID=<POOL_ID>
 COGNITO_APP_CLIENT_ID=<CLIENT_ID>
 ```
 
-`frontend/.env.local` (read by Vite):
+`frontend/.env.local` (read by Vite), all five: `src/config.ts` throws at
+load if any is missing or empty, and the dev server then renders a blank page:
 ```
+VITE_API_BASE_URL=/api
+VITE_MEDIA_BASE_URL=http://localhost:<VITE_PORT>
 VITE_COGNITO_REGION=ca-central-1
 VITE_COGNITO_USER_POOL_ID=<POOL_ID>
 VITE_COGNITO_CLIENT_ID=<CLIENT_ID>
 ```
+
+`/api` is relative on purpose: the Vite proxy forwards it to `backend-dev` on
+8001. `backend-dev` has no media bucket, so `VITE_MEDIA_BASE_URL` only has to be
+a non-empty origin. Use the dev server's own (`<VITE_PORT>` is the port you
+start it on), never the production site's. Uploaded images don't load locally
+either way. Put the dev pool's ids in the last two, never production's.
 
 Create both files; the backend and the frontend read them on start.
 

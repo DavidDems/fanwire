@@ -2,17 +2,31 @@
 type: runbook
 ---
 
-# Account lifecycle activation status
+# Account lifecycle activation: how deletion was switched on
 
-Reviewed in Outstanding-work track 6 (2026-11-25). The rollout plan this
-follows is [account-lifecycle-proof](account-lifecycle-proof.md) step 9.
+**Account deletion is live.** #124 set `ACCOUNT_LIFECYCLE_ENABLED=true`
+and `ACCOUNT_LIFECYCLE_CUTOVER_AT=2026-11-05T00:00:00Z` in the shared `common`
+env. It merged and deployed on 2026-11-26, local time (02:32 UTC on
+2026-11-27). A read-only check later that day found every function that reads
+the flag carrying both values, every alarm `OK`, and the feed answering 200.
+The cutover is 2026-11-05 so that the six confirmed identities can still create
+a profile, while the 2026-09-30 unconfirmed one never can (see "Readings and
+the cutover").
 
-Documentation only: nothing here ran against AWS (the SSO token had expired)
-and nothing was switched on. Every live check is a read-only command in the
-track 6 PR's manual steps and the activation PR's body. **Today, with the flag off, `DELETE /users/me/data`
-answers 503 for everyone** (`delete_account_data` raises `LifecycleUnavailable`
-when the flag is off and no operation exists), so the flag is what switches
-deletion on for real users. It is set in the separate activation PR (`outstanding-track-6-activate`), which merges only after the track deploy, the Migration Lambda and every gate below are green.
+This page is now history: the gates reviewed in Outstanding-work track 6
+(2026-11-25), following [account-lifecycle-proof](account-lifecycle-proof.md)
+step 9, and the readings that cleared them. Before #124, with the flag off,
+`DELETE /users/me/data` answered 503 for everyone (`delete_account_data` raises
+`LifecycleUnavailable` when the flag is off and no operation exists).
+
+**Rollback:** set `ACCOUNT_LIFECYCLE_ENABLED` back to `'false'` in
+`common` and deploy. New deletion requests then get the 503 again, but an
+already-accepted deletion still finishes: `delete_account_data` returns an
+existing operation whatever the flag says, and the AccountDeletion schedule
+keeps running it to completion. Leave the cutover as it is.
+
+The table below is the review as it stood before the readings. Every UNKNOWN
+in it went green on 2026-11-26.
 
 | Gate | Evidence in hand | Missing | State |
 |---|---|---|---|
