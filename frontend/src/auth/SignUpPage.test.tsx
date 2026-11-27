@@ -39,6 +39,13 @@ function renderSignUp(authService: FakeAuthService) {
   );
 }
 
+/** The fixed alert for any code the page has no field for (ForgotPasswordPage's wording). */
+const GENERIC_FAILURE = "Something went wrong. Please try again.";
+/** Distinctive provider text: it must never reach the page. */
+const PROVIDER_TEXT = "Provider says: something internal";
+/** Codes the page maps to no field, including one Cognito has never sent. */
+const UNMAPPED_CODES = ["InternalErrorException", "TooManyFailedAttemptsException", "MadeUpProviderException"];
+
 async function fillAndSubmit(
   user: ReturnType<typeof userEvent.setup>,
   confirmation = TEST_PASSWORD,
@@ -174,4 +181,19 @@ describe("SignUpPage", () => {
     expect(screen.queryByText(/confirm stub/)).toBeNull();
     expect(screen.queryByText("sign-in stub")).toBeNull();
   });
+
+  it.each(UNMAPPED_CODES)(
+    "shows one fixed message for %s and never the provider's own text",
+    async (code) => {
+      const user = userEvent.setup();
+      renderSignUp(new FakeAuthService().failWith("signUp", code, PROVIDER_TEXT));
+
+      await fillAndSubmit(user);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC_FAILURE);
+      expect(document.body).not.toHaveTextContent(PROVIDER_TEXT);
+      expectNoFieldError(screen.getByLabelText(/^email$/i));
+      expectNoFieldError(screen.getByLabelText(/^password$/i));
+    },
+  );
 });

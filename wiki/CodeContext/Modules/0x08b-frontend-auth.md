@@ -60,6 +60,13 @@ reads the tree from disk and enforces both halves, and that no module under
   `preventUserExistenceErrors` (`infra/lib/auth-stack.ts`), so Cognito does not
   send `UserNotFoundException` there; neither page maps it, and if it ever
   arrived it would get the page's generic alert like any unmapped code.
+- **No auth page renders the provider's own message** (ADR 0045). A code no
+  control owns gets `pageAlert` (`frontend/src/auth/errors.ts`), through
+  `splitFailure` on Sign-in, Sign-up and Confirm and directly on Confirm's
+  resend and both reset steps: "There have been too many attempts. Please wait
+  and try again later." for `LimitExceededException` or
+  `TooManyRequestsException`, otherwise "Something went wrong. Please try
+  again.", which is also `asAuthError`'s fallback for a non-Cognito throw.
 - **Tokens are stored by the SDK's default `localStorage`**, accepted for v1.
   The trade-off is recorded, not hidden: anything that achieves script
   execution in the page can read the ID token. A cookie backend is a separate,
