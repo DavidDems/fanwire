@@ -1428,7 +1428,7 @@ def _more(lines: list[str], hidden: int) -> list[str]:
 
 
 def _edge_end(path: str, edge: dict) -> str:
-    """`path:12` for a line citation, `path §3` for a section one, else the path."""
+    """`path:12` for a line citation, the path and its section sign for a section one."""
     detail = edge.get("detail", "")
     if not detail:
         return path
