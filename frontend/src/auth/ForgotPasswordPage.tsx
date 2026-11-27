@@ -9,7 +9,7 @@ import { Card } from "../components/ui/Card";
 import { InlineAlert } from "../components/ui/InlineAlert";
 import { useAuth } from "./AuthContext";
 import styles from "./AuthPage.module.css";
-import { PASSWORDS_DIFFER, asAuthError } from "./errors";
+import { PASSWORDS_DIFFER, asAuthError, pageAlert } from "./errors";
 import { PROFILE_QUERY_KEY } from "./profile";
 
 /**
@@ -43,9 +43,6 @@ const VERIFIED_ONLY =
   "We send a reset code only to a verified email address, so an account whose email was never verified cannot reset its password this way.";
 
 const INVALID_EMAIL = "Enter an email address, like name@example.com.";
-const TOO_MANY_ATTEMPTS =
-  "There have been too many attempts. Please wait and try again later.";
-const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
 const WRONG_CODE = "That code is not the one we sent.";
 
 /** The provider's answers on step one that mean "go on to step two". */
@@ -53,11 +50,6 @@ const SAME_NEXT_STEP = new Set([
   "UserNotFoundException",
   "InvalidParameterException",
 ]);
-const THROTTLED = new Set([
-  "LimitExceededException",
-  "TooManyRequestsException",
-]);
-
 /**
  * Step two's field failures. An unknown or unverified account never received a
  * code, so whatever code was typed is, truthfully, not the one we sent.
@@ -79,11 +71,6 @@ const RESET_FIELD_FAILURES: Readonly<Record<string, [ResetField, string]>> = {
 /** Something, an `@`, something, a dot, something: the syntax check, no more. */
 function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-/** The request alert for a failure no field owns: never the provider's words. */
-function alertFor(code: string): string {
-  return THROTTLED.has(code) ? TOO_MANY_ATTEMPTS : SOMETHING_WENT_WRONG;
 }
 
 export function ForgotPasswordPage() {
@@ -130,7 +117,7 @@ export function ForgotPasswordPage() {
     } catch (cause) {
       const { code: failed } = asAuthError(cause);
       if (SAME_NEXT_STEP.has(failed)) setCodeSent(true);
-      else setFailure(alertFor(failed));
+      else setFailure(pageAlert(failed));
     } finally {
       setBusy(false);
     }
@@ -153,7 +140,7 @@ export function ForgotPasswordPage() {
     } catch (cause) {
       const { code: failed } = asAuthError(cause);
       const onField = RESET_FIELD_FAILURES[failed];
-      if (onField === undefined) setFailure(alertFor(failed));
+      if (onField === undefined) setFailure(pageAlert(failed));
       else setErrors({ [onField[0]]: onField[1] });
     } finally {
       setBusy(false);
