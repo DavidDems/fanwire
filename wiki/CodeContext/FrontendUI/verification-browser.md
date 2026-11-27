@@ -91,6 +91,15 @@ counts as done: report it as "✅ Playwright MCP, Chromium, <date>" with what wa
     defect.
   - **A full-page screenshot draws the sticky header and fixed bar in the
     middle of the image.** That's the capture, not the layout.
+  - **With the Claude in Chrome extension instead of Playwright** (no
+    `browser_resize` or `browser_emulate_media`): `resize_window` can leave a
+    maximised window at its old width. For 360 px, open any app path, replace
+    the document with one same-origin `<iframe>` 360 px wide, and measure inside
+    it. Its media queries see 360, and it shares the signed-in session. For the
+    other theme, set every `prefers-color-scheme` `CSSMediaRule`'s `mediaText`
+    to `all` (dark) or `not all` (light) in the iframe's stylesheets, which the
+    dev server serves as editable `<style>` tags. To make a save fail on
+    purpose, `docker compose stop backend-dev`: the proxy answers 502.
   - **Media states past "wrong type" need an upload that reaches the bucket**,
     which `backend-dev` doesn't give you. Report preparing, ready, rejected
     and too large as covered by tests only.
