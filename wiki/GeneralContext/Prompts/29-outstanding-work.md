@@ -7,22 +7,21 @@ type: prompt
 **Brief for Director sessions** (a high-tier model, driven turn by turn by the
 human). Self-contained: read this file, then your track's file.
 
-**Objective:** finish every documented but unbuilt item in
-`TODO/02-backlog.md`, in eight tracks run one after another
-([ADR 0035](../Decisions/0035-outstanding-work-answers.md) holds the human's
-answers; don't re-ask them). The human starts one session per track with:
+**Objective:** the order of the results scraper (`38`) and the predictions
+tracks, and the rules every one of those sessions shares. The eight
+Outstanding-work tracks that finished everything in `TODO/02-backlog.md` are
+done and their briefs deleted ([ADR 0035](../Decisions/0035-outstanding-work-answers.md)
+holds the human's answers; don't re-ask them). The human starts one session
+per track with:
 
 > Read `wiki/GeneralContext/Prompts/29-outstanding-work.md` and
 > `wiki/GeneralContext/Prompts/<track file>`, then do the track.
 
 ## The order
 
-| Track | File | What |
-|---|---|---|
-| 8 | `37-outstanding-work-8-review-skills.md` | `wiki-review` and `ai-review` skills and prompts. Last of the Outstanding-work tracks |
-
-After track 8 and the results scraper (`38`), the predictions tracks, in
-this order ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md)):
+The results scraper (`38-results-scraper.md`, part `38-results-scraper-api.md`)
+runs first. Then the predictions tracks, in this order
+([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md)):
 
 | Track | File | What |
 |---|---|---|
@@ -35,7 +34,7 @@ this order ([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)
 
 A track is done when its backlog rows are deleted, each changed module's
 reference states the new fact, its prompt is deleted, this table loses its
-row, and `Timeline/` has one line. When the last track in these tables is done, delete this file.
+row, and `Timeline/` has one line. When the last track in this table is done, delete this file.
 
 ## How every track runs
 
