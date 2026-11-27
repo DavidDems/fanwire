@@ -10,6 +10,28 @@ import { AuthError } from "./AuthService";
  * same everywhere.
  */
 
+/** The page alert for any failure the page has no field or message of its own for. */
+export const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
+
+/** The page alert for a throttled request: nothing typed is wrong, so it is about no field. */
+export const TOO_MANY_ATTEMPTS =
+  "There have been too many attempts. Please wait and try again later.";
+
+const THROTTLED: ReadonlySet<string> = new Set([
+  "LimitExceededException",
+  "TooManyRequestsException",
+]);
+
+/**
+ * The fixed page alert for a code no control owns. Never the provider's own
+ * message: Cognito's wording can name whether an account exists ("User does
+ * not exist."), which `preventUserExistenceErrors` is set to hide, and nothing
+ * the provider says is ours to render.
+ */
+export function pageAlert(code: string): string {
+  return THROTTLED.has(code) ? TOO_MANY_ATTEMPTS : SOMETHING_WENT_WRONG;
+}
+
 /**
  * Narrow whatever `catch` produced to an `AuthError`.
  *
@@ -20,7 +42,7 @@ import { AuthError } from "./AuthService";
  */
 export function asAuthError(cause: unknown): AuthError {
   if (cause instanceof AuthError) return cause;
-  return new AuthError("UnknownError", "Something went wrong. Please try again.");
+  return new AuthError("UnknownError", SOMETHING_WENT_WRONG);
 }
 
 /** Which control a failure belongs on, and what to say there. */
@@ -30,7 +52,9 @@ export interface FieldFailure<Field extends string> {
 }
 
 /** A page's code -> control map. A code that is absent belongs to the page, not to a control. */
-export type FieldFailures<Field extends string> = Readonly<Record<string, FieldFailure<Field>>>;
+export type FieldFailures<Field extends string> = Readonly<
+  Record<string, FieldFailure<Field>>
+>;
 
 export interface SplitFailure<Field extends string> {
   /** Field-level messages, keyed by control. */
@@ -42,14 +66,16 @@ export interface SplitFailure<Field extends string> {
 /**
  * Put a failure where it belongs: on the control it is about, or — for a code
  * the page has no field for, which is nothing the user typed wrongly — in an
- * alert, rather than pretending one of the inputs is at fault.
+ * alert, rather than pretending one of the inputs is at fault. That alert is
+ * fixed text (`pageAlert`), never `error.message`.
  */
 export function splitFailure<Field extends string>(
   error: AuthError,
   failures: FieldFailures<Field>,
 ): SplitFailure<Field> {
   const onField = failures[error.code];
-  if (onField === undefined) return { fields: {}, alert: error.message };
+  if (onField === undefined)
+    return { fields: {}, alert: pageAlert(error.code) };
 
   const fields: Partial<Record<Field, string>> = {};
   fields[onField.field] = onField.message;

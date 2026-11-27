@@ -47,14 +47,16 @@ import { SignUpPage } from "./SignUpPage";
 
 type User = ReturnType<typeof userEvent.setup>;
 
-/** A Cognito code none of the five pages maps to a field: a request failure. */
-const UNMAPPED_CODE = "LimitExceededException";
 /**
- * The reset page (AUTH-001) owns its words: throttling has a generic alert of
- * its own, and any other failure is this one sentence.
+ * A Cognito code none of the five pages maps to a field: a request failure.
+ * No page renders the provider's own words (ADR 0045): throttling has a fixed
+ * alert of its own, and any other failure is this one sentence.
  */
-const RESET_UNMAPPED_CODE = "InternalErrorException";
-const RESET_FAILURE_TEXT = "Something went wrong. Please try again.";
+const UNMAPPED_CODE = "InternalErrorException";
+const THROTTLED_CODE = "LimitExceededException";
+const FAILURE_TEXT = "Something went wrong. Please try again.";
+const THROTTLED_TEXT =
+  "There have been too many attempts. Please wait and try again later.";
 const CODE = "123456";
 
 function renderSignIn(authService = new FakeAuthService()) {
@@ -197,8 +199,14 @@ describe("SignInPage in the narrow form card", () => {
 
   it("renders a request failure through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "Too many attempts. Wait a moment and try again.";
-    renderSignIn(new FakeAuthService().failWith("signIn", UNMAPPED_CODE, text));
+    const text = FAILURE_TEXT;
+    renderSignIn(
+      new FakeAuthService().failWith(
+        "signIn",
+        UNMAPPED_CODE,
+        "Sign-in is unavailable right now.",
+      ),
+    );
 
     await signInWith(user);
 
@@ -219,8 +227,14 @@ describe("SignUpPage in the narrow form card", () => {
 
   it("renders a request failure through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "Sign-up is unavailable right now.";
-    renderSignUp(new FakeAuthService().failWith("signUp", UNMAPPED_CODE, text));
+    const text = FAILURE_TEXT;
+    renderSignUp(
+      new FakeAuthService().failWith(
+        "signUp",
+        UNMAPPED_CODE,
+        "Sign-up is unavailable right now.",
+      ),
+    );
 
     await signUpWith(user);
 
@@ -243,9 +257,13 @@ describe("ConfirmPage in the narrow form card", () => {
 
   it("renders a failed confirmation through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "Confirmation is unavailable right now.";
+    const text = FAILURE_TEXT;
     renderConfirm(
-      new FakeAuthService().failWith("confirmSignUp", UNMAPPED_CODE, text),
+      new FakeAuthService().failWith(
+        "confirmSignUp",
+        UNMAPPED_CODE,
+        "Confirmation is unavailable right now.",
+      ),
     );
 
     await user.type(await screen.findByLabelText(/confirmation code/i), CODE);
@@ -256,12 +274,12 @@ describe("ConfirmPage in the narrow form card", () => {
 
   it("renders a failed resend through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = "You have asked for too many codes. Try again later.";
+    const text = THROTTLED_TEXT;
     renderConfirm(
       new FakeAuthService().failWith(
         "resendConfirmationCode",
-        UNMAPPED_CODE,
-        text,
+        THROTTLED_CODE,
+        "You have asked for too many codes. Try again later.",
       ),
     );
 
@@ -320,15 +338,14 @@ describe("ForgotPasswordPage in the narrow form card", () => {
     );
   });
 
-  // AUTH-001: the reset page renders none of the provider's own words, so a
-  // request failure is the page's one generic sentence, not `text`.
+  // AUTH-001: the reset page renders none of the provider's own words either.
   it("renders a failed code request through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = RESET_FAILURE_TEXT;
+    const text = FAILURE_TEXT;
     renderForgotPassword(
       new FakeAuthService().failWith(
         "forgotPassword",
-        RESET_UNMAPPED_CODE,
+        UNMAPPED_CODE,
         "Password reset is unavailable right now.",
       ),
     );
@@ -340,11 +357,11 @@ describe("ForgotPasswordPage in the narrow form card", () => {
 
   it("renders a failed reset through InlineAlert (criterion 2)", async () => {
     const user = userEvent.setup();
-    const text = RESET_FAILURE_TEXT;
+    const text = FAILURE_TEXT;
     renderForgotPassword(
       new FakeAuthService().failWith(
         "confirmForgotPassword",
-        RESET_UNMAPPED_CODE,
+        UNMAPPED_CODE,
         "Too many reset attempts. Try again later.",
       ),
     );
