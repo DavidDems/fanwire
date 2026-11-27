@@ -45,3 +45,10 @@
   border-bottom-color: var(--color-action);
   color: var(--color-text);
 }
+
+/* A20, one colour per kind: every tab bar is navigation, so LinkText (SegmentedTabs too). */
+@media (forced-colors: active) {
+  .tab {
+    color: LinkText;
+  }
+}

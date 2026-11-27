@@ -51,6 +51,12 @@ primary controls and nav as a design choice, and 24 px as the hard floor.
   Never on `--color-surface-muted` (3.899), never under a hover fill.
 - **Focus rings use `outline`, not `box-shadow`.** `outline` survives
   forced-colors mode (A20); a shadow is removed.
+- **One kind of control, one system colour (A20).** Forced colors colours by
+  element: LinkText for `<a>`, ButtonText for `<button>`. Where one kind is
+  built from both, its module names the colour in its forced-colors block:
+  navigation (the nav list, both tab bars) LinkText, a post's action controls
+  ButtonText, their counts CanvasText. Found in the human's Windows
+  contrast-theme check (2026-11-27), which passed otherwise.
 - **Don't fix a contrast failure by nudging a hex in a component.** A failing
   pair means the token table is wrong. Raise it, and the human decides any
   palette change ([ADR 0011](../../GeneralContext/Decisions/0011-brand-palette.md)).

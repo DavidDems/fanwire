@@ -60,3 +60,19 @@
   color: var(--color-text);
   text-decoration: underline;
 }
+
+/*
+ * A20, one colour per kind: in forced colors the browser colours by element (LinkText for <a>, ButtonText for <button>), so Reply, a link, would
+ * differ from Like and Repost, and the reply count from the plain counts.
+ */
+@media (forced-colors: active) {
+  .control {
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+
+  .count,
+  .countLink {
+    color: CanvasText;
+  }
+}
