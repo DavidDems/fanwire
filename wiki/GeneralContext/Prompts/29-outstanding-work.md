@@ -57,7 +57,8 @@ row, and `Timeline/` has one line. When the last track in this table is done, de
   as a merged preview. `docs lint` exits 0 on errors: read its "0 errors" line.
 - **Manual steps for the human** are an ordered list, each a single-line
   PowerShell command in its own block. A deploy waits for the human's
-  approval; after a migration the human runs the Migration Lambda.
+  approval and runs the Migration Lambda itself
+  ([ADR 0044](../Decisions/0044-deploy-runs-migrations.md)); by hand is the fallback.
 - **Ask with `AskUserQuestion`** only for a decision the docs leave open and
   the human hasn't answered. Pick the sensible default for the rest and say so.
 - **Dependency manifests and `wiki/CodeContext/Standards/`, `FrontendUI/`**

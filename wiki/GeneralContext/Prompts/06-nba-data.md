@@ -11,8 +11,8 @@ this file, then what it names.
 **Objective:** the sports data comes from the **Eoin Moore "NBA Dataset: Box
 Scores and Stats (1947–Today)"** Kaggle dataset, with the backend a user needs
 to explore it, loaded into the live database. The backend and its frontend
-are built; what is left to *this* thread is the API-SPORTS infra clean-up and
-`EVENTS-008` (gated). `TODO/02-backlog.md` "Sports data".
+are built, and so are the API-SPORTS infra clean-up (#75) and `EVENTS-008`:
+nothing is left to build. What is left is the human's (`TODO/01-for-you.md` §1).
 
 **Tier.** Each unit is a hand run on `agent/<ID>`, held by `agent-guard` to its
 spec's `allowed_paths` (`Architecture/director-sessions.md`). `.ai/`,
@@ -46,11 +46,9 @@ Done; the module reference is `wiki/CodeContext/Modules/0x02-events.md`:
   `SportsDataLoad` Lambda ("The load function"); the live database holds
   2003-04 onward. Loading is `build-deployment-post-deploy.md` "Load sports data".
 
-**Every deploy that adds a migration needs the `Migration` Lambda invoked
-right after** (`build-deployment-post-deploy.md` "Run migrations"); until then the routes
-on the changed tables answer 500. Check
-(`curl.exe -s -o NUL -w "%{http_code}" https://fanwire.daviddems.com/api/events/teams`
-prints `200`) before the next such deploy, and say so in each PR body.
+**Every deploy runs the `Migration` Lambda** after `cdk deploy` and fails
+unless it reaches the repo's Alembic head ([ADR 0044](../Decisions/0044-deploy-runs-migrations.md));
+by hand is the fallback (`build-deployment-post-deploy.md` "Run migrations").
 
 **The dataset is at `C:\data\nba`** (downloaded 2026-10-25; it already holds
 the first 2026-27 games). Facts every loader relies on:
@@ -111,13 +109,11 @@ the first 2026-27 games). Facts every loader relies on:
 
 ## Open work
 
-1. **The API-SPORTS infra clean-up**: delete the idempotency and live-score
-   tables, the API-SPORTS secret, the ingestion-retry queue and DLQ, and their
-   exports. It is the phase-2 PR (branch `outstanding-track-3-phase-2`), merged
-   into `main` only after Outstanding-work track 3's deploy is green. Two
-   resources are `RETAIN` (`IdempotencyTable` and `ApiSportsKey`); the human
-   decided to delete both, by hand after that PR's deploy
-   ([ADR 0035](../Decisions/0035-outstanding-work-answers.md), `TODO/01-for-you.md`).
+1. **Done: the API-SPORTS infra clean-up** (`INFRA-005`, #75;
+   `wiki/CodeContext/Modules/0x00a-architecture-infra.md`). Two resources are
+   `RETAIN` (`IdempotencyTable` and `ApiSportsKey`); the human decided to
+   delete both, by hand after its deploy
+   ([ADR 0035](../Decisions/0035-outstanding-work-answers.md), `TODO/01-for-you.md` §1).
 2. **Later, not planned:** seasons before 2003-04 (needs historical teams),
    player mentions in posts, following players or teams, and the NBA's
    standings tie-breakers (`EVENTS-007` orders by win percentage, wins,

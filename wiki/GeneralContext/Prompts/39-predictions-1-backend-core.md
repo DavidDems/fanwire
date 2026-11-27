@@ -144,7 +144,7 @@ alone, then the code, then the module reference.
 **Done** means:
 
 - the deployed app answers 404 on `/predictions/*`, and the migration has run
-  (the human invokes the Migration Lambda);
+  (the deploy invokes the Migration Lambda, ADR 0044);
 - in `backend-dev` with the flag on, after `seed_dev.py` and a load of the
   current season: a signed-in user picks a scheduled game, sees 409 after its
   lock (a test game's tip-off set in the past), and
