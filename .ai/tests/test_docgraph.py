@@ -778,7 +778,7 @@ class TestOrphans:
             "AGENTS.md",
             "CLAUDE.md",
             "frontend/CLAUDE.md",
-            "wiki/GeneralContext/Prompts/49-docs-graph.md",
+            "wiki/GeneralContext/Prompts/29-outstanding-work.md",
             "wiki/GeneralContext/Prompts/_template.md",
             "wiki/GeneralContext/Timeline/2026-11.md",
             ".claude/skills/wiki-review/SKILL.md",
