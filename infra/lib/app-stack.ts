@@ -139,14 +139,21 @@ export class AppStack extends cdk.Stack {
       `/${DataStack.DATABASE_NAME}`,
     ]);
 
-    // Dormant until schema/backfill, provider adoption inventory, bucket versioning,
-    // consumer drain and erasure-copy/retention gates receive human review.
+    // Account deletion is on. The gates and how the cutover was chosen:
+    // wiki/GeneralContext/Architecture/account-lifecycle-activation.md.
+    // ACCOUNT_LIFECYCLE_CUTOVER_AT: a Cognito identity with no profile created
+    // before it cannot create one (app.users.lifecycle.prepare_profile). The
+    // namespace the validator needs is COGNITO_REGION + COGNITO_USER_POOL_ID below.
     const common = {
       DATABASE_URL: databaseUrl,
       POWERTOOLS_SERVICE_NAME: 'fanwire',
       COGNITO_REGION: auth.region,
       COGNITO_USER_POOL_ID: auth.userPool.userPoolId,
-      ACCOUNT_LIFECYCLE_ENABLED: 'false',
+      ACCOUNT_LIFECYCLE_ENABLED: 'true',
+      // Just before the earliest confirmed identity in the pool (2026-11-05T05:31Z), so all
+      // six confirmed identities can create a profile; the one unconfirmed 2026-09-30
+      // identity cannot. ISO-8601 with an offset: infra/test/account-lifecycle.test.ts.
+      ACCOUNT_LIFECYCLE_CUTOVER_AT: '2026-11-05T00:00:00Z',
     };
 
     // The SES sandbox rejects unverified recipients: no send grant or from-address

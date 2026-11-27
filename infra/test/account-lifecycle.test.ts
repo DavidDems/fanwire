@@ -109,7 +109,7 @@ describe.each(Object.entries(DOMAIN_MODES))(
       );
     });
 
-    test("API, consumers, migration and reconciler agree on trusted namespace; activation stays dormant", () => {
+    test("API, consumers, migration and reconciler agree on trusted namespace; activation is on with a real cutover", () => {
       const commands = [
         "app.main.handler",
         "app.media.lambda_handler.handler",
@@ -130,8 +130,16 @@ describe.each(Object.entries(DOMAIN_MODES))(
         );
         expect(current.COGNITO_USER_POOL_ID).toBeDefined();
       }
-      for (const current of env.filter((_current, index) => index !== 3)) {
-        expect(current.ACCOUNT_LIFECYCLE_ENABLED).toBe("false");
+      for (const current of env) {
+        expect(current.ACCOUNT_LIFECYCLE_ENABLED).toBe("true");
+        const cutover = String(current.ACCOUNT_LIFECYCLE_CUTOVER_AT);
+        // backend/app/settings.py refuses a naive or missing cutover at start-up;
+        // this refuses it at synth, before any deploy.
+        expect(cutover).toMatch(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/,
+        );
+        expect(Number.isNaN(Date.parse(cutover))).toBe(false);
+        expect(cutover).toBe(env[0].ACCOUNT_LIFECYCLE_CUTOVER_AT);
       }
     });
 
