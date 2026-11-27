@@ -31,3 +31,19 @@ deletion on for real users. It is set in the separate activation PR (`outstandin
 4. **Drain**: confirm every queue and DLQ is 0 just before merging the activation PR, and again after.
 5. **Alarms and schedule**: confirm the rule is `ENABLED`, targets the AccountDeletion function, the function has invocations and 0 errors, and the alarms are `OK` with the alarm topic as their action.
 6. **Copy**: approve or overturn FRONTEND-060's sentence.
+
+## Readings and the cutover (2026-11-26)
+
+Read-only, after #123 deployed and the Migration Lambda answered
+`6da4a4366b5b`. Every gate is green: both media buckets never
+versioned; the queues and DLQs empty; the rule `ENABLED` at `rate(5 minutes)`,
+288 runs and 0 errors in 24 h, both AccountDeletion alarms `OK` with the
+topic's email subscription confirmed; the copy shipped as FRONTEND-060.
+
+The pool held 7 identities, all the human's test accounts: 6 `CONFIRMED`
+(the earliest created 2026-11-05T05:31Z) and 1 `UNCONFIRMED` from 2026-09-30.
+Which have a profile was not read. The human chose to keep the 6 confirmed and
+forget the unconfirmed one, without deleting anything, so the cutover is
+`2026-11-05T00:00:00Z`: each confirmed identity can still create a profile,
+and the unconfirmed one never can.
+

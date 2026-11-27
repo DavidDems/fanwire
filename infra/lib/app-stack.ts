@@ -150,9 +150,10 @@ export class AppStack extends cdk.Stack {
       COGNITO_REGION: auth.region,
       COGNITO_USER_POOL_ID: auth.userPool.userPoolId,
       ACCOUNT_LIFECYCLE_ENABLED: 'true',
-      // SET BEFORE MERGING: an ISO-8601 time with an offset, e.g. '2026-12-01T15:00:00Z'.
-      // infra/test/account-lifecycle.test.ts fails until it is one.
-      ACCOUNT_LIFECYCLE_CUTOVER_AT: 'SET-ME-BEFORE-MERGE',
+      // Just before the earliest confirmed identity in the pool (2026-11-05T05:31Z), so all
+      // six confirmed identities can create a profile; the one unconfirmed 2026-09-30
+      // identity cannot. ISO-8601 with an offset: infra/test/account-lifecycle.test.ts.
+      ACCOUNT_LIFECYCLE_CUTOVER_AT: '2026-11-05T00:00:00Z',
     };
 
     // The SES sandbox rejects unverified recipients: no send grant or from-address
