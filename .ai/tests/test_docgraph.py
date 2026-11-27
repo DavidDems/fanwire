@@ -778,7 +778,7 @@ class TestOrphans:
             "AGENTS.md",
             "CLAUDE.md",
             "frontend/CLAUDE.md",
-            "wiki/GeneralContext/Prompts/49-docs-graph.md",
+            "wiki/GeneralContext/Prompts/29-outstanding-work.md",
             "wiki/GeneralContext/Prompts/_template.md",
             "wiki/GeneralContext/Timeline/2026-11.md",
             ".claude/skills/wiki-review/SKILL.md",
@@ -1026,14 +1026,14 @@ class TestDebtCli:
             line.split() for line in lines
         ]
         assert any("frontend/src/gone/**" in line and "pattern)" in line for line in lines)
-        assert lines[-1] == "docs graph: 1 orphans, 2 dangling"
+        assert lines[-1] == "docs graph: 1 orphans, 2 dangling, 0 frozen"
         assert not (repo / GRAPH).exists()
 
     def test_orphans_json(self, repo):
         put(repo, "wiki/a.md", "x\n")
         result = run("graph", "--root", str(repo), "--orphans", "--json")
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout) == {"orphans": ["wiki/a.md"], "dangling": []}
+        assert json.loads(result.stdout) == {"orphans": ["wiki/a.md"], "dangling": [], "frozen": []}
 
     def test_check_passes_with_a_one_line_summary(self, checked):
         repo, base = checked
@@ -1092,6 +1092,75 @@ class TestDebtCli:
         before = (repo / GRAPH).read_bytes()
         assert run("graph", "--root", str(repo), *args).returncode == 2
         assert (repo / GRAPH).read_bytes() == before
+
+
+DECISION = "---\ntype: decision\nstatus: accepted\n---\n# 0001\n\n"
+
+
+class TestFrozenDecisions:
+    """A decision is immutable once merged (doclint freezes its links), so a
+    dangling edge from one is history, not debt: deleting a finished prompt
+    an ADR links to must not grow the ratchet. `--orphans` still lists it."""
+
+    def test_a_decisions_dangling_edge_is_frozen_not_dangling(self, repo):
+        put(repo, "wiki/index.md", "[d](Decisions/0001-x.md)\n")
+        put(repo, "wiki/Decisions/0001-x.md", DECISION + "[gone](../gone.md), wiki/gone.md:3\n")
+        found = docgraph.debt(repo)
+        assert found["dangling"] == []
+        assert found["frozen"] == [
+            {
+                "source": "wiki/Decisions/0001-x.md",
+                "target": "wiki/gone.md",
+                "kind": "cites-line",
+                "cause": "missing",
+            },
+            {
+                "source": "wiki/Decisions/0001-x.md",
+                "target": "wiki/gone.md",
+                "kind": "link",
+                "cause": "missing",
+            },
+        ]
+        assert debt_keys(repo) == []
+
+    def test_other_types_and_no_frontmatter_stay_dangling(self, repo):
+        put(repo, "wiki/index.md", "[a](a.md) [b](b.md)\n")
+        put(repo, "wiki/a.md", "---\ntype: reference\n---\n[gone](gone.md)\n")
+        put(repo, "wiki/b.md", "type: decision\n\n[gone](gone.md)\n")
+        found = docgraph.debt(repo)
+        assert [d["source"] for d in found["dangling"]] == ["wiki/a.md", "wiki/b.md"]
+        assert found["frozen"] == []
+
+    def test_a_decision_nothing_links_to_is_still_an_orphan(self, repo):
+        put(repo, "wiki/Decisions/0001-x.md", DECISION)
+        assert docgraph.debt(repo)["orphans"] == ["wiki/Decisions/0001-x.md"]
+
+    def test_deleting_a_doc_a_decision_links_to_passes_the_ratchet(self, checked):
+        repo, _ = checked
+        put(repo, "wiki/index.md", "[old](old.md) [d](Decisions/0001-x.md) [p](p.md)\n")
+        put(repo, "wiki/Decisions/0001-x.md", DECISION + "[p](../p.md)\n")
+        put(repo, "wiki/p.md", "x\n")
+        regen(repo)
+        base = commit(repo, "a decision links a prompt")
+        git(repo, "rm", "-q", "wiki/p.md")
+        put(repo, "wiki/index.md", "[old](old.md) [d](Decisions/0001-x.md)\n")
+        regen(repo)
+        result = docgraph.check(repo, base=base)
+        assert result["errors"] == [] and result["stale"] is False
+
+    def test_orphans_cli_lists_frozen_edges_apart(self, repo):
+        put(repo, "wiki/index.md", "[d](Decisions/0001-x.md)\n")
+        put(repo, "wiki/Decisions/0001-x.md", DECISION + "[gone](../gone.md)\n")
+        result = run("graph", "--root", str(repo), "--orphans")
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        row = ["frozen", "wiki/Decisions/0001-x.md", "->", "wiki/gone.md", "(link,", "missing)"]
+        assert row in [line.split() for line in lines]
+        assert not any(line.split()[:1] == ["dangling"] for line in lines)
+        assert lines[-1] == "docs graph: 0 orphans, 0 dangling, 1 frozen"
+        data = json.loads(run("graph", "--root", str(repo), "--orphans", "--json").stdout)
+        assert data["dangling"] == []
+        assert [d["target"] for d in data["frozen"]] == ["wiki/gone.md"]
 
 
 def test_this_module_names_its_baseline_so_a_base_can_be_told_apart():

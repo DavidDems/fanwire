@@ -1,6 +1,6 @@
 ---
 name: wiki-review
-description: A weekly by-hand pass over wiki/ and .ai/docs/ - run the doc linter, find budget overruns, duplicated facts, stale module facts, broken links and done backlog rows, and end in one reviewable PR.
+description: A weekly by-hand pass over wiki/ and .ai/docs/ - run the doc linter, find budget overruns, duplicated facts, stale module facts, broken links, orphan docs and done backlog rows, and end in one reviewable PR.
 ---
 
 # WikiReview
@@ -46,8 +46,14 @@ shared checkout. Run these in order and keep a list of findings.
    Correct the reference in place with the smallest true edit. When the doc is
    right and the code is wrong, report a finding; do not edit the doc.
 5. **Broken links.** The linter's link and citation errors; also inbound
-   links to anything you move.
-6. **Done backlog rows.** Each row of `TODO/02-backlog.md` whose work is on
+   links to anything you move (`agentctl docs graph --of <path>` lists them).
+6. **Orphans.** `agentctl docs graph --orphans` lists docs nothing links to
+   and dangling edges ([the graph reference](../../../.ai/docs/docgraph.md)).
+   Link an orphan from the file that owns its subject, or delete it and name
+   where its fact went. Fix a dangling edge's link or spec path, or report it;
+   edges listed as frozen are in merged decisions and stay. Prune the baseline
+   entries now fixed in the Director PR; never add one.
+7. **Done backlog rows.** Each row of `TODO/02-backlog.md` whose work is on
    `main` (`git log origin/main`, `gh pr list --state merged`): delete the row
    and make sure the module reference states the new fact. A finished live
    prompt is deleted and gets one `Timeline/` line

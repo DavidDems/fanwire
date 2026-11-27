@@ -23,7 +23,10 @@ Debt (step 3): `debt` lists orphans (docs with no inbound edge that are not
 roots) and dangling edges (to a `missing` node, or a `pattern` no tracked
 file matches) from a fresh build. `check` is what CI runs: the committed
 graph must equal a fresh build, and that debt may only shrink against the
-base's `.ai/graph-baseline.json`, by doclint's own ratchet.
+base's `.ai/graph-baseline.json`, by doclint's own ratchet. A dangling
+edge whose source is a decision (frontmatter `type: decision`) is `frozen`,
+not debt: a merged decision is immutable, as doclint treats it, so deleting
+a doc it links to (a finished prompt) cannot be repaired there.
 """
 
 from __future__ import annotations
@@ -401,11 +404,12 @@ def is_root(path: str) -> bool:
     )
 
 
-def debt_of(graph: dict, tracked: list[str]) -> dict:
+def debt_of(graph: dict, tracked: list[str], decisions: frozenset[str] = frozenset()) -> dict:
     """Orphan docs and dangling edges of `graph`, `tracked` deciding patterns.
 
     A dangling edge is listed once per (source, target, kind): two line
-    citations of one missing file are one finding.
+    citations of one missing file are one finding. One whose source is in
+    `decisions` goes to `frozen` instead: listed, never a baseline key.
     """
     kinds = _kinds(graph)
     reached = {e["target"] for e in graph["edges"] if e["source"] != e["target"]}
@@ -423,18 +427,34 @@ def debt_of(graph: dict, tracked: list[str]) -> dict:
         if kind == "missing" or e["target"] in empty:
             cause = "missing" if kind == "missing" else "pattern"
             dangling.add((e["source"], e["target"], e["kind"], cause))
+    rows = [{"source": s, "target": t, "kind": k, "cause": c} for s, t, k, c in sorted(dangling)]
     return {
         "orphans": orphans,
-        "dangling": [
-            {"source": s, "target": t, "kind": k, "cause": c} for s, t, k, c in sorted(dangling)
-        ],
+        "dangling": [r for r in rows if r["source"] not in decisions],
+        "frozen": [r for r in rows if r["source"] in decisions],
     }
+
+
+def decisions(root: Path, graph: dict) -> frozenset[str]:
+    """The docs of `graph` whose frontmatter says `type: decision`.
+
+    Read from the tree, not carried in the graph: a node attribute would put
+    every doc's type in `.ai/graph.json` for the one question debt asks.
+    """
+    return frozenset(
+        n["path"]
+        for n in graph["nodes"]
+        if n["kind"] == "doc"
+        and doclint.frontmatter(doccorpus._read(root, n["path"]) or "")[0].get("type")
+        == "decision"
+    )
 
 
 def debt(root: Path) -> dict:
     """Orphans and dangling edges of the tree at `root` as it is (a fresh build)."""
     root = Path(root).resolve()
-    return debt_of(build(root), doccorpus._tracked(root))
+    graph = build(root)
+    return debt_of(graph, doccorpus._tracked(root), decisions(root, graph))
 
 
 def debt_keys(found: dict) -> set[str]:
@@ -475,7 +495,7 @@ def check(root: Path, *, base: str) -> dict:
         raise ValueError(f"{BASELINE} not found") from None
     baseline = doclint.read_baseline(text)
     previous = _previous(root, base, baseline)
-    actual = debt_keys(debt_of(graph, doccorpus._tracked(root)))
+    actual = debt_keys(debt_of(graph, doccorpus._tracked(root), decisions(root, graph)))
     return {
         "stale": committed != dumps(graph).encode("ascii"),
         "errors": doclint.ratchet(actual, baseline, previous),

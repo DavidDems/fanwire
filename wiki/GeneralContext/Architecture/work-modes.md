@@ -130,7 +130,7 @@ One structure for every mode, so any session can start cold:
   A decision lives in one place; everything else links to it.
 - **History: `wiki/GeneralContext/Timeline/`**, one `changelog` volume per
   month ([2026-09](../Timeline/2026-09.md), [2026-10](../Timeline/2026-10.md),
-  [2026-11](../Timeline/2026-11.md)): one line per milestone, citing its PRs
+  [2026-11](../Timeline/2026-11.md), [2026-11b](../Timeline/2026-11b.md)): one line per milestone, citing its PRs
   as `fanwire-archive#N`. Reasons stay in the PRs and decisions above.
 - **How a hand run works: `Architecture/director-sessions.md`.** The loop, the
   gates, the verification and the standing limits.

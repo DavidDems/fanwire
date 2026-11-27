@@ -21,6 +21,7 @@ state. Nothing is duplicated between them: a task spec names the
 | **Every state and transition** | [docs/state-machine.md](docs/state-machine.md) |
 | **Collecting or reading unit measurements** | [docs/metrics.md](docs/metrics.md) — schema, attribution, unknowns, artifact commands, `agentctl metrics report` |
 | **What happens if an agent is manipulated** | [docs/threat-model.md](docs/threat-model.md) |
+| **What links to or from a doc, before grepping** | [docs/docgraph.md](docs/docgraph.md) — `agentctl docs graph --of`, `--task`, `--orphans` |
 
 ## In one paragraph
 
@@ -65,7 +66,8 @@ Nothing depends on an agent session staying alive.
 ├── hooks/                 git hooks (see hooks/README.md)
 ├── docs/                  handoff (start here), handoff-live-proof, philosophy,
 │                          architecture, state-machine, permissions, threat-model,
-│                          operations + operations-recovery, metrics, doclint
+│                          operations + operations-recovery, metrics, doclint,
+│                          docgraph
 └── tests/                 the suite over agentlib, bin and the workflows; runs in CI
 ```
 
