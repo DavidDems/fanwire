@@ -820,6 +820,7 @@
     {"source": ".agents/skills/ai-review/SKILL.md", "target": ".claude/skills/ai-review/SKILL.md", "kind": "link"},
     {"source": ".agents/skills/wiki-review/SKILL.md", "target": ".claude/skills/wiki-review/SKILL.md", "kind": "link"},
     {"source": ".agents/skills/wiki-update/SKILL.md", "target": ".claude/skills/wiki-update/SKILL.md", "kind": "link"},
+    {"source": ".ai/CHANGELOG.md", "target": ".ai/docs/doclint.md", "kind": "link"},
     {"source": ".ai/CHANGELOG.md", "target": ".ai/docs/metrics.md", "kind": "link"},
     {"source": ".ai/CHANGELOG.md", "target": "TODO/02-backlog.md", "kind": "link"},
     {"source": ".ai/README.md", "target": ".ai/docs/architecture.md", "kind": "link"},
