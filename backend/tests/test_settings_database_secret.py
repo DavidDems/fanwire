@@ -66,7 +66,7 @@ class _CountingClient:
         self.secret = secret
         self.reads: list[str] = []
 
-    def get_secret_value(self, SecretId: str) -> dict[str, str]:  # noqa: N803 - boto3's name
+    def get_secret_value(self, SecretId: str) -> dict[str, str]:
         self.reads.append(SecretId)
         return {"SecretString": json.dumps(self.secret)}
 

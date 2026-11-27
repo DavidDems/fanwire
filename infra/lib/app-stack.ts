@@ -87,6 +87,10 @@ export class AppStack extends cdk.Stack {
 
   private readonly props: AppStackProps;
   private readonly keyArn: string;
+  /** The RDS secret: the only one a database function may read (ADR 0045). */
+  private readonly databaseSecretArn: string;
+  /** Where the database and its secret are; never the credentials. */
+  private readonly databaseEnv: Record<string, string>;
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
@@ -124,23 +128,19 @@ export class AppStack extends cdk.Stack {
       ],
     });
 
-    // --- DATABASE_URL. Settings.database_url wants a full SQLAlchemy URL. The
-    // password is a CloudFormation dynamic reference resolved at deploy time:
-    // never in git or in the template. At rest it sits in the function's
-    // environment encrypted with the CMK. (A later backend change can read
-    // the secret at cold start instead and drop this; see wiki notes.)
-    const dbSecret = data.databaseSecret;
-    const databaseUrl = cdk.Fn.join('', [
-      'postgresql+psycopg://',
-      dbSecret.secretValueFromJson('username').unsafeUnwrap(),
-      ':',
-      dbSecret.secretValueFromJson('password').unsafeUnwrap(),
-      '@',
-      data.database.dbInstanceEndpointAddress,
-      ':',
-      data.database.dbInstanceEndpointPort,
-      `/${DataStack.DATABASE_NAME}`,
-    ]);
+    // --- the database (ADR 0045). A function that connects to RDS is told
+    // where the database and its secret are, never the credentials: it reads
+    // the secret from Secrets Manager once per cold start (app.settings) and
+    // builds the SQLAlchemy URL in memory, so no environment holds a password
+    // and a rotated password needs no redeploy. `readsDatabase` on
+    // backendFunction adds these variables and the one narrow read.
+    this.databaseSecretArn = data.databaseSecret.secretArn;
+    this.databaseEnv = {
+      DATABASE_SECRET_ARN: this.databaseSecretArn,
+      DATABASE_HOST: data.database.dbInstanceEndpointAddress,
+      DATABASE_PORT: data.database.dbInstanceEndpointPort,
+      DATABASE_NAME: DataStack.DATABASE_NAME,
+    };
 
     // Account deletion is on. The gates and how the cutover was chosen:
     // wiki/GeneralContext/Architecture/account-lifecycle-activation.md.
@@ -148,7 +148,6 @@ export class AppStack extends cdk.Stack {
     // before it cannot create one (app.users.lifecycle.prepare_profile). The
     // namespace the validator needs is COGNITO_REGION + COGNITO_USER_POOL_ID below.
     const common = {
-      DATABASE_URL: databaseUrl,
       POWERTOOLS_SERVICE_NAME: 'fanwire',
       COGNITO_REGION: auth.region,
       COGNITO_USER_POOL_ID: auth.userPool.userPoolId,
@@ -172,6 +171,7 @@ export class AppStack extends cdk.Stack {
     // --- API
     const api = this.backendFunction('Api', {
       command: 'app.main.handler',
+      readsDatabase: true,
       timeout: cdk.Duration.seconds(25), // under HTTP API's 30s integration cap
       memorySize: 512,
       image,
@@ -219,6 +219,7 @@ export class AppStack extends cdk.Stack {
     // --- media processing (GuardDuty scan result -> SQS -> here)
     const media = this.backendFunction('Media', {
       command: 'app.media.lambda_handler.handler',
+      readsDatabase: true,
       timeout: CONSUMER_TIMEOUTS.media,
       memorySize: 1024, // Pillow decode/resize
       image,
@@ -276,6 +277,7 @@ export class AppStack extends cdk.Stack {
     }
     const notifications = this.backendFunction('Notifications', {
       command: 'app.notifications.lambda_handler.handler',
+      readsDatabase: true,
       timeout: CONSUMER_TIMEOUTS.notifications,
       memorySize: 256,
       image,
@@ -289,6 +291,7 @@ export class AppStack extends cdk.Stack {
     // PostgreSQL claim epochs provide concurrency control; no quota reservation.
     const accountDeletion = this.backendFunction('AccountDeletion', {
       command: 'app.account_deletion_handler.handler',
+      readsDatabase: true,
       timeout: cdk.Duration.seconds(120),
       memorySize: 256,
       image,
@@ -494,11 +497,10 @@ export class AppStack extends cdk.Stack {
    * and from any shell with a DATABASE_URL. "One migration at a time" now
    * lives in Postgres, as an advisory lock in `app.migrate`.
    *
-   * No extra statements beyond what `backendFunction` already gives every
-   * function -- it needs its log group, the ENI actions for the VPC, and
-   * `kms:Decrypt` for its encrypted environment, and nothing else:
-   * DATABASE_URL is a CloudFormation dynamic reference resolved at deploy
-   * time, not a Secrets Manager call at runtime.
+   * No extra statements beyond what `backendFunction` gives every database
+   * function -- its log group, the ENI actions for the VPC, `kms:Decrypt` on
+   * the CMK, and `secretsmanager:GetSecretValue` on the RDS secret, which it
+   * reads at cold start to build its connection URL (ADR 0045).
    */
   private migrationRunner(
     image: ecrAssets.DockerImageAsset,
@@ -507,6 +509,7 @@ export class AppStack extends cdk.Stack {
   ): void {
     this.backendFunction('Migration', {
       command: 'app.migrate.handler',
+      readsDatabase: true,
       // Exact name: infra/iam/github-actions-deploy-role-policy.json grants
       // lambda:InvokeFunction on this ARN alone (ADR 0044).
       functionName: MIGRATION_FUNCTION_NAME,
@@ -543,9 +546,10 @@ export class AppStack extends cdk.Stack {
    * 2048 MB is about three times that peak and buys CPU; the four files are
    * ~440 MB, over the 512 MB of `/tmp` a function gets by default.
    *
-   * One grant beyond backendFunction's three: `s3:GetObject` on the dataset
-   * prefix. It knows the four file names, so no `s3:ListBucket`. The bucket
-   * is encrypted with the CMK `DecryptEnvironmentAndData` already names.
+   * One grant beyond what backendFunction gives every database function:
+   * `s3:GetObject` on the dataset prefix. It knows the four file names, so
+   * no `s3:ListBucket`. The bucket is encrypted with the CMK
+   * `DecryptEnvironmentAndData` already names.
    */
   private sportsDataLoad(
     image: ecrAssets.DockerImageAsset,
@@ -555,6 +559,7 @@ export class AppStack extends cdk.Stack {
   ): lambda.Function {
     const load = this.backendFunction('SportsDataLoad', {
       command: 'app.events.load_handler.handler',
+      readsDatabase: true,
       timeout: cdk.Duration.minutes(15),
       memorySize: 2048,
       ephemeralStorageSize: cdk.Size.mebibytes(1024),
@@ -579,9 +584,9 @@ export class AppStack extends cdk.Stack {
    * bucket, then invokes SportsDataLoad asynchronously for the current season.
    *
    * **Outside the VPC**: it needs Kaggle and AWS APIs, never the database, and
-   * avoids the NAT. So its environment is not `common` (no DATABASE_URL), and
-   * the token is read from Secrets Manager at invocation time, never held in
-   * the function's configuration. 2048 MB of ephemeral storage because
+   * avoids the NAT. So its environment is not `common`, it does not read the
+   * database secret (no `readsDatabase`), and the token is read from Secrets
+   * Manager at invocation time, never held in the function's configuration. 2048 MB of ephemeral storage because
    * kagglehub may leave a server-side zip beside the extracted file.
    *
    * Five grants beyond backendFunction's: read the one secret, get/put the
@@ -692,6 +697,8 @@ export class AppStack extends cdk.Stack {
       functionName?: string;
       /** Default one month, destroyed with the stack. */
       logRetention?: { days: logs.RetentionDays; removalPolicy: cdk.RemovalPolicy };
+      /** Connects to RDS: gets the database variables and may read the database secret (ADR 0045). */
+      readsDatabase?: boolean;
     },
   ): lambda.Function {
     const { network } = this.props;
@@ -747,8 +754,19 @@ export class AppStack extends cdk.Stack {
                 },
               }),
             ]),
-        // Environment variables are encrypted with the CMK.
+        // Environment variables are encrypted with the CMK, and so is the
+        // database secret: Secrets Manager decrypts it with the caller's
+        // kms:Decrypt, so this one statement covers both.
         this.kmsStatement('DecryptEnvironmentAndData', ['kms:Decrypt']),
+        ...(opts.readsDatabase
+          ? [
+              new iam.PolicyStatement({
+                sid: 'ReadDatabaseSecret',
+                actions: ['secretsmanager:GetSecretValue'],
+                resources: [this.databaseSecretArn],
+              }),
+            ]
+          : []),
         ...opts.statements,
       ],
     });
@@ -766,7 +784,7 @@ export class AppStack extends cdk.Stack {
       timeout: opts.timeout,
       memorySize: opts.memorySize,
       ephemeralStorageSize: opts.ephemeralStorageSize,
-      environment: opts.environment,
+      environment: opts.readsDatabase ? { ...opts.environment, ...this.databaseEnv } : opts.environment,
       environmentEncryption: opts.keyRef,
       ...(opts.outsideVpc
         ? {}
