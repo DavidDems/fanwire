@@ -4,15 +4,15 @@ type: runbook
 
 # After a deploy: migrations and sports data
 
-The deploy workflow runs neither of these ([[wiki/CodeContext/Standards/build-deployment|Build & Deployment]] "Automated deploy" → "What it does not do"). The human runs them by hand.
+The deploy workflow runs the migrations itself ([[wiki/CodeContext/Standards/build-deployment|Build & Deployment]] "Automated deploy" step 4, ADR 0044); it does not load sports data. The human runs the sports-data load by hand, and the migrations only as the fallback below.
 
 ## Run migrations
 
-When: after a deploy that adds an Alembic revision. Run these in order, in one PowerShell window:
+**This is the fallback.** A deploy runs the migrations as its own step; use this only when that step could not run (a run cancelled between `cdk deploy` and the step, or a run to re-check). "Which revisions ran?" is answered by the `Fanwire-App-Migration` log group, which never expires. Run these in order, in one PowerShell window:
 
 1. Find the function:
    ```powershell
-   $migration = aws lambda list-functions --profile fanwire-workload --region ca-central-1 --query "Functions[?contains(FunctionName,'Migration')].FunctionName" --output text
+   $migration = 'Fanwire-App-Migration'
    ```
 2. Invoke it and print its answer, which must name the new head revision:
    ```powershell

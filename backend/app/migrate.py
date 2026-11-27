@@ -3,10 +3,10 @@
 The fifth command override on the one shared backend image
 (`docker/backend.Dockerfile`'s `lambda` stage, which copies `alembic/` and
 `alembic.ini` to `LAMBDA_TASK_ROOT`), wired up as
-infra/lib/app-stack.ts's `Migration` function. A human invokes it once
-after `cdk deploy`, before the API is expected to work; **nothing invokes
-it automatically** -- not an EventBridge rule, not a schedule, not a
-CloudFormation custom resource. DDL inside a stack update makes every
+infra/lib/app-stack.ts's `Migration` function. `deploy.yml` invokes it after
+`cdk deploy` and before its smoke check (ADR 0044), and a human can by hand as
+the fallback; **no trigger invokes it** -- not an EventBridge rule, not a
+schedule, not a CloudFormation custom resource. DDL inside a stack update makes every
 deploy a schema change, makes rollback ambiguous and puts
 `alembic upgrade head` inside CloudFormation's timeout semantics. See
 `infra/test/app-stack.test.ts`'s "App stack: migration runner" for the
