@@ -1,17 +1,54 @@
+import json
 from datetime import datetime
+from functools import cache
 from typing import Self
+from urllib.parse import quote
 
+import boto3  # type: ignore[import-untyped]  # no boto3 stubs/py.typed marker installed
 from pydantic import Field, PositiveInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@cache
+def database_url_from_secret(secret_arn: str, host: str, port: int, name: str, region: str) -> str:
+    """The SQLAlchemy URL for the RDS secret at `secret_arn` (ADR 0045).
+
+    Read from Secrets Manager once per process -- once per Lambda cold start
+    -- however many times `Settings` is built; the URL is only ever held in
+    memory, never in an environment variable. The credentials are
+    URL-quoted, so a password with `%`, `@`, `:` or `/` in it survives
+    SQLAlchemy's URL parsing. No error raised here quotes the secret: a
+    missing key is named, its value never.
+    """
+    client = boto3.client("secretsmanager", region_name=region)
+    secret = json.loads(client.get_secret_value(SecretId=secret_arn)["SecretString"])
+    missing = [key for key in ("username", "password") if not secret.get(key)]
+    if missing:
+        raise ValueError(f"the database secret has no {' or '.join(missing)}")
+    username = quote(secret["username"], safe="")
+    password = quote(secret["password"], safe="")
+    return f"postgresql+psycopg://{username}:{password}@{host}:{port}/{name}"
 
 
 class Settings(BaseSettings):
     """12-factor config: every value comes from the environment, nothing
     hardcoded per-environment (wiki/CodeContext/Standards/design-principles.md)."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # hide_input_in_errors: a validation error would otherwise quote every
+    # input, the database URL and its password among them.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
-    database_url: str
+    # The database, one of two ways (`_database_url`, below). DATABASE_URL in
+    # full -- local dev, tests, compose. Or, on a deployed function, where the
+    # database and its RDS secret are (infra/lib/app-stack.ts, ADR 0045): the
+    # URL is then built from the secret at startup, so no environment holds
+    # the password. repr=False keeps the built URL out of any repr of Settings.
+    database_url: str = Field(default="", repr=False)
+    database_secret_arn: str = ""
+    database_host: str = ""
+    database_port: PositiveInt = 5432
+    database_name: str = ""
+
     aws_default_region: str = "us-east-1"
 
     # Cognito wiring for app.users.dependencies.get_token_verifier's
@@ -136,4 +173,31 @@ class Settings(BaseSettings):
                     "ENVIRONMENT is 'development' but AWS_LAMBDA_FUNCTION_NAME is set; "
                     "the local stack does not run on Lambda"
                 )
+        return self
+
+    # Deliberately the last validator: it runs after the others, so the URL it
+    # builds exists only once every other check has passed.
+    @model_validator(mode="after")
+    def _database_url(self) -> Self:
+        if self.database_url:
+            return self
+        if not self.database_secret_arn:
+            raise ValueError(
+                "No database configured: set DATABASE_URL, or DATABASE_SECRET_ARN "
+                "with DATABASE_HOST and DATABASE_NAME"
+            )
+        missing = [
+            env
+            for env, value in (("DATABASE_HOST", self.database_host), ("DATABASE_NAME", self.database_name))
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"DATABASE_SECRET_ARN is set but {' and '.join(missing)} is not")
+        self.database_url = database_url_from_secret(
+            self.database_secret_arn,
+            self.database_host,
+            self.database_port,
+            self.database_name,
+            self.aws_default_region,
+        )
         return self

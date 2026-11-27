@@ -41,9 +41,9 @@ resolves against the ini's own directory, so `versions/` is found too.
 `{"ok": False}` produces a *successful* invocation in the Lambda console,
 which is exactly the signal an operator reads as "migrations applied".
 
-**It never emits the database URL.** `DATABASE_URL` carries the password
-inline (the known gap in `wiki/CodeContext/Modules/0x00b-architecture-iam-gaps.md`),
-so this function must not widen it into CloudWatch -- not in a log record,
+**It never emits the database URL.** The URL carries the password inline
+(built in memory from the RDS secret on Lambda, ADR 0045; `DATABASE_URL`
+locally), so this function must not widen it into CloudWatch -- not in a log record,
 not in the return value, and above all not through the escaping exception.
 Lambda prints an unhandled exception's whole traceback including the
 `__cause__`/`__context__` chain, and SQLAlchemy/psycopg do put the connect
@@ -168,7 +168,7 @@ def redact(text: str, database_url: str) -> str:
     return _PASSWORD_KEYWORD.sub(f"password={_REDACTED}", text)
 
 
-def _escape_for_configparser(value: str) -> str:
+def escape_for_configparser(value: str) -> str:
     """Escape `%` for `Config.set_main_option`.
 
     The value goes to configparser, whose `BasicInterpolation` reads `%` as
@@ -176,8 +176,10 @@ def _escape_for_configparser(value: str) -> str:
     one -- with the offending value, i.e. the whole database URL, in the
     message. Alembic documents `%%` as the escape, and `get_main_option`
     interpolates on read, so the escaped value reads back identical to this
-    one. The RDS-generated password excludes `%` today; a hand-rotated one
-    need not.
+    one. The URL built from the RDS secret percent-quotes its password
+    (`app.settings.database_url_from_secret`), so any `%` in it, or in a
+    hand-written DATABASE_URL, would otherwise crash here. `alembic/env.py`
+    uses this too.
     """
     return value.replace("%", "%%")
 
@@ -227,7 +229,7 @@ def _build_config(database_url: str) -> Config:
     config = Config(str(ALEMBIC_INI))
     # `alembic/env.py` sets the same option from the same place, but setting
     # it here is what makes an unset DATABASE_URL fail before any DDL runs.
-    config.set_main_option("sqlalchemy.url", _escape_for_configparser(database_url))
+    config.set_main_option("sqlalchemy.url", escape_for_configparser(database_url))
     return config
 
 

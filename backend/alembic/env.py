@@ -9,6 +9,7 @@ import app.posts.models  # registers Post/PostLike/EventMention/Report on Base.m
 import app.users.models  # noqa: F401 — registers User/Follow on Base.metadata for autogenerate
 from alembic import context
 from app.db import Base
+from app.migrate import escape_for_configparser
 from app.settings import Settings
 
 # this is the Alembic Config object, which provides
@@ -20,9 +21,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# DATABASE_URL always comes from the environment (12-factor config, see
-# wiki/CodeContext/Standards/design-principles.md) - never hardcoded here.
-config.set_main_option("sqlalchemy.url", Settings().database_url)
+# The URL always comes from Settings (12-factor config, see
+# wiki/CodeContext/Standards/design-principles.md) - DATABASE_URL, or built
+# from the RDS secret (ADR 0045) - never hardcoded here. Escaped because
+# set_main_option goes through configparser, which reads a bare `%` as
+# interpolation and raises with the whole URL in its message.
+config.set_main_option("sqlalchemy.url", escape_for_configparser(Settings().database_url))
 
 # every module's models import into app.db.Base's registry so autogenerate
 # sees the full schema - see wiki/CodeContext/Modules/0x00-architecture.md
