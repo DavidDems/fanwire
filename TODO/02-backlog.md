@@ -20,7 +20,7 @@ and record the result as current-state fact in the module file it changed.
 
 **Order of work:** the Outstanding-work tracks are finished
 ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)). What is left runs in
-`wiki/GeneralContext/Prompts/29-outstanding-work.md`: the results scraper, then
+`wiki/GeneralContext/Prompts/29-outstanding-work.md`: the final track (`48`), the docs graph (`49`), the results scraper, then
 the predictions tracks. Each row below names its track.
 
 ## Agent system
@@ -58,6 +58,15 @@ before a brief.
 | Item | Mode | Notes |
 |---|---|---|
 | **A pipeline diagram, explained as a slide** | `director` | Once off. A slide deck artifact, not repository content. Ask a Director session for it when wanted |
+
+## Final track and docs graph
+
+One row per brief ([ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-answers.md)).
+
+| Item | Mode | Task | Notes |
+|---|---|---|---|
+| **Final track**: database credentials from Secrets Manager, the axe rows, the unmapped-Cognito-code message, dialog focus, image-pipeline timing (R16), a second docs revision | `hand` / `director` | — | `Prompts/48-outstanding-work-final.md`. The two Frontend rows below are in it |
+| **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. After 48 |
 
 ## Sports data
 
