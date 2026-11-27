@@ -232,6 +232,53 @@ def test_strip_metadata_removes_exif_from_generated_variants(s3_client):
     assert "exif" not in thumbnail.info
 
 
+def test_strip_metadata_keeps_python_memory_flat_for_a_large_photo(s3_client):
+    """R16 on the live stack (2026-11-27): a 12 MP phone photo ran the 1024 MB
+    Media Lambda out of memory, because stripping copied every pixel into a
+    Python list of tuples (about 80 bytes a pixel). Pillow's own pixel buffers
+    are not Python objects, so tracemalloc sees only that per-pixel copy; a
+    3 MP image keeps the red run small while the copy alone would cost ~250 MB.
+    """
+    import tracemalloc
+
+    _put_quarantine_object(s3_client, "q/large.jpg", _jpeg_bytes(size=(2000, 1500)))
+    media = Media(uploader_id=1, s3_key_quarantine="q/large.jpg", status=MediaStatus.SCANNING)
+    pipeline = _make_pipeline(s3_client, media)
+    pipeline.validate_type()
+
+    tracemalloc.start()
+    try:
+        pipeline.strip_metadata()
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak < 20 * 1024 * 1024
+    assert pipeline._stripped_image.size == (2000, 1500)
+
+
+def test_strip_metadata_applies_exif_orientation_before_dropping_it(s3_client):
+    """A phone stores a portrait photo as landscape pixels plus EXIF
+    Orientation; stripping the tag without applying it posts the photo
+    sideways. Orientation 6 means "rotate 90 degrees clockwise to display"."""
+    image = Image.new("RGB", (40, 20), (255, 0, 0))
+    exif = image.getexif()
+    exif[274] = 6  # tag 274 = Orientation
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", exif=exif.tobytes())
+    _put_quarantine_object(s3_client, "q/rotated.jpg", buffer.getvalue())
+    media = Media(uploader_id=1, s3_key_quarantine="q/rotated.jpg", status=MediaStatus.SCANNING)
+    pipeline = _make_pipeline(s3_client, media)
+
+    pipeline.validate_type()
+    pipeline.strip_metadata()
+    pipeline.generate_variants()
+
+    served = Image.open(io.BytesIO(pipeline._served_bytes))
+    assert served.size == (20, 40)
+    assert not served.getexif()
+
+
 def test_generate_variants_caps_served_and_thumbnail_dimensions(s3_client):
     original_size = (2000, 800)
     _put_quarantine_object(s3_client, "q/big.jpg", _jpeg_bytes(size=original_size))
