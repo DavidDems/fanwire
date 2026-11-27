@@ -32,6 +32,12 @@ export interface DialogProps {
    */
   onBack?: () => void;
   /**
+   * What the dialog is showing, for a caller that changes it while the dialog
+   * stays open (a modal flow's step). When it changes, focus moves to the
+   * heading, unless it is on Back or Close, which are still there.
+   */
+  detailKey?: string | number;
+  /**
    * `"alertdialog"` for a confirm (`FRONTEND-012`): a question that interrupts
    * and needs an answer. It has no Close button: its own Cancel is that, and
    * Escape and the backdrop still report `onClose`. `"dialog"` by default.
@@ -70,6 +76,13 @@ export interface DialogProps {
  * before the title. It goes when the caller stops passing `onBack`, and focus
  * that was on it moves to Close rather than out of the dialog.
  *
+ * **A new detail puts focus on the heading** (`detailKey`, FINAL-4): the link
+ * that changed it was in the old detail and is gone, and focus would fall to
+ * `body` with the dialog still open. The heading (`tabIndex` -1) is where the
+ * new detail starts, as the stats navigator does for a new level. Back or
+ * Close keeps it, so Back can be pressed again; a child's passive effect may
+ * still move it further in (the reply box opened by Reply).
+ *
  * **One may open inside another** (`FRONTEND-012`: a confirm chosen inside the
  * thread modal). The browser puts the inner one on top and reports Escape as
  * *its* `cancel`; React then hands that `cancel` (and the inner `close`) to
@@ -85,6 +98,7 @@ function OpenDialog({
   onClose,
   title,
   onBack,
+  detailKey,
   role = "dialog",
   describedBy,
   children,
@@ -92,6 +106,10 @@ function OpenDialog({
   const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // The detail focus was last placed for: the first one is the open's.
+  const shownDetailRef = useRef(detailKey);
   // Set while this component closes the element itself, so the `close` event
   // that follows is not mistaken for the reader leaving.
   const closingRef = useRef(false);
@@ -132,6 +150,18 @@ function OpenDialog({
     if (dialog === null || hasBack) return;
     if (!dialog.contains(document.activeElement)) closeRef.current?.focus();
   }, [hasBack]);
+
+  // After the Back rule above, so focus it put on Close stays there. A layout
+  // effect, so a child's passive effect (the reply box) may still move it.
+  useLayoutEffect(() => {
+    if (shownDetailRef.current === detailKey) return;
+    shownDetailRef.current = detailKey;
+    const active = document.activeElement;
+    const heading = headingRef.current;
+    if (heading === null || active === heading) return;
+    if (active !== null && headerRef.current?.contains(active)) return;
+    heading.focus();
+  }, [detailKey]);
 
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>): void {
     // A dialog opened inside this one: its Escape is its own.
@@ -182,6 +212,7 @@ function OpenDialog({
     >
       <div className={styles.content}>
         <header
+          ref={headerRef}
           className={`${styles.header} ${hasBack ? styles.withBack : ""}`}
         >
           {hasBack ? (
@@ -195,7 +226,12 @@ function OpenDialog({
               <ChevronDownIcon className={styles.backIcon} />
             </button>
           ) : null}
-          <h2 id={titleId} className={styles.title}>
+          <h2
+            ref={headingRef}
+            id={titleId}
+            className={styles.title}
+            tabIndex={-1}
+          >
             {title}
           </h2>
           {/*
