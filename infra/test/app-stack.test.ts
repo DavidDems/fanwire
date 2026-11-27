@@ -43,6 +43,9 @@ const RETIRED_ENV_VARS = [
   'LIVE_SCORE_CACHE_TABLE_NAME',
 ] as const;
 
+/** The functions that connect to RDS: everything on the image but the refresh (EVENTS-008). */
+const DATABASE_FUNCTIONS = ['api', 'media', 'notifications', 'accountDeletion', 'migration', 'sportsDataLoad'] as const;
+
 function fn(kind: keyof typeof HANDLERS): [string, CfnResource] {
   const hit = imageFunctions().find(([, f]) =>
     JSON.stringify((f.Properties?.ImageConfig as { Command?: string[] })?.Command) === JSON.stringify([HANDLERS[kind]]),
@@ -157,13 +160,25 @@ describe('App stack: functions', () => {
     }
   });
 
-  test('DATABASE_URL is assembled from a Secrets Manager dynamic reference, never a literal password', () => {
-    for (const [id, f] of imageFunctions()) {
-      if (id === fn('sportsDataRefresh')[0]) continue; // EVENTS-008: never touches the database
+  test('no function environment holds a database URL, a password or a secret dynamic reference (ADR 0045)', () => {
+    for (const [id, f] of Object.entries(functions())) {
+      const env = (f.Properties?.Environment as { Variables?: Record<string, unknown> } | undefined)?.Variables ?? {};
+      const text = JSON.stringify(env);
+      expect({ id, names: Object.keys(env) }).toEqual({ id, names: expect.not.arrayContaining(['DATABASE_URL']) });
+      expect({ id, text }).toEqual({ id, text: expect.not.stringMatching(/resolve:secretsmanager|postgresql|password/i) });
+    }
+  });
 
-      const url = JSON.stringify(envOf(f).DATABASE_URL);
-      expect(url).toContain('postgresql+psycopg://');
-      expect(url).toContain('{{resolve:secretsmanager:');
+  test('every database function is told where the credentials are, never what they are (ADR 0045)', () => {
+    for (const kind of DATABASE_FUNCTIONS) {
+      const env = envOf(fn(kind)[1]);
+      expect({ kind, arn: JSON.stringify(env.DATABASE_SECRET_ARN) }).toEqual({
+        kind,
+        arn: expect.stringMatching(/Postgres[A-Za-z0-9]*Secret/),
+      });
+      expect(env.DATABASE_HOST).toBeDefined();
+      expect(env.DATABASE_PORT).toBeDefined();
+      expect(env.DATABASE_NAME).toBe('fanwire');
     }
   });
 
@@ -210,7 +225,6 @@ describe('App stack: least privilege', () => {
     expect(actions).toEqual(expect.arrayContaining(['s3:PutObject', 's3:DeleteObject', 'cognito-idp:AdminDeleteUser', 'events:PutEvents']));
     expect(actions.filter((a) => a.startsWith('dynamodb:'))).toEqual([]);
     expect(statementsForRole(roleOf(fn('api')[1])).map((st) => st.Sid)).not.toContain('LiveScoreCache');
-    expect(actions).not.toContain('secretsmanager:GetSecretValue');
   });
 
   test('account deletion and recovery grants are scoped to the two media buckets and this user pool', () => {
@@ -266,7 +280,6 @@ describe('App stack: least privilege', () => {
     expect(actions).toEqual(
       expect.arrayContaining(['s3:GetObject', 's3:DeleteObject', 's3:PutObject', 'sqs:ReceiveMessage', 'sqs:DeleteMessage']),
     );
-    expect(actions).not.toContain('secretsmanager:GetSecretValue');
   });
 
   test('notifications role: consume its queue and look up the recipient in Cognito', () => {
@@ -279,6 +292,52 @@ describe('App stack: least privilege', () => {
     for (const r of Object.values(resourcesOfType(raw(), 'AWS::IAM::Role'))) {
       expect(r.Properties?.ManagedPolicyArns).toBeUndefined();
     }
+  });
+});
+
+/**
+ * ADR 0045: the database functions read the RDS secret from Secrets Manager
+ * at cold start, so each holds exactly one narrow read of exactly that secret
+ * (and decrypts it with the CMK its environment already uses). Nothing else
+ * in the stack may read it.
+ */
+describe('App stack: database credentials from Secrets Manager (ADR 0045)', () => {
+  const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : [v]);
+  const grantsOn = (roleId: string, action: string) =>
+    statementsForRole(roleId).filter((st) => (asList(st.Action) as string[]).includes(action));
+
+  test.each(DATABASE_FUNCTIONS)('%s: exactly one GetSecretValue, on exactly the database secret, nothing else in it', (kind) => {
+    const f = fn(kind)[1];
+    const grants = grantsOn(roleOf(f), 'secretsmanager:GetSecretValue');
+    expect(grants).toHaveLength(1);
+    const [grant] = grants;
+    expect(grant!.Effect).toBe('Allow');
+    expect(grant!.Action).toBe('secretsmanager:GetSecretValue');
+    expect(grant!.Condition).toBeUndefined();
+    // The same ARN the function is told to read, and nothing beside it.
+    expect(asList(grant!.Resource)).toEqual([envOf(f).DATABASE_SECRET_ARN]);
+    expect(JSON.stringify(grant!.Resource)).not.toContain('*');
+  });
+
+  test.each(DATABASE_FUNCTIONS)('%s: kms:Decrypt on the CMK that encrypts the secret, and on nothing else', (kind) => {
+    const f = fn(kind)[1];
+    const resources = grantsOn(roleOf(f), 'kms:Decrypt').flatMap((st) => asList(st.Resource));
+    expect(resources.length).toBeGreaterThan(0);
+    for (const r of resources) expect(r).toEqual(f.Properties?.KmsKeyArn);
+  });
+
+  test('no other role in the App stack may read the database secret', () => {
+    const dbRoles = DATABASE_FUNCTIONS.map((kind) => roleOf(fn(kind)[1]));
+    const secretArn = JSON.stringify(envOf(fn('api')[1]).DATABASE_SECRET_ARN);
+    const readers = Object.entries(resourcesOfType(raw(), 'AWS::IAM::Policy'))
+      .filter(([, p]) => JSON.stringify(p.Properties?.PolicyDocument).includes(secretArn))
+      .map(([, p]) => ((p.Properties?.Roles ?? []) as { Ref: string }[]).map((r) => r.Ref))
+      .flat()
+      .sort();
+    expect(readers).toEqual([...dbRoles].sort());
+    // The refresh and the origin-verify authorizer keep their one secret each.
+    const refreshGrants = grantsOn(roleOf(fn('sportsDataRefresh')[1]), 'secretsmanager:GetSecretValue');
+    expect(JSON.stringify(refreshGrants)).not.toContain(secretArn);
   });
 });
 
@@ -665,14 +724,15 @@ describe('App stack: sports data load (EVENTS-002)', () => {
   });
 
   // INFRA-008: four, with the ENI self-deny beside the ENI allow.
-  test('its policy is the four every VPC function has plus s3:GetObject on nba-eoin/* of the bucket', () => {
+  test('its policy is the five every database function has plus s3:GetObject on nba-eoin/* of the bucket', () => {
     const statements = statementsForRole(roleOf(load()));
     const common = statementsForRole(roleOf(fn('migration')[1]));
-    expect(common).toHaveLength(4);
-    expect(statements).toHaveLength(5);
-    expect(statements.slice(0, 4).map((st) => st.Sid)).toEqual(common.map((st) => st.Sid));
+    // ADR 0045: the four, plus reading the database secret.
+    expect(common).toHaveLength(5);
+    expect(statements).toHaveLength(6);
+    expect(statements.slice(0, 5).map((st) => st.Sid)).toEqual(common.map((st) => st.Sid));
 
-    const extra = statements[4]!;
+    const extra = statements[5]!;
     expect(extra.Effect).toBe('Allow');
     expect(extra.Action).toBe('s3:GetObject');
     const resource = JSON.stringify(extra.Resource);
@@ -731,12 +791,12 @@ describe('App stack: sports data refresh (EVENTS-008)', () => {
     expect(statementsOf().map((st) => st.Sid)).not.toContain('VpcNetworkInterfaces');
   });
 
-  test('every other image function keeps its VpcConfig and a DATABASE_URL', () => {
+  test('every other image function keeps its VpcConfig and a DATABASE_SECRET_ARN', () => {
     const others = imageFunctions().filter(([id]) => id !== fn('sportsDataRefresh')[0]);
     expect(others).toHaveLength(6);
     for (const [, f] of others) {
       expect(f.Properties?.VpcConfig).toBeDefined();
-      expect(Object.keys(envOf(f))).toContain('DATABASE_URL');
+      expect(Object.keys(envOf(f))).toContain('DATABASE_SECRET_ARN');
     }
   });
 
