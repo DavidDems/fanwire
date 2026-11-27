@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-import app.dependencies as dependencies
+from app import dependencies
 from app.dependencies import get_session, get_settings
 from app.users.lifecycle import LifecycleUnavailable
 
