@@ -54,9 +54,34 @@ counts as done: report it as "✅ Playwright MCP, Chromium, <date>" with what wa
   Whatever the human types into that window, a sign-in included, can still be
   there next time. An agent never submits credentials it was not given, and
   never acts on the live site as a signed-in user.
-- **Not covered:** axe, because there is no axe dependency and loading it from a
-  CDN would put a third-party script into the check. The axe row stays NOT DONE
-  until the human runs the axe browser extension. 
+- **axe** ([ADR 0045](../../GeneralContext/Decisions/0045-final-track-answers.md)):
+  `frontend/scripts/axe-check.cjs`, a host script, not the MCP server. It
+  drives the installed Chrome headless (`playwright-core`, no browser download)
+  in a fresh non-persistent context, signs in as `FANWIRE_TEST_1_*` from
+  `frontend/.env.test-accounts.local` through the Sign-in page (creating the
+  profile on a fresh stack), and injects `axe-core` from `node_modules`, never
+  a CDN. It refuses any host but `localhost`/`127.0.0.1`, never prints the
+  email or password, runs WCAG 2.x A/AA plus best-practice on the shell, rail,
+  Recent Games, team tabs, chart and result cards, light and dark, at 1280 and
+  360 (rail and Recent Games at 1280 only: the rail isn't mounted below
+  76.0625em), and exits 1 on any serious or critical violation. It finds the
+  game and team pages through the first Recent Games card, so the database
+  needs games: `generate_scale_fixture.py --seasons 1` is enough. Full results
+  go to `.playwright-mcp/`. With the stack and `npm run dev` up, from `frontend/`:
+
+  ```powershell
+  node scripts/axe-check.cjs http://localhost:5173
+  ```
+
+  **Last run, 2026-11-27**, Chrome 158.0.8127.37 headless, signed in, one
+  synthetic season: **0 violations of any impact** on every surface, scheme and
+  width (`/`, `/games/<id>`, `/stats/seasons?season=…&team=…`). axe left two
+  needs-review items, checked by hand: the chart's axis labels and the season
+  `<select>` (background not computable: SVG, gradient arrow), measured at
+  6.26:1 light and 7.60:1 dark for the axis, 12.69:1 and 9.03:1 for the select;
+  and `label-content-name-mismatch` on the account menu button, whose only
+  visible content is the avatar's initial, an image of the user rather than a
+  text label (2.5.3 doesn't apply).
 - **Signed-in states** use the two dev-pool test accounts (`fwtest1` and
   `fwtest2`), whose credentials are in the untracked
   `frontend/.env.test-accounts.local`. How to start the stack, recreate their
@@ -116,7 +141,7 @@ the routes it touched, filled in or marked NOT DONE:
 | Reduced motion: nothing moves (A8) | | | OS setting or DevTools rendering emulation |
 | Forced colors: focus, button edges and current nav visible (A20) | | n/a | Windows contrast theme or DevTools emulation |
 | Targets ≥ 24 px; primary and nav ≥ 44 px (A6) | | | DevTools inspector |
-| axe DevTools: 0 serious or critical on the route | | | Browser extension; paste the count |
+| axe: 0 serious or critical on the route | | | `node scripts/axe-check.cjs` (§3a "axe"; add the route to its page list), or the axe DevTools extension; paste the counts |
 
 Each row is ✅, ❌ (with what was seen), or **NOT DONE**, plus who checked it,
 in which browser and OS, on which date. Unfilled means NOT DONE.
