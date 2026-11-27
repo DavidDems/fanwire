@@ -143,7 +143,7 @@ describe('App stack: functions', () => {
   });
 
   test('the Migration function has a fixed name, so the deploy role can be granted lambda:InvokeFunction on exactly it', () => {
-    expect(fn('migration')[1].Properties?.FunctionName).toBe('fanwire-migration');
+    expect(fn('migration')[1].Properties?.FunctionName).toBe('Fanwire-App-Migration');
   });
 
   test('every backend function but the refresh runs in the app subnets with the Lambda SG; env encrypted with the CMK', () => {
@@ -897,9 +897,11 @@ describe('App stack: ENI self-deny (INFRA-008)', () => {
     }
   });
 
-  test('no function in the App stack sets FunctionName, so generated names keep the Fanwire-App- prefix', () => {
+  test('only the Migration function sets FunctionName (ADR 0044), and it keeps the Fanwire-App- prefix the deny matches', () => {
     const fns = Object.entries(functions());
     expect(fns.length).toBe(8);
-    expect(fns.filter(([, f]) => f.Properties?.FunctionName !== undefined).map(([id]) => id)).toEqual([]);
+    const named = fns.filter(([, f]) => f.Properties?.FunctionName !== undefined);
+    expect(named.map(([id]) => id)).toEqual([fn('migration')[0]]);
+    expect(named[0]![1].Properties?.FunctionName).toMatch(/^Fanwire-App-/);
   });
 });

@@ -21,8 +21,10 @@ name: deploy
 # (FanwireCdkCfnExecPolicy) is the human's to roll out, and every role the
 # stacks create carries FanwireRoleBoundary, also the human's. Nothing here
 # writes either; it reads both and refuses to deploy unless the live versions
-# match the repo, so a change that needs a new version waits for the rollout. Migrations are not run: invoke the
-# Migration function by hand after a deploy that adds an Alembic revision.
+# match the repo, so a change that needs a new version waits for the rollout.
+# The one application call it can make is lambda:InvokeFunction on the
+# Migration function (ADR 0044): after `cdk deploy` it runs the migrations,
+# under this same environment approval, before the smoke check.
 #
 # --require-approval never: CI cannot answer CDK's IAM-change prompt. The
 # review of an IAM change happens at the PR (infra/test/iam-policy.test.ts and
@@ -178,6 +180,53 @@ jobs:
       - name: cdk deploy
         run: '"$RUNNER_TEMP/cdk" fanwire-cdk:deploy deploy --all -c deployFrontend=true --require-approval never'
 
+      # Every deploy runs the migrations (ADR 0044), under this job's approval:
+      # the role holds lambda:InvokeFunction on this one function and nothing
+      # else. Idempotent, so a deploy with no new revision still invokes it. The
+      # response must be the repo's single Alembic head; the handler raises, with
+      # a redacted message, on any failure (backend/app/migrate.py), so a
+      # FunctionError stops the job before the smoke check. The read timeout is
+      # above the function's 10-minute limit.
+      - name: Run the database migrations
+        id: migrate
+        run: |
+          set -euo pipefail
+          head="$(python3 - <<'PY'
+          import ast, pathlib
+          revs, downs = set(), set()
+          for f in pathlib.Path("backend/alembic/versions").glob("*.py"):
+              for node in ast.parse(f.read_text(encoding="utf-8")).body:
+                  if isinstance(node, ast.AnnAssign):
+                      target = node.target
+                  elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+                      target = node.targets[0]
+                  else:
+                      continue
+                  if not isinstance(target, ast.Name) or target.id not in ("revision", "down_revision") or node.value is None:
+                      continue
+                  value = ast.literal_eval(node.value)
+                  if target.id == "revision":
+                      revs.add(value)
+                  elif target.id == "down_revision" and value:
+                      downs.update([value] if isinstance(value, str) else value)
+          heads = revs - downs
+          assert len(heads) == 1, f"expected one Alembic head, found {sorted(heads)}"
+          print(heads.pop())
+          PY
+          )"
+          echo "Repo head: $head"
+          status="$(aws lambda invoke --function-name Fanwire-App-Migration --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 700 --cli-connect-timeout 60 --query FunctionError --output text "$RUNNER_TEMP/migration.json")"
+          if [ "$status" != None ]; then
+            echo "::error::Migration function failed ($status): $(head -c 2000 "$RUNNER_TEMP/migration.json" | tr '\r\n' '  ')"
+            exit 1
+          fi
+          applied="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("revision", ""))' "$RUNNER_TEMP/migration.json")"
+          if [ "$applied" != "$head" ]; then
+            echo "::error::Migration returned revision '$applied', the repo head is '$head' ($(head -c 500 "$RUNNER_TEMP/migration.json"))"
+            exit 1
+          fi
+          echo "Migrated to $applied"
+
       # A deploy CloudFormation calls a success can still leave the site down.
       # Fetch it through CloudFront, as a user would: /api/health (the function),
       # /api/feed (the database), / (this run's bundle). No credentials; the
@@ -203,7 +252,7 @@ jobs:
                 sleep 10
               fi
             done
-            echo "::error::$url failed after 12 attempts (last status $code, body: $(head -c 500 "$body" 2>/dev/null | tr '\r\n' '  ')). If this commit adds an Alembic revision, invoke the Migration function, then re-run this workflow. To roll back, re-run the last green deploy run (incident-runbook.md, 'Roll back a deploy')."
+            echo "::error::$url failed after 12 attempts (last status $code, body: $(head -c 500 "$body" 2>/dev/null | tr '\r\n' '  ')). The migrations ran in the step before this one. To roll back, re-run the last green deploy run (incident-runbook.md, 'Roll back a deploy')."
             exit 1
           }
           check "$SITE_URL/api/health" health_ok
@@ -218,7 +267,6 @@ jobs:
             echo
             echo "Smoke check of the live site: ${{ steps.smoke.outcome }}"
             echo
-            echo "Migrations are not run by this workflow. If this commit adds an Alembic"
-            echo "revision, invoke the Migration function by hand now: build-deployment.md"
-            echo "-> \"Automated deploy\"."
+            echo "Migrations: ${{ steps.migrate.outcome }} (the Migration function's log group"
+            echo "keeps every run: build-deployment.md -> \"Run migrations\")."
           } >> "$GITHUB_STEP_SUMMARY"

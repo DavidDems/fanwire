@@ -22,6 +22,12 @@
         "arn:aws:iam::294321867941:role/cdk-hnb659fds-image-publishing-role-294321867941-us-east-1",
         "arn:aws:iam::294321867941:role/cdk-hnb659fds-lookup-role-294321867941-us-east-1"
       ]
+    },
+    {
+      "Sid": "InvokeMigrationFunction",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "arn:aws:lambda:ca-central-1:294321867941:function:Fanwire-App-Migration"
     }
   ]
 }

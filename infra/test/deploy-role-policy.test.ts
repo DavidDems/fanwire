@@ -32,13 +32,13 @@ describe('GitHubActionsDeployRole policy', () => {
     expect(invoke).toHaveLength(1);
     expect(invoke[0]?.Effect).toBe('Allow');
     expect(list(invoke[0]!.Action)).toEqual(['lambda:InvokeFunction']);
-    expect(list(invoke[0]!.Resource)).toEqual(['arn:aws:lambda:ca-central-1:294321867941:function:fanwire-migration']);
+    expect(list(invoke[0]!.Resource)).toEqual(['arn:aws:lambda:ca-central-1:294321867941:function:Fanwire-App-Migration']);
   });
 
   test('that ARN names the function the app stack creates', () => {
     const names = Object.values(resourcesOfType(synthFanwire().json(STACK_NAMES.app), 'AWS::Lambda::Function')).map(
       (f) => f.Properties?.FunctionName,
     );
-    expect(names).toContain('fanwire-migration');
+    expect(names).toContain('Fanwire-App-Migration');
   });
 });
