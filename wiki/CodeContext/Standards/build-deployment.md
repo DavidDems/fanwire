@@ -98,4 +98,5 @@ Moved to [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deplo
 - [[wiki/CodeContext/Standards/build-deployment-spa|Rebuilding the SPA]] — shipping a frontend build by hand.
 - [[wiki/CodeContext/Standards/build-deployment-nat-ami|Upgrading the NAT instance's AMI]] — replacing the NAT instance on an advisory.
 - [[wiki/CodeContext/Standards/build-deployment-post-deploy|After a deploy: migrations and sports data]] — invoking `Migration` and `SportsDataLoad`.
+- [[wiki/CodeContext/Standards/build-deployment-media-timing|Timing the image pipeline]] — measuring upload-to-`processed` on the live stack against the composer's 30 s bound (R16).
 - [[wiki/CodeContext/Standards/build-deployment-deploy-setup|Deploy workflow setup]] — the role's trust and the `production` environment.

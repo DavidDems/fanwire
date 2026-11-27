@@ -65,7 +65,7 @@ One row per brief ([ADR 0045](../wiki/GeneralContext/Decisions/0045-final-track-
 
 | Item | Mode | Task | Notes |
 |---|---|---|---|
-| **Final track**: database credentials from Secrets Manager, the axe rows, the unmapped-Cognito-code message, dialog focus, image-pipeline timing (R16), a second docs revision | `hand` / `director` | — | `Prompts/48-outstanding-work-final.md`. The two Frontend rows below are in it |
+| **Final track**: database credentials from Secrets Manager, the axe rows, the unmapped-Cognito-code message, dialog focus, image-pipeline timing (R16), a second docs revision | `hand` / `director` | — | `Prompts/48-outstanding-work-final.md`. The two Frontend rows below are in it. R16 waits on the human's run of `wiki/CodeContext/Standards/build-deployment-media-timing.md` |
 | **Docs graph**: `agentctl docs graph`, its query command, orphans and a CI staleness check | `director` | — | `Prompts/49-docs-graph.md`. After 48 |
 
 ## Sports data
