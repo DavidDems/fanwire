@@ -30,7 +30,13 @@ import re
 
 import pytest
 import sqlalchemy
-from testcontainers.postgres import PostgresContainer
+
+from tests import testcontainers_host
+
+# Before testcontainers is imported: it reads its host override once, at import.
+testcontainers_host.apply()
+
+from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 from app.events import models as _events_models  # noqa: F401 — registers Team/Game
 from app.media import models as _media_models  # noqa: F401 — registers Media

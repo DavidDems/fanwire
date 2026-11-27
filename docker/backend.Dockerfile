@@ -37,6 +37,12 @@ COPY backend/scripts ./scripts
 # already existed, and the branch creating that file needs the fix to go green:
 # each waiting on the other. Verified both ways against a real build.
 COPY backend/openapi.jso[n] ./
+# Docker Desktop on Windows sends every build-context file as 0755, so in a
+# locally built image each source file looked executable and `ruff check .`
+# reported one EXE002 per file (275) that CI's Linux checkout never had. Files
+# lose the bit and directories keep theirs (`X`); on a Linux build this changes
+# nothing. tests/test_file_modes.py holds the result.
+RUN chmod -R a-x,a+X ${LAMBDA_TASK_ROOT}
 ENTRYPOINT ["python", "-m", "pytest"]
 
 # --- dev stage: `backend-dev` in docker-compose.yml — a real, clickable
