@@ -12,3 +12,4 @@ type: changelog
 - 2026-11-27 | 1.4.0 | Added `agentctl docs graph`: writes `.ai/graph.json`, a typed, deterministic graph of links, mentions, citations and spec paths between docs, task specs and code | [doclint reference](docs/doclint.md)
 - 2026-11-27 | 1.5.0 | `agentctl docs graph --of`, `--within` and `--task` query the committed graph: edges of a file, its neighbourhood, and a task's required_context closure | [doclint reference](docs/doclint.md)
 - 2026-11-27 | 1.6.0 | `agentctl docs graph --orphans` lists unlinked docs and dangling edges, and `--check` (a docs-lint step in CI) fails on a stale `.ai/graph.json` or orphans/dangling edges beyond `.ai/graph-baseline.json` | [doclint reference](docs/doclint.md)
+- 2026-11-27 | 1.7.0 | `agentctl docs graph`: a dangling edge from a decision (`type: decision`) is frozen history, not graph debt; `--orphans` lists it apart and the baseline drops such entries | [doclint reference](docs/doclint.md)

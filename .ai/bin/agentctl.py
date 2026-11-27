@@ -1462,7 +1462,14 @@ def _graph_orphans(args) -> int:
         print(f"  orphan    {path}")
     for d in found["dangling"]:
         print(f"  dangling  {d['source']} -> {d['target']}  ({d['kind']}, {d['cause']})")
-    print(f"docs graph: {len(found['orphans'])} orphans, {len(found['dangling'])} dangling")
+    if found["frozen"]:
+        print("frozen (in merged decisions, not debt):")
+    for d in found["frozen"]:
+        print(f"  frozen    {d['source']} -> {d['target']}  ({d['kind']}, {d['cause']})")
+    print(
+        f"docs graph: {len(found['orphans'])} orphans, {len(found['dangling'])} dangling,"
+        f" {len(found['frozen'])} frozen"
+    )
     return OK
 
 
