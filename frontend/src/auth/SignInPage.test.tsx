@@ -129,13 +129,21 @@ describe("SignInPage", () => {
     expectNoFieldError(screen.getByLabelText(/^email$/i));
   });
 
-  it("puts an unknown account on the email field", async () => {
+  it("never says whether an account exists for the address", async () => {
+    // The pool sets `preventUserExistenceErrors`, so Cognito does not send this
+    // code here; if it ever did, naming account existence would be the leak the
+    // setting exists to stop. It gets the page's generic failure, like any
+    // code the page has no field for.
     const user = userEvent.setup();
     renderSignIn(new FakeAuthService().failWith("signIn", "UserNotFoundException"));
 
     await fillAndSubmit(user);
 
-    expectFieldError(await screen.findByLabelText(/^email$/i));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "UserNotFoundException (from the auth double)",
+    );
+    expect(screen.queryByText(/no account for this email/i)).toBeNull();
+    expectNoFieldError(screen.getByLabelText(/^email$/i));
     expectNoFieldError(screen.getByLabelText(/^password$/i));
   });
 

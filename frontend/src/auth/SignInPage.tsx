@@ -29,10 +29,6 @@ const FIELD_FAILURES: FieldFailures<SignInField> = {
     field: "password",
     message: "That password is not right for this account.",
   },
-  UserNotFoundException: {
-    field: "email",
-    message: "There is no account for this email address.",
-  },
   PasswordResetRequiredException: {
     field: "password",
     message: "This account has to reset its password before signing in.",

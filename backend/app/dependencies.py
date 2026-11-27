@@ -22,6 +22,7 @@ from functools import lru_cache
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]  # no boto3 stubs/py.typed marker installed
+from aws_lambda_powertools import Logger
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,6 +31,8 @@ from app.db import make_engine, make_session_factory
 from app.eventbus import EventBridgePublisher, EventPublisher, InMemoryEventPublisher, PostEventBus
 from app.notifications.local_dispatch import LocalDispatchPublisher
 from app.settings import Settings
+
+logger = Logger()
 
 
 @lru_cache(maxsize=1)
@@ -101,6 +104,10 @@ def get_session() -> Iterator[Session]:
         from app.users.lifecycle import LifecycleUnavailable
         if isinstance(exc, LifecycleUnavailable):
             session.rollback()
+            logger.warning(
+                "account lifecycle unavailable",
+                extra={"exception_type": type(exc).__name__, "reason": _log_reason(exc)},
+            )
             raise HTTPException(status_code=503, detail="Account temporarily unavailable") from None
         raise
     except ValueError as exc:
@@ -109,11 +116,31 @@ def get_session() -> Iterator[Session]:
             session.rollback()
             raise HTTPException(status_code=403, detail="account_unavailable") from None
         raise
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
         session.rollback()
+        logger.error(
+            "database error",
+            extra={"exception_type": type(exc).__name__, "reason": _log_reason(exc)},
+        )
         raise HTTPException(status_code=503, detail="Account temporarily unavailable") from None
     finally:
         session.close()
+
+
+def _log_reason(exc: Exception) -> str:
+    """The exception's message as far as a log may carry it.
+
+    Only the first line: SQLAlchemy appends the statement and its parameters
+    (user data) on later lines, and the driver's DETAIL lines can quote row
+    values. The line kept is still redacted with `app.migrate.redact`, since a
+    connection failure can carry the connect string and its password.
+    """
+    # Imported here, on the failure path only: app.migrate brings alembic with
+    # it, which the API's cold start has no other use for.
+    from app.migrate import redact
+
+    first_line = str(exc).partition("\n")[0]
+    return redact(first_line, get_settings().database_url)
 
 
 def open_session() -> Session:
