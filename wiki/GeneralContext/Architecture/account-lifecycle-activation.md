@@ -61,3 +61,13 @@ forget the unconfirmed one, without deleting anything, so the cutover is
 `2026-11-05T00:00:00Z`: each confirmed identity can still create a profile,
 and the unconfirmed one never can.
 
+## Live proof and cleanup (2026-11-27)
+
+The human signed up a throwaway account on the live site and deleted it from
+Account settings. The API access log shows `DELETE` answered 204 at
+06:07:25 UTC, and signing in with it then failed. A read-only check afterwards
+found 0 errors in the AccountDeletion and API logs since 05:45 UTC, 0
+AccountDeletion `Errors` datapoints, and every alarm `OK`. The human then
+deleted the unconfirmed 2026-09-30 identity with `admin-delete-user`. The pool
+now holds the 6 confirmed identities only.
+
