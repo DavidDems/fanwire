@@ -248,13 +248,20 @@ class TestTheDeployWorkflowShape:
             "iam set-",
             "iam tag-",
             "bootstrap",
-            "lambda invoke",
             "gh pr merge",
             "--approve",
         ],
     )
     def test_it_never_touches_what_a_human_owns(self, deploy, forbidden):
         assert forbidden not in "\n".join(deploy)
+
+    def test_the_only_lambda_it_invokes_is_the_migration_function(self, deploy):
+        """ADR 0044: the role holds lambda:InvokeFunction on one function, and
+        the workflow invokes only that one, before the smoke check."""
+        text = "\n".join(deploy)
+        assert re.findall(r"aws lambda invoke --function-name (\S+)", text) == ["Fanwire-App-Migration"]
+        assert text.count("lambda invoke") == 1
+        assert text.index("- name: Run the database migrations") < text.index("- name: Smoke check the live site")
 
 
 def _step(lines: list[str], name: str) -> list[str]:

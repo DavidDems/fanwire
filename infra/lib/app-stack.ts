@@ -65,6 +65,9 @@ export const ALARM_THRESHOLDS = {
   sportsDataConflicts: 0,
 } as const;
 
+/** Fixed so the deploy role's policy (infra/iam/) can name it; keep the two in step. */
+export const MIGRATION_FUNCTION_NAME = 'Fanwire-App-Migration';
+
 /**
  * Compute: the one shared backend Lambda image (build-deployment.md) run as
  * seven functions, the HTTP API in front of the API function, and every
@@ -469,9 +472,10 @@ export class AppStack extends cdk.Stack {
    * against it. A second image would double the build, the ECR footprint and
    * the ways the two could drift apart.
    *
-   * **Nothing invokes this.** No rule, no schedule, no event source mapping,
-   * no CloudFormation custom resource: a human invokes it once after
-   * `cdk deploy`, before the API is expected to work. DDL inside a stack
+   * **No trigger invokes this.** No rule, no schedule, no event source mapping,
+   * no CloudFormation custom resource: `deploy.yml` invokes it after `cdk
+   * deploy` and before its smoke check (ADR 0044, which reversed INFRA-003's
+   * "a human, by nothing else"); by hand stays the fallback. DDL inside a stack
    * update would make every deploy a schema change, make rollback ambiguous
    * and put `alembic upgrade head` inside CloudFormation's timeout and
    * failure semantics. `test/app-stack.test.ts` sweeps every stack for an
@@ -503,8 +507,13 @@ export class AppStack extends cdk.Stack {
   ): void {
     this.backendFunction('Migration', {
       command: 'app.migrate.handler',
+      // Exact name: infra/iam/github-actions-deploy-role-policy.json grants
+      // lambda:InvokeFunction on this ARN alone (ADR 0044).
+      functionName: MIGRATION_FUNCTION_NAME,
+      // The record of which revisions ran: never expires, survives the stack.
+      logRetention: { days: logs.RetentionDays.INFINITE, removalPolicy: cdk.RemovalPolicy.RETAIN },
       // Well clear of the longest plausible `alembic upgrade head` on a cold
-      // database, and it is invoked by hand so nothing is waiting on it.
+      // database; deploy.yml waits on it, with a read timeout above this.
       timeout: cdk.Duration.minutes(10),
       memorySize: 512,
       image,
@@ -679,12 +688,16 @@ export class AppStack extends cdk.Stack {
       environment: Record<string, string>;
       statements: iam.PolicyStatement[];
       outsideVpc?: boolean;
+      /** Fixed physical name, for a function an IAM policy outside CDK names exactly. */
+      functionName?: string;
+      /** Default one month, destroyed with the stack. */
+      logRetention?: { days: logs.RetentionDays; removalPolicy: cdk.RemovalPolicy };
     },
   ): lambda.Function {
     const { network } = this.props;
     const logGroup = new logs.LogGroup(this, `${id}LogGroup`, {
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      retention: opts.logRetention?.days ?? logs.RetentionDays.ONE_MONTH,
+      removalPolicy: opts.logRetention?.removalPolicy ?? cdk.RemovalPolicy.DESTROY,
     });
     const role = new iam.Role(this, `${id}Role`, {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -740,6 +753,7 @@ export class AppStack extends cdk.Stack {
       ],
     });
     const fn = new lambda.Function(this, id, {
+      functionName: opts.functionName,
       code: lambda.Code.fromEcrImage(opts.image.repository, {
         tagOrDigest: opts.image.imageTag,
         cmd: [opts.command],
