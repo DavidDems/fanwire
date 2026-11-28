@@ -30,11 +30,5 @@
   "dangling:.ai/tasks/FRONTEND-058/task.json -> frontend/src/features/games/team-short-name.test.ts (allowed_paths)",
   "dangling:.ai/tasks/FRONTEND-060/task.json -> frontend/src/test/bundle-budgets/FRONTEND-060.ts (allowed_paths)",
   "dangling:.ai/tasks/USERS-004/task.json -> frontend/src/test/bundle-budgets/USERS-004.ts (allowed_paths)",
-  "dangling:.ai/tasks/USERS-005/task.json -> frontend/src/test/bundle-budgets/USERS-005.ts (allowed_paths)",
-  "orphan:.agents/skills/ui-design/references/patterns.md",
-  "orphan:.agents/skills/ui-design/references/sharp_edges.md",
-  "orphan:.agents/skills/ui-design/references/validations.md",
-  "orphan:.claude/skills/ui-design/references/sharp_edges.md",
-  "orphan:.claude/skills/ui-design/references/validations.md",
-  "orphan:wiki/GeneralContext/Decisions/0041-react-19-entry-budget.md"
+  "dangling:.ai/tasks/USERS-005/task.json -> frontend/src/test/bundle-budgets/USERS-005.ts (allowed_paths)"
 ]

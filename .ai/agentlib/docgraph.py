@@ -76,11 +76,15 @@ def _source_edges(name, raw, tracked, names, patterns):
             dest = doclint.repo_name(name, url.path)
             if dest is not None:
                 out.append((dest, kind, ""))
-    # Markdown mentions any tracked path; other text files, Markdown only
-    # (as inventory counts), read whole: a Python constant naming a doc is a use.
+    # Markdown mentions any tracked path, from the root or else relative to its
+    # own folder (a skill's `references/x.md`); other text files, Markdown only
+    # (as inventory counts), from the root, read whole: a Python constant naming
+    # a doc is a use.
     for token in doccorpus.named_paths(text if markdown else raw, doccorpus._NAMED_PATH):
         if token in tracked and (markdown or token.endswith(".md")):
             out.append((token, "mention", ""))
+        elif markdown and (local := doclint.repo_name(name, token)) in tracked:
+            out.append((local, "mention", ""))
     covered = []
     for match in doclint.CITATION.finditer(text):
         covered.append(match.span())
