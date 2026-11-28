@@ -160,10 +160,35 @@ class TestMentions:
             ("wiki/a.md", "wiki/b.md", "mention"),
         ]
 
-    def test_an_untracked_or_relative_name_is_not_a_mention(self, repo):
-        put(repo, "wiki/a.md", "Edit backend/app/gone.py and b.md and service.py.\n")
+    def test_an_untracked_name_is_not_a_mention(self, repo):
+        put(repo, "wiki/a.md", "Edit backend/app/gone.py and c.md and service.py.\n")
         put(repo, "wiki/b.md", "x\n")
         put(repo, "backend/app/service.py", "x = 1\n")
+        assert docgraph.build(repo)["edges"] == []
+
+    def test_markdown_naming_a_path_relative_to_its_folder_mentions_it(self, repo):
+        # A skill's SKILL.md names `references/patterns.md` beside itself.
+        put(repo, ".claude/skills/s/SKILL.md", "Consult `references/patterns.md` and b.md.\n")
+        put(repo, ".claude/skills/s/references/patterns.md", "x\n")
+        put(repo, ".claude/skills/s/b.md", "x\n")
+        assert edges(docgraph.build(repo)) == [
+            (".claude/skills/s/SKILL.md", ".claude/skills/s/b.md", "mention"),
+            (".claude/skills/s/SKILL.md", ".claude/skills/s/references/patterns.md", "mention"),
+        ]
+
+    def test_a_root_path_wins_over_a_relative_reading(self, repo):
+        put(repo, "wiki/a.md", "Read wiki/b.md.\n")
+        put(repo, "wiki/b.md", "x\n")
+        put(repo, "wiki/wiki/b.md", "x\n")
+        assert edges(docgraph.build(repo)) == [("wiki/a.md", "wiki/b.md", "mention")]
+
+    def test_code_names_resolve_from_the_root_only(self, repo):
+        put(repo, "backend/app/a.md", "x\n")
+        put(repo, "backend/app/main.py", 'DOC = "a.md"\n')
+        assert docgraph.build(repo)["edges"] == []
+
+    def test_a_relative_name_leaving_the_repository_is_not_a_mention(self, repo):
+        put(repo, "a.md", "See ../outside.md.\n")
         assert docgraph.build(repo)["edges"] == []
 
     def test_code_mentions_markdown_but_not_other_code(self, repo):
