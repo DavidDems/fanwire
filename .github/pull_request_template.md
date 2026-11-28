@@ -2,6 +2,11 @@
 
 <!-- What this changes, and why. Link the task, prompt or issue. -->
 
+<!-- Director review: identify applicable skills and the evidence for the acceptance
+     criteria. For code changes give the red case, the passing checks on this
+     revision and the reason for any retained workaround. For test-speed changes
+     include comparable timings. Resolve missing evidence before recommending merge. -->
+
 ## Before a production deploy
 
 For a PR that touches `backend/app/`, tick one:
