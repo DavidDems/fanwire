@@ -512,8 +512,7 @@ jobs:
 
   # Backlog 19: stacked PRs merged top-down never reached main. A PR's base
   # must be `main`, an `outstanding-track-*` integration branch or the final
-  # track's `outstanding-final` (Prompts/48) or the docs-graph track's
-  # `outstanding-graph` (Prompts/49). Runs on
+  # track's `outstanding-final` (Prompts/48). Runs on
   # pull_request only; on push/dispatch it is skipped, which `gate` accepts.
   # The base ref is attacker-influenced text, so it comes in through env and
   # is never interpolated into the script.
@@ -526,9 +525,9 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           case "$BASE_REF" in
-            main|outstanding-track-*|outstanding-final|outstanding-graph) echo "base '$BASE_REF' is allowed" ;;
+            main|outstanding-track-*|outstanding-final) echo "base '$BASE_REF' is allowed" ;;
             *)
-              echo "::error::PR base '$BASE_REF' is not allowed; target main, an outstanding-track-* branch, outstanding-final or outstanding-graph"
+              echo "::error::PR base '$BASE_REF' is not allowed; target main, an outstanding-track-* branch or outstanding-final"
               exit 1
               ;;
           esac
