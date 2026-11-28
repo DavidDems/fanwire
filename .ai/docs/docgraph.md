@@ -31,7 +31,7 @@ inventory and the graph agree on what a link is.
 |---|---|
 | `link` | A Markdown inline or reference link to a repository path |
 | `wikilink` | A `[[...]]` link |
-| `mention` | A Markdown file naming any tracked path in prose, or another tracked text file naming a Markdown file |
+| `mention` | A Markdown file naming any tracked path in prose, from the root or else relative to its own folder (a skill's `references/x.md`), or another tracked text file naming a Markdown file from the root |
 | `cites-line` | A `path:12` or `path:12-20` citation; `detail` holds the line or range |
 | `cites-section` | A `file §n` citation, or `word §n` where the word is the stem of exactly one Markdown file (`handoff §10`); `detail` holds `§n`. A bare local `§n` is not an edge |
 | `required_context` | A spec to each entry |
