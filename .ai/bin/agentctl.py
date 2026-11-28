@@ -22,6 +22,11 @@ thing, write state.
   agentctl docs inventory --paths wiki/  words against budget, inbound links, last commit
   agentctl docs dupes                   repeated and near-repeated Markdown paragraphs
   agentctl docs archive-refs            PR numbers and hashes to fanwire-archive (dry run)
+  agentctl docs graph                   write .ai/graph.json: how docs, specs and code link
+  agentctl docs graph --of wiki/x.md [--within 2]   its edges (or neighbourhood), no rebuild
+  agentctl docs graph --task AUTH-001   a task's context, the docs they link, its paths
+  agentctl docs graph --orphans         unlinked docs and dangling edges (fresh build)
+  agentctl docs graph --check [--base origin/main]  graph current, debt only shrinks
   agentctl addresses                    fail on a personal email address in a tracked file
   agentctl selfcheck [--workspaces]     prove the machinery works, no tokens spent
   agentctl preflight ports              fail if a docker-compose host port is already bound
@@ -67,6 +72,7 @@ from agentlib import (
     addresses,
     ciresult,
     doccorpus,
+    docgraph,
     doclint,
     guard,
     handusage,
@@ -1224,6 +1230,44 @@ def build_parser() -> argparse.ArgumentParser:
     arc = corpus("archive-refs", "rewrite #NNN and commit hashes in Markdown to fanwire-archive")
     arc.add_argument("--write", action="store_true", help="apply the changes (default: dry run)")
     arc.set_defaults(func=cmd_docs_archive_refs)
+    graph = docs.add_parser(
+        "graph",
+        help="write .ai/graph.json, or query it: how docs, specs and code link",
+        description="With no query flag, build and write .ai/graph.json. With --of or "
+        "--task, answer from the committed file (no rebuild). --orphans and --check "
+        "build afresh and write nothing.",
+    )
+    graph.add_argument("--root", default=None, help="repository to read (default: this one)")
+    target = graph.add_mutually_exclusive_group()
+    target.add_argument("--of", metavar="PATH", help="inbound and outbound edges of one node")
+    target.add_argument(
+        "--task", metavar="ID", help="a task's required_context, the docs they link, its paths"
+    )
+    target.add_argument(
+        "--orphans",
+        action="store_true",
+        help="unlinked docs and edges to nothing, from a fresh build (no write)",
+    )
+    target.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if .ai/graph.json is stale or orphans/dangling edges grew past the baseline",
+    )
+    graph.add_argument(
+        "--base", default=None, help="with --check: merged base commit (default: origin/main)"
+    )
+    graph.add_argument(
+        "--within",
+        type=int,
+        metavar="N",
+        default=None,
+        help="with --of: the neighbourhood to depth N; with --task: link depth (default 1)",
+    )
+    graph.add_argument(
+        "--limit", type=int, default=None, help=f"rows to print (default {GRAPH_LIMIT})"
+    )
+    graph.add_argument("--json", action="store_true")
+    graph.set_defaults(func=cmd_docs_graph)
 
     addr = sub.add_parser("addresses", help="fail on a personal email address in a tracked file")
     addr.add_argument("--root", default=None, help="repository to scan (default: this one)")
@@ -1352,6 +1396,159 @@ def cmd_docs_archive_refs(args) -> int:
     verb = "changed" if args.write else "would change (dry run; --write applies)"
     print(f"docs archive-refs: {len(changes)} lines in {files} files {verb}")
     return OK
+
+
+GRAPH_LIMIT = 50
+
+
+def cmd_docs_graph(args) -> int:
+    if args.base is not None and not args.check:
+        print("docs graph: --base needs --check", file=sys.stderr)
+        return USAGE
+    if args.orphans or args.check:
+        if args.within is not None or args.limit is not None or (args.check and args.json):
+            print(
+                "docs graph: --orphans takes only --json, --check only --base", file=sys.stderr
+            )
+            return USAGE
+        return _graph_check(args) if args.check else _graph_orphans(args)
+    if args.of is None and args.task is None:
+        if args.within is not None or args.limit is not None or args.json:
+            print("docs graph: --within, --limit and --json need --of or --task", file=sys.stderr)
+            return USAGE
+        try:
+            graph = docgraph.write(_corpus_root(args))
+        except (OSError, ValueError) as exc:
+            print(f"docs graph: {exc}", file=sys.stderr)
+            return USAGE
+        print(
+            f"docs graph: {len(graph['nodes'])} nodes, {len(graph['edges'])} edges"
+            f" -> {docgraph.GRAPH}"
+        )
+        return OK
+    limit = GRAPH_LIMIT if args.limit is None else args.limit
+    if limit < 1 or (args.within is not None and args.within < 0):
+        print("docs graph: --limit must be 1 or more and --within 0 or more", file=sys.stderr)
+        return USAGE
+    try:
+        graph = docgraph.load(_corpus_root(args))
+        if args.task is not None:
+            depth = 1 if args.within is None else args.within
+            lines, data = _graph_task(docgraph.task_view(graph, args.task, depth), limit)
+        elif args.within is not None:
+            lines, data = _graph_within(docgraph.within(graph, args.of, args.within), limit)
+        else:
+            lines, data = _graph_of(docgraph.of(graph, args.of), limit)
+    except docgraph.GraphError as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(data, ensure_ascii=True, indent=2))
+    else:
+        print("\n".join(lines))
+    return OK
+
+
+def _graph_orphans(args) -> int:
+    try:
+        found = docgraph.debt(_corpus_root(args))
+    except (OSError, ValueError) as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    if args.json:
+        print(json.dumps(found, ensure_ascii=True, indent=2))
+        return OK
+    for path in found["orphans"]:
+        print(f"  orphan    {path}")
+    for d in found["dangling"]:
+        print(f"  dangling  {d['source']} -> {d['target']}  ({d['kind']}, {d['cause']})")
+    if found["frozen"]:
+        print("frozen (in merged decisions, not debt):")
+    for d in found["frozen"]:
+        print(f"  frozen    {d['source']} -> {d['target']}  ({d['kind']}, {d['cause']})")
+    print(
+        f"docs graph: {len(found['orphans'])} orphans, {len(found['dangling'])} dangling,"
+        f" {len(found['frozen'])} frozen"
+    )
+    return OK
+
+
+def _graph_check(args) -> int:
+    try:
+        result = docgraph.check(_corpus_root(args), base=args.base or "origin/main")
+    except (OSError, ValueError) as exc:
+        print(f"docs graph: {exc}", file=sys.stderr)
+        return USAGE
+    if result["stale"]:
+        print(f"{docgraph.GRAPH} differs from a fresh build: {docgraph.REMEDY}")
+    for error in result["errors"]:
+        print(error)
+    state = "stale" if result["stale"] else "up to date"
+    errors = len(result["errors"]) + result["stale"]
+    print(
+        f"docs graph: {state}, {len(result['debt'])} baselined orphans/dangling, {errors} errors"
+    )
+    return FAILED if errors else OK
+
+
+def _more(lines: list[str], hidden: int) -> list[str]:
+    return lines + ([f"  ... {hidden} more"] if hidden else [])
+
+
+def _edge_end(path: str, edge: dict) -> str:
+    """`path:12` for a line citation, the path and its section sign for a section one."""
+    detail = edge.get("detail", "")
+    if not detail:
+        return path
+    return f"{path}:{detail}" if edge["kind"] == "cites-line" else f"{path} {detail}"
+
+
+def _kind_note(kind: str) -> str:
+    return "" if kind == "doc" else f"  ({kind})"
+
+
+def _graph_of(view: dict, limit: int) -> tuple[list[str], dict]:
+    out, into = view["out"], view["in"]
+    # Share the limit, so a hub's many inbound edges never hide its outbound ones.
+    n_out = min(len(out), max(limit - len(into), (limit + 1) // 2))
+    n_in = min(len(into), limit - n_out)
+    hidden = len(out) + len(into) - n_out - n_in
+    lines = [f"{view['path']}  ({view['kind']})"]
+    lines += [f"  out {e['kind']:<16} {_edge_end(e['target'], e)}" for e in out[:n_out]]
+    lines += [f"  in  {e['kind']:<16} {_edge_end(e['source'], e)}" for e in into[:n_in]]
+    lines = _more(lines, hidden) + [f"docs graph: {len(out)} out, {len(into)} in"]
+    return lines, {**view, "out": out[:n_out], "in": into[:n_in], "more": hidden}
+
+
+def _graph_within(view: dict, limit: int) -> tuple[list[str], dict]:
+    root, rest = view["nodes"][0], view["nodes"][1:]
+    shown = rest[:limit]
+    lines = [f"{root['path']}  ({root['kind']})  within {view['depth']}"]
+    for n in shown:
+        via = n["via"]
+        where = "" if via["from"] == root["path"] else f"  via {via['from']}"
+        lines.append(
+            f"  {n['distance']} {via['direction']:<3} {via['kind']:<16} {n['path']}"
+            f"{_kind_note(n['kind'])}{where}"
+        )
+    lines = _more(lines, len(rest) - len(shown))
+    lines.append(f"docs graph: {len(view['nodes'])} nodes within {view['depth']} of {root['path']}")
+    return lines, {**view, "nodes": [root, *shown], "more": len(rest) - len(shown)}
+
+
+def _graph_task(view: dict, limit: int) -> tuple[list[str], dict]:
+    context, linked, allowed = view["required_context"], view["linked"], view["allowed_paths"]
+    shown = linked[:limit]
+    lines = [f"{view['task']}  {view['spec']}"]
+    lines += [f"  context  {c['path']}{_kind_note(c['kind'])}" for c in context]
+    lines += [f"  {n['distance']} link   {n['path']}  via {n['via']}" for n in shown]
+    lines = _more(lines, len(linked) - len(shown))
+    lines += [f"  allowed  {row}" for row in docgraph.compact_paths(allowed)]
+    lines.append(
+        f"docs graph: {len(context)} context, {len(linked)} linked within {view['depth']},"
+        f" {len(allowed)} allowed"
+    )
+    return lines, {**view, "linked": shown, "more": len(linked) - len(shown)}
 
 
 def cmd_addresses(args) -> int:

@@ -106,7 +106,9 @@ Context-Update-Track (runbook: [repo-cutover](../../wiki/GeneralContext/Architec
 They share the linter's types, budgets, body count and link syntax, read
 tracked files only, and exit 0 unless their input is unusable (2). Each takes
 `--paths <prefix>...` to narrow its scope, `--root <repo>` to read another
-checkout, and `--json`.
+checkout, and `--json`. `docs graph` (`agentlib.docgraph`) maps how docs,
+specs and code link and checks for orphans ([docgraph](docgraph.md)); lint
+and inventory skip its `.ai/graph.json` and `.ai/graph-baseline.json`.
 
 - `docs inventory` gives one row per tracked Markdown file: body words, type,
   budget and whether it is over, the newest commit that touched it, and every

@@ -496,6 +496,19 @@ jobs:
           # repo-cutover.md): lint the snapshot against itself.
           case "$base" in *[!0]*) ;; *) base=HEAD ;; esac
           python .ai/bin/agentctl.py docs lint --base "$base"
+      # Prompts/49: the committed .ai/graph.json must equal a fresh build, and
+      # its orphans and dangling edges may only shrink against the base's
+      # .ai/graph-baseline.json. Runs even when lint failed, so one push shows
+      # both; same base as the lint step, chosen the same way.
+      - name: Check the docs graph is current and its orphans only shrink
+        if: ${{ !cancelled() }}
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-${PUSH_BASE:-origin/main}}"
+          case "$base" in *[!0]*) ;; *) base=HEAD ;; esac
+          python .ai/bin/agentctl.py docs graph --check --base "$base"
 
   # Backlog 19: stacked PRs merged top-down never reached main. A PR's base
   # must be `main`, an `outstanding-track-*` integration branch or the final

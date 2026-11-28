@@ -374,3 +374,16 @@ def test_test_fixtures_are_data_not_documents(repo):
     put(repo, ".ai/tasks/OLD-1/brief.md", text, kind=None)
     found = {(v.path, v.rule) for v in doclint.scan(repo)}
     assert {(".ai/tasks/OLD-1/brief.md", "link"), (".ai/tasks/OLD-1/brief.md", "citation")} <= found
+
+
+def test_the_generated_docs_graph_is_not_scanned(repo):
+    """Prompts/49: `.ai/graph.json` is generated from the corpus, so a path
+    or citation in it is the corpus's, already checked at its source."""
+    put(repo, doclint.GRAPH, '{"edges": ["wiki/gone.md:12", "wiki/gone.md §3"]}\n', None)
+    assert not doclint.scan(repo)
+
+
+def test_the_graph_baseline_is_not_scanned(repo):
+    """Prompts/49 step 3: `.ai/graph-baseline.json` lists debt keys, not prose."""
+    put(repo, doclint.GRAPH_BASELINE, '["dangling:wiki/a.md -> wiki/gone.md:12 (link)"]\n', None)
+    assert not doclint.scan(repo)

@@ -31,6 +31,14 @@ ARCHIVE = "fanwire-archive"
 # code comment, a workflow); the same set doclint reads for citations.
 _TEXT = (".md", ".py", ".yml", ".yaml", ".json", ".ts", ".tsx", ".txt", ".ps1", ".sh", ".toml")
 _PATH_TOKEN = re.compile(r"[\w./-]+\.md\b")
+# The same token with any extension: docgraph's named code paths.
+_NAMED_PATH = re.compile(r"[\w./-]+\.[A-Za-z]\w*")
+
+
+def named_paths(text: str, pattern: re.Pattern = _PATH_TOKEN):
+    """Each repository-root path token in `text`, as a tracked name would be spelled."""
+    for token in pattern.findall(text):
+        yield token.removeprefix("./").lstrip("/")
 
 
 def _tracked(root: Path) -> list[str]:
@@ -86,11 +94,12 @@ def inventory(root: Path, paths: list[str] | None = None) -> list[dict]:
     inbound: dict[str, dict[str, str]] = defaultdict(dict)
     texts = {}
     for name in tracked:
+        if name in (doclint.GRAPH, doclint.GRAPH_BASELINE):
+            continue
         if name.endswith(_TEXT) and (text := _read(root, name)) is not None:
             texts[name] = text
     for name, text in texts.items():
-        for token in _PATH_TOKEN.findall(text):
-            token = token.removeprefix("./").lstrip("/")
+        for token in named_paths(text):
             if token in markdown and token != name:
                 inbound[token].setdefault(name, "mention")
         if name.endswith(".md"):
