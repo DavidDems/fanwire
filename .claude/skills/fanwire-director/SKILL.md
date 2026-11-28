@@ -1,0 +1,13 @@
+---
+name: fanwire-director
+description: Run a human-supervised Fanwire Director session from task specification through delegated tests, implementation, review and release follow-up.
+---
+
+Read the active brief, the [work modes](../../../wiki/GeneralContext/Architecture/work-modes.md) and the [Director runbook](../../../wiki/GeneralContext/Architecture/director-sessions.md). Use the runbook for commands, role guards and branch bookkeeping. Apply the following handoffs in hand-run sessions.
+
+1. **Spec.** Name the observable outcome, owner, supported callers and relevant failure case. Map each acceptance criterion to evidence and eligible role paths. Merge any necessary scope amendment in its own Director PR first.
+2. **Test brief.** Give the test author the local test-driven-development skill, criteria, allowed files and module references. Choose the cheapest layer that can actually detect each break. Use a pure unit test for a rule, a real database for transaction semantics and a browser for browser behaviour. During iteration run the affected case or file. When reducing suite time, measure the same workload before and after and show which regression each retained test catches.
+3. **Implementation brief.** Review the red failure and commit tests alone. Give a separate implementation agent a dedicated worktree at that SHA, the allowed paths and the relevant skills. Both briefs prohibit push, PR and workflow actions. For agent-system tests strip every GIT_* variable from Git subprocesses. Use systematic-debugging for unexpected failures and zero-tech-debt for workaround removal. Follow the module's boundaries and keep test edits out of implementation.
+4. **Review.** Trace a changed rule through its real caller. Check for duplicated ownership, silent defaults and special cases. Preserve approved infrastructure decisions. Apply verification-before-completion, inspect the diff yourself and run the applicable runbook gates on the reviewed revision. For sibling units verify their combined tree with applicable full container suites.
+5. **PR and release.** Record the acceptance evidence, commands and results, required restricted-tree disclosures and merge order. Return a unit with missing evidence to the responsible step before recommending merge. The human merges and approves deploy. When post-deploy verification is in scope, check the deployed revision and affected user flow and report the observation.
+6. **Documentation.** Use wiki-update for changed module decisions in the unit and any Director tidy-up PR for remaining cross-cutting documentation. Use wiki-review at the established weekly review. Update the active brief on handoff or retire it when finished.

@@ -36,6 +36,7 @@ Load just-in-time. A manager-tier agent reads `wiki/GeneralContext/index.md` fir
 - `PostEventBus` (EventBridge) is the one domain event bus for the whole app, not `posts/`-exclusive despite the name.
 - No module reaches past its own interface boundary into another module's concrete classes or tables — `wiki/CodeContext/Modules/0x00-architecture.md` Connection rule.
 - Apply `wiki/CodeContext/Standards/design-principles.md` on every change: SOLID, DRY/KISS/YAGNI, fail-fast/validate-at-boundaries-only, 12-factor, the security baseline.
+- For workaround removal and refactors, use `.agents/skills/zero-tech-debt/SKILL.md` and the design principles' "Code quality and technical debt" rules.
 - Follow `wiki/CodeContext/Standards/gof-patterns.md` for which pattern implements which behavior; don't introduce another.
 
 ## Build / test / run
@@ -65,6 +66,8 @@ Prefer the `docker-compose` commands: they run in CI's containers. Direct comman
 **CI**: `.github/workflows/test-agent.yml` is the one authoritative test executor — backend and frontend test containers, `pip-audit`, `npm audit` (of both `frontend/` and `infra/`), the CDK synth/IAM gate, and the `.ai/` suite, on every PR. Despite its name it is not an agent.
 
 ## Workflow
+Interactive Directors must use the [Fanwire Director skill](.claude/skills/fanwire-director/SKILL.md) for handoffs and review. Give each hand-run worker its applicable skill with the brief.
+
 1. Write a failing test against the requested change first, against the intended interface even if the entity doesn't exist yet. Commit it alone.
 2. Implement until the test passes. Commit separately. Never combine steps 1 and 2 into one commit, never skip step 1.
 3. Update the relevant `wiki/CodeContext/Modules/0x0N-*.md` file(s) in the same pass if the change alters a documented decision — wiki entries are pruned/merged when they stop being referenced or a correction supersedes them, not left stale.
