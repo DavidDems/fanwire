@@ -81,7 +81,7 @@ that here as usual.
   that names the major and its decision (`dependencyMajor`, "ADR NNNN") may
   declare more, and its raw growth lifts the raw cap by as much
   (FRONTEND-047). React 19 was the first (+23.4 kB gzip, all `react-dom` 19's);
-  its fold reset the cap from 480 kB to the measured entry plus 1% (ADR 0041). `/search` stays in the
+  its fold reset the cap from 480 kB to the measured entry plus 1% ([ADR 0041](../../GeneralContext/Decisions/0041-react-19-entry-budget.md)). `/search` stays in the
   entry: `SearchPage` shares its code with the home page's search rail, and
   lazy-loading it made the entry larger.
 - **The react-hooks 7 rules hold on React 18 and 19** (FRONTEND-047): no ref
