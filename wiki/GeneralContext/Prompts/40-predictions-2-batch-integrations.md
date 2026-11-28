@@ -25,7 +25,9 @@ restricted-tree edit is named in its PR body.
 ## Read first, in this order
 
 1. `29-outstanding-work.md` "How every track runs".
-2. ADR 0037 and ADR [0040](../Decisions/0040-predictions-track-answers.md) (the answers); [`39-predictions-data.md`](39-predictions-data.md) "Settlement"
+2. ADR 0037, ADR [0040](../Decisions/0040-predictions-track-answers.md) (the answers) and
+   ADR [0046](../Decisions/0046-scraper-and-predictions-readiness.md) (no
+   reserved concurrency; how a shared pick is stored); [`39-predictions-data.md`](39-predictions-data.md) "Settlement"
    and "Events"; `wiki/CodeContext/Modules/0x09-predictions.md` (landed by `39`).
 3. `0x00-architecture.md` "PostEventBus implementation";
    `0x02b-events-loading.md` "The load function";
@@ -38,14 +40,18 @@ restricted-tree edit is named in its PR body.
    `infra/lib/app-stack.ts` `sportsDataLoad()` and `messaging-stack.ts`
    (`NotificationRule`).
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
 - Nothing of this track exists. `SportsDataLoad` publishes nothing today, and
   no rule targets a function other than the notifications consumer and media.
-- **Depends on** `39` (the module, settlement, flag off) and on `38` (the
-  scraper's loads, which are what make settlement timely).
+- **Depends on** `39` (the module, settlement, flag off). It runs while `38`
+  is in shadow (ADR 0046): until `38` loads, the daily Kaggle refresh's load
+  is the event that triggers settlement. `38`'s loads only make it timely.
+- No function reserves concurrency, deliberately (`0x00b`: the `Migration`
+  entry). The SQS triggers go through `AppStack.sqsTrigger` (batch size and
+  `reportBatchItemFailures`).
 - The load function runs in the VPC. EventBridge `PutEvents` goes through the
   NAT instance, as the API's does (`0x00a` "Egress").
 
@@ -59,7 +65,9 @@ One PR each, test-first.
    re-ask them.
 1. **`SportsDataLoaded` (`EVENTS-0xx`).**
    - `load_handler` publishes `{seasons, source, games_written}` through
-     `PostEventBus` **after** its transaction commits.
+     `PostEventBus` **after** its transaction commits. `source` is the
+     event's `"source"` once `38` deliverable 5 adds it, and `"kaggle"` for an
+     event without one (every load before that).
    - A publish failure is logged and counted as a metric, and never fails or
      rolls back a committed load (the daily run covers it).
    - Tests: published once on success, never on a failed or locked load; a
@@ -76,14 +84,16 @@ One PR each, test-first.
    publishes nothing.
 3. **Infra (`INFRA-0xx`).**
    - The `PredictionsBatch` function: the shared image, in the VPC, its own
-     role. Reserve a concurrency of 1 so two runs can't overlap. Proposal:
-     5-minute timeout, 1024 MB.
+     role. **No reserved concurrency** (ADR 0046 item 5): the settlement
+     advisory lock stops overlapping runs, and the event source's
+     `maxConcurrency` is 2, its minimum. Proposal: 5-minute timeout, 1024 MB.
    - The `PredictionsQueue` with a DLQ and a DLQ-depth alarm.
    - `PredictionsRule`, detail-type `SportsDataLoaded`.
    - `PredictionsDailyRunSchedule`.
    - `events:PutEvents` on the bus for `SportsDataLoad` and `PredictionsBatch`.
    - The Errors alarm.
-   - Synth and IAM tests (no new wildcard); `0x00a` alarm count updated with the
+   - Synth and IAM tests (no new wildcard); `0x00b`'s list of VPC-attached
+     functions gains it; `0x00a` alarm count updated with the
      test.
 4. **Notifications (`NOTIFICATIONS-0xx`).**
    - The type `picks_settled`: a migration for the enum, the
@@ -92,12 +102,16 @@ One PR each, test-first.
    - The self, deactivated and removed fences as for the other types.
    - `LocalDispatchPublisher` covers it in `backend-dev`.
 5. **Shared picks (`POSTS-0xx`).**
-   - The `data_link` type `pick`, validated by
-     `app.predictions.service.validate_pick_link` and previewed through
-     `pick_previews`, both added by this unit's predictions half.
+   - The `data_link` type `pick`, stored as `posts.linked_pick_id`, a
+     nullable FK to `picks.id` (ADR 0046 item 7, ADR 0030's shape). One
+     migration adds the column and widens `ck_posts_one_data_link` and
+     `ck_posts_no_data_link_on_reply`; `app.posts.data_link.DataLink` maps it.
+   - Validated by `app.predictions.service.validate_pick_link` and previewed
+     through `pick_previews`, both added by this unit's predictions half.
    - Tests: someone else's pick, or a void one, is refused with a precise
-     error; previews are batched with a fixed query count; the view assembly
-     includes it.
+     error; a reply can't carry one; a post can't carry a pick and another
+     link; previews are batched with a fixed query count; the view assembly
+     includes it; deleting the account removes the post, then the pick.
 6. **Docs:**
    - `0x09` (the batch, events, alarms);
    - `0x05` (the type);

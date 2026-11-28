@@ -30,14 +30,16 @@ restricted-tree edit is named in its PR body.
 2. ADR 0038; [`39-predictions-design.md`](39-predictions-design.md)
    "Leaderboards" and "Abuse cases";
    [ADR 0017](../Decisions/0017-navigation-and-home-rail.md) (navigation and the
-   home rail), as amended by ADR [0040](../Decisions/0040-predictions-track-answers.md) items 15–18.
+   home rail), as amended by ADR [0040](../Decisions/0040-predictions-track-answers.md) items 15–18;
+   ADR [0046](../Decisions/0046-scraper-and-predictions-readiness.md) (the
+   launch waits for `38`).
 3. `wiki/CodeContext/FrontendUI/index.md` and the files track 42 read;
    `layout.md` (one template per route).
 4. `wiki/CodeContext/Modules/0x08l-…` (track 42's part), `0x08e-frontend-notifications.md`,
    `0x08c-frontend-compose.md` and `0x08f-frontend-feed.md` (attachments and
    cards), `0x08k-frontend-account.md` (profile), `0x09-predictions.md`.
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
@@ -46,6 +48,12 @@ Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
   API) and `41` (the model's ghost row).
 - `PREDICTIONS_ENABLED` is unset on the Api function, so false by default
   (`39` adds the setting, not the infra): check `infra/lib/app-stack.ts`.
+- **The launch waits for `38` to be live** (ADR 0046): its sweeps invoke the
+  load after the human confirmed the shadow measures. Units 0–3 don't wait.
+- The nav today (`routes/AppLayout.tsx`, ADR 0017): one `<nav
+  aria-label="Primary">` with Home, Stats, Schedule, Search, Notifications and
+  Sign out. On phones, Search is the header icon and the nav's Search item is
+  hidden (`layout.md` §1, the one exception).
 
 ## Deliverables
 
@@ -84,7 +92,9 @@ One PR each, test-first, each with a browser pass.
    - "Share" on a pick opens compose with the `pick` attachment.
    - A post card renders the pick preview (game, picked team, value, state), as
      the sports-data previews do.
-4. **The launch (`INFRA-0xx` plus a Director PR).**
+4. **The launch (`INFRA-0xx` plus a Director PR).** **Start gate:** `38` is
+   live, its sweeps invoking the load (`38` deliverable 6). If it isn't,
+   stop after unit 3 and say so.
    - `PREDICTIONS_ENABLED=true` on the Api function, with a synth test.
    - After the deploy, the human checks the live app (an ordered list, one
      PowerShell line each where a command is needed).
@@ -113,9 +123,13 @@ One PR each, test-first, each with a browser pass.
 ## Mechanics learned the hard way
 
 - **Run the frontend suite alone**: beside the others it flakes.
-- **The entry chunk is about 1 kB under its limit**: every new route is lazy.
-- **A keyboard reader reaches the home rail late** (backlog, Frontend): the
-  rail card makes that worse, so fix that item first or say so in the PR.
+- **The entry may grow at most 1 kB gzip per unit** (`0x08a`, ADR 0041):
+  every new route is lazy, and each lazy chunk is declared in its unit's
+  `src/test/bundle-budgets/<UNIT>.ts`.
+- **The home rail's keyboard order is solved** by "Skip to search"
+  (`FRONTEND-056`, `accessibility.md` A11). The new rail card sits in the
+  rail after the search box, so that skip link still reaches it first. Keep
+  it so.
 
 ## Design notes (starting points, not decisions)
 

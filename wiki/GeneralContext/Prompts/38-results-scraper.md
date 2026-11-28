@@ -12,11 +12,11 @@ names.
 played, not 24–48 hours later with the daily Kaggle refresh (`EVENTS-008`).
 This track adds a client for the **balldontlie API, free tier**, run on the
 human's Windows PC (not AWS). It writes the current season's final scores in
-the Kaggle files' shape and loads them through the existing bucket and
+the Kaggle files' shape and loads them through the bucket and
 `SportsDataLoad`. Box scores keep coming from Kaggle, which fills each game's
-box score on its next run. The track comes after the Outstanding-work tracks
-(`29-outstanding-work.md`) and before predictions, which settle picks from
-these scores.
+box score on its next run. Picks settle from these scores: `39`–`42` run
+during this track's shadow; only `43`'s launch waits for it
+([ADR 0046](../Decisions/0046-scraper-and-predictions-readiness.md)).
 
 **Tier.** Specs and ADRs are Director PRs; code is a `hand` unit on
 `agent/<ID>` held by `agent-guard` (`Architecture/director-sessions.md`). Every
@@ -36,15 +36,19 @@ its PR body.
    are the CSV contract.
 5. For the infra unit only: `infra/lib/app-stack.ts` `sportsDataLoad()`.
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify: `git log origin/main`, `gh pr list`,
 `python .ai/bin/agentctl.py status`.
 
 - The refresh runs daily at 09:00 UTC (`SportsDataRefreshSchedule`) for the
-  current season, 2026-27. Nothing of this track is built.
+  current season, 2026-27. **It is loading** (the human, 2026-11-27,
+  ADR 0046): the shadow comparison and the schedule file depend on it. Nothing
+  of this track is built.
 - `nba-eoin/` holds **whole-history** files: `Games.csv` has every season.
-- Next free ids: `EVENTS-018` and ADR `0036` (check both).
+- `SportsDataLoad` accepts only `{"seasons": [...]}`
+  (`load_handler._seasons`); deliverable 5 widens it.
+- Next free ids: `EVENTS-018` and ADR `0047` (check both).
 
 ## Decisions already made (the human, 2026-11-19; don't re-open)
 
@@ -79,7 +83,7 @@ Verify: `git log origin/main`, `gh pr list`,
 One PR each, test-first per `AGENTS.md` Workflow (failing tests committed
 alone, then the code, then the module reference).
 
-1. **ADR 0036** (Director): a second data source for the current season's
+1. **ADR 0047** (Director; the next free number): a second data source for the current season's
    final scores, the legal basis, balldontlie's free tier, the decisions
    above. It amends ADR 0032's "one sports-data source".
 2. **ID mapping** (`app/results/ids.py`). Game: schedule row by ET tip-off
@@ -116,8 +120,8 @@ alone, then the code, then the module reference).
    compares every Kaggle game with the scraper's (`SportsDataConflictsAlarm`).
 7. **Docs:** `0x02b-events-loading.md`; `06-nba-data.md` (the current
    season's two writers); `index.md` (`events/` row, the out-of-scope
-   one-source line, Task prompts); `29-outstanding-work.md` (this track
-   after track 8); a runbook part for the PC.
+   one-source line, Task prompts); `29-outstanding-work.md` (this track's
+   row); a runbook part for the PC.
 
 ## Phase 2, only if the human subscribes to ALL-STAR
 
@@ -166,9 +170,10 @@ this file when the human asks.
 ## Design notes (starting points, not decisions)
 
 - **One free-tier call first** (unit 3's first step): `GET /nba/v1/games` for
-  one finished date settles what the spec leaves open: quarter scores (the
-  docs page lists them from 2023, the OpenAPI spec does not), `datetime`'s
-  time zone and the per-minute limit. Record the answers in the API part.
+  one finished date settles what the spec leaves open: the path (the docs'
+  examples use `/v1/games`, the OpenAPI spec and home page `/nba/v1/games`),
+  quarter scores (the docs list them from 2023, the OpenAPI spec doesn't) and
+  `datetime`'s time zone. Record the answers in the API part.
 - **Request cost:** one request per sweep returns every game of a date
   (`dates[]`, `per_page` 100); a two-date sweep is two requests.
 

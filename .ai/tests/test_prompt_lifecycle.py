@@ -14,6 +14,11 @@ GENERAL = ROOT / "wiki/GeneralContext"
 RETIRED = (
     "20-stats-navigation-and-compose-modal.md",
     "21-visual-refresh-specs.md",
+    # ADR 0046 (2026-11-27): the API-cost briefs are retired, not parked.
+    "12-agent-evals.md",
+    "13-worker-shell.md",
+    "14-learning-loop.md",
+    "15-context-graph.md",
 )
 
 
@@ -33,13 +38,7 @@ def test_finished_thread_is_not_listed_in_the_index(name):
     assert "A finished prompt is deleted" in index
 
 
-PARKED = (
-    "04-cheap-automations.md",
-    "12-agent-evals.md",
-    "13-worker-shell.md",
-    "14-learning-loop.md",
-    "15-context-graph.md",
-)
+PARKED = ("04-cheap-automations.md",)
 
 
 @pytest.mark.parametrize("name", PARKED)

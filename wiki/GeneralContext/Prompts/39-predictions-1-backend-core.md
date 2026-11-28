@@ -13,7 +13,8 @@ of an upcoming NBA game, locks the pick at tip-off, settles it from the stored
 result into a points ledger, and serves the boards. It fixes the API contract
 first, so the frontend tracks can generate types early. Everything stays
 behind `PREDICTIONS_ENABLED=false`. It is the first of the predictions tracks,
-run in order after the results scraper (`38`):
+run in order while the results scraper (`38`) is in shadow
+([ADR 0046](../Decisions/0046-scraper-and-predictions-readiness.md)):
 
 `39` core → `40` batch and integrations → `41` Elo model → `42` pick UI →
 `43` boards and launch → `44` AI model (parked).
@@ -31,7 +32,9 @@ It closes the backlog row "Predictions track 39".
 2. ADRs [0037](../Decisions/0037-predictions-module-and-batch-lambda.md),
    [0038](../Decisions/0038-picks-scoring-and-leaderboards.md),
    [0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md),
-   [0040](../Decisions/0040-predictions-track-answers.md) (the human's answers for every track).
+   [0040](../Decisions/0040-predictions-track-answers.md) (the human's answers for every track),
+   [0046](../Decisions/0046-scraper-and-predictions-readiness.md) (the order,
+   account deletion, the verified-email sync).
 3. [`39-predictions-data.md`](39-predictions-data.md) (tables, settlement, API)
    and [`39-predictions-design.md`](39-predictions-design.md) (boards, abuse).
 4. `Architecture/work-modes.md`; `director-sessions.md` "The loop, per unit".
@@ -44,23 +47,30 @@ It closes the backlog row "Predictions track 39".
 7. Code, at the unit that needs it: `backend/app/events/service.py`,
    `schedule.py`, `schemas.py` (`ScheduleGameOut`); `backend/app/posts/` rate
    limiter (`PostCountRateLimiter`); `backend/app/settings.py`;
-   `backend/app/main.py`.
+   `backend/app/main.py`; `backend/app/account_deletion.py` (`_cleanup`) and
+   `app/users/auth.py` (`VerifiedIdentity`), for units 2b and 3.
 
 Don't read the frontend or `infra/`: this track changes neither.
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify each: `git log origin/main`, `gh pr list`,
 `python .ai/bin/agentctl.py status`.
 
-- Nothing of predictions exists. The next free ADR is after 0039; the next
-  module file is `0x09`.
-- **Depends on `38` being live**: the scraper writes the current season's
-  final scores from balldontlie's free tier (box scores still come from
-  Kaggle), and loads only after its 14-game-day shadow run. Until then,
-  results arrive 24–48 h late from Kaggle and settlement waits on them. `38`
-  takes its own ADR and `EVENTS-` ids, so check the next free ones at spec
-  time. The new prefix is `PREDICTIONS-001`.
+- Nothing of predictions exists. The next module file is `0x09`. `38` takes
+  ADR 0047 and `EVENTS-018` onward, so check the next free ADR and `EVENTS-`,
+  `USERS-` ids at spec time (`USERS-012`, if nothing has taken it). The new
+  prefix is `PREDICTIONS-001`.
+- **Runs while `38` is in shadow** (ADR 0046). Until `38` loads, results come
+  from the daily Kaggle refresh, 24–48 h late, so a local or deployed pick
+  settles a day or two after its game. That is enough to build and test
+  everything; only `43`'s launch waits for `38`.
+- **Account deletion is live** (since 2026-11-26): `app.account_deletion._cleanup`
+  removes each module's rows through its service (`remove_account_notifications`,
+  `_media`, `_posts`, then `_user`). Predictions joins that list (unit 3).
+- The API verifies **Cognito ID tokens only** (`users/auth.py`), which carry
+  `email_verified`. `VerifiedIdentity` doesn't expose it yet, and `User` stores
+  no verification state (`0x01b-users-auth.md`).
 - `scheduled_games` holds the 2026-27 schedule, and `ScheduleGameOut` exposes
   `nba_game_id` and `time_tbd`.
 
@@ -87,13 +97,22 @@ alone, then the code, then the module reference.
    - `final_games(session, from_season)`: ordered, for track 41.
    - Frozen dataclasses, batched, with query-count tests like
      `game_final_previews`. `predictions` never imports `app.events.models`.
-2b. **Verified email (`USERS-0xx`, a users unit).** A stored flag synced from
-   the token's `email_verified` claim on sign-in and after verification, and
-   `app.users.service.verified_user_ids(session, ids)` for the boards
-   (ADR 0040, Consequences). Tests: the flag follows the claim, and a batched
-   read uses a fixed query count.
+2b. **Verified email (`USERS-0xx`, a users unit).** `VerifiedIdentity` gains
+   `email_verified` (the ID token's claim; absent means false). A stored
+   `users.email_verified` flag is written on an authenticated request only when
+   the claim differs from it (ADR 0046 item 6). That covers sign-in and a
+   later verification once the SPA refreshes its token.
+   `app.users.service.verified_user_ids(session, ids)` serves the boards
+   (ADR 0040, Consequences). Tests: the flag follows the claim both ways, an
+   unchanged claim writes nothing, and the batched read uses a fixed query
+   count.
 3. **Tables and the immutability trigger (`PREDICTIONS-002`).**
    - The six tables and their indexes in one Alembic migration.
+   - `app.predictions.service.remove_account_predictions(session, user_id)`,
+     called in `app.account_deletion._cleanup` after `remove_account_posts`
+     and before `remove_account_user` (ADR 0046 item 4): it removes the
+     user's picks and ledger rows. Tests: the account's rows go and nobody
+     else's do; a rerun is a no-op; the deletion tests still pass.
    - The trigger on `model_predictions`. Tests against real Postgres:
      - a probability update after `tipoff_at` is refused;
      - each allowed outcome transition passes;

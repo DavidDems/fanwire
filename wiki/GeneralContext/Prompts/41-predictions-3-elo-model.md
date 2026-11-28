@@ -34,12 +34,16 @@ body.
 6. Code: `backend/app/predictions/`, `app.events.service.final_games` and
    `upcoming_games`.
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
 - Nothing of the model exists. **Depends on** `39` (tables, the trigger) and
-  `40` (the batch running in production).
+  `40` (the batch running in production). It may run while `38` is still in
+  shadow ([ADR 0046](../Decisions/0046-scraper-and-predictions-readiness.md)):
+  ratings then update from the daily Kaggle refresh, a day or two late, so a
+  team's latest game can be missing from a forecast. That is already the
+  "older ratings" case in `41-elo-model-spec.md` "Running it".
 - The full history (2003-04 onward) loads into a throwaway Postgres on port
   5433 in about 133 s (`0x02b` "Measured"), from `C:\data\nba` or
   `C:\data\nba-refresh`.

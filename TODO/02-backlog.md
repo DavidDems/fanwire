@@ -33,22 +33,19 @@ changes a workflow.
 14. **Parked for API cost** ([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)):
     proving the cheap automations' two fixes live (`Prompts/04`), exercising a
     failure path on purpose (`handoff.md` §6, item 3), and whether
-    `--permission-mode acceptEdits` suits a worker that runs a tool
-    (`Prompts/13`). Each needs metered runs; the human revisits only by
-    choosing to spend.
+    `--permission-mode acceptEdits` suits a worker that runs a tool (from the
+    worker-shell brief, retired by [ADR 0046](../wiki/GeneralContext/Decisions/0046-scraper-and-predictions-readiness.md)).
+    Each needs metered runs; the human revisits only by choosing to spend.
 
 Decided, nothing to build: bot-opened PRs keep `action_required`.
 
 ## Improvement roadmap
 
-From the Director's review of 2026-10-19, narrowed on 2026-11-17: development is
-hand-run, so the briefs that need metered API runs are parked
-([ADR 0035](../wiki/GeneralContext/Decisions/0035-outstanding-work-answers.md)).
-Each brief is in `wiki/GeneralContext/Prompts/`.
-
-| Brief | Mode | Now |
-|---|---|---|
-| `12`–`15` (evals, worker shell, learning loop, context graph) | `director` | Parked: each needs metered API runs to build or score |
+From the Director's review of 2026-10-19. Its last briefs, `12`–`15` (evals,
+the worker shell, the learning loop, the context graph), each needed metered
+API runs and were retired on 2026-11-27
+([ADR 0046](../wiki/GeneralContext/Decisions/0046-scraper-and-predictions-readiness.md));
+reviving one takes a new brief. Nothing is open here.
 
 ## Workflow ideas, not yet designed
 
@@ -63,26 +60,27 @@ before a brief.
 
 NBA data from the Eoin Moore Kaggle dataset, 2003-04 onward (the human's
 choice, 2026-10-13; `EVENTS-001`, fanwire-archive#139, loaded a first, thinner dataset).
-Nothing is left to build here; the dataset's facts and the human's data
-decisions are `Prompts/06-nba-data.md`, and the results scraper is `Prompts/38`.
+The dataset's facts and the human's data decisions are `Prompts/06-nba-data.md`.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
+| **Results scraper track 38**: same-night final scores from balldontlie's free tier, run on the human's PC, loaded through `nba-scraper/` and `SportsDataLoad` after a 14-game-day shadow proof | `hand` | — | ADR 0046 | `Prompts/38-results-scraper.md`. Starts first; predictions 39–42 run during its shadow |
 
 ## Predictions
 
 Users pick NBA winners, earn non-monetary points and are ranked; every game
 shows "Our prediction" ([ADR 0037](../wiki/GeneralContext/Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../wiki/GeneralContext/Decisions/0040-predictions-track-answers.md); 0040 holds the human's answers).
-Runs after the Outstanding-work tracks and the results scraper (`Prompts/38`),
-in this order. One row per track; its brief lists the units.
+Runs in this order while the results scraper (`Prompts/38`) is in shadow;
+only track 43's launch waits for it to be live ([ADR 0046](../wiki/GeneralContext/Decisions/0046-scraper-and-predictions-readiness.md)).
+One row per track; its brief lists the units.
 
 | Item | Mode | Task | Where it came from | Notes |
 |---|---|---|---|---|
-| **Predictions track 39**: the `predictions` module, picks and the tip-off lock, settlement and the points ledger, boards, the API contract, behind `PREDICTIONS_ENABLED=false` | `hand` | — | ADR 0037, 0038 | `Prompts/39-predictions-1-backend-core.md`. Needs `38` live |
+| **Predictions track 39**: the `predictions` module, picks and the tip-off lock, settlement and the points ledger, boards, the API contract, behind `PREDICTIONS_ENABLED=false` | `hand` | — | ADR 0037, 0038 | `Prompts/39-predictions-1-backend-core.md`. Runs during `38`'s shadow |
 | **Predictions track 40**: `SportsDataLoaded` on `PostEventBus`, the `PredictionsBatch` Lambda and daily run, the `picks_settled` notification, the `pick` post attachment | `hand` | — | ADR 0037 | `Prompts/40-predictions-2-batch-integrations.md`. After 39 |
 | **Predictions track 41**: the `elo-mov-1` model, its out-of-sample backtest, live forecasts and the model record | `hand` | — | ADR 0039 | `Prompts/41-predictions-3-elo-model.md`. After 40; first check the margin formula against 538's published ratings |
 | **Predictions track 42**: "Our prediction", its record page and the pick control in the frontend | `hand` | — | ADR 0038, 0039 | `Prompts/42-predictions-4-pick-ui.md`. After 41 |
-| **Predictions track 43**: leaderboards, Beat the model, my picks, sharing, the settled notification's UI, and the launch | `hand` | — | ADR 0038 | `Prompts/43-predictions-5-boards-launch.md`. After 42; navigation decided in ADR 0040 (a Rankings item) |
+| **Predictions track 43**: leaderboards, Beat the model, my picks, sharing, the settled notification's UI, and the launch | `hand` | — | ADR 0038 | `Prompts/43-predictions-5-boards-launch.md`. After 42; navigation decided in ADR 0040 (a Rankings item). Its launch unit needs `38` live |
 | **Predictions track 44**: a machine-learning model compared with Elo (TabPFN, LightGBM, a Bayesian/Kalman rating model) | `hand` | — | ADR 0039 item 6 | **Parked** until 41 is live. `Prompts/44-predictions-6-ai-model.md` |
 
 ## Backend and infra

@@ -8,17 +8,22 @@ type: prompt
 gives against the CSV contract, read 2026-11-19 from its OpenAPI spec
 ([nba.yml](https://www.balldontlie.io/openapi/nba.yml)), its
 [docs](https://docs.balldontlie.io/) and its
-[terms](https://www.balldontlie.io/terms). The terms allow storing,
-publishing and displaying the data, commercial use included, with no
-attribution required. They forbid sharing the API key, reselling the data
-as a substitute feed, and presenting it as official league data.
+[terms](https://www.balldontlie.io/terms). Re-read on 2026-11-27 (terms
+dated 2026-10-20). The terms allow storing, publishing and displaying the
+data, commercial use included, with no attribution required and no retention
+deadline. They forbid sharing the API key, evading the rate limit, building a
+substitute feed, and presenting the data as official league data. The data is
+"best effort", and the terms say to verify it before using it to settle
+anything. The shadow proof and the loader's conflict alarm are that check.
 
 ## Tiers
 
-The human's reading of the account page: the free tier covers Teams, Players
-and Games; ALL-STAR (60 requests/min, per league) adds Game Player Stats,
-Active Players and Player Injuries. The spec states no per-minute figure for
-the free tier: confirm it with the first call (the brief's Design notes).
+The docs' tier table, 2026-11-27: **Free, 5 requests/min, $0**: Teams,
+Players and Games. **ALL-STAR, 60/min, $9.99 a month per league**: adds Game
+Player Stats, Active Players and Player Injuries. GOAT (600/min, $39.99) adds
+box scores and the rest. Over the limit, the answer is 429; an endpoint
+outside the tier answers 401. A sweep is one or two requests, well under
+5/min. The limiter allows at most 4 a minute.
 
 ## Phase 1: games, free tier
 
@@ -28,8 +33,11 @@ the free tier: confirm it with the first call (the brief's Design notes).
 - **Game fields** (the spec's `NBAGame`): `id`, `date`, `datetime`,
   `season`, `status`, `status_state`, `period`, `time`, `period_detail`,
   `postseason`, `home_team_score`, `visitor_team_score`, `home_team`,
-  `visitor_team`, `ist_stage`. No arena, attendance, nba.com id, quarter or
-  overtime scores in the spec.
+  `visitor_team`, `ist_stage`. The docs' examples also show `postponed` and
+  `home_q1`…`home_q4`, `home_ot1`…`home_ot3` (and the visitor's), "only
+  available for 2023 season and beyond". The spec lists neither, so the first
+  call decides. No arena, attendance or nba.com id. `status` is free text
+  ("7:00 pm ET", "Final"): read `status_state`, never `status`.
 - **Final.** Write a game only when `status_state` is `final`. The enum:
   `scheduled`, `in_progress`, `final`, `postponed`, `canceled`, `delayed`,
   `suspended`, `abandoned`, `unknown`. `period` can read 4 for an overtime
@@ -38,7 +46,7 @@ the free tier: confirm it with the first call (the brief's Design notes).
   schedule file (ET tip-off date + home + away); teams through a fixed table
   keyed on `abbreviation`, checked against `dataset.TEAMS`.
 - **Time.** `datetime` is a date-time with no zone stated in the spec; the
-  docs examples end in `Z` (UTC). Convert to `America/New_York` for
+  docs examples end in `Z` (UTC), for example `2025-01-05T23:00:00.000Z`. Convert to `America/New_York` for
   `gameDateTimeEst`; never trust `date` across midnight.
 
 ## What phase 1 writes
