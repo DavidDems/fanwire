@@ -36,6 +36,7 @@ Load just-in-time. A manager-tier agent reads `wiki/GeneralContext/index.md` fir
 - `PostEventBus` (EventBridge) is the one domain event bus for the whole app, not `posts/`-exclusive despite the name.
 - No module reaches past its own interface boundary into another module's concrete classes or tables — `wiki/CodeContext/Modules/0x00-architecture.md` Connection rule.
 - Apply `wiki/CodeContext/Standards/design-principles.md` on every change: SOLID, DRY/KISS/YAGNI, fail-fast/validate-at-boundaries-only, 12-factor, the security baseline.
+- For workaround removal and refactors, use `.agents/skills/zero-tech-debt/SKILL.md` and the design principles' "Code quality and technical debt" rules.
 - Follow `wiki/CodeContext/Standards/gof-patterns.md` for which pattern implements which behavior; don't introduce another.
 
 ## Build / test / run
