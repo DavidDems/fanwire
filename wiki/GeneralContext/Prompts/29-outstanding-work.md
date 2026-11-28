@@ -19,10 +19,19 @@ per track with:
 
 ## The order
 
-First the results scraper (`38-results-scraper.md`, part
-`38-results-scraper-api.md`); the final track (`48`) and the docs graph
-(`49`) are done and their briefs deleted. Then the predictions tracks, in this order
-([ADR 0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md)):
+The final track (`48`) and the docs graph (`49`) are done and their briefs
+deleted. Two lines of work run side by side
+([ADR 0046](../Decisions/0046-scraper-and-predictions-readiness.md)):
+
+- **The results scraper** (`38-results-scraper.md`, part
+  `38-results-scraper-api.md`) starts first. Its shadow run takes at least 14
+  game days.
+- **The predictions tracks** (ADRs [0037](../Decisions/0037-predictions-module-and-batch-lambda.md)–[0040](../Decisions/0040-predictions-track-answers.md))
+  run in the order below while the scraper is in shadow, on the daily Kaggle
+  refresh's results. **Only P5's launch unit waits for `38` to be live.**
+  Two sessions never edit the same module at once: `38` touches `events/`
+  (the load handler) and `40`'s first unit does too, so whichever runs second
+  starts from a `main` that holds the other.
 
 | Track | File | What |
 |---|---|---|
@@ -30,7 +39,7 @@ First the results scraper (`38-results-scraper.md`, part
 | P2 | `40-predictions-2-batch-integrations.md` | `SportsDataLoaded`, `PredictionsBatch`, `picks_settled` notification, shared picks |
 | P3 | `41-predictions-3-elo-model.md` | `elo-mov-1`, its out-of-sample backtest, live forecasts |
 | P4 | `42-predictions-4-pick-ui.md` | "Our prediction", its record page, the pick control |
-| P5 | `43-predictions-5-boards-launch.md` | Leaderboards, my picks, sharing, the launch (flag on) |
+| P5 | `43-predictions-5-boards-launch.md` | Leaderboards, my picks, sharing, the launch (flag on; waits for `38` live) |
 | P6 | `44-predictions-6-ai-model.md` | A machine-learning model against Elo. Parked until P3 is live |
 
 A track is done when its backlog rows are deleted, each changed module's

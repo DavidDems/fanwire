@@ -10,8 +10,10 @@ human), one unit per session, with a browser check per unit
 Self-contained: read this file, then what it names.
 
 **Objective:** show every coming game's "Our prediction" with its honest
-record, and let a signed-in user pick the winner from the game page and the
-schedule, through every state: open, locked, settled, void. The feature stays
+record, and let a signed-in user pick the winner from the Schedule tab's
+upcoming-game card, through every state: open, locked, settled, void. The game
+page, which exists only once a game has a result, shows the forecast that was
+frozen at tip-off beside the score. The feature stays
 off in production until `43` switches it on. This track runs after `41`, so
 real forecasts exist in `backend-dev`; its types come from the contract `39`
 fixed. It closes the backlog row "Predictions track 42".
@@ -25,8 +27,9 @@ its PR body.
 1. `29-outstanding-work.md` "How every track runs".
 2. ADRs [0038](../Decisions/0038-picks-scoring-and-leaderboards.md) and
    [0039](../Decisions/0039-our-prediction-disclosure-and-immutability.md)
-   (what must be shown and how it is worded), and [0040](../Decisions/0040-predictions-track-answers.md) items 10–14 (the
-   human's answers for this track).
+   (what must be shown and how it is worded), [0040](../Decisions/0040-predictions-track-answers.md) items 10–14 (the
+   human's answers for this track), and [0046](../Decisions/0046-scraper-and-predictions-readiness.md)
+   (this track runs before `38` is live).
 3. `wiki/CodeContext/FrontendUI/index.md`, then ADRs 0010–0018 as it lists
    them, `direction.md`, `tokens.md`, `components-shared.md`,
    `components-sports.md`, `components-map-pages.md` (`GamePage`,
@@ -37,17 +40,23 @@ its PR body.
 5. [`41-elo-model-spec.md`](41-elo-model-spec.md) "Wording".
 6. The `dataviz` skill, only if the calibration is drawn as a chart.
 
-## Where things stand (2026-11-19)
+## Where things stand (2026-11-27)
 
 Verify: `git log origin/main`, `gh pr list`, `agentctl status`.
 
 - Nothing of the UI exists. **Depends on** `39` (the contract), `40` and `41`
   (real forecasts and settlement in `backend-dev`).
 - `/schedule` (`features/schedule/SchedulePage`) and the game page
-  (`features/games/GamePage`) exist; a scheduled game is a plain `GameCard`
-  block.
-- The entry chunk sits about 1 kB under its 480 kB limit (backlog, Frontend),
-  so every new route here is lazy.
+  (`features/games/GamePage`) exist. On the schedule, a final game is the
+  shared `GameCard` with one link to the game; **a game not played yet is the
+  same card with its Eastern start time and no link**, so the pick buttons
+  sit in that card with no link around them. The game page is keyed by
+  `games.id`, which exists only after the result, so there is no page for an
+  upcoming game.
+- The bundle budget (`0x08a-frontend-shell.md`, `src/test/bundle-budget.ts`):
+  the entry may grow at most 1 kB gzip per unit, under a 560.3 kB raw cap
+  (ADR 0041). Every new route here is lazy, and each new lazy chunk is
+  declared in `src/test/bundle-budgets/<UNIT>.ts` in the unit's test commit.
 
 ## Deliverables
 
@@ -66,19 +75,21 @@ snapshots), with a browser pass reported per `verification-browser.md`.
    the switch: the UI renders nothing for predictions when the API answers 404,
    so production stays unchanged.
 2. **"Our prediction" (`FRONTEND-0xx`).**
-   - The forecast on the game page and on schedule cards: both teams'
-     percentages as text first, a two-part bar second. Use tokens, not team
+   - The forecast on schedule cards (upcoming) and on the game page (final,
+     the frozen forecast): both teams' percentages as text first, a two-part
+     bar second. Use tokens, not team
      colours (ADR 0016), and tabular figures.
    - An accessible name like "Our prediction: Boston 64 percent, Miami 36
      percent".
    - A link "How accurate is this?" to `/predictions/model`.
-   - After the game: "We gave Boston 64 %" beside the score.
+   - After the game: "We gave Boston 64 %" beside the score, on the game
+     page and on the schedule's final card.
 3. **The record page (`FRONTEND-0xx`).** `/predictions/model`, lazy:
    - the wording of `41-elo-model-spec.md`, with every number from the API;
    - the backtest and the live record as two separate sections;
    - the calibration table as a real `<table>`, with a chart only beside it;
    - a small-sample note under 100 live games.
-4. **The pick control (`FRONTEND-0xx`).**
+4. **The pick control (`FRONTEND-0xx`), in the upcoming-game card.**
    - Two buttons in a radio group, each showing its value ("+10", "+14").
    - The states:
      - **open**: "Locks 7:30 PM ET", changeable, removable;

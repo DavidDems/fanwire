@@ -34,9 +34,14 @@ Team and user columns are real FKs to `teams.id` and `users.id`, like
 | `team_ratings` | `model_id`, `team_id`, `nba_game_id`, `game_date`, `season`, `rating_before`, `rating_after` | Unique (`model_id`, `team_id`, `nba_game_id`). Derived, so it can be rebuilt; not public record |
 | `model_predictions` | `model_id`, `nba_game_id`, `season`, `home_team_id`, `away_team_id`, `tipoff_at` timestamptz, `home_win_prob` numeric(5,4), `expected_margin` numeric(5,1) (home − away), `expected_total` numeric(5,1) null, `inputs` jsonb, `computed_at`, `status` (`open`/`final`/`void`), `home_won` bool null | Partial unique (`model_id`, `nba_game_id`) where `status <> 'void'`. **Trigger:** once `OLD.tipoff_at <= now()`, only `status` and `home_won` may change, and only `open`→`final`, `open`→`void` or `final`→`void`; `DELETE` is refused. Before then, an upsert may refresh it |
 | `picks` | `user_id`, `nba_game_id`, `season`, `game_date` (ET), `picked_side` (`home`/`away`), `picked_team_id`, `model_prediction_id` null, `model_prob` numeric(5,4) null (for the picked side), `points_if_correct` smallint, `status` (`open`/`won`/`lost`/`void`), `created_at`, `updated_at`, `settled_at` | Partial unique (`user_id`, `nba_game_id`) where `status <> 'void'`, so a rescheduled game can be picked again. Indexes: (`nba_game_id`, `status`), (`user_id`, `season`) |
-| `points_ledger` | `user_id`, `pick_id`, `delta` (signed int), `kind` (`award`/`reversal`), `season`, `game_date`, `created_at` | Append-only. Index (`season`, `game_date`, `user_id`). A losing pick has no row |
+| `points_ledger` | `user_id`, `pick_id`, `delta` (signed int), `kind` (`award`/`reversal`), `season`, `game_date`, `created_at` | Append-only: corrections are new rows; only account deletion removes rows (ADR 0046). Index (`season`, `game_date`, `user_id`). A losing pick has no row |
 
 There is no leaderboard table (ADR 0038).
+
+**Account deletion** (ADR 0046 item 4): `remove_account_predictions` deletes
+the user's `picks` and `points_ledger` rows inside the deletion's cleanup,
+after the user's posts. Boards and the community split are read live, so they
+drop the account with nothing else to do.
 
 ## Settlement (safe to rerun)
 
@@ -77,7 +82,10 @@ scraper `postponed` status could void sooner. That would be a later events unit;
   `notifications/` adds the type `picks_settled`, in-app only, with
   `reference_id` null, and the click goes to the user's picks.
 - **Feed:** a shared pick is a post whose `data_link` type is `pick`.
-  - `ref_id` is the pick's id, validated by
+  - Stored as ADR 0030 stores attachments (ADR 0046 item 7): a nullable
+    `posts.linked_pick_id` FK to `picks.id`, inside `ck_posts_one_data_link`
+    and `ck_posts_no_data_link_on_reply`, never a generic type-and-id pair.
+  - Validated by
     `app.predictions.service.validate_pick_link(session, pick_id, author_id)`:
     the author's own pick, not void.
   - It is previewed in batches by `pick_previews(session, ids)`, computed live,
